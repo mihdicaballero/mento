@@ -30,8 +30,8 @@ def extract_pdf_pages(directory, input_file, output_file, pages):
 
 def main():
     # Example usage
-    directory = r"C:\Users\Equipo 32\OneDrive - CHM Structural Engineers\Peachtree - Society Atlanta\RFI's\RFI 118 Bathroom and Exterior Signange"
-    input_pdf = "Pages from Society Atlanta - CB Specialties Submittals 11212022"
+    directory = r"D:\Desktop\Engineering"
+    input_pdf = "Pages from XXXXXXX"
     output_pdf = input_pdf + "_extract"
 
     # Define the range of pages to extract

@@ -218,7 +218,7 @@ def add_page_numbers_with_total_first(pdf_path):
 if __name__ == "__main__":
     # # Indicar el directorio de la carpeta con el PDF (va una r al principio para que funcione)
     source_dir = Path(
-        r'D:\Documents\RAMÉ\Proyectos\23029 Agustin Murgia_Verificación andamios\4 Memoria y anexos\02 Memoria de cálculo\anexos')
+        r'D:\Desktop\Engineering')
     # Lista con todos los PDFs del directorio
     input_file = (source_dir / 'Test.pdf')
     # Leo el archivo PDF
@@ -228,5 +228,5 @@ if __name__ == "__main__":
     # Example usage
     output_pdf = "numbered_pages.pdf"
     rgb_color = (50, 50, 50)  # Custom color in RGB values
-    createPagePdf(num_pages, output_pdf, x=180, y=8, font_name="Helvetica", font_size=12, font_color=rgb_color)
+    create_page_pdf(num_pages, output_pdf, x=180, y=8, font_name="Helvetica", font_size=12, font_color=rgb_color)
     # add_page_numbers(str(input_file))
