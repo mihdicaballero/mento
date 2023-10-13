@@ -1,7 +1,7 @@
 import os
 import PyPDF3
 from pathlib import Path
-from PDF_page_numbers import add_page_numbers, insert_text_into_pdf, remove_pdf_file, rename_pdf_file
+from page_numbers import add_page_numbers, insert_text_into_pdf, remove_pdf_file, rename_pdf_file
 
 '''
 A MEJORAR:
@@ -32,11 +32,11 @@ def merge_template_to_pdf(template_pdf, calcpad_folder, annex_folder, input_name
 def main():
     # Template PDF file with background
     template_pdf = Path(
-        r"O:\Ingeniería\Memorias y Anexos\Template\background\background.pdf")   
+        r"D:\Desktop\Engineering\background.pdf")   
     # Working folder containing PDF file from Calcpad
-    calcpad_folder = r"P:\23029 Agustin Murgia_Verificación andamios\2 Cálculos\01 Andamio\Calcpad"
+    calcpad_folder = r"D:\Desktop\Engineering"
     # Folder where the annexes are stored
-    annex_folder = r"P:\23029 Agustin Murgia_Verificación andamios\4 Memoria y anexos\02 Memoria de cálculo\anexos" 
+    annex_folder = r"D:\Desktop\Engineering" 
     # Input PDF name. "Example.pdf"
     input_name = 'ACC_Viento_UNIT 50-84 General.pdf'
     # Output PDF name. "Example.pdf"
