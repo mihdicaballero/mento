@@ -87,7 +87,7 @@ def Diagrama_Interaccion(fc, zeta_c, fy, zeta_y,Diametro, n_bp, A_bar_p, n_bc, A
   Phi = 0 # Factor de reduccion de capacidad para columna
   Beta_1_adopt = Beta_1(fc)
   As_total = n_bp * A_bar_p + n_bc * A_bar_c
-  tamanio_salida = 5000
+  tamanio_salida = 300
 
   Pn=np.zeros(tamanio_salida)
   Mn=np.zeros(tamanio_salida)
@@ -138,7 +138,7 @@ def Diagrama_Interaccion(fc, zeta_c, fy, zeta_y,Diametro, n_bp, A_bar_p, n_bc, A
   for j in range(1, tamanio_salida - 2): # Los ultimos 2 valores los calculo a parte, el anteultimo le corresponde a traccion pura, y el ultimo es el primero para cerrar la poligonal
     Pn[j] = 0
     Mn[j] = 0
-    # Calcular las deformaciones zetas, tensiones y fuerzas en las barras
+    # Calcular las deformaciones zetas, tensiones y fuerzas en las barras perimetrales (despues en la central)
     for i in range(0, n_bp): # Esto es para las barras perimetrales que tienen todas el mismo area
       # Calcular las deformaciones zetas
       zetas[i] = zeta_c - ((zeta_c + zeta_barra_mas_traccionada[j]) / max_d) * d_barra[i]
