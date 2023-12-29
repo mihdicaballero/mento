@@ -3,14 +3,14 @@ from structurelab.PDF.pdf_tools import *
 def main():
     ## EXAMPLE MERGE FOLDER
     # Input folder containing PDF files
-    folder = r"D:\Desktop\Engineering"
+    folder = r"D:\Desktop\Test"
     
     # Merging PDFs with bookmarks enabled
     merge_pdfs_by_folder(folder, bookmark=True)
 
     ## EXAMPLE MARGE BY NAME
     # Input folder containing PDF files
-    folder = r"D:\Desktop\PDF"
+    folder = r"D:\Desktop\Test"
     # List of input PDFs
     pdfs = ['pdf1', 'pdf2', 'pdf3']
 
@@ -21,7 +21,7 @@ def main():
     merge_pdfs_by_name(folder, pdfs, output, bookmark=True) 
 
     ## EXAMPLE EXTRACT PAGES
-    directory = r"D:\Desktop\Engineering"
+    directory = r"D:\Desktop\Test"
     input_pdf = "Pages from XXXXXXX"
     output_pdf = input_pdf + "_extract"
 
