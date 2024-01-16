@@ -3,7 +3,7 @@ import PyPDF3
 import numpy as np
 from PyPDF3 import PdfFileMerger
 from pathlib import Path
-from page_numbers import add_page_numbers, insert_text_into_pdf, remove_pdf_file, rename_pdf_file
+from structurelab.PDF.page_numbers import add_page_numbers, insert_text_into_pdf, remove_pdf_file, rename_pdf_file
 
 
 def extract_pdf_pages(directory, input_file, output_file, pages):
