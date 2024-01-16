@@ -1,11 +1,11 @@
-import os, argparse
+import os
 from PyPDF3 import PdfFileReader, PdfFileWriter
 from pathlib import Path
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
-
+from tqdm import tqdm
 
 def remove_pdf_file(file_path):
     """
@@ -127,7 +127,7 @@ def add_page_numbers(pdf_path, x, y, font_name, font_size, font_color):
         with open(tmp_pdf, 'rb') as tmp_file:
             number_pdf = PdfFileReader(tmp_file)
 
-            for page_num in range(num_pages):
+            for page_num in tqdm(range(num_pages), desc="Adding page numbers"):
                 page = pdf.getPage(page_num)
                 number_layer = number_pdf.getPage(page_num)
 
@@ -218,7 +218,7 @@ def add_page_numbers_with_total_first(pdf_path):
 if __name__ == "__main__":
     # # Indicar el directorio de la carpeta con el PDF (va una r al principio para que funcione)
     source_dir = Path(
-        r'D:\Desktop\Engineering')
+        r'C:\Users\Equipo 32\Desktop\Engineering')
     # Lista con todos los PDFs del directorio
     input_file = (source_dir / 'Test.pdf')
     # Leo el archivo PDF
@@ -228,5 +228,4 @@ if __name__ == "__main__":
     # Example usage
     output_pdf = "numbered_pages.pdf"
     rgb_color = (50, 50, 50)  # Custom color in RGB values
-    create_page_pdf(num_pages, output_pdf, x=180, y=8, font_name="Helvetica", font_size=12, font_color=rgb_color)
-    # add_page_numbers(str(input_file))
+    add_page_numbers(str(input_file),x=180, y=8, font_name="Helvetica", font_size=12, font_color=rgb_color)
