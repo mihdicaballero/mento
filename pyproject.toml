@@ -1,0 +1,62 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "StructureLab"
+version = "0.1.0"
+description = "A package for structural engineering analysis"
+readme = "README.md"
+authors = [
+    {name = "Mihdí Caballero", email = "mihdicaballero@gmail.com"},
+    {name = "Juan Pablo Romaris", email="jpromaris@yahoo.com.ar"}
+]
+license = {text = "GPL-3.0"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dynamic = ["readme", "dependencies"]
+requires-python = ">=3.10"
+keywords = [
+    "concrete design",
+    "structural engineering",
+    "structural analysis",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/mihdicaballero/StructureLab"
+
+[tool.setuptools]
+packages = ["structurelab"]
+# Add any additional packages if necessary
+
+[tool.setuptools.dynamic]
+version = { attr = "structurelab._version.__version__" }
+readme = { file = "README.md", content-type = "text/markdown" }
+dependencies = { file = "requirements.txt" }
+
+[tool.pylint]
+disable = [
+    "too-many-locals",
+    "too-many-arguments",
+    "too-many-statements",
+]
+max-line-length = 120
+
+[tool.mypy]
+packages = ["structurelab"]
+python_version = "3.10"
+strict = true
+allow_any_generics = true
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q"
+testpaths = [
+    "tests",
+]
+
+[tool.black]
+target-version = ['py310', 'py311', 'py312']
