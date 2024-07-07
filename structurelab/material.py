@@ -6,7 +6,7 @@ import math
 import forallpeople
 forallpeople.environment('structural',top_level=True)
 #Useful extra units
-cm = 1e-2*m
+cm = 1e-2*m # type: ignore
 
 @dataclass
 class Material:
@@ -20,7 +20,7 @@ class Concrete(Material):
     def __init__(self, name: str, f_c: float):
         super().__init__(name)
         self.f_c = f_c
-        self.density = 2500 * kg / m**3 
+        self.density = 2500 * kg / m**3 # type: ignore
 
     def get_properties(self):
         properties = super().get_properties()
@@ -29,7 +29,7 @@ class Concrete(Material):
         return properties
 @dataclass
 class ConcreteACI(Concrete):
-    def __init__(self, name: str, f_c: float=25*MPa, design_code: str="318-19"):
+    def __init__(self, name: str, f_c: float=25*MPa, design_code: str="318-19"): # type: ignore
         super().__init__(name, f_c)
         self.design_code = design_code
         self.E_c = self.calculate_E_c()
@@ -42,15 +42,15 @@ class ConcreteACI(Concrete):
         properties['f_r'] = self.f_r
         return properties
     def calculate_E_c(self):
-        return ((self.density / (kg / m**3)) ** 1.5) * 0.043 * math.sqrt(self.f_c / MPa) * MPa
+        return ((self.density / (kg / m**3)) ** 1.5) * 0.043 * math.sqrt(self.f_c / MPa) * MPa # type: ignore
     def calculate_f_r(self):
-        return 0.625*math.sqrt(self.f_c/MPa)*MPa
+        return 0.625*math.sqrt(self.f_c/MPa)*MPa # type: ignore
     def beta_1(self):
-        if 17 <= self.f_c / MPa <= 28:
+        if 17 <= self.f_c / MPa <= 28: # type: ignore
             return 0.85
-        elif 28 < self.f_c / MPa <= 56:
-            return 0.85 - 0.05/7 * (self.f_c / MPa - 20)
-        elif 56 < self._c / MPa:
+        elif 28 < self.f_c / MPa <= 56: # type: ignore
+            return 0.85 - 0.05/7 * (self.f_c / MPa - 20) # type: ignore
+        elif 56 < self._c / MPa: # type: ignore
             return 0.65
 
 
@@ -59,13 +59,13 @@ class Steel(Material):
     def __init__(self, name: str, f_y: float):
         super().__init__(name)
         self.f_y = f_y
-        self.density: float = 7850*kg/m**3
+        self.density: float = 7850*kg/m**3 # type: ignore
 
 @dataclass
 class SteelBar(Steel):
-    def __init__(self, name: str, f_y: float=420*MPa):
+    def __init__(self, name: str, f_y: float=420*MPa): # type: ignore
         super().__init__(name, f_y)
-        self.E_s = 200*MPa
+        self.E_s = 200*MPa # type: ignore
     def get_properties(self):
         properties = super().get_properties()
         properties['E_s'] = self.E_s
@@ -74,11 +74,11 @@ class SteelBar(Steel):
 
 @dataclass
 class SteelStrand(Steel):
-    def __init__(self, name: str, f_y: float=1700*MPa):
+    def __init__(self, name: str, f_y: float=1700*MPa): # type: ignore
         super().__init__(name, f_y)
-        self.f_u = 1860*MPa
-        self.E_s = 190*MPa
-        self_prestress_stress = 0
+        self.f_u = 1860*MPa # type: ignore
+        self.E_s = 190*MPa # type: ignore
+        self_prestress_stress = 0 
     def get_properties(self):
         properties = super().get_properties()
         properties['E_s'] = self.E_s
@@ -88,11 +88,11 @@ class SteelStrand(Steel):
 
 
 
-concrete=ConcreteACI(name="H25",f_c=30*MPa, design_code="318-19")
+concrete=ConcreteACI(name="H25",f_c=30*MPa, design_code="318-19") # type: ignore
 print(concrete.get_properties())
 print(concrete.beta_1())
 print(concrete.E_c,', ',concrete.f_r)
-steelbar = SteelBar(name="ADN 500",f_y=500*MPa)
+steelbar = SteelBar(name="ADN 500",f_y=500*MPa) # type: ignore
 print(steelbar.get_properties())
-steelstrand = SteelStrand(name='Y1860',f_y=1700*MPa)
+steelstrand = SteelStrand(name='Y1860',f_y=1700*MPa) # type: ignore
 print(steelstrand.get_properties())
