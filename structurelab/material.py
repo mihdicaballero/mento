@@ -99,12 +99,16 @@ class SteelStrand(Steel):
         properties['f_u'] = self.f_u
         return properties
 
+def main():
+    # Test cases
+    concrete=create_concrete(name="H30",f_c=30*MPa, design_code="ACI 318-19") # type: ignore
+    print(concrete.get_properties())
+    print(concrete.beta_1())
+    print(concrete.E_c,', ',concrete.f_r)
+    steelbar = SteelBar(name="ADN 500",f_y=500*MPa) # type: ignore
+    print(steelbar.get_properties())
+    steelstrand = SteelStrand(name='Y1860',f_y=1700*MPa) # type: ignore
+    print(steelstrand.get_properties())
 
-concrete=create_concrete(name="H30",f_c=30*MPa, design_code="ACI 318-19") # type: ignore
-print(concrete.get_properties())
-print(concrete.beta_1())
-print(concrete.E_c,', ',concrete.f_r)
-steelbar = SteelBar(name="ADN 500",f_y=500*MPa) # type: ignore
-print(steelbar.get_properties())
-steelstrand = SteelStrand(name='Y1860',f_y=1700*MPa) # type: ignore
-print(steelstrand.get_properties())
+if __name__ == "__main__":
+    main()
