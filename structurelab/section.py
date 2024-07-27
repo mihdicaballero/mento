@@ -11,9 +11,9 @@ cm = 1e-2 * m  # type: ignore
 
 @dataclass
 class Section:
-    def __init__(self, name:str):
+    def __init__(self, name:str, settings=None):
         self.name=name
-        self.settings=Settings()
+        self.settings = settings if settings is not None else Settings()
 
 
 @dataclass
@@ -22,9 +22,7 @@ class ConcreteSection(Section):
         super().__init__(name)
         self.concrete = concrete
         self.steelBar = steelBar
-        self.cc = self.settings.cc
-
-
+        self.cc = self.settings.get_setting('clear_cover')
 
 @dataclass
 class RectangularConcreteSection(ConcreteSection):
