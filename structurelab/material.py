@@ -90,7 +90,7 @@ class SteelStrand(Steel):
     def __init__(self, name: str, f_y: float=1700*MPa): # type: ignore
         super().__init__(name, f_y)
         self.f_u = 1860*MPa # type: ignore
-        self.E_s = 190*MPa # type: ignore
+        self.E_s = 190000*MPa # type: ignore
         self_prestress_stress = 0 
     def get_properties(self):
         properties = super().get_properties()
