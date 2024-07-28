@@ -123,8 +123,12 @@ class Beam(RectangularConcreteSection):
             else:
                 self.__A_s_calculated=A_s_min
             
-
-        print(f"PARA EL MOMENTO {M_u}, EL ARMADO DE CALCULO ES {self.__A_s_calculated}")
+        rho_max=self.__determine_maximum_flexural_reinforcement_ratio_ACI_318_19()
+        A_s_max=rho_max*self._depth*self._width
+        if self.__A_s_calculated > A_s_max:
+            print(f"El armado requerido es mayor al maximo")
+        else:
+            print(f"PARA EL MOMENTO {M_u}, EL ARMADO DE CALCULO ES {self.__A_s_calculated}")
 
 
     '''
@@ -155,7 +159,7 @@ def main():
     )
 
     print(f"Nombre de la sección: {section.get_name()}")
-    section.design_flexure_ACI_318_19(200*kN*m)
+    section.design_flexure_ACI_318_19(500*kN*m)
 
 
 if __name__ == "__main__":
