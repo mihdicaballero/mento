@@ -52,7 +52,7 @@ class Rebar:
                             'num_bars_1': num_bars,
                             'diameter_1': diameter,
                             'total_as': total_as,
-                            'DCR': total_as / self.required_as,
+                            'DCR': round(self.required_as/total_as,2),
                             'available_spacing_1': available_spacing
                         }
                     break
@@ -66,13 +66,12 @@ class Rebar:
 def main():
     concrete=material.create_concrete(name="H30",f_c=30*MPa, design_code="ACI 318-19") # type: ignore
     section = Beam(
-        name="V 40x50",
+        name="V 20x50",
         concrete=concrete,
         steelBar="Barras Longitudinales",
-        width=40*cm,
+        width=20*cm,
         depth=50 * cm,
     )
-
     print(f"Nombre de la sección: {section.name}")
     as_nec=15*cm**2
     # Custom settings for a specific beam
