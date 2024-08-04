@@ -1,10 +1,12 @@
-from settings import Settings
-from material import create_concrete, SteelBar, Concrete
-
 from dataclasses import dataclass
 import forallpeople
 forallpeople.environment('structural', top_level=True)
 import numpy as np
+
+import material
+from settings import Settings
+
+
 
 
 # Definir algunas unidades adicionales útiles
@@ -32,8 +34,8 @@ class ConcreteSection(Section):
 class RectangularConcreteSection(ConcreteSection):
     def __init__(self, name: str, concrete, steelBar: str, width: float, depth: float):
         super().__init__(name, concrete, steelBar)
-        self.width = width
-        self.depth = depth
+        self._width = width
+        self._depth = depth
 
     def get_area(self):
         return self._width * self._depth
@@ -42,7 +44,7 @@ class RectangularConcreteSection(ConcreteSection):
 
 @dataclass
 class Beam(RectangularConcreteSection):
-    def __init__(self, name: str, concrete: Concrete, steelBar: SteelBar, width: float, depth: float):  # type: ignore
+    def __init__(self, name: str, concrete: material.Concrete, steelBar: material.SteelBar, width: float, depth: float):  # type: ignore
         super().__init__(name, concrete, steelBar, width, depth)
 
 
@@ -144,8 +146,8 @@ class Beam(RectangularConcreteSection):
 
 def main():
     # Ejemplo de uso
-    concrete=create_concrete(name="H30",f_c=30*MPa, design_code="ACI 318-19") # type: ignore
-    steelBar=SteelBar(name="ADN 420", f_y=420*MPa) # type: ignore
+    concrete=material.create_concrete(name="H30",f_c=30*MPa, design_code="ACI 318-19") # type: ignore
+    steelBar=material.SteelBar(name="ADN 420", f_y=420*MPa) # type: ignore
     section = Beam(
         name="V-40x50",
         concrete=concrete,
@@ -156,7 +158,6 @@ def main():
 
     print(f"Nombre de la sección: {section.get_name()}")
     section.design_flexure_ACI_318_19(500*kN*m)  # type: ignore
-    section.design_flexure_ACI_318_19(600*kN*m)  # type: ignore
 
 if __name__ == "__main__":
     main()

@@ -131,18 +131,24 @@ def create_concrete(name: str, f_c: float, design_code: str):
         return Concrete_EHE_08(name=name, f_c=f_c)
     else:
         raise ValueError(f"Invalid design code: {design_code}")
-    
+
 @dataclass
 class Steel(Material):
-    _f_y: float
-    _density: float = field(default=7850*kg/m**3) # type: ignore
+    _f_y: float = field(init=False)
+    _density: float = field(default=7850 * kg / m**3)  # type: ignore
+
+    def __init__(self, name: str, f_y: float, density: float = 7850 * kg / m**3):
+        super().__init__(name)
+        self._f_y = f_y
+        self._density = density
 
 @dataclass
 class SteelBar(Steel):
     _E_s: float = field(default=200000*MPa) # type: ignore
     _epsilon_y: float = field(init=False)
 
-    def __post_init__(self):
+    def __init__(self, name: str, f_y: float, density: float =7850 *kg/m**3):
+        super().__init__(name, f_y, density)
         self._epsilon_y = self._f_y / self._E_s
     def get_properties(self) -> dict:
         properties = super().get_properties()
@@ -157,10 +163,15 @@ class SteelStrand(Steel):
     _E_s: float = field(default=190000*MPa) # type: ignore
     prestress_stress: float = field(default=0)
 
+    def __init__(self, name: str, f_y: float, density: float =7850 *kg/m**3):
+        super().__init__(name, f_y, density)
+        self._epsilon_y = self._f_y / self._E_s
+
+
     def get_properties(self) -> dict:
         properties = super().get_properties()
         properties['E_s'] = self._E_s
-        properties['f_y'] = self.f_y
+        properties['f_y'] = self._f_y
         properties['f_u'] = self._f_u
         return properties
 
