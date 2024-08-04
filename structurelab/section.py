@@ -28,7 +28,7 @@ class ConcreteSection(Section):
         super().__init__(name)
         self.concrete = concrete
         self.steelBar = steelBar
-        self.cc = self.settings.get_setting('clear_cover')
+        self.cc = self._settings.get_setting('clear_cover')
 
 @dataclass
 class RectangularConcreteSection(ConcreteSection):
@@ -50,11 +50,11 @@ class Beam(RectangularConcreteSection):
 
     def __determine_maximum_flexural_reinforcement_ratio_ACI_318_19(self):
         # Determination of maximum reinforcement ratio
-        concrete_properties=self._concrete.get_properties()
+        concrete_properties=self.concrete.get_properties()
         beta_1=concrete_properties["beta_1"]
         f_c=concrete_properties["f_c"]
         epsilon_c=concrete_properties["epsilon_c"]
-        rebar_properties=self._steelBar.get_properties()
+        rebar_properties=self.steelBar.get_properties()
         f_y=rebar_properties["f_y"]
         epsilon_y=rebar_properties["epsilon_y"]
 
@@ -86,9 +86,9 @@ class Beam(RectangularConcreteSection):
     def design_flexure_ACI_318_19(self, M_u:float):
         a_assumed=0.18*self._depth # Partimos de un valor propuesto para la altura del bloque de compresion de Whitney.
 
-        concrete_properties=self._concrete.get_properties()
+        concrete_properties=self.concrete.get_properties()
         f_c=concrete_properties["f_c"]
-        rebar_properties=self._steelBar.get_properties()
+        rebar_properties=self.steelBar.get_properties()
         f_y=rebar_properties["f_y"]
 
         tol=0.01
@@ -157,8 +157,7 @@ def main():
     )
 
     print(f"Nombre de la sección: {section.get_name()}")
-    section.design_flexure_ACI_318_19(500*kN*m)
-
+    section.design_flexure_ACI_318_19(500*kN*m)  # type: ignore
 
 if __name__ == "__main__":
     main()

@@ -1,4 +1,4 @@
-import material
+from material import create_concrete
 from settings import Settings
 from section import Beam
 import forallpeople
@@ -17,7 +17,7 @@ class Rebar:
                 25*mm: 4.909*cm**2,#type: ignore
                 32*mm: 8.043*cm**2,#type: ignore
             }
-    
+# Add beam class of rebar
     def __init__(self, required_as, beam, settings=None):
             self.required_as = required_as
             self.beam = beam
@@ -29,7 +29,6 @@ class Rebar:
 
     def calculate_rebars(self):
         effective_width = self.beam.width - 2 * (self.cc + self.def_stirrup_db)
-        available_width = effective_width
         
         best_combination = None
         min_total_area = float('inf')
@@ -64,15 +63,15 @@ class Rebar:
         return best_combination
 
 def main():
-    concrete=material.create_concrete(name="H30",f_c=30*MPa, design_code="ACI 318-19") # type: ignore
+    concrete=create_concrete(name="H30",f_c=30*MPa, design_code="ACI 318-19") # type: ignore
     section = Beam(
         name="V 20x50",
         concrete=concrete,
         steelBar="Barras Longitudinales",
         width=20*cm,
-        depth=50 * cm,
+        depth=50*cm,
     )
-    print(f"Nombre de la sección: {section.name}")
+    print(f"Nombre de la sección: {section.get_name()}")
     as_nec=15*cm**2
     # Custom settings for a specific beam
     custom_settings = {
