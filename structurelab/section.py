@@ -1,12 +1,10 @@
+from settings import Settings
+from material import create_concrete, SteelBar, Concrete
+
 from dataclasses import dataclass
 import forallpeople
 forallpeople.environment('structural', top_level=True)
 import numpy as np
-
-import material
-from settings import Settings
-
-
 
 
 # Definir algunas unidades adicionales útiles
@@ -44,13 +42,13 @@ class RectangularConcreteSection(ConcreteSection):
 
 @dataclass
 class Beam(RectangularConcreteSection):
-    def __init__(self, name: str, concrete: material.Concrete, steelBar: material.SteelBar, width: float, depth: float):  # type: ignore
+    def __init__(self, name: str, concrete: Concrete, steelBar: SteelBar, width: float, depth: float):  # type: ignore
         super().__init__(name, concrete, steelBar, width, depth)
 
 
     def __determine_maximum_flexural_reinforcement_ratio_ACI_318_19(self):
         # Determination of maximum reinforcement ratio
-        concrete_properties=self._concrete.get_properties()
+        concrete_properties=self.concrete.get_properties()
         beta_1=concrete_properties["beta_1"]
         f_c=concrete_properties["f_c"]
         epsilon_c=concrete_properties["epsilon_c"]
@@ -146,8 +144,8 @@ class Beam(RectangularConcreteSection):
 
 def main():
     # Ejemplo de uso
-    concrete=material.create_concrete(name="H30",f_c=30*MPa, design_code="ACI 318-19") # type: ignore
-    steelBar=material.SteelBar(name="ADN 420", f_y=420*MPa) # type: ignore
+    concrete=create_concrete(name="H30",f_c=30*MPa, design_code="ACI 318-19") # type: ignore
+    steelBar=SteelBar(name="ADN 420", f_y=420*MPa) # type: ignore
     section = Beam(
         name="V-40x50",
         concrete=concrete,

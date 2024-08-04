@@ -14,7 +14,9 @@ class Material:
     name: str
 
     def get_properties(self) -> Dict[str, float]:
-        return {}
+        return {
+            'name':self.name
+        }
 @dataclass
 class Concrete(Material):
     f_c: float = field(default=25*MPa) # type: ignore
@@ -63,27 +65,28 @@ class Concrete_ACI_318_19(Concrete):
     @property
     def f_r(self) -> float:
         return self._f_r
-
+    
+    @property
     def beta_1(self) -> float:
         return self._beta_1
 @dataclass
 class Concrete_EN_1992(Concrete):
     _E_cm: float = field(init=False)  # Secant modulus of elasticity
-    f_ck: float = field(init=False) # Characteristic concrete strength
-    f_cm: float = field(init=False) # mean compressive strength
-    f_ctm: float = field(init=False) # Mean tensile strength
+    _f_ck: float = field(init=False) # Characteristic concrete strength
+    _f_cm: float = field(init=False) # mean compressive strength
+    _f_ctm: float = field(init=False) # Mean tensile strength
 
     def __post_init__(self):
         # Calculate _E_cm and f_ctm based on f_c and density
-        self.f_ck = self.f_c
-        self.f_cm = self.f_ck+8*MPa #type:ignore
-        self._E_cm = 22000 * (self.f_cm / (10*MPa)) ** (0.3) * MPa # type: ignore       
-        self.f_ctm = 0.3 * (self.f_ck / MPa) ** (2/3) * MPa # type: ignore
+        self._f_ck = self.f_c
+        self._f_cm = self._f_ck+8*MPa #type:ignore
+        self._E_cm = 22000 * (self._f_cm / (10*MPa)) ** (0.3) * MPa # type: ignore       
+        self._f_ctm = 0.3 * (self._f_ck / MPa) ** (2/3) * MPa # type: ignore
 
     def get_properties(self) -> dict:
         properties = super().get_properties()
-        properties['_E_cm'] = self._E_cm
-        properties['f_ctm'] = self.f_ctm
+        properties['E_cm'] = self._E_cm
+        properties['f_ctm'] = self._f_ctm
         return properties
 
     def alpha_cc(self):
@@ -93,25 +96,25 @@ class Concrete_EN_1992(Concrete):
 @dataclass
 class Concrete_EHE_08(Concrete):
     _E_cm: float = field(init=False)  # Secant modulus of elasticity
-    f_ck: float = field(init=False) # Characteristic concrete strength
-    f_cm: float = field(init=False) # mean compressive strength
-    f_ctm: float = field(init=False) # Mean tensile strength
-    f_ctm_fl: float = field(init=False) # Mean flexure tensile strength
+    _f_ck: float = field(init=False) # Characteristic concrete strength
+    _f_cm: float = field(init=False) # mean compressive strength
+    _f_ctm: float = field(init=False) # Mean tensile strength
+    _f_ctm_fl: float = field(init=False) # Mean flexure tensile strength
 
     def __post_init__(self):
         # Calculate _E_cm and f_ctk based on f_c
         # Formulas are based on EHE-08 specifications
-        self.f_ck = self.f_c
-        self.f_cm = self.f_ck+8*MPa #type:ignore
-        self._E_cm = 8500 *(self.f_cm / MPa)**(1/3) * MPa  # type: ignore
-        self.f_ctm = 0.3 * (self.f_ck / MPa)**(2/3) * MPa  # type: ignore
+        self._f_ck = self.f_c
+        self._f_cm = self._f_ck+8*MPa #type:ignore
+        self._E_cm = 8500 *(self._f_cm / MPa)**(1/3) * MPa  # type: ignore
+        self._f_ctm = 0.3 * (self._f_ck / MPa)**(2/3) * MPa  # type: ignore
 
     def get_properties(self) -> dict:
         properties = super().get_properties()
-        properties['_E_cm'] = self._E_cm
-        properties['f_ck'] = self.f_ck
-        properties['f_cm'] = self.f_cm
-        properties['f_ctm'] = self.f_ctm
+        properties['E_cm'] = self._E_cm
+        properties['f_ck'] = self._f_ck
+        properties['f_cm'] = self._f_cm
+        properties['f_ctm'] = self._f_ctm
         return properties
 
     def alpha_cc(self):
@@ -131,21 +134,21 @@ def create_concrete(name: str, f_c: float, design_code: str):
     
 @dataclass
 class Steel(Material):
-    f_y: float
-    density: float = field(default=7850*kg/m**3) # type: ignore
+    _f_y: float
+    _density: float = field(default=7850*kg/m**3) # type: ignore
 
 @dataclass
 class SteelBar(Steel):
-    E_s: float = field(default=200000*MPa) # type: ignore
-    epsilon_y: float = field(init=False)
+    _E_s: float = field(default=200000*MPa) # type: ignore
+    _epsilon_y: float = field(init=False)
 
     def __post_init__(self):
-        self.epsilon_y = self.f_y / self.E_s
+        self._epsilon_y = self._f_y / self._E_s
     def get_properties(self) -> dict:
         properties = super().get_properties()
-        properties['E_s'] = self.E_s
-        properties['f_y'] = self.f_y
-        properties['epsilon_y']=self.epsilon_y
+        properties['E_s'] = self._E_s
+        properties['f_y'] = self._f_y
+        properties['epsilon_y']=self._epsilon_y
         return properties
 
 @dataclass
