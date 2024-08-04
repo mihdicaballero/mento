@@ -28,14 +28,14 @@ class ConcreteSection(Section):
         super().__init__(name)
         self.concrete = concrete
         self.steelBar = steelBar
-        self.cc = self.settings.get_setting('clear_cover')
+        self.cc = self._settings.get_setting('clear_cover')
 
 @dataclass
 class RectangularConcreteSection(ConcreteSection):
     def __init__(self, name: str, concrete, steelBar: str, width: float, depth: float):
         super().__init__(name, concrete, steelBar)
-        self._width = width
-        self._depth = depth
+        self.width = width
+        self.depth = depth
 
     def get_area(self):
         return self._width * self._depth
