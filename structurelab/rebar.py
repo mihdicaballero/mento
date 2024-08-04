@@ -1,5 +1,6 @@
-
-import math
+import material
+from settings import Settings
+from section import Beam
 import forallpeople
 forallpeople.environment('structural',top_level=True)
 cm = 1e-2*m # type: ignore
@@ -7,26 +8,27 @@ cm = 1e-2*m # type: ignore
 class Rebar:
     rebar_diameters = [6*mm, 8*mm, 10*mm, 12*mm, 16*mm, 20*mm, 25*mm, 32*mm] #type: ignore
     rebar_areas = {
-                6*mm: 0.283*cm**2,   
-                8*mm: 0.503*cm**2,  
-                10*mm: 0.785*cm**2, 
-                12*mm: 1.131*cm**2, 
-                16*mm: 2.011*cm**2, 
-                20*mm: 3.142*cm**2, 
-                25*mm: 4.909*cm**2,
-                32*mm: 8.043*cm**2,
+                6*mm: 0.283*cm**2,   #type: ignore
+                8*mm: 0.503*cm**2,  #type: ignore
+                10*mm: 0.785*cm**2, #type: ignore
+                12*mm: 1.131*cm**2, #type: ignore
+                16*mm: 2.011*cm**2, #type: ignore
+                20*mm: 3.142*cm**2, #type: ignore
+                25*mm: 4.909*cm**2,#type: ignore
+                32*mm: 8.043*cm**2,#type: ignore
             }
-    def __init__(self, required_as, beam, rebar_settings):
+# Add beam class of rebar
+    def __init__(self, required_as, beam, settings=None):
             self.required_as = required_as
             self.beam = beam
-            self.clear_cover = rebar_settings['clear_cover']
-            self.clear_spacing = rebar_settings['clear_spacing']
-            self.stirrup_diameter = rebar_settings['stirrup_diameter']
+            self.settings = settings if settings is not None else Settings()
+            self.cc = self.settings.get_setting('clear_cover')
+            self.clear_spacing = self.settings.get_setting('clear_spacing')
+            self.def_stirrup_db = self.settings.get_setting('stirrup_diameter')
             self.bars = self.calculate_rebars()
 
     def calculate_rebars(self):
-        effective_width = self.beam.width - 2 * (self.clear_cover + self.stirrup_diameter)
-        available_width = effective_width
+        effective_width = self.beam.width - 2 * (self.cc + self.def_stirrup_db)
         
         best_combination = None
         min_total_area = float('inf')
@@ -49,7 +51,7 @@ class Rebar:
                             'num_bars_1': num_bars,
                             'diameter_1': diameter,
                             'total_as': total_as,
-                            'DCR': total_as / self.required_as,
+                            'DCR': round(self.required_as/total_as,2),
                             'available_spacing_1': available_spacing
                         }
                     break
@@ -60,34 +62,29 @@ class Rebar:
         
         return best_combination
 
+def main():
+    concrete=material.create_concrete(name="H30",f_c=30*MPa, design_code="ACI 318-19") # type: ignore
+    section = Beam(
+        name="V 20x50",
+        concrete=concrete,
+        steelBar="Barras Longitudinales",
+        width=20*cm,
+        depth=50*cm,
+    )
+    print(f"Nombre de la sección: {section.get_name()}")
+    as_nec=15*cm**2
+    # Custom settings for a specific beam
+    custom_settings = {
+        'clear_cover': 30 * mm, #type: ignore
+        'stirrup_diameter': 8 * mm,#type: ignore
+    }
+    # Creating a Settings instance with custom settings
+    settings = Settings(custom_settings)
+    rebar = Rebar(required_as=as_nec, beam=section, settings=settings)
+    # Call the calculate_rebars method
+    best_combination = rebar.calculate_rebars()
 
-# Test the class and methods
-class BeamSection:
-    def __init__(self, name, concrete, steel, width, height):
-        self.name = name
-        self.concrete = concrete
-        self.steel = steel
-        self.width = width
-        self.height = height
+    print(f"Best combination: {best_combination}")
 
-# Example usage:
-beam = BeamSection(
-    name="V20x50",
-    concrete="aci_concrete",
-    steel="steel_rebar",
-    width=18 * cm,
-    height=60 * cm
-)
-rebar_settings = {
-    'clear_cover': 25*mm,       #type: ignore
-    'clear_spacing': 20*mm,     #type: ignore
-    'stirrup_diameter': 6*mm,  #type: ignore
-}
-
-as_nec=5.6*cm**2
-rebar = Rebar(required_as=as_nec, beam=beam, rebar_settings=rebar_settings)
-
-# Call the calculate_rebars method
-best_combination = rebar.calculate_rebars()
-
-print(f"Best combination: {best_combination}")
+if __name__ == "__main__":
+    main()
