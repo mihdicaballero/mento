@@ -35,14 +35,18 @@ class Concrete_ACI_318_19(Concrete):
     def __post_init__(self):
         self.E_c =  ((self.density / (kg / m**3)) ** 1.5) * 0.043 * math.sqrt(self.f_c / MPa) * MPa # type: ignore
         self.f_r = 0.625*math.sqrt(self.f_c/MPa)*MPa # type: ignore
+        self.beta_1=self.__beta_1()
 
     def get_properties(self) -> dict:
         properties = super().get_properties()       
         properties['E_c'] = self.E_c
         properties['f_r'] = self.f_r
+        properties['beta_1'] = self.beta_1
+        properties['epsilon_c']=self.epsilon_c
         return properties
     
-    def beta_1(self):
+    def __beta_1(self):
+        # This is a private method (accesed only by the class constructor)
         if 17 <= self.f_c / MPa <= 28: # type: ignore
             return 0.85
         elif 28 < self.f_c / MPa <= 56: # type: ignore
@@ -119,7 +123,7 @@ class Steel(Material):
 
 @dataclass
 class SteelBar(Steel):
-    E_s: float = field(default=200*MPa) # type: ignore
+    E_s: float = field(default=200000*MPa) # type: ignore
     epsilon_y: float = field(init=False)
 
     def __post_init__(self):
@@ -128,6 +132,7 @@ class SteelBar(Steel):
         properties = super().get_properties()
         properties['E_s'] = self.E_s
         properties['f_y'] = self.f_y
+        properties['epsilon_y']=self.epsilon_y
         return properties
 
 @dataclass
