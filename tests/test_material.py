@@ -43,8 +43,8 @@ def test_steel_bar_properties():
 
     assert properties['name'] == "ADN 500"
     assert properties['f_y'] == f_y
-    assert properties['E_s'] == 200 * MPa #type:ignore
-    assert steelbar.epsilon_y == pytest.approx(f_y /( 200 * MPa), rel=0.01)  #type:ignore
+    assert properties['E_s'] == 200000 * MPa #type:ignore
+    assert steelbar._epsilon_y == pytest.approx(f_y /( properties['E_s']), rel=0.01)  #type:ignore
 
 def test_steel_strand_properties():
     f_y = 1700 * MPa #type:ignore
