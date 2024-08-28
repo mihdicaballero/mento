@@ -56,9 +56,9 @@ class Beam(RectangularConcreteSection):
         epsilon_c=concrete_properties["epsilon_c"]
         rebar_properties=self.steelBar.get_properties()
         f_y=rebar_properties["f_y"]
-        epsilon_y=rebar_properties["epsilon_y"]
+        epsilon_ty=rebar_properties["epsilon_ty"]
 
-        epsilon_min_rebar_ACI_318_19=epsilon_y+epsilon_c # ESTO CHEQUEARLO BIEN, CREO QUE ES ASI, PERO REVISAR
+        epsilon_min_rebar_ACI_318_19=epsilon_ty+0.003 # Limit for tension controled sections (Table 21.2.2 Page 393)
 
         rho_max=0.85*beta_1*f_c/f_y*(epsilon_c/(epsilon_c+epsilon_min_rebar_ACI_318_19))
         return rho_max
@@ -84,14 +84,14 @@ class Beam(RectangularConcreteSection):
 
 
     def design_flexure_ACI_318_19(self, M_u:float):
-        a_assumed=0.18*self._depth # Partimos de un valor propuesto para la altura del bloque de compresion de Whitney.
+        a_assumed=0.08*self._depth # Adopted value to be confirmed
 
         concrete_properties=self.concrete.get_properties()
         f_c=concrete_properties["f_c"]
         rebar_properties=self.steelBar.get_properties()
         f_y=rebar_properties["f_y"]
 
-        tol=0.01
+        tol=0.001
         error=tol*2
 
         phi_assumed=0.9 # Asumimos que trabaja dominada a traccion (en realidad mas que asumirlo, lo forzamso)
