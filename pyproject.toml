@@ -11,7 +11,7 @@ authors = [
     {name = "Mihdí Caballero", email = "mihdicaballero@gmail.com"},
     {name = "Juan Pablo Romaris", email="jpromaris@yahoo.com.ar"}
 ]
-license = {text = "GPL-3.0"}
+license = {text = "MIT"}
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",

@@ -51,7 +51,6 @@ class Rebar:
                             'num_bars_1': num_bars,
                             'diameter_1': diameter,
                             'total_as': total_as,
-                            'DCR': round(self.required_as/total_as,2),
                             'available_spacing_1': available_spacing
                         }
                     break
