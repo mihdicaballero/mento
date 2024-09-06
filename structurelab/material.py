@@ -50,12 +50,13 @@ class Concrete_ACI_318_19(Concrete):
         return properties
     
     def __beta_1(self) -> float:
-        # This is a private method (accesed only by the class constructor)
+        # Table 22.2.2.4.3—Values of β1 for equivalent rectangular concrete stress distribution
+        # Page 399
         if 17 <= self.f_c / MPa <= 28: # type: ignore
             return 0.85
-        elif 28 < self.f_c / MPa <= 56: # type: ignore
-            return 0.85 - 0.05/7 * (self.f_c / MPa - 20) # type: ignore
-        elif 56 < self.f_c / MPa: # type: ignore
+        elif 28 < self.f_c / MPa <= 55: # type: ignore
+            return 0.85 - 0.05/7 * (self.f_c / MPa - 28) # type: ignore
+        elif 55 < self.f_c / MPa: # type: ignore
             return 0.65
         
     @property
@@ -149,12 +150,13 @@ class SteelBar(Steel):
 
     def __init__(self, name: str, f_y: float, density: float =7850 *kg/m**3):
         super().__init__(name, f_y, density)
-        self._epsilon_y = self._f_y / self._E_s
+        self._epsilon_ty = self._f_y / self._E_s # 21.2.2.1 - Page 392
+
     def get_properties(self) -> dict:
         properties = super().get_properties()
         properties['E_s'] = self._E_s
         properties['f_y'] = self._f_y
-        properties['epsilon_y']=self._epsilon_y
+        properties['epsilon_ty']=self._epsilon_ty
         return properties
 
 @dataclass
