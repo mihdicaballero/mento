@@ -1,7 +1,13 @@
+import sys
+import os
+
+# Add the project root to PYTHONPATH
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import pytest
 from structurelab.material import create_concrete
 from structurelab.settings import Settings
-from structurelab.section import Beam
+from structurelab.concrete.beam import Beam
 from structurelab.rebar import Rebar
 import forallpeople
 

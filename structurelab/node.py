@@ -19,18 +19,21 @@ class Node:
         return sum(forces.get_moment() for forces in self.forces_list)
 
 
+def main():
+    # Ejemplo de uso
+    section = Section(material="Concrete", SteelBar_long="Longitudinal Steel", SteelBar_trans="Transverse Steel", cc=25)
+    forces1 = Forces(My=100)
+    forces2 = Forces(My=200)
 
-# Ejemplo de uso
-section = Section(material="Concrete", SteelBar_long="Longitudinal Steel", SteelBar_trans="Transverse Steel", cc=25)
-forces1 = Forces(My=100)
-forces2 = Forces(My=200)
+    node = Node(section=section, forces_list=[forces1, forces2])
 
-node = Node(section=section, forces_list=[forces1, forces2])
+    print(f"Node Section Material: {node.section.material}")
+    print(f"Total Moment: {node.get_total_moment()}")
 
-print(f"Node Section Material: {node.section.material}")
-print(f"Total Moment: {node.get_total_moment()}")
+    # Añadir otra instancia de Forces
+    forces3 = Forces(My=50)
+    node.add_forces(forces3)
+    print(f"Updated Total Moment: {node.get_total_moment()}")
 
-# Añadir otra instancia de Forces
-forces3 = Forces(My=50)
-node.add_forces(forces3)
-print(f"Updated Total Moment: {node.get_total_moment()}")
+if __name__ == "__main__":
+    main()

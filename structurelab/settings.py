@@ -7,18 +7,37 @@ class Settings:
     def __init__(self, settings_dict=None):
         # Default settings
         self.settings = {
+            # Beam design settings
             'clear_cover': 25 * mm, # type: ignore
             'clear_spacing': 20 * mm, # type: ignore
             'stirrup_diameter': 6 * mm, # type: ignore
             'vibrator_size': 30 * mm, # type: ignore
             'layers_spacing': 25 * mm, # type: ignore
+            'longitudinal_diameter': 12*mm # type: ignore
             # Add other settings with their default values
+            # Safety factors
         }
         
         # Update defaults with provided settings if any
         if settings_dict:
             self.settings.update(settings_dict)
 
+    def load_aci_318_19_settings(self):
+        """
+        Load settings specific to ACI 318-19.
+        This will override only the settings that are different in ACI 318-19.
+        """
+        aci_318_19_settings = {
+            'lambda': 1, # Normalweight concrete
+            'phi_v': 0.75, # Shear strength reduction factor
+            'phi_c': 0.65, # Compression controlled strength reduction factor
+            'phi_t': 0.90  # Tension controlled strength reduction factor
+            # Add other ACI-specific settings
+        }
+
+        # Update current settings with ACI 318-19 specific settings
+        self.settings.update(aci_318_19_settings)
+    
     def get_setting(self, key):
         if key in self.settings:
             return self.settings.get(key)
@@ -49,17 +68,10 @@ def main():
     settings.set_setting('clear_cover', 35 * mm) # type: ignore
     print(f"Updated Clear Cover: {settings.get_setting('clear_cover')} ")  # Output: 35.0 mm
 
-    # Test getting a non-existent setting (should raise an error)
-    try:
-        print(settings.get_setting('non_existent_setting'))
-    except KeyError as e:
-        print(f"Error: {e}")
-
-    # Test setting a non-existent setting (should raise an error)
-    try:
-        settings.set_setting('non_existent_setting', 50 *mm) # type: ignore
-    except KeyError as e:
-        print(f"Error: {e}")
+    settings = Settings()
+    print("Default Settings:", settings.settings)
+    settings.load_aci_318_19_settings()
+    print("ACI 318-19 Settings:", settings.settings)
 
 if __name__ == "__main__":
     main()
