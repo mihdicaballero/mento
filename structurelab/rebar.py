@@ -1,6 +1,6 @@
-from material import create_concrete
-from settings import Settings
-from section import Beam
+from structurelab.material import create_concrete
+from structurelab.settings import Settings
+from structurelab.concrete.beam import Beam
 import forallpeople
 forallpeople.environment('structural',top_level=True)
 cm = 1e-2*m # type: ignore
@@ -28,7 +28,7 @@ class Rebar:
             self.bars = self.calculate_rebars()
 
     def calculate_rebars(self):
-        effective_width = self.beam.width - 2 * (self.cc + self.def_stirrup_db)
+        effective_width = self.beam._width - 2 * (self.cc + self.def_stirrup_db)
         
         best_combination = None
         min_total_area = float('inf')
