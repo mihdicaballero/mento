@@ -49,17 +49,5 @@ def main():
     settings.set_setting('clear_cover', 35 * mm) # type: ignore
     print(f"Updated Clear Cover: {settings.get_setting('clear_cover')} ")  # Output: 35.0 mm
 
-    # Test getting a non-existent setting (should raise an error)
-    try:
-        print(settings.get_setting('non_existent_setting'))
-    except KeyError as e:
-        print(f"Error: {e}")
-
-    # Test setting a non-existent setting (should raise an error)
-    try:
-        settings.set_setting('non_existent_setting', 50 *mm) # type: ignore
-    except KeyError as e:
-        print(f"Error: {e}")
-
 if __name__ == "__main__":
     main()

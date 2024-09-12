@@ -29,7 +29,7 @@ keywords = [
 "Homepage" = "https://github.com/mihdicaballero/StructureLab"
 
 [tool.setuptools]
-packages = ["structurelab"]
+packages = ["find_namespace:structurelab"]
 # Add any additional packages if necessary
 
 [tool.setuptools.dynamic]
