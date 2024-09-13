@@ -50,6 +50,10 @@ class Settings:
             self.settings[key] = value
         else:
             raise KeyError(f"Setting '{key}' does not exist.")
+    
+    def update(self, new_settings: dict):
+        """Updates the settings dictionary with new values."""
+        self.settings.update(new_settings)
 
 def main():
     # Define custom settings

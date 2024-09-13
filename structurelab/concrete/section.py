@@ -14,4 +14,4 @@ class ConcreteSection(Section):
         super().__init__(name)
         self.concrete = concrete
         self.steelBar = steelBar
-        self.cc = self._settings.get_setting('clear_cover')
+        
