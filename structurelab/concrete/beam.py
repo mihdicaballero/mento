@@ -28,7 +28,7 @@ class Beam(RectangularConcreteSection):
         epsilon_c=concrete_properties["epsilon_c"]
         rebar_properties=self.steelBar.get_properties()
         f_y=rebar_properties["f_y"]
-        epsilon_y=rebar_properties["epsilon_y"]
+        epsilon_y=rebar_properties['epsilon_ty']
 
         epsilon_min_rebar_ACI_318_19=epsilon_y+epsilon_c # ESTO CHEQUEARLO BIEN, CREO QUE ES ASI, PERO REVISAR
 
@@ -43,7 +43,6 @@ class Beam(RectangularConcreteSection):
         rebar_properties=self._steelBar.get_properties()
         epsilon_y=rebar_properties["epsilon_y"]
 
-
         if epsilon_mas_deformado<=epsilon_y:
             return 0.65
         elif epsilon_mas_deformado<=epsilon_y+epsilon_c:
@@ -52,63 +51,65 @@ class Beam(RectangularConcreteSection):
             return 0.9
 
     def design_flexure_ACI_318_19(self, M_u:float):
-        a_assumed=0.18*self._depth # Partimos de un valor propuesto para la altura del bloque de compresion de Whitney.
-
+        max_rho=self.__determine_maximum_flexural_reinforcement_ratio_ACI_318_19()
+        self._settings.load_aci_318_19_settings()
+        phi = self._settings.get_setting('phi_t')
+        setting_flexural_min_reduction = self._settings.get_setting('flexural_min_reduction')
         concrete_properties=self.concrete.get_properties()
         f_c=concrete_properties["f_c"]
         rebar_properties=self.steelBar.get_properties()
         f_y=rebar_properties["f_y"]
-
-        tol=0.01
-        error=tol*2
-
-        phi_assumed=0.9 # Asumimos que trabaja dominada a traccion (en realidad mas que asumirlo, lo forzamso)
-        #while phi_assumed==0.9:
-        while(error>=tol):
-            A_s_calc=M_u/phi_assumed/(f_y*(0.9*self._depth-a_assumed/2)) # DONDE PUSE 0.9*self._depth en realidad va d, pero no lo tenemos bien el cover aun :(
-            a=A_s_calc*f_y/(0.85*f_c*self._width)
-            error=abs(a_assumed-a)/a_assumed
-            a_assumed=a
-
+        d=0.9*self._depth # Asumption
+        A=-phi*f_y**2/(1.7*f_c*self._width)
+        B=phi*f_y*d
+        C=-M_u
+        A_s_calc=(-B+np.sqrt(B**2 - 4*A*C))/(2*A)
         A_s_min=max((0.25*np.sqrt(f_c / MPa)*MPa/f_y*self._depth*self._width/cm**2) , (1.4*MPa/f_y*self._depth*self._width/cm**2))*cm**2# type: ignore
-
-        #ACA HAY QUE HACER ALGO CON LOS SETTINGS PARA QUE POR DEFECTO NO HAGA LO DE REDUCIR CUANTIA MINIMA
-        # PORQUE ES MEDIO PELIGROSO, PORQUE AFECTA A LA CAPACIDAD POR CORTE :( A DONINI NO LE GUSTA :(
-        # PODEMOS PONER ESO EN LOS SETTINGS :)
-        # VERLOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
-
-        settingMISTERIOSOS= False # ACA VER ESTO DESPUES, ES PARA LO DE LA REDUCCIOn
 
         if A_s_calc>A_s_min:
             self.__A_s_calculated=A_s_calc
         elif  4*A_s_calc/3 > A_s_min:
             self.__A_s_calculated=A_s_min
         else: 
-            if settingMISTERIOSOS:
+            if setting_flexural_min_reduction=="True":
                 self.__A_s_calculated=4*A_s_calc/3
             else:
                 self.__A_s_calculated=A_s_min
             
         rho_max=self.__determine_maximum_flexural_reinforcement_ratio_ACI_318_19()
         A_s_max=rho_max*self._depth*self._width
+
         if self.__A_s_calculated > A_s_max:
-            print(f"El armado requerido es mayor al maximo")
+            print(f"The section cannot be reinforced; increase the dimensions or use compressive reinforcement.")
+            return
         else:
-            print(f"PARA EL MOMENTO {M_u}, EL ARMADO DE CALCULO ES {self.__A_s_calculated}")
+            result={
+                'As_min_code':A_s_min,
+                'As_required':A_s_calc,
+                'As_max':A_s_max,
+                'As_adopted':self.__A_s_calculated
+            }
+            return result
 
+    def design_flexure_EN_1992(M_u):
+        pass
 
-    '''
-    def desgin_flexure():
-        if isinstance(self.concrete, concreteACI):
-            self.design_flexure_ACI()
+    def design_flexure_EHE_08(M_u):
+        pass
+
+    def design_flexure(self, M_u:float):
+        if self.concrete.design_code=="ACI 318-19":
+            return self.design_flexure_ACI_318_19(M_u)
+        elif self.concrete.design_code=="EN 1992":
+            return self.design_flexure_EN_1992(M_u)
+        elif self.concrete.design_code=="EHE-08":
+            return self.design_flexure_EHE_08(M_u)
         else:
-            raise ValueError("Concrete type not supported")
-    '''
+            raise ValueError("Concrete design code not supported")
 
-    def check_flexure_ACI_318_19(self):
-        max_rho=self.__determine_maximum_flexural_reinforcement_ratio_ACI_318_19()
-        print(max_rho)
-        pass   
+
+    def check_flexure_ACI_318_19(self, M_u:float, A_s, d_b=0.5, n_bars=2):
+        pass
 
     def check_shear_ACI_318_19(self, V_u:float, N_u:float, A_s:float, d_b:float, s:float, n_legs:float):
         concrete_properties=self.concrete.get_properties()
@@ -197,7 +198,8 @@ def main():
     )
 
     print(f"Nombre de la sección: {section.get_name()}")
-    section.design_flexure_ACI_318_19(500*kN*m)  # type: ignore
+    resultados=section.design_flexure(500*kN*m)  # type: ignore
+    print(resultados)
 
 
 def shear():
