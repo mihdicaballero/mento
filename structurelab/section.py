@@ -27,3 +27,7 @@ class Section:
     def update_settings(self, new_settings: dict):
         """Updates settings with new values."""
         self._settings.update(new_settings)
+        
+if __name__ == "__main__":
+    main()
+
