@@ -31,7 +31,8 @@ class Settings:
             'lambda': 1, # Normalweight concrete
             'phi_v': 0.75, # Shear strength reduction factor
             'phi_c': 0.65, # Compression controlled strength reduction factor
-            'phi_t': 0.90  # Tension controlled strength reduction factor
+            'phi_t': 0.90,  # Tension controlled strength reduction factor
+            'flexural_min_reduction': "True" # If "True", selects 4/3 of the calculated steel if it is less than the minimum. If "False", always uses the code's minimum values.
             # Add other ACI-specific settings
         }
 
