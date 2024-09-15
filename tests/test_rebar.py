@@ -29,31 +29,31 @@ custom_settings={
 section.update_settings(custom_settings)
 
 # Tests
-def test_beam_longitudinal_rebar_ACI_318_19():
+def test_beam_longitudinal_ACI_318_19():
     as_nec = 5 * cm**2
-    best_combination = Rebar(beam=section).beam_longitudinal_rebar_ACI_318_19(as_req=as_nec)
+    best_combination = Rebar(beam=section).beam_longitudinal_ACI_318_19(as_req=as_nec)
 
     assert best_combination is not None
     assert best_combination['layer_1'] == 1
     assert best_combination['num_bars_1'] == 3
-    assert best_combination['diameter_1'] ==  16*mm
+    assert best_combination['diameter_1'] ==  16*mm # type: ignore
     assert best_combination['total_as'].value == pytest.approx(0.0006033,rel=1e-3)
-    assert best_combination['available_spacing_1'] == 38*mm
+    assert best_combination['available_spacing_1'] == 38*mm # type: ignore
 
-def test_beam_longitudinal_rebar_ACI_318_19_fail():
+def test_beam_longitudinal_ACI_318_19_fail():
     as_nec = 150 * cm**2
     # Expecting a ValueError to be raised
     with pytest.raises(ValueError, match="Cannot fit the required reinforcement within the beam width considering clear cover and spacing."):
-        Rebar(beam=section).beam_longitudinal_rebar_ACI_318_19(as_req=as_nec)
+        Rebar(beam=section).beam_longitudinal_ACI_318_19(as_req=as_nec)
 
-def test_beam_transverse_rebar_ACI_318_19():
+def test_beam_transverse_ACI_318_19():
     av_nec = 0.00104*m #type: ignore
-    best_combination = Rebar(beam=section).beam_transverse_rebar_ACI_318_19(A_v_req=av_nec,V_s_req = 24.92*kip, lambda_factor= 1, f_c=4000*psi, d=13.5*inch) #type: ignore
+    best_combination = Rebar(beam=section).beam_transverse_ACI_318_19(A_v_req=av_nec,V_s_req = 24.92*kip, lambda_factor= 1, f_c=4000*psi, d=13.5*inch) #type: ignore
 
     assert best_combination is not None
     assert best_combination['n_stirrups'] == 1
-    assert best_combination['d_b'] == 12*mm
-    assert best_combination['s'] ==  6*inch
+    assert best_combination['d_b'] == 12*mm # type: ignore
+    assert best_combination['s'] ==  6*inch # type: ignore
     assert best_combination['A_v'].value == pytest.approx(0.001484,rel=1e-3)
 
 # This is where pytest will collect the tests and run them

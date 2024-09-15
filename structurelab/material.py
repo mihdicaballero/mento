@@ -131,7 +131,7 @@ def create_concrete(name: str, f_c: float, design_code: str):
     elif design_code == "EHE-08":
         return Concrete_EHE_08(name=name, f_c=f_c)
     else:
-        raise ValueError(f"Invalid design code: {design_code}")
+        raise ValueError(f"Invalid design code: {design_code}. Options: ACI 318-19, EN 1992, EHE-08.")
 
 @dataclass
 class Steel(Material):

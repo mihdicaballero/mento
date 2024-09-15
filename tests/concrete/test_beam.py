@@ -59,12 +59,12 @@ def test_shear_design():
     # Compare dictionaries with a tolerance for floating-point values, in m 
     assert results['A_v_min'].value  == pytest.approx(0.0002116, rel=1e-3)
     assert results['A_v_req'].value  == pytest.approx(0.001042, rel=1e-3)
-    assert results['A_v'].value  == pytest.approx(0.001662, rel=1e-3)
+    assert results['A_v'].value  == pytest.approx(0.0014842, rel=1e-3)
     assert results['phi_V_c'].value  == pytest.approx(56969.4, rel=1e-3)
-    assert results['phi_V_s'].value  == pytest.approx(176865, rel=1e-3)
-    assert results['phi_V_n'].value  == pytest.approx(233834, rel=1e-3)
+    assert results['phi_V_s'].value  == pytest.approx(157905, rel=1e-3)
+    assert results['phi_V_n'].value  == pytest.approx(214875, rel=1e-3)
     assert results['phi_V_max'].value  == pytest.approx(284847, rel=1e-3)
-    assert results["FUv"]  == pytest.approx(0.7176789, rel=1e-3)
+    assert results["FUv"]  == pytest.approx(0.7810047891, rel=1e-3)
 
     # Assert non-numeric values directly
     assert results['shear_ok'] == True

@@ -7,6 +7,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from dataclasses import dataclass
 from structurelab.concrete.rectangular import RectangularConcreteSection
 from structurelab import material
+from structurelab.rebar import Rebar
 import numpy as np
 import math
 import forallpeople
@@ -256,9 +257,10 @@ class Beam(RectangularConcreteSection):
         # Required shear reinforcing
         A_v_req = max(V_s_req/(phi_v*f_yt*d), A_v_min)
 
-        # CALL REBAR CLASS AND DESIGN THE STIRRUPS OF THE SECTION and get A_v provided
         # The result should be A_v =  0.0654498*inch and '1eØ0.5/6'
-        A_v =  0.0654498*inch #type: ignore
+        A_v_design = Rebar(self).beam_transverse_ACI_318_19(A_v_req,V_s_req, lambda_factor, f_c, d)
+
+        A_v =  A_v_design['A_v'] #type: ignore
         V_s = A_v * f_yt * d  # Shear contribution of reinforcement
         phi_V_s = phi_v * V_s  # Reduced shear contribution of reinforcement
         # Total shear strength
@@ -316,10 +318,36 @@ def shear():
     V_u=37.727*kip # type: ignore
     N_u = 0*kip # type: ignore
     A_s=0.847*inch**2 # type: ignore
-    results=section.check_shear_ACI_318_19(V_u, N_u, A_s, d_b=0.5*inch, s=6*inch, n_legs=2) # type: ignore
+    results=section.check_shear_ACI_318_19(V_u, N_u, A_s, d_b=12*mm, s=6*inch, n_legs=2) # type: ignore
     print(results)
     results=section.design_shear_ACI_318_19(V_u, N_u, A_s) # type: ignore
     print(results)
+
+def rebar():
+    concrete=create_concrete(name="H30",f_c=30*MPa, design_code="ACI 318-19") # type: ignore
+    section = Beam(
+        name="V 20x50",
+        concrete=concrete,
+        steelBar="Barras Longitudinales",
+        width=20*cm,
+        depth=50*cm,
+    )
+    print(f"Nombre de la sección: {section.get_name()}")
+    # Custom settings for a specific beam
+    custom_settings = {
+        'clear_cover': 30 * mm, #type: ignore
+        'stirrup_diameter': 8 * mm,#type: ignore
+    }
+    # Creating a Settings instance with custom settings
+    section.update_settings(custom_settings)
+    as_nec=5*cm**2
+    rebar = Rebar(beam=section)
+    # Call the calculate_rebars method
+    best_combination = rebar.beam_longitudinal_rebar_ACI_318_19(as_req=as_nec)
+    print(f"Best combination: {best_combination}")
+    av_nec = 0.00104*m #type: ignore 
+    best_combination = rebar.beam_transverse_rebar_ACI_318_19(A_v_req=av_nec,V_s_req = 24.92*kip, lambda_factor= 1, f_c=4000*psi, d=13.5*inch) #type: ignore
+    print(f"Best combination: {best_combination}")
 
 if __name__ == "__main__":
     shear()
