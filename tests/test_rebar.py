@@ -29,35 +29,32 @@ custom_settings={
 section.update_settings(custom_settings)
 
 # Tests
-def test_rebar_initialization():
-    as_nec = 15 * cm**2
-    rebar = Rebar(required_as=as_nec, beam=section)
-
-    assert rebar.required_as == as_nec
-    assert rebar.beam == section
-
-def test_rebar_calculate_rebars():
-    as_nec = 16.08 * cm**2
-    rebar = Rebar(required_as=as_nec, beam=section)
-    best_combination = rebar.calculate_rebars()
+def test_beam_longitudinal_rebar_ACI_318_19():
+    as_nec = 5 * cm**2
+    best_combination = Rebar(beam=section).beam_longitudinal_rebar_ACI_318_19(as_req=as_nec)
 
     assert best_combination is not None
-    assert 'layer_1' in best_combination
-    assert 'num_bars_1' in best_combination
-    assert 'diameter_1' in best_combination
-    assert 'total_as' in best_combination
-    assert 'available_spacing_1' in best_combination
+    assert best_combination['layer_1'] == 1
+    assert best_combination['num_bars_1'] == 3
+    assert best_combination['diameter_1'] ==  16*mm
+    assert best_combination['total_as'].value == pytest.approx(0.0006033,rel=1e-3)
+    assert best_combination['available_spacing_1'] == 38*mm
 
-    # Check if total_as meets or exceeds the required area
-    assert best_combination['total_as'].value == pytest.approx(as_nec.value,rel=1e-3)
-
-def test_rebar_no_solution_possible():
+def test_beam_longitudinal_rebar_ACI_318_19_fail():
     as_nec = 150 * cm**2
-    rebar = Rebar(required_as=as_nec, beam=section)
-
+    # Expecting a ValueError to be raised
     with pytest.raises(ValueError, match="Cannot fit the required reinforcement within the beam width considering clear cover and spacing."):
-        rebar.calculate_rebars()
-        raise ValueError('Cannot fit the required reinforcement within the beam width considering clear cover and spacing')
+        Rebar(beam=section).beam_longitudinal_rebar_ACI_318_19(as_req=as_nec)
+
+def test_beam_transverse_rebar_ACI_318_19():
+    av_nec = 0.00104*m #type: ignore
+    best_combination = Rebar(beam=section).beam_transverse_rebar_ACI_318_19(A_v_req=av_nec,V_s_req = 24.92*kip, lambda_factor= 1, f_c=4000*psi, d=13.5*inch) #type: ignore
+
+    assert best_combination is not None
+    assert best_combination['n_stirrups'] == 1
+    assert best_combination['d_b'] == 12*mm
+    assert best_combination['s'] ==  6*inch
+    assert best_combination['A_v'].value == pytest.approx(0.001484,rel=1e-3)
 
 # This is where pytest will collect the tests and run them
 if __name__ == "__main__":
