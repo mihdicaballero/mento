@@ -28,9 +28,9 @@ class Beam(RectangularConcreteSection):
         epsilon_c=concrete_properties["epsilon_c"]
         rebar_properties=self.steelBar.get_properties()
         f_y=rebar_properties["f_y"]
-        epsilon_y=rebar_properties['epsilon_ty']
+        epsilon_ty=rebar_properties['epsilon_ty']
 
-        epsilon_min_rebar_ACI_318_19=epsilon_y+epsilon_c # ESTO CHEQUEARLO BIEN, CREO QUE ES ASI, PERO REVISAR
+        epsilon_min_rebar_ACI_318_19=epsilon_ty+epsilon_c # ESTO CHEQUEARLO BIEN, CREO QUE ES ASI, PERO REVISAR
 
         rho_max=0.85*beta_1*f_c/f_y*(epsilon_c/(epsilon_c+epsilon_min_rebar_ACI_318_19))
         return rho_max
@@ -41,55 +41,82 @@ class Beam(RectangularConcreteSection):
         concrete_properties=self._concrete.get_properties()
         epsilon_c=concrete_properties["epsilon_c"]
         rebar_properties=self._steelBar.get_properties()
-        epsilon_y=rebar_properties["epsilon_y"]
+        epsilon_ty=rebar_properties["epsilon_ty"]
 
-        if epsilon_mas_deformado<=epsilon_y:
+        if epsilon_mas_deformado<=epsilon_ty:
             return 0.65
-        elif epsilon_mas_deformado<=epsilon_y+epsilon_c:
-            return (0.9-0.65)*(epsilon_mas_deformado-epsilon_y)/epsilon_c+0.65
+        elif epsilon_mas_deformado<=epsilon_ty+epsilon_c:
+            return (0.9-0.65)*(epsilon_mas_deformado-epsilon_ty)/epsilon_c+0.65
         else:
             return 0.9
 
     def design_flexure_ACI_318_19(self, M_u:float):
-        max_rho=self.__determine_maximum_flexural_reinforcement_ratio_ACI_318_19()
         self._settings.load_aci_318_19_settings()
         phi = self._settings.get_setting('phi_t')
         setting_flexural_min_reduction = self._settings.get_setting('flexural_min_reduction')
         concrete_properties=self.concrete.get_properties()
-        f_c=concrete_properties["f_c"]
+        f_c=concrete_properties['f_c']
+        beta_1=concrete_properties['beta_1']
         rebar_properties=self.steelBar.get_properties()
-        f_y=rebar_properties["f_y"]
-        d=0.9*self._depth # Asumption
-        A=-phi*f_y**2/(1.7*f_c*self._width)
-        B=phi*f_y*d
-        C=-M_u
-        A_s_calc=(-B+np.sqrt(B**2 - 4*A*C))/(2*A)
+        f_y=rebar_properties['f_y']
+        epsilon_ty=rebar_properties['epsilon_ty']
+        E_s=rebar_properties['E_s']
+
+        d=0.9*self._depth # Asumption, this is the main difference between design and check.
+        b=self._width
+
+        
+        # Determination of minimum reinforcement
         A_s_min=max((0.25*np.sqrt(f_c / MPa)*MPa/f_y*self._depth*self._width/cm**2) , (1.4*MPa/f_y*self._depth*self._width/cm**2))*cm**2# type: ignore
 
-        if A_s_calc>A_s_min:
-            self.__A_s_calculated=A_s_calc
-        elif  4*A_s_calc/3 > A_s_min:
-            self.__A_s_calculated=A_s_min
-        else: 
-            if setting_flexural_min_reduction=="True":
-                self.__A_s_calculated=4*A_s_calc/3
-            else:
-                self.__A_s_calculated=A_s_min
-            
+        # Determination of maximum reinforcement
         rho_max=self.__determine_maximum_flexural_reinforcement_ratio_ACI_318_19()
-        A_s_max=rho_max*self._depth*self._width
+        A_s_max=rho_max*d*b
 
-        if self.__A_s_calculated > A_s_max:
-            print(f"The section cannot be reinforced; increase the dimensions or use compressive reinforcement.")
-            return
-        else:
+        # Determination of required reinforcement
+        R_n=M_u/(phi*b*d**2)
+        A_s_calc=0.85*f_c*b*d/f_y*(1-np.sqrt(1-2*R_n/(0.85*f_c)))
+
+        if A_s_calc>A_s_min:
+            self._A_s_calculated=A_s_calc
+        elif  4*A_s_calc/3 > A_s_min:
+            self._A_s_calculated=A_s_min
+        else: 
+            if setting_flexural_min_reduction=='True':
+                self._A_s_calculated=4*A_s_calc/3
+            else:
+                self._A_s_calculated=A_s_min
+        if self._A_s_calculated <= A_s_max: 
+            self._A_s_comp=0
             result={
                 'As_min_code':A_s_min,
                 'As_required':A_s_calc,
                 'As_max':A_s_max,
-                'As_adopted':self.__A_s_calculated
+                'As_adopted':self._A_s_calculated,
+                'As_compression':self._A_s_comp
             }
             return result
+        else:
+            rho=0.85*beta_1*f_c/f_y*(0.003/(epsilon_ty+0.006))
+            M_n_t=rho*f_y*(d-0.59*rho*f_y*d/f_c)*b*d
+            M_n_prima=M_u/phi-M_n_t
+            c_t=0.003*d/(epsilon_ty+0.006)
+            # HAY QUE VER DONDE ESTA DEFINIDO EL d_prima por ahora asumo
+            d_prima=5*cm
+            f_s_prima=min(0.003*E_s*(1-d_prima/c_t),f_y)
+            A_s_prima=M_n_prima/(f_s_prima*(d-d_prima))
+            A_s=rho*b*d+A_s_prima
+            self._A_s_calculated=A_s
+            self._A_s_comp=A_s_prima
+            result={
+                'As_min_code':A_s_min,
+                'As_required':self._A_s_calculated,
+                'As_max':A_s_max,
+                'As_adopted':self._A_s_calculated,
+                'As_compression':self._A_s_comp
+            }
+            return result
+
 
     def design_flexure_EN_1992(M_u):
         pass
@@ -185,20 +212,20 @@ class Beam(RectangularConcreteSection):
 
 
 
-def main():
-    # Ejemplo de uso
-    concrete=material.create_concrete(name="H30",f_c=30*MPa, design_code="ACI 318-19") # type: ignore
-    steelBar=material.SteelBar(name="ADN 420", f_y=420*MPa) # type: ignore
+def flexure():
+    # Example 6.9.2 CRSI Design Guide - p6-64 (355 pdf)
+    concrete=material.create_concrete(name="fc4000",f_c=4000*psi, design_code="ACI 318-19") # type: ignore
+    steelBar=material.SteelBar(name="G60", f_y=60000*psi) # type: ignore
     section = Beam(
-        name="V-40x50",
+        name="B-28x24",
         concrete=concrete,
         steelBar=steelBar,
-        width=400 * mm,  # type: ignore
-        depth=500 * mm,  # type: ignore
+        width=28 * inch,  # type: ignore
+        depth=24 * inch,  # type: ignore
     )
 
     print(f"Nombre de la sección: {section.get_name()}")
-    resultados=section.design_flexure(500*kN*m)  # type: ignore
+    resultados=section.design_flexure(156.1*kip*ft)  # type: ignore
     print(resultados)
 
 
@@ -226,4 +253,5 @@ def shear():
     print(results)
 
 if __name__ == "__main__":
+    flexure()
     shear()
