@@ -150,13 +150,13 @@ class SteelBar(Steel):
 
     def __init__(self, name: str, f_y: float, density: float =7850 *kg/m**3):
         super().__init__(name, f_y, density)
-        self._epsilon_ty = self._f_y / self._E_s # 21.2.2.1 - Page 392
+        self._epsilon_y = self._f_y / self._E_s # 21.2.2.1 - Page 392
 
     def get_properties(self) -> dict:
         properties = super().get_properties()
         properties['E_s'] = self._E_s
         properties['f_y'] = self._f_y
-        properties['epsilon_ty']=self._epsilon_ty
+        properties['epsilon_ty']=self._epsilon_y
         return properties
 
 @dataclass
