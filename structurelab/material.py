@@ -131,7 +131,7 @@ def create_concrete(name: str, f_c: float, design_code: str):
     elif design_code == "EHE-08":
         return Concrete_EHE_08(name=name, f_c=f_c)
     else:
-        raise ValueError(f"Invalid design code: {design_code}")
+        raise ValueError(f"Invalid design code: {design_code}. Options: ACI 318-19, EN 1992, EHE-08.")
 
 @dataclass
 class Steel(Material):
@@ -150,13 +150,13 @@ class SteelBar(Steel):
 
     def __init__(self, name: str, f_y: float, density: float =7850 *kg/m**3):
         super().__init__(name, f_y, density)
-        self._epsilon_ty = self._f_y / self._E_s # 21.2.2.1 - Page 392
+        self._epsilon_y = self._f_y / self._E_s # 21.2.2.1 - Page 392
 
     def get_properties(self) -> dict:
         properties = super().get_properties()
         properties['E_s'] = self._E_s
         properties['f_y'] = self._f_y
-        properties['epsilon_ty']=self._epsilon_ty
+        properties['epsilon_ty']=self._epsilon_y
         return properties
 
 @dataclass
