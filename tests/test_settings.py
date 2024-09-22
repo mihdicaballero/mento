@@ -1,10 +1,5 @@
 import pytest
-import forallpeople
-
-# Initialize the forallpeople environment
-forallpeople.environment('structural',top_level=True)
-#Useful extra units
-cm = 1e-2*m # type: ignore
+from structurelab.units import mm
 
 from structurelab.settings import Settings  # Replace 'your_module' with the actual module name
 

@@ -1,4 +1,7 @@
-from structurelab.PDF.pdf_tools import *
+from structurelab.PDF.pdf_tools import merge_pdfs_by_folder, merge_pdfs_by_name, merge_template_to_pdf, extract_pdf_pages 
+from structurelab.PDF.pdf_tools import add_page_numbers, insert_text_into_pdf, remove_pdf_file, rename_pdf_file
+import numpy as np
+from pathlib import Path
 
 def main():
     ## EXAMPLE MERGE FOLDER

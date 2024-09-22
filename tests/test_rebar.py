@@ -1,19 +1,14 @@
 import sys
 import os
-import random
 
 # Add the project root to PYTHONPATH
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import pytest
 from structurelab.material import create_concrete
-from structurelab.settings import Settings
 from structurelab.concrete.beam import Beam
 from structurelab.rebar import Rebar
-import forallpeople
-
-forallpeople.environment('structural', top_level=True)
-cm = 1e-2 * forallpeople.m  # type: ignore
+from structurelab.units import MPa, psi, kip, mm, inch, m, cm
 
 concrete = create_concrete(name="H30", f_c=30*MPa, design_code="ACI 318-19") # type: ignore
 section = Beam(

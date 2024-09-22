@@ -1,6 +1,5 @@
 from dataclasses import dataclass, field
-import forallpeople
-forallpeople.environment('structural', top_level=True)
+from structurelab.units import kN, m
 
 @dataclass
 class Forces:

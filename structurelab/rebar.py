@@ -1,8 +1,5 @@
-import forallpeople
-forallpeople.environment('structural',top_level=True)
-cm = 1e-2*m # type: ignore
 import math
-from structurelab import material
+from structurelab.units import psi, mm, inch, m, cm
 
 class Rebar:
     rebar_diameters = [6*mm, 8*mm, 10*mm, 12*mm, 16*mm, 20*mm, 25*mm, 32*mm] #type: ignore
@@ -62,7 +59,6 @@ class Rebar:
     def beam_transverse_rebar_ACI_318_19(self, A_v_req:float, V_s_req:float, lambda_factor:float, f_c:float, d:float):
         self.def_stirrup_db = self.settings.get('stirrup_diameter')
         best_combination = None
-        min_A_v = float('inf')
         # Check if V_s_req <= 4 * lambda * sqrt(f_c) * A_cv
         A_cv = self.beam._width*d
         if V_s_req <= 4 * lambda_factor * math.sqrt(f_c / psi) * psi * A_cv: #type: ignore
@@ -100,7 +96,7 @@ class Rebar:
         # Area of a stirrup bar 
         A_db = self.rebar_areas[d_b]  # Convert diameter to rebar area
         # Vertical stirrups angle
-        alpha = 90  # degrees
+        # alpha = 90  # degrees
         # Area of vertical stirrups
         A_vs = n_legs * A_db
         # Area of vertical stirrups per unit length (in^2/ft)

@@ -46,8 +46,8 @@ disable = [
 max-line-length = 120
 
 [tool.ruff]
-extend-select = ["C4", "SIM", "TCH"]
-ignore = []
+lint.extend-select = ["C4", "SIM", "TCH"]
+lint.ignore = []
 show-fixes = true
 
 [tool.mypy]

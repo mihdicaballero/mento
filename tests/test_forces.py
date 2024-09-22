@@ -5,10 +5,7 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import pytest
-import forallpeople
-forallpeople.environment('structural', top_level=True)
-
-# Import the Forces class
+from structurelab.units import kN, m
 from structurelab.forces import Forces
 
 def test_default_initialization():
