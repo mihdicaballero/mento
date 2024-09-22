@@ -46,7 +46,7 @@ disable = [
 max-line-length = 120
 
 [tool.ruff]
-extend-select = ["C4", SIM", "TCH"]
+extend-select = ["C4", "SIM", "TCH"]
 ignore = []
 show-fixes = true
 
