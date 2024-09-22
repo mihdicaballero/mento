@@ -2,6 +2,7 @@ import forallpeople
 forallpeople.environment('structural',top_level=True)
 cm = 1e-2*m # type: ignore
 import math
+from structurelab import material
 
 class Rebar:
     rebar_diameters = [6*mm, 8*mm, 10*mm, 12*mm, 16*mm, 20*mm, 25*mm, 32*mm] #type: ignore
@@ -14,8 +15,8 @@ class Rebar:
             self.clear_spacing = self.settings.get('clear_spacing')
             self.def_stirrup_db = self.settings.get('stirrup_diameter')
 
-    def beam_longitudinal_ACI_318_19(self, as_req):
-        self.as_req = as_req
+    def beam_longitudinal_rebar_ACI_318_19(self, A_s_req:float):
+        self.A_s_req = A_s_req
         effective_width = self.beam._width - 2 * (self.cc + self.def_stirrup_db)
         # The method finds the best combination of rebar for the required As
         best_combination = None
@@ -31,7 +32,7 @@ class Rebar:
             while num_bars * diameter + (num_bars - 1) * self.clear_spacing <= effective_width:
                 total_as = num_bars * rebar_area
                 
-                if total_as >= as_req:
+                if total_as >= A_s_req:
                     if best_combination is None or total_as < min_total_area:
                         min_total_area = total_as
                         available_spacing = (effective_width - (num_bars * diameter)) / (num_bars - 1)
@@ -53,7 +54,12 @@ class Rebar:
                 
         return best_combination
     
-    def beam_transverse_ACI_318_19(self, A_v_req, V_s_req, lambda_factor, f_c, d):
+    def beam_longitudinal_rebar_EN_1992(self):
+        pass
+    def beam_longitudinal_rebar_EHE_08(self):
+        pass
+
+    def beam_transverse_rebar_ACI_318_19(self, A_v_req:float, V_s_req:float, lambda_factor:float, f_c:float, d:float):
         self.def_stirrup_db = self.settings.get('stirrup_diameter')
         best_combination = None
         min_A_v = float('inf')
@@ -106,3 +112,31 @@ class Rebar:
                             'A_v': A_v,
                         }
         return best_combination
+    
+    def beam_transverse_rebar_EN_1992(self):
+        pass
+    
+    def beam_transverse_rebar_EHE_08(self):
+        pass
+    
+    # Factory method to select the transverse rebar method
+    def beam_transverse_rebar(self,  A_v_req:float, V_s_req:float, lambda_factor:float, f_c:float, d:float):
+        if self.beam.concrete.design_code=="ACI 318-19":
+            return self.beam_transverse_rebar_ACI_318_19(A_v_req, V_s_req, lambda_factor, f_c, d)
+        elif self.beam.concrete.design_code=="EN 1992":
+            return self.beam_transverse_rebar_EN_1992()
+        elif self.beam.concrete.design_code=="EHE-08":
+            return self.beam_transverse_rebar_EHE_08()
+        else:
+            raise ValueError(f"Shear design method not implemented for concrete type: {type(self.concrete).__name__}")
+    
+    # Factory method to select the longitudinal rebar method
+    def beam_longitudinal_rebar(self,  A_s_req:float):
+        if self.beam.concrete.design_code=="ACI 318-19":
+            return self.beam_longitudinal_rebar_ACI_318_19(A_s_req)
+        elif self.beam.concrete.design_code=="EN 1992":
+            return self.beam_longitudinal_rebar_EN_1992()
+        elif self.beam.concrete.design_code=="EHE-08":
+            return self.beam_longitudinal_rebar_EHE_08()
+        else:
+            raise ValueError(f"Shear design method not implemented for concrete type: {type(self.concrete).__name__}")

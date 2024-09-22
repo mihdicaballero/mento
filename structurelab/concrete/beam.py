@@ -13,7 +13,7 @@ import math
 import forallpeople
 forallpeople.environment('structural', top_level=True)
 # Definir algunas unidades adicionales útiles
-cm = 1e-2 * m  # type: ignore
+cm = 1e-2 * m  # type: ignore # noqa: F821
 
 @dataclass
 class Beam(RectangularConcreteSection):
@@ -210,7 +210,7 @@ class Beam(RectangularConcreteSection):
         cc = self._settings.get_setting('clear_cover')
         self._settings.load_aci_318_19_settings()
         phi_v = self._settings.get_setting('phi_v')
-        f_yt = min(f_y,60*ksi) #type: ignore
+        f_yt = min(f_y,60*ksi) #type: ignore # noqa: F821
         lambda_factor = self._settings.get_setting('lambda')
         # Effective height
         d_bs_ini = self._settings.get_setting('longitudinal_diameter') # Longitudinal diameter if none is defined
@@ -225,28 +225,28 @@ class Beam(RectangularConcreteSection):
         sigma_Nu = min(N_u / (6 * A_g), 0.05 * f_c)  # Axial stress influence
 
         # Concrete shear capacity assuming that the beam is provided with minimum shear rebar:
-        k_c_min_rebar = max(2 * lambda_factor * math.sqrt(f_c / psi) * psi + sigma_Nu, #type: ignore
-                            8 * lambda_factor * rho_w ** (1/3) * math.sqrt(f_c / psi) * psi + sigma_Nu) #type: ignore
+        k_c_min_rebar = max(2 * lambda_factor * math.sqrt(f_c / psi) * psi + sigma_Nu, #type: ignore # noqa: F821
+                            8 * lambda_factor * rho_w ** (1/3) * math.sqrt(f_c / psi) * psi + sigma_Nu) #type: ignore # noqa: F821
 
-        V_cmin = 0*kip  # type: ignore
-        V_cmax = (5 * lambda_factor * math.sqrt(f_c / psi) * psi) * A_cv  # Maximum concrete shear strength #type: ignore
+        V_cmin = 0*kip  # type: ignore # noqa: F821
+        V_cmax = (5 * lambda_factor * math.sqrt(f_c / psi) * psi) * A_cv  # Maximum concrete shear strength #type: ignore # noqa: F821
         
         # Calculate actual concrete shear strength
         V_c = min(V_cmax, max(V_cmin, k_c_min_rebar * A_cv))
         phi_V_c = phi_v * V_c  # Reduced concrete shear strength
         
         # Maximum total shear capacity
-        V_max = V_c + (8 * lambda_factor * math.sqrt(f_c / psi) * psi) * A_cv #type: ignore
+        V_max = V_c + (8 * lambda_factor * math.sqrt(f_c / psi) * psi) * A_cv #type: ignore # noqa: F821
         phi_V_max = phi_v * V_max  # Reduced maximum shear capacity
 
         # Minimum shear reinforcement calculation
         # Minimum reinforcement should be placed if the factored shear Vu is greater than half the shear capacity of the concrete, 
         # reduced by 0.5ϕVc. It is assumed that minimum reinforcement is required.
         if V_u < phi_V_c/2:
-            A_v_min = 0*inch #type: ignore
+            A_v_min = 0*inch #type: ignore # noqa: F821
             max_shear_ok = True
         elif phi_V_c/2 < V_u < phi_V_max:
-            A_v_min = max((0.75 * math.sqrt(f_c / psi) * psi/ f_yt) * self._width , (50 * psi/f_yt) * self._width)  # type: ignore
+            A_v_min = max((0.75 * math.sqrt(f_c / psi) * psi/ f_yt) * self._width , (50 * psi/f_yt) * self._width)  # type: ignore # noqa: F821
             max_shear_ok = True
         else:
             max_shear_ok = False 
@@ -258,7 +258,7 @@ class Beam(RectangularConcreteSection):
         A_v_req = max(V_s_req/(phi_v*f_yt*d), A_v_min)
 
         # The result should be A_v =  0.0654498*inch and '1eØ0.5/6'
-        A_v_design = Rebar(self).beam_transverse_ACI_318_19(A_v_req,V_s_req, lambda_factor, f_c, d)
+        A_v_design = Rebar(self).beam_transverse_rebar(A_v_req,V_s_req, lambda_factor, f_c, d)
 
         A_v =  A_v_design['A_v'] #type: ignore
         V_s = A_v * f_yt * d  # Shear contribution of reinforcement
@@ -280,6 +280,41 @@ class Beam(RectangularConcreteSection):
             "FUv" : V_u / phi_V_n 
         }
         return result
+    
+    def check_shear_EN_1992(self, V_u: float, N_u: float, A_s: float):
+        pass
+ 
+    def design_shear_EN_1992(self, V_u: float, N_u: float, A_s: float):
+        pass
+
+    def design_shear_EHE_08(self, V_u: float, N_u: float, A_s: float):
+        pass
+
+    def check_shear_EHE_08(self, V_u: float, N_u: float, A_s: float):
+        pass
+  
+    # Factory method to select the shear design method
+    def design_shear(self, V_u: float, N_u: float, A_s: float):
+        if self.concrete.design_code=="ACI 318-19":
+            return self.design_shear_ACI_318_19(V_u, N_u, A_s)
+        elif self.concrete.design_code=="EN 1992":
+            return self.design_shear_EN_1992(V_u, N_u, A_s)
+        elif self.concrete.design_code=="EHE-08":
+            return self.design_shear_EHE_08(V_u, N_u, A_s)
+        else:
+            raise ValueError(f"Shear design method not implemented for concrete type: {type(self.concrete).__name__}")
+    
+    # Factory method to select the shear check method
+    def check_shear(self, V_u: float, N_u: float, A_s: float, d_b:float, s:float, n_legs:int):
+        if self.concrete.design_code=="ACI 318-19":
+            return self.check_shear_ACI_318_19(V_u, N_u, A_s, d_b, s, n_legs)
+        elif self.concrete.design_code=="EN 1992":
+            return self.check_shear_EN_1992(V_u, N_u, A_s, d_b, s, n_legs)
+        elif self.concrete.design_code=="EHE-08":
+            return self.check_shear_EHE_08(V_u, N_u, A_s, d_b, s, n_legs)
+        else:
+            raise ValueError(f"Shear design method not implemented for concrete type: {type(self.concrete).__name__}")
+
 
 
 def main():
@@ -318,13 +353,13 @@ def shear():
     V_u=37.727*kip # type: ignore
     N_u = 0*kip # type: ignore
     A_s=0.847*inch**2 # type: ignore
-    results=section.check_shear_ACI_318_19(V_u, N_u, A_s, d_b=12*mm, s=6*inch, n_legs=2) # type: ignore
+    results=section.check_shear(V_u, N_u, A_s, d_b=12*mm, s=6*inch, n_legs=2) # type: ignore
     print(results)
-    results=section.design_shear_ACI_318_19(V_u, N_u, A_s) # type: ignore
+    results=section.design_shear(V_u, N_u, A_s) # type: ignore
     print(results)
 
 def rebar():
-    concrete=create_concrete(name="H30",f_c=30*MPa, design_code="ACI 318-19") # type: ignore
+    concrete=material.create_concrete(name="H30",f_c=30*MPa, design_code="ACI 318-19") # type: ignore
     section = Beam(
         name="V 20x50",
         concrete=concrete,
@@ -336,18 +371,18 @@ def rebar():
     # Custom settings for a specific beam
     custom_settings = {
         'clear_cover': 30 * mm, #type: ignore
-        'stirrup_diameter': 8 * mm,#type: ignore
+        'stirrup_diameter': 8 * mm, #type: ignore
     }
     # Creating a Settings instance with custom settings
     section.update_settings(custom_settings)
     as_nec=5*cm**2
     rebar = Rebar(beam=section)
     # Call the calculate_rebars method
-    best_combination = rebar.beam_longitudinal_rebar_ACI_318_19(as_req=as_nec)
+    best_combination = rebar.beam_longitudinal_rebar(A_s_req=as_nec)
     print(f"Best combination: {best_combination}")
     av_nec = 0.00104*m #type: ignore 
-    best_combination = rebar.beam_transverse_rebar_ACI_318_19(A_v_req=av_nec,V_s_req = 24.92*kip, lambda_factor= 1, f_c=4000*psi, d=13.5*inch) #type: ignore
+    best_combination = rebar.beam_transverse_rebar(A_v_req=av_nec,V_s_req = 24.92*kip, lambda_factor= 1, f_c=4000*psi, d=13.5*inch) #type: ignore
     print(f"Best combination: {best_combination}")
 
 if __name__ == "__main__":
-    shear()
+    rebar()
