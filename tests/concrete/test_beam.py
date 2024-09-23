@@ -34,6 +34,7 @@ V_u = 37.727*kip  # type: ignore
 N_u = 0*kip  # type: ignore
 A_s = 0.847*inch**2  # type: ignore
 
+
 def test_shear_check():
     
     results = section.check_shear_ACI_318_19(V_u, N_u, A_s, d_b=0.5*inch, s=6*inch, n_legs=2)  # type: ignore
@@ -69,6 +70,33 @@ def test_shear_design():
     # Assert non-numeric values directly
     assert results['shear_ok'] == True
     assert results['max_shear_ok'] == True
+
+
+
+# ------- Flexural test --------------
+# LO QUE ME ESTÁ FALTANDO ES SETEAR EL MEC COVER.
+
+sectionFlexureTest1 = Beam(
+    # CRSI GUIDE EXAMPLE 6.6
+    name="B-12x24",
+    concrete=concrete,
+    steelBar=steelBar,
+    width=12*inch,  # type: ignore
+    depth=24*inch,  # type: ignore
+)
+
+def test_flexural_design():
+    
+    results = sectionFlexureTest1.design_flexure(258.3*kip*ft)  # type: ignore
+
+    # Compare dictionaries with a tolerance for floating-point values, in m 
+    assert results['As_min_code'].value  == pytest.approx(0.0005548, rel=1e-3)
+    assert results['As_required'].value  == pytest.approx(0.0019173, rel=1e-3)
+    assert results['As_max'].value  == pytest.approx(0.0030065, rel=1e-3)
+    assert results['As_adopted'].value  == pytest.approx(0.0019173, rel=1e-3)
+    assert results['As_compression'].value  == pytest.approx(0, rel=1e-3)
+
+
 
 
 # This is where pytest will collect the tests and run them

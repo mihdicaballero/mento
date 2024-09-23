@@ -67,7 +67,7 @@ class Beam(RectangularConcreteSection):
 
         
         # Determination of minimum reinforcement
-        A_s_min=max((0.25*np.sqrt(f_c / MPa)*MPa/f_y*self._depth*self._width/cm**2) , (1.4*MPa/f_y*self._depth*self._width/cm**2))*cm**2# type: ignore
+        A_s_min=max((3*np.sqrt(f_c / psi)*psi/f_y*d*self._width) , (200*psi/f_y*d*self._width))# type: ignore
 
         # Determination of maximum reinforcement
         rho_max=self.__determine_maximum_flexural_reinforcement_ratio_ACI_318_19()
@@ -309,19 +309,19 @@ class Beam(RectangularConcreteSection):
 
 
 def flexure():
-    # Example 6.9.2 CRSI Design Guide - p6-64 (355 pdf)
+    # Example 6.6 CRSI Design Guide
     concrete=material.create_concrete(name="fc4000",f_c=4000*psi, design_code="ACI 318-19") # type: ignore
     steelBar=material.SteelBar(name="G60", f_y=60000*psi) # type: ignore
     section = Beam(
-        name="B-28x24",
+        name="B-12x24",
         concrete=concrete,
         steelBar=steelBar,
-        width=28 * inch,  # type: ignore
+        width=12 * inch,  # type: ignore
         depth=24 * inch,  # type: ignore
     )
 
     print(f"Nombre de la sección: {section.get_name()}")
-    resultados=section.design_flexure(156.1*kip*ft)  # type: ignore
+    resultados=section.design_flexure(258.3*kip*ft)  # type: ignore
     print(resultados)
 
 
