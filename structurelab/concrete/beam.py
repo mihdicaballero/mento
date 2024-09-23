@@ -117,7 +117,7 @@ class Beam(RectangularConcreteSection):
         cc = self._settings.get_setting('clear_cover')
         self._settings.load_aci_318_19_settings()
         phi_v = self._settings.get_setting('phi_v')
-        f_yt = min(f_y,60*ksi) #type: ignore
+        f_yt = min(f_y,60*ksi)
         lambda_factor = self._settings.get_setting('lambda')
 
         # Minimum shear reinforcement calculation
@@ -144,7 +144,7 @@ class Beam(RectangularConcreteSection):
         rho_w = A_s / A_cv  # Longitudinal reinforcement ratio
         
         # Size modification factor
-        lambda_s = math.sqrt(2 / (1 + d / (10*inch))) #type: ignore
+        lambda_s = math.sqrt(2 / (1 + d / (10*inch)))
 
         # Concrete shear strength calculation
         sigma_Nu = min(N_u / (6 * A_g), 0.05 * f_c)  # Axial stress influence
@@ -153,22 +153,22 @@ class Beam(RectangularConcreteSection):
         if A_v < A_v_min:
             k_c_min_rebar = 8 * lambda_s * lambda_factor * rho_w ** (1/3) * math.sqrt(f_c / psi) * psi + sigma_Nu
         else:           
-            k_c_min_rebar = max(2 * lambda_factor * math.sqrt(f_c / psi) * psi + sigma_Nu, #type: ignore
-                            8 * lambda_factor * rho_w ** (1/3) * math.sqrt(f_c / psi) * psi + sigma_Nu) #type: ignore
+            k_c_min_rebar = max(2 * lambda_factor * math.sqrt(f_c / psi) * psi + sigma_Nu,
+                            8 * lambda_factor * rho_w ** (1/3) * math.sqrt(f_c / psi) * psi + sigma_Nu)
 
         V_cmin = 0*kip  
-        V_cmax = (5 * lambda_factor * math.sqrt(f_c / psi) * psi) * A_cv  # Maximum concrete shear strength #type: ignore
+        V_cmax = (5 * lambda_factor * math.sqrt(f_c / psi) * psi) * A_cv  # Maximum concrete shear strength
         
         # Calculate actual concrete shear strength
         V_c = min(V_cmax, max(V_cmin, k_c_min_rebar * A_cv))
         phi_V_c = phi_v * V_c  # Reduced concrete shear strength
         
         # Maximum total shear capacity
-        V_max = V_c + (8 * lambda_factor * math.sqrt(f_c / psi) * psi) * A_cv #type: ignore
+        V_max = V_c + (8 * lambda_factor * math.sqrt(f_c / psi) * psi) * A_cv
         phi_V_max = phi_v * V_max  # Reduced maximum shear capacity
 
         if V_u < phi_V_c/2:
-            A_v_min = 0*inch #type: ignore
+            A_v_min = 0*inch
             max_shear_ok = True
         elif phi_V_c/2 < V_u < phi_V_max:
             A_v_min = max((0.75 * math.sqrt(f_c / psi) * psi/ f_yt) * self._width , (50 * psi/f_yt) * self._width)  
@@ -255,17 +255,30 @@ class Beam(RectangularConcreteSection):
         # Required shear reinforcing
         A_v_req = max(V_s_req/(phi_v*f_yt*d), A_v_min)
 
-        # The result should be A_v =  0.0654498*inch and '1eØ0.5/6'
-        A_v_design = Rebar(self).beam_transverse_rebar(A_v_req,V_s_req, lambda_factor, f_c, d)
+        # Design input for rebar detailing
+        self.shear_rebar_input = {
+            'A_v_req': A_v_req,
+            'V_s_req': V_s_req,
+            'd': d  # effective depth         
+        }
 
-        A_v =  A_v_design['A_v'] #type: ignore
+        A_v_design = Rebar(self).beam_transverse_rebar(self.shear_rebar_input)
+        # Store the final rebar design results as a property of the Beam instance
+        self.transverse_rebar = {
+            'n_stirrups': A_v_design['n_stirrups'],
+            'd_b': A_v_design['d_b'],
+            'spacing': A_v_design['spacing'],
+            'A_v': A_v_design['A_v']
+        }
+
+        A_v =  A_v_design['A_v']
         V_s = A_v * f_yt * d  # Shear contribution of reinforcement
         phi_V_s = phi_v * V_s  # Reduced shear contribution of reinforcement
         # Total shear strength
         phi_V_n = phi_v * (V_c + V_s)  # Total reduced shear strength (concrete + rebar)
 
         # Design results
-        result = {
+        self.shear_design_results = {
             'A_v_min': A_v_min,  # Minimum shear reinforcement area
             'A_v_req': A_v_req, # Required shear reinforcing area
             'A_v': A_v,  # Provided stirrup reinforcement per unit length
@@ -277,7 +290,7 @@ class Beam(RectangularConcreteSection):
             'max_shear_ok': max_shear_ok,  # Check if applied shear is within max shear capacity
             "FUv" : V_u / phi_V_n 
         }
-        return result
+        return self.shear_design_results
     
     def check_shear_EN_1992(self, V_u: float, N_u: float, A_s: float):
         pass
@@ -340,47 +353,16 @@ def shear():
         }
     concrete=material.create_concrete(name="C4",f_c=4000*psi, design_code="ACI 318-19") 
     steelBar=material.SteelBar(name="ADN 420", f_y=60*ksi) 
-    section = Beam(
-        name="V-10x16",
-        concrete=concrete,
-        steelBar=steelBar,
-        width=10*inch,  
-        depth=16*inch,  
-    )
+    section = Beam(name="V-10x16",concrete=concrete,steelBar=steelBar,width=10*inch, depth=16*inch)
     section.update_settings(custom_settings)
     V_u=37.727*kip 
     N_u = 0*kip 
     A_s=0.847*inch**2 
     results=section.check_shear(V_u, N_u, A_s, d_b=12*mm, s=6*inch, n_legs=2) 
     print(results)
-    results=section.design_shear(V_u, N_u, A_s) 
-    print(results)
-
-def rebar():
-    concrete=material.create_concrete(name="H30",f_c=30*MPa, design_code="ACI 318-19") 
-    section = Beam(
-        name="V 20x50",
-        concrete=concrete,
-        steelBar="Barras Longitudinales",
-        width=20*cm,
-        depth=50*cm,
-    )
-    print(f"Nombre de la sección: {section.get_name()}")
-    # Custom settings for a specific beam
-    custom_settings = {
-        'clear_cover': 30 * mm, #type: ignore
-        'stirrup_diameter': 8 * mm, #type: ignore
-    }
-    # Creating a Settings instance with custom settings
-    section.update_settings(custom_settings)
-    as_nec=5*cm**2
-    rebar = Rebar(beam=section)
-    # Call the calculate_rebars method
-    best_combination = rebar.beam_longitudinal_rebar(A_s_req=as_nec)
-    print(f"Best combination: {best_combination}")
-    av_nec = 0.00104*m #type: ignore 
-    best_combination = rebar.beam_transverse_rebar(A_v_req=av_nec,V_s_req = 24.92*kip, lambda_factor= 1, f_c=4000*psi, d=13.5*inch) #type: ignore
-    print(f"Best combination: {best_combination}")
+    section.design_shear(V_u, N_u, A_s) 
+    print(section.shear_design_results)
+    print(section.transverse_rebar)
 
 if __name__ == "__main__":
-    rebar()
+    shear()
