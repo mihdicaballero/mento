@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from structurelab.units import kN, m
+from devtools import debug
 
 @dataclass
 class Forces:
@@ -36,10 +37,10 @@ class Forces:
 
 def main():
     f1 = Forces(My=10*kN*m,Nx=2*kN) # type: ignore
-    print(f1.My,f1.Nx) 
+    debug(f1) 
     f = Forces()
     f.Nx = 20*kN #type: ignore
-    print(f)
+    debug(f)
 
 if __name__ == "__main__":
     main()

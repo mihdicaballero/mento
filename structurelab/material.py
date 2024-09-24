@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import Dict
 import math
 from structurelab.units import kg, m, MPa
+from devtools import debug
 
 @dataclass
 class Material:
@@ -177,12 +178,12 @@ class SteelStrand(Steel):
 def main():
     # Test cases
     concrete=create_concrete(name="H25",f_c=25*MPa, design_code="ACI 318-19")
-    print(concrete.get_properties())
-    print(concrete.E_c,', ',concrete.f_r)
+    debug(concrete.get_properties())
+    debug(concrete.E_c,', ',concrete.f_r)
     steelbar = SteelBar(name="ADN 500",f_y=500*MPa)
-    print(steelbar.get_properties())
+    debug(steelbar.get_properties())
     steelstrand = SteelStrand(name='Y1860',f_y=1700*MPa)
-    print(steelstrand.get_properties())
+    debug(steelstrand.get_properties())
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 import sys
 import os
+from devtools import debug
 
 # Add the project root to PYTHONPATH
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -9,6 +10,8 @@ from structurelab.concrete.rectangular import RectangularConcreteSection
 from structurelab import material
 from structurelab.rebar import Rebar
 from structurelab.units import MPa, ksi, psi, kip, mm, inch, kN, m, cm
+from structurelab.results import Formatter
+from IPython.display import Markdown, display
 import numpy as np
 import math
 
@@ -17,6 +20,7 @@ class Beam(RectangularConcreteSection):
     def __init__(self, name: str, concrete: material.Concrete, steelBar: material.SteelBar, 
                  width: float, depth: float,settings=None):  
         super().__init__(name, concrete, steelBar, width, depth, settings)
+        self.shear_design_results = None
 
     def __determine_maximum_flexural_reinforcement_ratio_ACI_318_19(self):
         # Determination of maximum reinforcement ratio
@@ -78,7 +82,7 @@ class Beam(RectangularConcreteSection):
         A_s_max=rho_max*self._depth*self._width
 
         if self.__A_s_calculated > A_s_max:
-            print("The section cannot be reinforced; increase the dimensions or use compressive reinforcement.")
+            debug("The section cannot be reinforced; increase the dimensions or use compressive reinforcement.")
             return
         else:
             result={
@@ -210,12 +214,16 @@ class Beam(RectangularConcreteSection):
         phi_v = self._settings.get_setting('phi_v')
         f_yt = min(f_y,60*ksi)
         lambda_factor = self._settings.get_setting('lambda')
+        # Inputs into class
+        self.V_u = V_u
+        self.N_u = N_u
+        self.A_s = A_s 
         # Effective height
         d_bs_ini = self._settings.get_setting('longitudinal_diameter') # Longitudinal diameter if none is defined
         d_stirrup_ini = self._settings.get_setting('stirrup_diameter')
-        d = self._depth-(cc+d_stirrup_ini+d_bs_ini/2)
+        self.d = self._depth-(cc+d_stirrup_ini+d_bs_ini/2)
         # Effective shear area and longitudinal reinforcement ratio
-        A_cv = self._width * d  # Effective shear area
+        A_cv = self._width * self.d  # Effective shear area
         A_g = self._width * self._depth  # Gross area
         rho_w = A_s / A_cv  # Longitudinal reinforcement ratio
         
@@ -253,13 +261,13 @@ class Beam(RectangularConcreteSection):
         # Required shear reinforcing nominal strength
         V_s_req = V_u-phi_V_c
         # Required shear reinforcing
-        A_v_req = max(V_s_req/(phi_v*f_yt*d), A_v_min)
+        A_v_req = max(V_s_req/(phi_v*f_yt*self.d), A_v_min)
 
         # Design input for rebar detailing
         self.shear_rebar_input = {
             'A_v_req': A_v_req,
             'V_s_req': V_s_req,
-            'd': d  # effective depth         
+            'd': self.d  # effective depth         
         }
 
         A_v_design = Rebar(self).beam_transverse_rebar(self.shear_rebar_input)
@@ -272,7 +280,7 @@ class Beam(RectangularConcreteSection):
         }
 
         A_v =  A_v_design['A_v']
-        V_s = A_v * f_yt * d  # Shear contribution of reinforcement
+        V_s = A_v * f_yt * self.d  # Shear contribution of reinforcement
         phi_V_s = phi_v * V_s  # Reduced shear contribution of reinforcement
         # Total shear strength
         phi_V_n = phi_v * (V_c + V_s)  # Total reduced shear strength (concrete + rebar)
@@ -325,7 +333,25 @@ class Beam(RectangularConcreteSection):
             return self.check_shear_EHE_08(V_u, N_u, A_s, d_b, s, n_legs)
         else:
             raise ValueError(f"Shear design method not implemented for concrete type: {type(self.concrete).__name__}")
+        
+    # Beam results forJjupyter Notebook
+    @property
+    def shear_results(self):
+        if not self.shear_design_results:
+            raise ValueError("Shear design has not been performed yet. Call design_shear first.")
 
+        FU_v = self.shear_design_results['FUv']
+        # Create FUFormatter instance and format FU value
+        formatter = Formatter()
+        formatted_FU = formatter.FU(FU_v)
+        rebar_v = f"{self.transverse_rebar['n_stirrups']}eØ{self.transverse_rebar['d_b']}/{self.transverse_rebar['spacing']}"
+        # Print results
+        markdown_content = f"Armadura transversal {rebar_v}, $A_v$={round(self.transverse_rebar['A_v'].value*10000,2)}" \
+                         f"cm²/m, $V_u$={round(self.V_u,0)}, $\\phi V_n$={round(self.shear_design_results['phi_V_n'],0)} → {formatted_FU}"
+        # Display the content
+        display(Markdown(markdown_content))
+
+        return markdown_content
 
 
 def main():
@@ -339,9 +365,9 @@ def main():
         depth=500 * mm,  
     )
 
-    print(f"Nombre de la sección: {section.get_name()}")
+    debug(f"Nombre de la sección: {section.get_name()}")
     resultados=section.design_flexure(500*kN*m)  
-    print(resultados)
+    debug(resultados)
 
 
 def shear():
@@ -359,10 +385,12 @@ def shear():
     N_u = 0*kip 
     A_s=0.847*inch**2 
     results=section.check_shear(V_u, N_u, A_s, d_b=12*mm, s=6*inch, n_legs=2) 
-    print(results)
+    debug(results)
     section.design_shear(V_u, N_u, A_s) 
-    print(section.shear_design_results)
-    print(section.transverse_rebar)
+    debug(section.shear_results)
+    debug(section.shear_design_results)
+    debug(section.transverse_rebar)
+
 
 if __name__ == "__main__":
     shear()
