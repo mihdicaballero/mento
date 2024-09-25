@@ -1,7 +1,7 @@
 import pytest
-from structurelab.units import mm
+from mento.units import mm
 
-from structurelab.settings import Settings  # Replace 'your_module' with the actual module name
+from mento.settings import Settings  # Replace 'your_module' with the actual module name
 
 def test_default_settings():
     settings = Settings()

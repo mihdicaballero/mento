@@ -5,10 +5,10 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import pytest
-from structurelab import material
-from structurelab.concrete.beam import Beam
-from structurelab.rebar import Rebar
-from structurelab.units import psi, kip, mm, inch, ksi, cm, MPa
+from mento import material
+from mento.concrete.beam import Beam
+from mento.rebar import Rebar
+from mento.units import psi, kip, mm, inch, ksi, cm, MPa
 
 @pytest.fixture()
 def beam_example_imperial():

@@ -1,4 +1,4 @@
-from structurelab.settings import Settings
+from mento.settings import Settings
 from dataclasses import dataclass
 import sys
 import os

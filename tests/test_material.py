@@ -5,8 +5,8 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import pytest
-from structurelab.material import Concrete_ACI_318_19, Concrete_EN_1992, Concrete_EHE_08, SteelBar, SteelStrand
-from structurelab.units import MPa, m, kg
+from mento.material import Concrete_ACI_318_19, Concrete_EN_1992, Concrete_EHE_08, SteelBar, SteelStrand
+from mento.units import MPa, m, kg
 
 
 def test_concrete_aci_318_19_properties():

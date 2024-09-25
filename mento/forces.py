@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from structurelab.units import kN, m
+from mento.units import kN, m
 from devtools import debug
 
 @dataclass

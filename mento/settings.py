@@ -1,4 +1,4 @@
-from structurelab.units import mm
+from mento.units import mm
 
 class Settings: 
     def __init__(self, settings_dict=None):

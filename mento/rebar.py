@@ -1,5 +1,5 @@
 import math
-from structurelab.units import psi, mm, inch, m, cm
+from mento.units import psi, mm, inch, m, cm
 
 class Rebar:
     rebar_diameters = [6*mm, 8*mm, 10*mm, 12*mm, 16*mm, 20*mm, 25*mm, 32*mm]

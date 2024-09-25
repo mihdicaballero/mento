@@ -5,8 +5,8 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import pytest
-from structurelab.units import kN, m
-from structurelab.forces import Forces
+from mento.units import kN, m
+from mento.forces import Forces
 
 def test_default_initialization():
     # Test default initialization

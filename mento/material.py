@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict
 import math
-from structurelab.units import kg, m, MPa
+from mento.units import kg, m, MPa
 from devtools import debug
 
 @dataclass

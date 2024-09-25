@@ -6,11 +6,11 @@ from devtools import debug
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from dataclasses import dataclass
-from structurelab.concrete.rectangular import RectangularConcreteSection
-from structurelab import material
-from structurelab.rebar import Rebar
-from structurelab.units import MPa, ksi, psi, kip, mm, inch, kN, m, cm
-from structurelab.results import Formatter
+from mento.concrete.rectangular import RectangularConcreteSection
+from mento import material
+from mento.rebar import Rebar
+from mento.units import MPa, ksi, psi, kip, mm, inch, kN, m, cm
+from mento.results import Formatter
 from IPython.display import Markdown, display
 import numpy as np
 import math
