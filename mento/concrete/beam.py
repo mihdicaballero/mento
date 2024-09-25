@@ -346,8 +346,8 @@ class Beam(RectangularConcreteSection):
         formatted_FU = formatter.FU(FU_v)
         rebar_v = f"{self.transverse_rebar['n_stirrups']}eØ{self.transverse_rebar['d_b']}/{self.transverse_rebar['spacing']}"
         # Print results
-        markdown_content = f"Armadura transversal {rebar_v}, $A_v$={round(self.transverse_rebar['A_v'].value*10000,2)}" \
-                         f"cm²/m, $V_u$={round(self.V_u,0)}, $\\phi V_n$={round(self.shear_design_results['phi_V_n'],0)} → {formatted_FU}"
+        markdown_content = f"Armadura transversal {rebar_v}, $A_v$={round(self.transverse_rebar['A_v'].value*1000,2)}" \
+                         f" cm²/m, $V_u$={round(self.V_u,0)}, $\\phi V_n$={round(self.shear_design_results['phi_V_n'],0)} → {formatted_FU}"
         # Display the content
         display(Markdown(markdown_content))
 
