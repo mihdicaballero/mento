@@ -1,5 +1,13 @@
 __pycache__/
+.pytest_cache/
 *.py[cod]
 .DS_Store
 
-venv/
+/mento.egg-info
+
+.xlsx
+.pdf
+.docx
+
+.venv/
+.vscode/

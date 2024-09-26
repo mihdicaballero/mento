@@ -1,5 +1,3 @@
-# common/materials.py
-
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict
@@ -184,7 +182,6 @@ def main():
     debug(steelbar.get_properties())
     steelstrand = SteelStrand(name='Y1860',f_y=1700*MPa)
     debug(steelstrand.get_properties())
-
 
 if __name__ == "__main__":
     main()
