@@ -1,9 +1,6 @@
 import os
 import PyPDF3
-import numpy as np
 from PyPDF3 import PdfFileMerger
-from pathlib import Path
-from structurelab.PDF.page_numbers import add_page_numbers, insert_text_into_pdf, remove_pdf_file, rename_pdf_file
 
 
 def extract_pdf_pages(directory, input_file, output_file, pages):
@@ -112,10 +109,10 @@ def merge_pdfs_by_name(folder, pdfs, output, bookmark=True):
     for pdf in pdfs:
         input_file = os.path.join(folder, pdf + ".pdf")
         bookmark_name = os.path.splitext(os.path.basename(input_file))[0] if bookmark else None
-        merger.append(fileobj=open(input_file, 'rb'), import_bookmarks=False, bookmark=bookmark_name)
+        merger.append(fileobj=open(input_file, 'rb'), import_bookmarks=False, bookmark=bookmark_name)  # noqa: SIM115
 
     output_path = os.path.join(folder, output)
-    merger.write(fileobj=open(output_path, 'wb'))
+    merger.write(fileobj=open(output_path, 'wb')) # noqa: SIM115
     merger.close()
 
 def merge_template_to_pdf(template_pdf, input_folder, annex_folder, input_name, output_name):

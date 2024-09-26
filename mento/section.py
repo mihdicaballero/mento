@@ -1,14 +1,11 @@
+from mento.settings import Settings
+from dataclasses import dataclass
 import sys
 import os
 
 # Add the project root to PYTHONPATH
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from dataclasses import dataclass
-import forallpeople
-forallpeople.environment('structural', top_level=True)
-
-from structurelab.settings import Settings
 
 
 @dataclass
@@ -28,6 +25,4 @@ class Section:
         """Updates settings with new values."""
         self._settings.update(new_settings)
         
-if __name__ == "__main__":
-    main()
 

@@ -5,11 +5,8 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import pytest
-import forallpeople
-forallpeople.environment('structural', top_level=True)
-
-# Import the Forces class
-from structurelab.forces import Forces
+from mento.units import kN, m
+from mento.forces import Forces
 
 def test_default_initialization():
     # Test default initialization

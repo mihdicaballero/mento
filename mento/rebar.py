@@ -1,23 +1,9 @@
-from structurelab.material import create_concrete
-from structurelab.settings import Settings
-from structurelab.concrete.beam import Beam
-import forallpeople
-forallpeople.environment('structural',top_level=True)
-cm = 1e-2*m # type: ignore
 import math
+from mento.units import psi, mm, inch, m, cm
 
 class Rebar:
-    rebar_diameters = [6*mm, 8*mm, 10*mm, 12*mm, 16*mm, 20*mm, 25*mm, 32*mm] #type: ignore
-    rebar_areas = {
-                6*mm: 0.283*cm**2,   #type: ignore
-                8*mm: 0.503*cm**2,  #type: ignore
-                10*mm: 0.785*cm**2, #type: ignore
-                12*mm: 1.131*cm**2, #type: ignore
-                16*mm: 2.011*cm**2, #type: ignore
-                20*mm: 3.142*cm**2, #type: ignore
-                25*mm: 4.909*cm**2,#type: ignore
-                32*mm: 8.043*cm**2,#type: ignore
-            }
+    rebar_diameters = [6*mm, 8*mm, 10*mm, 12*mm, 16*mm, 20*mm, 25*mm, 32*mm]
+    rebar_areas = {d: (math.pi * d ** 2) / 4 for d in rebar_diameters}
 # Add beam class of rebar
     def __init__(self, beam):
             self.beam = beam
@@ -26,8 +12,8 @@ class Rebar:
             self.clear_spacing = self.settings.get('clear_spacing')
             self.def_stirrup_db = self.settings.get('stirrup_diameter')
 
-    def beam_longitudinal_rebar_ACI_318_19(self, as_req):
-        self.as_req = as_req
+    def beam_longitudinal_rebar_ACI_318_19(self, A_s_req:float):
+        self.A_s_req = A_s_req
         effective_width = self.beam._width - 2 * (self.cc + self.def_stirrup_db)
         # The method finds the best combination of rebar for the required As
         best_combination = None
@@ -43,7 +29,7 @@ class Rebar:
             while num_bars * diameter + (num_bars - 1) * self.clear_spacing <= effective_width:
                 total_as = num_bars * rebar_area
                 
-                if total_as >= as_req:
+                if total_as >= A_s_req:
                     if best_combination is None or total_as < min_total_area:
                         min_total_area = total_as
                         available_spacing = (effective_width - (num_bars * diameter)) / (num_bars - 1)
@@ -65,26 +51,37 @@ class Rebar:
                 
         return best_combination
     
-    def beam_transverse_rebar_ACI_318_19(self, A_v_req, V_s_req, lambda_factor, f_c, d):
+    def beam_longitudinal_rebar_EN_1992(self):
+        pass
+    def beam_longitudinal_rebar_EHE_08(self):
+        pass
+
+    def beam_transverse_rebar_ACI_318_19(self, shear_rebar_input):
         self.def_stirrup_db = self.settings.get('stirrup_diameter')
+        concrete_properties=self.beam.concrete.get_properties()
+        f_c=concrete_properties["f_c"]
+        lambda_factor = self.beam._settings.get_setting('lambda')
+        A_v_req = shear_rebar_input['A_v_req']
+        V_s_req = shear_rebar_input['V_s_req']
+        d = shear_rebar_input['d']
+
         best_combination = None
-        min_A_v = float('inf')
         # Check if V_s_req <= 4 * lambda * sqrt(f_c) * A_cv
         A_cv = self.beam._width*d
-        if V_s_req <= 4 * lambda_factor * math.sqrt(f_c / psi) * psi * A_cv: #type: ignore
+        if V_s_req <= 4 * lambda_factor * math.sqrt(f_c / psi) * psi * A_cv:
             # Maximum spacing across the length of the beam
-            s_max_l = min(d / 2, 24*inch)  #type: ignore
+            s_max_l = min(d / 2, 24*inch) 
             # Maximum spacing across the width of the beam
-            s_max_w = min(d, 24*inch)  #type: ignore
+            s_max_w = min(d, 24*inch) 
             # Spacing along length
-            s = math.floor(d / 2)*inch #type: ignore
+            s = math.floor(d / 2)*inch
         else:
             # Maximum spacing across the length of the beam
-            s_max_l = min(d / 4, 12*inch)  #type: ignore
+            s_max_l = min(d / 4, 12*inch) 
             # Maximum spacing across the width of the beam
-            s_max_w = min(d / 2, 12*inch)  #type: ignore
+            s_max_w = min(d / 2, 12*inch) 
             # Spacing along length
-            s = math.floor(d / 4) *inch #type: ignore
+            s = math.floor(d / 4) *inch
 
         # Ensure that the calculated spacing is within the maximum allowed spacing
         s = min(s, s_max_l)
@@ -99,14 +96,14 @@ class Rebar:
         # Ensure that spacing along the width is within the maximum allowed spacing
         s_w = min(s_w, s_max_w)
         # Minimum bar diameter (in inches)
-        d_b_min = math.sqrt((4 * A_vs_req.value) / (math.pi * n_legs))*m #type: ignore
+        d_b_min = math.sqrt((4 * A_vs_req.value) / (math.pi * n_legs))*m
 
         # Find the smallest available bar diameter greater than or equal to d_bmin
-        d_b = max(3/8*inch, min(filter(lambda db: db >= d_b_min, self.rebar_diameters))) #type: ignore
+        d_b = max(3/8*inch, min(filter(lambda db: db >= d_b_min, self.rebar_diameters)))
         # Area of a stirrup bar 
         A_db = self.rebar_areas[d_b]  # Convert diameter to rebar area
         # Vertical stirrups angle
-        alpha = 90  # degrees
+        # alpha = 90  # degrees
         # Area of vertical stirrups
         A_vs = n_legs * A_db
         # Area of vertical stirrups per unit length (in^2/ft)
@@ -114,36 +111,35 @@ class Rebar:
         best_combination = {
                             'n_stirrups': n_stirrups,
                             'd_b': d_b,
-                            's': s,
+                            'spacing': s,
                             'A_v': A_v,
                         }
         return best_combination
-
-def main():
-    concrete=create_concrete(name="H30",f_c=30*MPa, design_code="ACI 318-19") # type: ignore
-    section = Beam(
-        name="V 20x50",
-        concrete=concrete,
-        steelBar="Barras Longitudinales",
-        width=20*cm,
-        depth=50*cm,
-    )
-    print(f"Nombre de la sección: {section.get_name()}")
-    # Custom settings for a specific beam
-    custom_settings = {
-        'clear_cover': 30 * mm, #type: ignore
-        'stirrup_diameter': 8 * mm,#type: ignore
-    }
-    # Creating a Settings instance with custom settings
-    section.update_settings(custom_settings)
-    as_nec=5*cm**2
-    rebar = Rebar(beam=section)
-    # Call the calculate_rebars method
-    best_combination = rebar.beam_longitudinal_rebar_ACI_318_19(as_req=as_nec)
-    print(f"Best combination: {best_combination}")
-    av_nec = 0.00104*m #type: ignore 
-    best_combination = rebar.beam_transverse_rebar_ACI_318_19(A_v_req=av_nec,V_s_req = 24.92*kip, lambda_factor= 1, f_c=4000*psi, d=13.5*inch) #type: ignore
-    print(f"Best combination: {best_combination}")
-
-if __name__ == "__main__":
-    main()
+    
+    def beam_transverse_rebar_EN_1992(self, shear_rebar_input):
+        pass
+    
+    def beam_transverse_rebar_EHE_08(self, shear_rebar_input):
+        pass
+    
+    # Factory method to select the transverse rebar method
+    def beam_transverse_rebar(self, shear_rebar_input):
+        if self.beam.concrete.design_code=="ACI 318-19":
+            return self.beam_transverse_rebar_ACI_318_19(shear_rebar_input)
+        elif self.beam.concrete.design_code=="EN 1992":
+            return self.beam_transverse_rebar_EN_1992(shear_rebar_input)
+        elif self.beam.concrete.design_code=="EHE-08":
+            return self.beam_transverse_rebar_EHE_08(shear_rebar_input)
+        else:
+            raise ValueError(f"Shear design method not implemented for concrete type: {type(self.concrete).__name__}")
+    
+    # Factory method to select the longitudinal rebar method
+    def beam_longitudinal_rebar(self, A_s_req:float):
+        if self.beam.concrete.design_code=="ACI 318-19":
+            return self.beam_longitudinal_rebar_ACI_318_19(A_s_req)
+        elif self.beam.concrete.design_code=="EN 1992":
+            return self.beam_longitudinal_rebar_EN_1992(A_s_req)
+        elif self.beam.concrete.design_code=="EHE-08":
+            return self.beam_longitudinal_rebar_EHE_08(A_s_req)
+        else:
+            raise ValueError(f"Shear design method not implemented for concrete type: {type(self.concrete).__name__}")

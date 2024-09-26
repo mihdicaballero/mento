@@ -15,7 +15,7 @@ class Formatter:
     
     def FU(self, FU):
         # Determine color based on FU value
-        if FU < self.mid_value:
+        if self.mid_value > FU:
             color = self.green
         elif self.mid_value <= FU <= self.max_value:
             color = self.yellow
@@ -25,7 +25,7 @@ class Formatter:
         return f"$\\color{{{color}}}{{\\text{{FU}}={round(FU,2)}}}$"
     def FU_value(self, FU):
         # Determine color based on FU value
-        if FU < self.mid_value:
+        if self.mid_value > FU:
             color = self.green
         elif self.mid_value <= FU <= 1:
             color = self.yellow
@@ -50,7 +50,7 @@ class Formatter:
     # Formatting functions outside the class
     def FU_value_df(self,FU):
         if isinstance(FU, (int, float)):
-            if FU < self.mid_value:
+            if self.mid_value > FU:
                 return f"color: {self.green}"
             elif self.mid_value <= FU <= self.max_value:
                 return f"color: {self.yellow}"

@@ -1,12 +1,7 @@
 import pytest
-import forallpeople
+from mento.units import mm
 
-# Initialize the forallpeople environment
-forallpeople.environment('structural',top_level=True)
-#Useful extra units
-cm = 1e-2*m # type: ignore
-
-from structurelab.settings import Settings  # Replace 'your_module' with the actual module name
+from mento.settings import Settings  # Replace 'your_module' with the actual module name
 
 def test_default_settings():
     settings = Settings()

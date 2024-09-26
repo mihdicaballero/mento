@@ -1,5 +1,6 @@
 from section import Section
 from forces import Forces
+from devtools import debug
 
 class Node:
     def __init__(self, section, forces_list):
@@ -21,19 +22,18 @@ class Node:
 
 def main():
     # Ejemplo de uso
-    section = Section(material="Concrete", SteelBar_long="Longitudinal Steel", SteelBar_trans="Transverse Steel", cc=25)
+    section = Section(name="V10")
     forces1 = Forces(My=100)
     forces2 = Forces(My=200)
 
     node = Node(section=section, forces_list=[forces1, forces2])
 
-    print(f"Node Section Material: {node.section.material}")
-    print(f"Total Moment: {node.get_total_moment()}")
+    debug(f"Total Moment: {node.get_total_moment()}")
 
     # Añadir otra instancia de Forces
     forces3 = Forces(My=50)
     node.add_forces(forces3)
-    print(f"Updated Total Moment: {node.get_total_moment()}")
+    debug(f"Updated Total Moment: {node.get_total_moment()}")
 
 if __name__ == "__main__":
     main()
