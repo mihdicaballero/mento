@@ -1,9 +1,4 @@
-import sys
-import os
 from devtools import debug
-
-# Add the project root to PYTHONPATH
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from dataclasses import dataclass
 from mento.concrete.rectangular import RectangularConcreteSection
