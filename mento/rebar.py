@@ -8,13 +8,11 @@ class Rebar:
     def __init__(self, beam):
             self.beam = beam
             self.settings = beam.get_settings()
-            self.cc = self.settings.get('clear_cover')
             self.clear_spacing = self.settings.get('clear_spacing')
-            self.def_stirrup_db = self.settings.get('stirrup_diameter')
 
     def beam_longitudinal_rebar_ACI_318_19(self, A_s_req:float):
         self.A_s_req = A_s_req
-        effective_width = self.beam._width - 2 * (self.cc + self.def_stirrup_db)
+        effective_width = self.beam._width - 2 * (self.beam.beam.cc + self.beam.stirrup_d_b)
         # The method finds the best combination of rebar for the required As
         best_combination = None
         min_total_area = float('inf')
@@ -58,11 +56,9 @@ class Rebar:
         pass
 
     def beam_transverse_rebar_ACI_318_19(self, A_v_req, V_s_req):
-        self.def_stirrup_db = self.settings.get('stirrup_diameter')
         concrete_properties=self.beam.concrete.get_properties()
         f_c=concrete_properties["f_c"]
         lambda_factor = self.beam._settings.get_setting('lambda')
-
         best_combination = None
         # Check if V_s_req <= 4 * lambda * sqrt(f_c) * A_cv
         A_cv = self.beam._width*self.beam.d
@@ -86,11 +82,11 @@ class Rebar:
         # Required transverse rebar per stirrup distance
         A_vs_req = A_v_req*s
         # Number of legs of the stirrups across the beam width
-        n_legs_req = math.ceil((self.beam._width - 2 * self.cc - self.def_stirrup_db) / s_max_w) + 1
+        n_legs_req = math.ceil((self.beam._width - 2 * self.beam.cc - self.beam.stirrup_d_b) / s_max_w) + 1
         n_stirrups = math.ceil(n_legs_req/2)
         n_legs = n_stirrups*2
         # Spacing along the width of the beam
-        s_w = (self.beam._width - 2 * self.cc - self.def_stirrup_db) / (n_legs - 1)
+        s_w = (self.beam._width - 2 * self.beam.cc - self.beam.stirrup_d_b) / (n_legs - 1)
         # Ensure that spacing along the width is within the maximum allowed spacing
         s_w = min(s_w, s_max_w)
         # Minimum bar diameter (in inches)
