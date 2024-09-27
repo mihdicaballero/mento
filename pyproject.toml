@@ -41,9 +41,10 @@ disable = [
 max-line-length = 120
 
 [tool.ruff]
-lint.extend-select = ["C4", "SIM", "TCH"]
-lint.ignore = []
+extend-select = ["C4", "SIM", "TCH"]
+ignore = []
 show-fixes = true
+line-length = 120
 
 [tool.mypy]
 packages = ["mento"]

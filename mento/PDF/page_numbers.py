@@ -44,7 +44,7 @@ def create_page_pdf(num, tmp, x=180, y=8, font_name="Helvetica", font_size=11, f
     
     c.save()
 
-def create_text_pdf(num, tmp, text_list, coordinates_list, font_name="Helvetica", font_size=11, font_color="black"):
+def create_text_pdf(num, tmp, text_list, coord, font_name="Helvetica", font_size=11, font_color="black"):
     c = canvas.Canvas(tmp, pagesize=A4)
     
     # Create a custom color using RGB values
@@ -55,7 +55,7 @@ def create_text_pdf(num, tmp, text_list, coordinates_list, font_name="Helvetica"
     for i in range(1, num + 1):
         c.setFont(font_name, font_size)
         
-        for text, (x, y) in zip(text_list, coordinates_list):
+        for text, (x, y) in zip(text_list, coord):
             c.setFillColor(font_color)
             c.drawString(x * mm, y * mm, text)
         
@@ -75,7 +75,7 @@ def createPagePdfWithTotalFirst(num, tmp):
         c.showPage()
     c.save()
 
-def insert_text_into_pdf(pdf_path, text_list, coordinates_list, font_name="Helvetica", font_size=11, font_color="black"):
+def insert_text_into_pdf(pdf_path, text_list, coord, font_name="Helvetica", font_size=11, font_color="black"):
     """
     Insert a list of texts at specified coordinates into an input PDF.
     """
@@ -88,7 +88,7 @@ def insert_text_into_pdf(pdf_path, text_list, coordinates_list, font_name="Helve
         num_pages = pdf.getNumPages()
 
         # Create new PDF with the inserted text
-        create_text_pdf(num_pages, tmp_pdf, text_list, coordinates_list, font_name, font_size, font_color)
+        create_text_pdf(num_pages, tmp_pdf, text_list, coord, font_name, font_size, font_color)
 
         with open(tmp_pdf, 'rb') as tmp_file:
             text_pdf = PdfFileReader(tmp_file)

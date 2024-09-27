@@ -36,10 +36,10 @@ class Forces:
             super().__setattr__(name, value)
 
 def main():
-    f1 = Forces(My=10*kN*m,Nx=2*kN) # type: ignore
+    f1 = Forces(My=10*kN*m,Nx=2*kN)
     debug(f1) 
     f = Forces()
-    f.Nx = 20*kN #type: ignore
+    f.Nx = 20*kN
     debug(f)
 
 if __name__ == "__main__":

@@ -1,9 +1,3 @@
-import sys
-import os
-
-# Add the project root to PYTHONPATH
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 from dataclasses import dataclass
 from mento.concrete.section import ConcreteSection
 
@@ -13,6 +7,7 @@ class RectangularConcreteSection(ConcreteSection):
         super().__init__(name, concrete, steelBar, settings)
         self._width = width
         self._depth = depth
+        self.d = 0.9*self._depth # Initial value
 
     def get_area(self):
         return self._width * self._depth
