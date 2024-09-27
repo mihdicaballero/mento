@@ -7,6 +7,7 @@ class RectangularConcreteSection(ConcreteSection):
         super().__init__(name, concrete, steelBar, settings)
         self._width = width
         self._depth = depth
+        self.d = 0.9*self._depth # Initial value
 
     def get_area(self):
         return self._width * self._depth

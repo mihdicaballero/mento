@@ -1,5 +1,4 @@
 from devtools import debug
-
 from dataclasses import dataclass
 from mento.concrete.rectangular import RectangularConcreteSection
 from mento import material
@@ -12,9 +11,9 @@ import math
 
 @dataclass
 class Beam(RectangularConcreteSection):
-    def __init__(self, name: str, concrete: material.Concrete, steelBar: material.SteelBar, 
+    def __init__(self, name: str, concrete: material.Concrete, steel_bar: material.SteelBar, 
                  width: float, depth: float,settings=None):  
-        super().__init__(name, concrete, steelBar, width, depth, settings)
+        super().__init__(name, concrete, steel_bar, width, depth, settings)
         self.shear_design_results = None
 
     def __determine_maximum_flexural_reinforcement_ratio_ACI_318_19(self):
@@ -138,16 +137,16 @@ class Beam(RectangularConcreteSection):
     def check_shear_ACI_318_19(self, V_u:float, N_u:float, A_s:float, d_b:float, s:float, n_legs:float):
         concrete_properties=self.concrete.get_properties()
         f_c=concrete_properties["f_c"]
-        rebar_properties=self.steelBar.get_properties()
+        rebar_properties=self.steel_bar.get_properties()
         f_y=rebar_properties["f_y"]
-        cc = self._settings.get_setting('clear_cover')
         self._settings.load_aci_318_19_settings()
         phi_v = self._settings.get_setting('phi_v')
         f_yt = min(f_y,60*ksi)
         lambda_factor = self._settings.get_setting('lambda')
 
         # Minimum shear reinforcement calculation
-        # 'Minimum reinforcement should be placed if the factored shear Vu is greater than half the shear capacity of the concrete,
+        # 'Minimum reinforcement should be placed if the factored shear Vu 
+        # is greater than half the shear capacity of the concrete,
         # reduced by 0.5ϕVc. It is assumed that minimum reinforcement is required.
         # Rebar needed, V_u > φ_v*V_c/2
         A_v_min = max((0.75 * math.sqrt(f_c / psi) * psi/ f_yt) * self._width , (50 * psi/f_yt) * self._width)  
@@ -157,20 +156,16 @@ class Beam(RectangularConcreteSection):
         A_vs = n_legs * A_db  # Total area of stirrups
         A_v = A_vs / s  # Stirrup area per unit length
 
-        d_bs_ini = self._settings.get_setting('longitudinal_diameter') # Longitudinal diameter if none is defined
-        d_stirrup = d_b
-        d = self._depth-(cc+d_stirrup+d_bs_ini/2)
-
-        V_s = A_v * f_yt * d  # Shear contribution of reinforcement
+        V_s = A_v * f_yt * self.d  # Shear contribution of reinforcement
         phi_V_s = phi_v * V_s  # Reduced shear contribution of reinforcement
 
         # Effective shear area and longitudinal reinforcement ratio
-        A_cv = self._width * d  # Effective shear area
+        A_cv = self._width * self.d  # Effective shear area
         A_g = self._width * self._depth  # Gross area
         rho_w = A_s / A_cv  # Longitudinal reinforcement ratio
         
         # Size modification factor
-        lambda_s = math.sqrt(2 / (1 + d / (10*inch)))
+        lambda_s = math.sqrt(2 / (1 + self.d / (10*inch)))
 
         # Concrete shear strength calculation
         sigma_Nu = min(N_u / (6 * A_g), 0.05 * f_c)  # Axial stress influence
@@ -208,7 +203,7 @@ class Beam(RectangularConcreteSection):
         # Required shear reinforcing nominal strength
         V_s_req = V_u-phi_V_c
         # Required shear reinforcing
-        A_v_req = max(V_s_req/(phi_v*f_yt*d), A_v_min)
+        A_v_req = max(V_s_req/(phi_v*f_yt*self.d), A_v_min)
 
         # Check results
         result = {
@@ -229,9 +224,8 @@ class Beam(RectangularConcreteSection):
     def design_shear_ACI_318_19(self, V_u:float, N_u:float, A_s:float):
         concrete_properties=self.concrete.get_properties()
         f_c=concrete_properties["f_c"]
-        rebar_properties=self.steelBar.get_properties()
+        rebar_properties=self.steel_bar.get_properties()
         f_y=rebar_properties["f_y"]
-        cc = self._settings.get_setting('clear_cover')
         self._settings.load_aci_318_19_settings()
         phi_v = self._settings.get_setting('phi_v')
         f_yt = min(f_y,60*ksi)
@@ -240,10 +234,6 @@ class Beam(RectangularConcreteSection):
         self.V_u = V_u
         self.N_u = N_u
         self.A_s = A_s 
-        # Effective height
-        d_bs_ini = self._settings.get_setting('longitudinal_diameter') # Longitudinal diameter if none is defined
-        d_stirrup_ini = self._settings.get_setting('stirrup_diameter')
-        self.d = self._depth-(cc+d_stirrup_ini+d_bs_ini/2)
         # Effective shear area and longitudinal reinforcement ratio
         A_cv = self._width * self.d  # Effective shear area
         A_g = self._width * self._depth  # Gross area
@@ -268,7 +258,8 @@ class Beam(RectangularConcreteSection):
         phi_V_max = phi_v * V_max  # Reduced maximum shear capacity
 
         # Minimum shear reinforcement calculation
-        # Minimum reinforcement should be placed if the factored shear Vu is greater than half the shear capacity of the concrete, 
+        # Minimum reinforcement should be placed if the factored shear Vu 
+        # is greater than half the shear capacity of the concrete, 
         # reduced by 0.5ϕVc. It is assumed that minimum reinforcement is required.
         if V_u < phi_V_c/2:
             A_v_min = 0*inch
@@ -285,14 +276,7 @@ class Beam(RectangularConcreteSection):
         # Required shear reinforcing
         A_v_req = max(V_s_req/(phi_v*f_yt*self.d), A_v_min)
 
-        # Design input for rebar detailing
-        self.shear_rebar_input = {
-            'A_v_req': A_v_req,
-            'V_s_req': V_s_req,
-            'd': self.d  # effective depth         
-        }
-
-        A_v_design = Rebar(self).beam_transverse_rebar(self.shear_rebar_input)
+        A_v_design = Rebar(self).beam_transverse_rebar(A_v_req, V_s_req)
         # Store the final rebar design results as a property of the Beam instance
         self.transverse_rebar = {
             'n_stirrups': A_v_design['n_stirrups'],
@@ -366,10 +350,12 @@ class Beam(RectangularConcreteSection):
         # Create FUFormatter instance and format FU value
         formatter = Formatter()
         formatted_FU = formatter.FU(FU_v)
-        rebar_v = f"{self.transverse_rebar['n_stirrups']}eØ{self.transverse_rebar['d_b']}/{self.transverse_rebar['spacing']}"
+        rebar_v = f"{self.transverse_rebar['n_stirrups']}eØ\
+            {self.transverse_rebar['d_b']}/{self.transverse_rebar['spacing']}"
         # Print results
         markdown_content = f"Armadura transversal {rebar_v}, $A_v$={round(self.transverse_rebar['A_v'].value*1000,2)}" \
-                         f" cm²/m, $V_u$={round(self.V_u,0)}, $\\phi V_n$={round(self.shear_design_results['phi_V_n'],0)} → {formatted_FU}"
+                         f" cm²/m, $V_u$={round(self.V_u,0)},\
+                              $\\phi V_n$={round(self.shear_design_results['phi_V_n'],0)} → {formatted_FU}"
         # Display the content
         display(Markdown(markdown_content))
 
@@ -394,16 +380,11 @@ def flexure():
 
 
 def shear():
-    # Define custom settings
-    custom_settings = {
-        'clear_cover': 1.5*inch, 
-        'stirrup_diameter': 0.5*inch, 
-        'longitudinal_diameter': 1*inch 
-        }
     concrete=material.create_concrete(name="C4",f_c=4000*psi, design_code="ACI 318-19") 
     steelBar=material.SteelBar(name="ADN 420", f_y=60*ksi) 
-    section = Beam(name="V-10x16",concrete=concrete,steelBar=steelBar,width=10*inch, depth=16*inch)
-    section.update_settings(custom_settings)
+    section = Beam(name="V-10x16",concrete=concrete,steel_bar=steelBar,width=10*inch, depth=16*inch)
+    section.cc = 1.5*inch
+    section.stirrup_d_b = 0.5*inch
     V_u=37.727*kip 
     N_u = 0*kip 
     A_s=0.847*inch**2 

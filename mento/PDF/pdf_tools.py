@@ -22,7 +22,11 @@ def extract_pdf_pages(directory, input_file, output_file, pages):
     Usage:
         extract_pdf_pages('path/to/directory', 'input.pdf', 'output.pdf', [0, 2, 4])
 
-    This function takes an input PDF, specified by its file name, and extracts the pages listed in the 'pages' parameter. It then saves the extracted pages as a new PDF with the specified 'output_file' in the same directory. The function is a practical tool for customizing PDFs by selecting specific pages to create tailored documents.
+    This function takes an input PDF, specified by its file name, 
+    and extracts the pages listed in the 'pages' parameter. It then 
+    saves the extracted pages as a new PDF with the specified 'output_file' 
+    in the same directory. The function is a practical tool for customizing 
+    PDFs by selecting specific pages to create tailored documents.
     """
     # Join the directory and file paths to create the full input file path
     input_path = os.path.join(directory, input_file)
@@ -53,7 +57,8 @@ def merge_pdfs_by_folder(folder, bookmark=True):
 
     Args:
         folder (str): The path to the folder containing the input PDF files.
-        bookmark (bool): Optional. If True, bookmarks are added for each merged PDF using the PDF filename (default is True).
+        bookmark (bool): Optional. If True, bookmarks are added for each merged
+          PDF using the PDF filename (default is True).
 
     Returns:
         None
@@ -61,7 +66,10 @@ def merge_pdfs_by_folder(folder, bookmark=True):
     Usage:
         merge_pdfs_by_folder('input_folder', bookmark=True)
 
-    This function combines multiple PDF files located in the specified 'folder' into a single output PDF. If 'bookmark' is set to True, bookmarks are generated for each merged PDF using the PDF filename. It's a practical utility for consolidating and indexing multiple PDF documents in a folder.
+    This function combines multiple PDF files located in the specified 'folder' 
+    into a single output PDF. If 'bookmark' is set to True, bookmarks are generated 
+    for each merged PDF using the PDF filename. It's a practical utility for 
+    consolidating and indexing multiple PDF documents in a folder.
     """
     # Getting a list of all PDF files in the folder
     pdfs = [os.path.join(folder, f) for f in os.listdir(folder) if f.endswith('.pdf')]
@@ -94,7 +102,8 @@ def merge_pdfs_by_name(folder, pdfs, output, bookmark=True):
         folder (str): The path to the folder containing the input PDF files.
         pdfs (list): A list of PDF filenames (without the ".pdf" extension) to merge.
         output (str): The name of the output PDF file to be created.
-        bookmark (bool): Optional. If True, bookmarks are added for each merged PDF using the PDF filename (default is True).
+        bookmark (bool): Optional. If True, bookmarks are added for each 
+        merged PDF using the PDF filename (default is True).
 
     Returns:
         None
@@ -102,7 +111,11 @@ def merge_pdfs_by_name(folder, pdfs, output, bookmark=True):
     Usage:
         merge_pdfs_by_name('input_folder', ['document1', 'document2', 'document3'], 'merged.pdf', bookmark=True)
 
-    This function combines multiple PDF files located in the specified 'folder' based on their filenames and creates a single output PDF in the same folder. If 'bookmark' is set to True, bookmarks will be generated for each merged PDF with the PDF filename. It's a handy tool for merging and organizing multiple PDF documents into a single, indexed file.
+    This function combines multiple PDF files located in the specified 'folder' 
+    based on their filenames and creates a single output PDF in the same folder. 
+    If 'bookmark' is set to True, bookmarks will be generated for each merged 
+    PDF with the PDF filename. It's a handy tool for merging and organizing 
+    multiple PDF documents into a single, indexed file.
     """
     merger = PdfFileMerger(strict=False)
 
@@ -132,7 +145,14 @@ def merge_template_to_pdf(template_pdf, input_folder, annex_folder, input_name, 
     Usage:
         merge_template_to_pdf('template.pdf', 'input_folder', 'output_folder', 'input.pdf', 'output.pdf')
 
-    This function combines a template PDF with an existing PDF, creating a new PDF document with customized content. It opens and reads the existing PDF and template PDF, iterates through the pages of the existing PDF, and merges each page with the template page. The resulting PDF is saved in the 'annex_folder' with the specified 'output_name'. The function is a useful tool for generating personalized PDFs by integrating template content into each page of the original document.
+    This function combines a template PDF with an existing PDF, 
+    creating a new PDF document with customized content. 
+    It opens and reads the existing PDF and template PDF, iterates 
+    through the pages of the existing PDF, and merges each page 
+    with the template page. The resulting PDF is saved in the 
+    'annex_folder' with the specified 'output_name'. The function 
+    is a useful tool for generating personalized PDFs by integrating 
+    template content into each page of the original document.
     """
     existing_pdf = os.path.join(input_folder, input_name)
     output_pdf = os.path.join(annex_folder, output_name)

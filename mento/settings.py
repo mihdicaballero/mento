@@ -9,10 +9,7 @@ class Settings:
             'clear_spacing': 20 * mm, 
             'stirrup_diameter': 6 * mm, 
             'vibrator_size': 30 * mm, 
-            'layers_spacing': 25 * mm, 
-            'longitudinal_diameter': 12*mm 
-            # Add other settings with their default values
-            # Safety factors
+            'layers_spacing': 25 * mm,
         }
         
         # Update defaults with provided settings if any
@@ -29,7 +26,8 @@ class Settings:
             'phi_v': 0.75, # Shear strength reduction factor
             'phi_c': 0.65, # Compression controlled strength reduction factor
             'phi_t': 0.90,  # Tension controlled strength reduction factor
-            'flexural_min_reduction': "True" # If "True", selects 4/3 of the calculated steel if it is less than the minimum. If "False", always uses the code's minimum values.
+            'flexural_min_reduction': "True" # If "True", selects 4/3 of the calculated steel
+             # if it is less than the minimum. If "False", always uses the code's minimum values.
             # Add other ACI-specific settings
         }
 
