@@ -4,11 +4,11 @@ from devtools import debug
 
 @dataclass
 class Forces:
-    Nx: float = field(default=0*kN) #type: ignore
-    Vz: float = field(default=0*kN) #type: ignore
-    My: float = field(default=0*kN*m) #type: ignore
+    Nx: float = field(default=0*kN)
+    Vz: float = field(default=0*kN)
+    My: float = field(default=0*kN*m)
 
-    def __init__(self, Nx: float = 0*kN, Vz: float = 0*kN, My: float = 0*kN*m, **kwargs): #type: ignore
+    def __init__(self, Nx: float = 0*kN, Vz: float = 0*kN, My: float = 0*kN*m, **kwargs):
         # Initialize the default fields
         super().__setattr__('Nx', Nx)
         super().__setattr__('Vz', Vz)

@@ -3,10 +3,8 @@ from mento import material
 from mento.units import ksi, psi, kip, inch
 import pytest
 
-
-
 @pytest.fixture()
-def beam_example():
+def beam_example() -> Beam:
     concrete = material.create_concrete(name="C4", f_c=4000*psi, design_code="ACI 318-19")  
     steelBar = material.SteelBar(name="ADN 420", f_y=60*ksi)  
     section = Beam(
@@ -20,7 +18,7 @@ def beam_example():
     section.stirrup_d_b = 0.5*inch
     return section
 
-def test_shear_check_ACI_318_19(beam_example):
+def test_shear_check_ACI_318_19(beam_example: Beam) -> None:
     V_u = 37.727*kip  
     N_u = 0*kip  
     A_s = 0.847*inch**2  
@@ -40,7 +38,7 @@ def test_shear_check_ACI_318_19(beam_example):
     assert results['shear_ok'] is True
     assert results['max_shear_ok'] is True
 
-def test_shear_design_ACI_318_19(beam_example):
+def test_shear_design_ACI_318_19(beam_example: Beam) -> None:
     V_u = 37.727*kip  
     N_u = 0*kip  
     A_s = 0.847*inch**2  
