@@ -3,5 +3,5 @@ ruff
 pytest==7.4.2
 forallpeople==1.2.0
 pandas==2.2.3
-IPython==8.27.0
+IPython
 mypy
