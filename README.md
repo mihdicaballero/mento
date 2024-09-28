@@ -1,5 +1,5 @@
 # Mento
-*An intuitive tool for structural engineers to design concrete elements efficiently*
+*An intuitive tool for structural engineers to design concrete elements efficiently.*
 
 [![Tests](https://github.com/mihdicaballero/mento/actions/workflows/tests.yml/badge.svg)][tests]
 [![Codecov](https://codecov.io/gh/robbievanleeuwen/concrete-properties/branch/master/graph/badge.svg)][codecov]
@@ -9,19 +9,19 @@
 [ruff]: https://github.com/charliermarsh/ruff
 [codecov]: https://app.codecov.io/github/mihdicaballero/mento
 
-This repository provides a comprehensive package for the design and structural analysis of concrete sections, focusing on both rectangular and circular beam designs, as well as rectangular column and footing checks. The package adheres to multiple design codes, ensuring broad applicability in structural engineering projects.
+This repository provides a comprehensive package for the design and structural analysis of concrete sections, beams, columns and footings. The package adheres to multiple design codes, ensuring broad applicability in structural engineering projects.
 
 #### Features
 - Check and design for flexure and shear of:
     - Rectangular Concrete Beam
-    - Circular Concrete Beam
+    - Circular Concrete Column
     - Rectangular Concrete Column
 - Check and design of foundation elements:
     - Rectangular Isolated Footing
 - Unit-sensitive design, allowing users to input variables with their respective units for accurate calculations.
 - Interactive usage in Jupyter Notebooks, allowing users to create custom calculations using package modules.
 - Results are presented in markdown format within the notebook and as pandas DataFrames for easy handling of multiple checks.
-- Ability to export DataFrames to Excel and generate detailed reports in LaTeX format.
+- Ability to generate detailed reports in LaTeX format.
 - Comprehensive testing for design code compliance, including ACI 318-19, EN 1992, EHE-08, and CIRSOC 201-2005, with validation of checks and designs included.
 
 

@@ -1,9 +1,10 @@
 from section import Section
 from forces import Forces
 from devtools import debug
+from typing import List
 
 class Node:
-    def __init__(self, section, forces_list):
+    def __init__(self, section: Section, forces_list: List[Forces]) -> None:
         if not isinstance(section, Section):
             raise TypeError("section must be an instance of Section")
         if not all(isinstance(forces, Forces) for forces in forces_list):
@@ -11,16 +12,16 @@ class Node:
         self.section = section
         self.forces_list = forces_list
 
-    def add_forces(self, forces):
+    def add_forces(self, forces: Forces) -> None:
         if not isinstance(forces, Forces):
             raise TypeError("forces must be an instance of Forces")
         self.forces_list.append(forces)
 
-    def get_total_moment(self):
+    def get_total_moment(self) -> float:
         return sum(forces.get_moment() for forces in self.forces_list)
 
 
-def main():
+def main() -> None:
     # Ejemplo de uso
     section = Section(name="V10")
     forces1 = Forces(My=100)

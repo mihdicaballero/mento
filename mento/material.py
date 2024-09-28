@@ -1,15 +1,14 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Dict
+from typing import Dict, Any, Union
 import math
 from mento.units import kg, m, MPa
 from devtools import debug
-
 @dataclass
 class Material:
     name: str
 
-    def get_properties(self) -> Dict[str, float]:
+    def get_properties(self) -> Dict[str, Any]:
         return {
             'name':self.name
         }
@@ -25,6 +24,7 @@ class Concrete(Material):
         properties['design_code'] = self.design_code
         properties['density'] = self.density
         return properties
+    
 @dataclass
 class Concrete_ACI_318_19(Concrete):
     _E_c: float = field(init=False)
@@ -32,10 +32,11 @@ class Concrete_ACI_318_19(Concrete):
     epsilon_c: float = field(default=0.003, init=False)
     _beta_1: float = field(init=False)
 
-    def __post_init__(self):
-        self._E_c =  ((self.density / (kg / m**3)) ** 1.5) * 0.043 * math.sqrt(self.f_c / MPa) * MPa
-        self._f_r = 0.625*math.sqrt(self.f_c/MPa)*MPa
-        self._beta_1=self.__beta_1()
+    def __init__(self, name: str, f_c: float):
+        super().__init__(name=name, f_c=f_c)
+        self._E_c = ((self.density / (kg / m**3)) ** 1.5) * 0.043 * math.sqrt(self.f_c / MPa) * MPa
+        self._f_r = 0.625 * math.sqrt(self.f_c / MPa) * MPa
+        self._beta_1 = self.__beta_1()
 
     def get_properties(self) -> dict:
         properties = super().get_properties()       
@@ -51,9 +52,12 @@ class Concrete_ACI_318_19(Concrete):
         if 17 <= self.f_c / MPa <= 28:
             return 0.85
         elif 28 < self.f_c / MPa <= 55:
-            return 0.85 - 0.05/7 * (self.f_c / MPa - 28)
+            return 0.85 - 0.05 / 7 * (self.f_c / MPa - 28)
         elif self.f_c / MPa > 55:
             return 0.65
+        else:
+            # Handle case where f_c / MPa < 17
+            return 0.85  # or another appropriate value based on your requirements
         
     @property
     def E_c(self) -> float:
@@ -73,11 +77,12 @@ class Concrete_EN_1992(Concrete):
     _f_cm: float = field(init=False) # mean compressive strength
     _f_ctm: float = field(init=False) # Mean tensile strength
 
-    def __post_init__(self):
-        # Calculate _E_cm and f_ctm based on f_c and density
+    def __init__(self, name: str, f_c: float):
+        super().__init__(name=name, f_c=f_c)
+        self.design_code = "EN 1992"
         self._f_ck = self.f_c
-        self._f_cm = self._f_ck+8*MPa
-        self._E_cm = 22000 * (self._f_cm / (10*MPa)) ** (0.3) * MPa       
+        self._f_cm = self._f_ck + 8 * MPa
+        self._E_cm = 22000 * (self._f_cm / (10 * MPa)) ** 0.3 * MPa       
         self._f_ctm = 0.3 * (self._f_ck / MPa) ** (2/3) * MPa
 
     def get_properties(self) -> dict:
@@ -86,9 +91,23 @@ class Concrete_EN_1992(Concrete):
         properties['f_ctm'] = self._f_ctm
         return properties
 
-    def alpha_cc(self):
+    def alpha_cc(self) -> float:
         # Example implementation for alpha_cc, as per Eurocode EN 1992-1-1
         return 1.0  # Typically, this value is taken as 1.0 for normal weight concrete
+    
+    @property
+    def E_c(self) -> float:
+        return self._E_cm
+
+    @property
+    def f_ck(self) -> float:
+        return self._f_ck
+    @property
+    def f_cm(self) -> float:
+        return self._f_cm
+    @property
+    def f_ctm(self) -> float:
+        return self._f_ctm
 
 @dataclass
 class Concrete_EHE_08(Concrete):
@@ -98,7 +117,9 @@ class Concrete_EHE_08(Concrete):
     _f_ctm: float = field(init=False) # Mean tensile strength
     _f_ctm_fl: float = field(init=False) # Mean flexure tensile strength
 
-    def __post_init__(self):
+    def __init__(self, name: str, f_c: float):
+        super().__init__(name=name, f_c=f_c)
+        self.design_code = "EHE-08"
         # Calculate _E_cm and f_ctk based on f_c
         # Formulas are based on EHE-08 specifications
         self._f_ck = self.f_c
@@ -114,12 +135,13 @@ class Concrete_EHE_08(Concrete):
         properties['f_ctm'] = self._f_ctm
         return properties
 
-    def alpha_cc(self):
+    def alpha_cc(self) -> float:
         # Example implementation for alpha_cc as per EHE-08
         return 0.85  # Example value, modify according to EHE-08 standards
 
 # Factory function
-def create_concrete(name: str, f_c: float, design_code: str):
+def create_concrete(name: str, f_c: float, design_code: str) -> Union[Concrete_ACI_318_19, 
+                                                                      Concrete_EN_1992, Concrete_EHE_08]:
     if design_code == "ACI 318-19":
         return Concrete_ACI_318_19(name=name, f_c=f_c)
     elif design_code == "EN 1992":
@@ -173,11 +195,10 @@ class SteelStrand(Steel):
         properties['f_u'] = self._f_u
         return properties
 
-def main():
+def main() -> None:
     # Test cases
     concrete=create_concrete(name="H25",f_c=25*MPa, design_code="ACI 318-19")
     debug(concrete.get_properties())
-    debug(concrete.E_c,', ',concrete.f_r)
     steelbar = SteelBar(name="ADN 500",f_y=500*MPa)
     debug(steelbar.get_properties())
     steelstrand = SteelStrand(name='Y1860',f_y=1700*MPa)

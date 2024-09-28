@@ -1,27 +1,22 @@
 from mento.settings import Settings
 from dataclasses import dataclass
-import sys
-import os
-
-# Add the project root to PYTHONPATH
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-
+from typing import Optional, Dict, Any
 
 @dataclass
-class Section:
-    def __init__(self, name:str, settings=None):
-        self._name=name
-        self._settings = settings if settings is not None else Settings()
-    
-    def get_name(self):
+class Section: 
+    def __init__(self, name: str, settings: Optional[Settings] = None):
+        self._name: str = name
+        self._settings: Settings = settings if settings is not None else Settings()
+
+    def get_name(self) -> str:
+        """Returns the name of the section."""
         return self._name
-    
-    def get_settings(self):
-        """Returns the current settings."""
+
+    def get_settings(self) -> Dict[str, Any]:
+        """Returns the current settings as a dictionary."""
         return self._settings.settings
-    
-    def update_settings(self, new_settings: dict):
+
+    def update_settings(self, new_settings: Dict[str, Any]) -> None:
         """Updates settings with new values."""
         self._settings.update(new_settings)
         

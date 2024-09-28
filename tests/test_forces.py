@@ -1,57 +1,51 @@
-import sys
-import os
-
-# Add the project root to PYTHONPATH
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 import pytest
 from mento.units import kN, m
 from mento.forces import Forces
 
-def test_default_initialization():
+def test_default_initialization() -> None:
     # Test default initialization
     f = Forces()
-    assert f.Nx == 0 * kN #type: ignore
-    assert f.Vz == 0 * kN #type: ignore
-    assert f.My == 0 * kN * m #type: ignore
+    assert f.Nx == 0 * kN 
+    assert f.Vz == 0 * kN 
+    assert f.My == 0 * kN * m 
 
-def test_custom_initialization():
+def test_custom_initialization() -> None:
     # Test initialization with custom values
-    f = Forces(Nx=10 * kN, Vz=5 * kN, My=15 * kN * m)  #type: ignore
-    assert f.Nx == 10 * kN #type: ignore
-    assert f.Vz == 5 * kN #type: ignore
-    assert f.My == 15 * kN * m #type: ignore
+    f = Forces(Nx=10 * kN, Vz=5 * kN, My=15 * kN * m)  
+    assert f.Nx == 10 * kN 
+    assert f.Vz == 5 * kN 
+    assert f.My == 15 * kN * m 
 
-def test_setting_attributes():
+def test_setting_attributes() -> None:
     # Test setting attributes
     f = Forces()
-    f.Nx = 20 * kN #type: ignore
-    f.Vz = 10 * kN #type: ignore
-    f.My = 25 * kN * m #type: ignore
-    assert f.Nx == 20 * kN #type: ignore
-    assert f.Vz == 10 * kN #type: ignore
-    assert f.My == 25 * kN * m #type: ignore
+    f.Nx = 20 * kN 
+    f.Vz = 10 * kN 
+    f.My = 25 * kN * m 
+    assert f.Nx == 20 * kN 
+    assert f.Vz == 10 * kN 
+    assert f.My == 25 * kN * m 
 
-def test_get_non_existent_attribute():
+def test_get_non_existent_attribute() -> None:
     # Test getting a non-existent attribute
     f = Forces()
     with pytest.raises(AttributeError):
         _ = f.non_existent
 
-def test_set_non_existent_attribute():
+def test_set_non_existent_attribute() -> None:
     # Test setting a non-existent attribute
     f = Forces()
     with pytest.raises(AttributeError):
-        f.non_existent = 10 * kN #type: ignore
+        f.non_existent = 10 * kN 
 
-def test_additional_kwargs():
+def test_additional_kwargs() -> None:
     # Test initialization with additional keyword arguments
-    f = Forces(extra_force=10 * kN) #type: ignore
-    assert f.extra_force == 10 * kN #type: ignore
+    f = Forces(extra_force=10 * kN) 
+    assert f.extra_force == 10 * kN 
 
     # Test setting an additional keyword argument
-    f.extra_force = 20 * kN #type: ignore
-    assert f.extra_force == 20 * kN #type: ignore
+    f.extra_force = 20 * kN 
+    assert f.extra_force == 20 * kN 
 
 if __name__ == "__main__":
     pytest.main()
