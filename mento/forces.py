@@ -1,14 +1,14 @@
 from dataclasses import dataclass, field
-import forallpeople
-forallpeople.environment('structural', top_level=True)
+from mento.units import kN, m
+from devtools import debug
 
 @dataclass
 class Forces:
-    Nx: float = field(default=0*kN) #type: ignore
-    Vz: float = field(default=0*kN) #type: ignore
-    My: float = field(default=0*kN*m) #type: ignore
+    Nx: float = field(default=0*kN)
+    Vz: float = field(default=0*kN)
+    My: float = field(default=0*kN*m)
 
-    def __init__(self, Nx: float = 0*kN, Vz: float = 0*kN, My: float = 0*kN*m, **kwargs): #type: ignore
+    def __init__(self, Nx: float = 0*kN, Vz: float = 0*kN, My: float = 0*kN*m, **kwargs):
         # Initialize the default fields
         super().__setattr__('Nx', Nx)
         super().__setattr__('Vz', Vz)
@@ -36,11 +36,11 @@ class Forces:
             super().__setattr__(name, value)
 
 def main():
-    f1 = Forces(My=10*kN*m,Nx=2*kN) # type: ignore
-    print(f1.My,f1.Nx) 
+    f1 = Forces(My=10*kN*m,Nx=2*kN)
+    debug(f1) 
     f = Forces()
-    f.Nx = 20*kN #type: ignore
-    print(f)
+    f.Nx = 20*kN
+    debug(f)
 
 if __name__ == "__main__":
     main()

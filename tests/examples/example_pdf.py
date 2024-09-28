@@ -1,4 +1,7 @@
-from structurelab.PDF.pdf_tools import *
+from mento.PDF.pdf_tools import merge_pdfs_by_folder, merge_pdfs_by_name, merge_template_to_pdf, extract_pdf_pages 
+from mento.PDF.pdf_tools import add_page_numbers, insert_text_into_pdf, remove_pdf_file, rename_pdf_file
+import numpy as np
+from pathlib import Path
 
 def main():
     ## EXAMPLE MERGE FOLDER
@@ -68,8 +71,10 @@ def main():
     # Create the PDF with background, number pages and text.
     output_path = merge_template_to_pdf(template_pdf, calcpad_folder, annex_folder, input_name, output_name)
     output_path2 = add_page_numbers(output_path, number_coords[0], number_coords[1],"Helvetica", font_size, font_color)
-    output_path3 = insert_text_into_pdf(output_path2, [project_name,annex_name], coordinates_list_top, "Helvetica", font_size, "white")
-    output_path4 = insert_text_into_pdf(output_path3, ["Doc.: "+input_name,date], coordinates_list_bot, "Helvetica", font_size, font_color)    
+    output_path3 = insert_text_into_pdf(output_path2, [project_name,annex_name], coordinates_list_top, 
+                                        "Helvetica", font_size, "white")
+    output_path4 = insert_text_into_pdf(output_path3, ["Doc.: "+input_name,date], coordinates_list_bot, 
+                                        "Helvetica", font_size, font_color)    
     # remove temporary PDF files
     remove_pdf_file(output_path)
     remove_pdf_file(output_path2)
