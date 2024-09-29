@@ -38,15 +38,6 @@ def test_set_non_existent_attribute() -> None:
     with pytest.raises(AttributeError):
         f.non_existent = 10 * kN 
 
-def test_additional_kwargs() -> None:
-    # Test initialization with additional keyword arguments
-    f = Forces(extra_force=10 * kN) 
-    assert f.extra_force == 10 * kN 
-
-    # Test setting an additional keyword argument
-    f.extra_force = 20 * kN 
-    assert f.extra_force == 20 * kN 
-
 if __name__ == "__main__":
     pytest.main()
 

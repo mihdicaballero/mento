@@ -6,6 +6,7 @@ from mento.settings import Settings
 from mento.rebar import Rebar
 from mento.units import MPa, ksi, psi, kip, mm, inch, kN, m, cm
 from mento.results import Formatter
+from mento.forces import Forces
 from IPython.display import Markdown, display
 import numpy as np
 import math
@@ -358,12 +359,12 @@ def shear() -> None:
     section = Beam(name="V-10x16",concrete=concrete,steel_bar=steelBar,width=10*inch, depth=16*inch)
     section.cc = 1.5*inch
     section.stirrup_d_b = 0.5*inch
-    V_u=37.727*kip 
-    N_u = 0*kip 
+    f = Forces(Vz=37.727*kip, Nx=0*kip)
+    debug(f.get_forces()) 
     A_s=0.847*inch**2 
-    results=section.check_shear(V_u, N_u, A_s, d_b=12*mm, s=6*inch, n_legs=2) 
+    results=section.check_shear(f.Vz, f.Nx, A_s, d_b=12*mm, s=6*inch, n_legs=2) 
     debug(results)
-    section.design_shear(V_u, N_u, A_s) 
+    section.design_shear(f.Vz, f.Nx, A_s) 
     debug(section.shear_results)
     debug(section.shear_design_results)
     debug(section.transverse_rebar)
@@ -380,10 +381,10 @@ def rebar() -> None:
     )
     section.cc = 30*mm
     section.stirrup_d_b = 8*mm
-    as_nec = 500 * cm**2
+    as_nec = 5 * cm**2
     best_combination = Rebar(section).beam_longitudinal_rebar_ACI_318_19(A_s_req=as_nec)
     debug(best_combination)
 
 
 if __name__ == "__main__":
-    rebar()
+    shear()
