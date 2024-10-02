@@ -25,27 +25,35 @@ class Forces:
         Sets the forces of the object with the provided values.
     """
     _last_id: int = field(default=0, init=False, repr=False)  # Class variable to keep track of last assigned ID
-    id: int = field(init=False)  # Instance variable for the ID
     Nx: float = field(default=0*kN)
     Vz: float = field(default=0*kN)
     My: float = field(default=0*kN*m)
     _forces: Dict[str, float] = field(init=False, repr=False)
 
-    def __init__(self, id: Optional[int] = None, Nx: float = 0*kN, Vz: float = 0*kN, My: float = 0*kN*m, **kwargs: Any) -> None:
-        # Initialize the default fields
-        if id is None:
-            Forces._last_id += 1  # Increment the class variable for the next ID
-            self.id = Forces._last_id  # Assign the next available ID
-        else:
-            self.id = id  # Use the specified ID
+    def __init__(self, label: Optional[str] = None, Nx: float = 0*kN, 
+                 Vz: float = 0*kN, My: float = 0*kN*m, **kwargs: Any) -> None:
+        # Initialize the private ID automatically
+        Forces._last_id += 1  # Increment the class variable for the next ID
+        self._id = Forces._last_id  # Assign the next available ID
+        
+        # Initialize label (user-defined or None by default)
+        self.label = label
+
         self.Nx = Nx
         self.Vz = Vz
         self.My = My
+
         # Initialize the internal dictionary to hold the forces
         super().__setattr__('_forces', {'Nx': Nx, 'Vz': Vz, 'My': My})
+
         # Update the dictionary with additional keyword arguments
         for key, value in kwargs.items():
             self._forces[key] = value
+    
+    @property
+    def id(self) -> int:
+        """Read-only property to access the private _id."""
+        return self._id
     
     def __getattr__(self, name: str) -> float:
         if name in self._forces:
@@ -55,7 +63,11 @@ class Forces:
     
     def __setattr__(self, name: str, value: float) -> None:
         """Override setattr to only allow setting known force attributes."""
-        if name in ('id', 'Nx', 'Vz', 'My'):
+        # Allow setting private/internal attributes directly (those starting with '_')
+        if name.startswith('_'):
+            super().__setattr__(name, value)
+        # Allow setting public attributes (Nx, Vz, My, label)
+        elif name in ('label', 'Nx', 'Vz', 'My'):
             super().__setattr__(name, value)
             # Update _forces if it has been initialized
             if '_forces' in self.__dict__:
@@ -108,7 +120,8 @@ def main() -> None:
     debug(f.Nx)
     debug(f.get_forces())
     f.set_forces(Nx=10*kN,My=15*kN*m)
-    debug(f)
+    f.label = "Crane load"
+    debug(f, f.label)
 
 if __name__ == "__main__":
     main()
