@@ -13,7 +13,8 @@ class RectangularConcreteSection(ConcreteSection):
         super().__init__(name, concrete, steel_bar, settings)
         self._width = width
         self._height = height
-        self.d = 0.9*self._height # Initial value
+        # TODO(Mihdi): This implementation is not handling edge cases properly
+        self.d = 0.9*self._height # Initial value 
 
     @property
     def width(self) -> float:

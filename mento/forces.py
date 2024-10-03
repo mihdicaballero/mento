@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
-from mento.units import kN, m
+from mento.units import kN, kNm
 from devtools import debug
-from typing import Dict, Any, Optional
+from typing import Dict, Optional
 
 @dataclass
 class Forces:
@@ -10,118 +10,80 @@ class Forces:
 
     Attributes
     ----------
-    Nx : float
+    N_x : float
         Axial force along the x-axis (default is 0 kN).
-    Vz : float
+    V_z : float
         Shear force along the z-axis (default is 0 kN).
-    My : float
+    M_y : float
         Bending moment about the y-axis (default is 0 kN*m).
 
     Methods
     -------
     get_forces() -> dict
-        Returns the forces as a dictionary with keys 'Nx', 'Vz', and 'My'.
+        Returns the forces as a dictionary with keys 'N_x', 'V_z', and 'M_y'.
     set_forces() -> None
         Sets the forces of the object with the provided values.
     """
+    _id: int = field(init=False, repr=False)  # Instance ID, assigned internally
     _last_id: int = field(default=0, init=False, repr=False)  # Class variable to keep track of last assigned ID
-    Nx: float = field(default=0*kN)
-    Vz: float = field(default=0*kN)
-    My: float = field(default=0*kN*m)
-    _forces: Dict[str, float] = field(init=False, repr=False)
+    label: Optional[str] = None
 
-    def __init__(self, label: Optional[str] = None, Nx: float = 0*kN, 
-                 Vz: float = 0*kN, My: float = 0*kN*m, **kwargs: Any) -> None:
-        # Initialize the private ID automatically
-        Forces._last_id += 1  # Increment the class variable for the next ID
-        self._id = Forces._last_id  # Assign the next available ID
-        
+    def __init__(self, label: Optional[str] = None, N_x: float = 0*kN, V_z: float = 0*kN, M_y: float = 0*kNm) -> None:
+        # Increment the class variable for the next unique ID
+        Forces._last_id += 1
+        self._id = Forces._last_id  # Private ID assigned internally, unique per instance
+
         # Initialize label (user-defined or None by default)
         self.label = label
 
-        self.Nx = Nx
-        self.Vz = Vz
-        self.My = My
+        # Set the forces
+        self._N_x = N_x
+        self._V_z = V_z
+        self._M_y = M_y
 
-        # Initialize the internal dictionary to hold the forces
-        super().__setattr__('_forces', {'Nx': Nx, 'Vz': Vz, 'My': My})
-
-        # Update the dictionary with additional keyword arguments
-        for key, value in kwargs.items():
-            self._forces[key] = value
-    
     @property
     def id(self) -> int:
-        """Read-only property to access the private _id."""
+        """Read-only property for accessing the unique ID of the instance."""
         return self._id
-    
-    def __getattr__(self, name: str) -> float:
-        if name in self._forces:
-            return self._forces[name]
-        else:
-            raise AttributeError(f"'Forces' object has no attribute '{name}'")
-    
-    def __setattr__(self, name: str, value: float) -> None:
-        """Override setattr to only allow setting known force attributes."""
-        # Allow setting private/internal attributes directly (those starting with '_')
-        if name.startswith('_'):
-            super().__setattr__(name, value)
-        # Allow setting public attributes (Nx, Vz, My, label)
-        elif name in ('label', 'Nx', 'Vz', 'My'):
-            super().__setattr__(name, value)
-            # Update _forces if it has been initialized
-            if '_forces' in self.__dict__:
-                self._forces[name] = value
-        else:
-            raise AttributeError(f"'Forces' object has no attribute '{name}'")
 
+    @property
+    def N_x(self) -> float:
+        return self._N_x
+
+    @property
+    def V_z(self) -> float:
+        return self._V_z
+
+    @property
+    def M_y(self) -> float:
+        return self._M_y
 
     def get_forces(self) -> Dict[str, float]:
-        """
-        Get the current force values as a dictionary.
+        """Returns the forces as a dictionary."""
+        return  {
+            'N_x': self._N_x,
+            'V_z': self._V_z,
+            'M_y': self._M_y
+        }
 
-        Returns
-        -------
-        Dict[str, float]
-            A dictionary containing the current values of 'Nx', 'Vz', and 'My'.
-        """
-        return self._forces
-
-    def set_forces(self, **kwargs: Any) -> None:
-        """
-        Set the forces to new values.
-
-        Parameters
-        ----------
-        Nx : float
-            New axial force along the x-axis (default is 0*kN).
-        Vz : float
-            New shear force along the z-axis (default is 0*kN).
-        My : float
-            New bending moment about the y-axis (default is 0*kN*m).
-
-        Returns
-        -------
-        None
-        """
-        for key, value in kwargs.items():
-            if key in self._forces:
-                setattr(self, key, value)
-            else:
-                raise AttributeError(f"'Forces' object has no attribute '{key}'")
+    def set_forces(self, N_x: float = 0*kN, V_z: float = 0*kN, M_y: float = 0*kNm) -> None:
+        """Sets the forces in the object."""
+        self._N_x = N_x
+        self._V_z = V_z
+        self._M_y = M_y
 
 
 def main() -> None:
-    f1 = Forces(My=10 * kN * m, Nx=2 * kN)
-    debug(f1) 
-    debug(f1.My, f1.id)
-    f = Forces(id=10)
-    f.Nx = 20 * kN
-    debug(f.Nx)
+    f = Forces(M_y=10 * kNm, N_x=2 * kN)
+    debug(f) 
+    print(f.M_y, f.id)
+    # f.Nx = 20 * kN # This doesn't work, since you must use the set_forces method. 
+    debug(f.N_x)
     debug(f.get_forces())
-    f.set_forces(Nx=10*kN,My=15*kN*m)
+    f.set_forces(N_x=10*kN,M_y=15*kNm)
     f.label = "Crane load"
-    debug(f, f.label)
+    debug(f)
+    debug(f.get_forces())
 
 if __name__ == "__main__":
     main()

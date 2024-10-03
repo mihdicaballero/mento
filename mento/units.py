@@ -10,6 +10,7 @@ m = ureg.meter
 cm = 1e-2 * ureg.meter
 mm = 1e-3 * ureg.meter
 kN = 1e3 * ureg.newton
+kNm = 1e3 * ureg.newton * ureg.meter
 MPa = 1e6 * ureg.pascal
 kg = 1e3 * ureg.gram
 sec = ureg.second
@@ -23,13 +24,15 @@ inch = ureg.inch
 ft = ureg.foot
 
 def main() -> None:
-    debug(2*cm, 3*MPa, 4*kg, 1*mm, 1*m, 3*kN)
+    debug(2*cm, 3*MPa, 4*kg, 1*mm, 1*m, 3*kN, 2*kNm)
     debug(1*psi, 1*lb, 1*kip, 1*psi, 1*ksi, 1*inch, 1*ft)
     a = 3*ureg.meter
     N = 3*kN
     A = 3*m**2
     s = N/A
     print(a, N.to_compact(), N.to('kip'),A, s)
+    # Get only the value
+    debug(N.magnitude, N.to('kN'))
     debug(a, N, A, s)
     wavelength = 1550 * ureg.nm
     frequency = (ureg.speed_of_light / wavelength).to('Hz')

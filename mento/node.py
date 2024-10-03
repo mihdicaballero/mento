@@ -1,6 +1,6 @@
 from section import Section
 from forces import Forces
-from units import kN, m
+from units import kNm
 from devtools import debug
 from typing import List
 
@@ -21,16 +21,16 @@ class Node:
 
 def main() -> None:
     # Ejemplo de uso
-    section = Section(name="V10")
-    forces1 = Forces(My=100*kN*m)
-    forces2 = Forces(My=200*kN*m)
+    section = Section(label="V10")
+    forces1 = Forces(My=100*kNm)
+    forces2 = Forces(My=200*kNm)
 
     node = Node(section=section, forces_list=[forces1, forces2])
 
     debug(node.forces_list)
 
     # Añadir otra instancia de Forces
-    forces3 = Forces(My=50*kN*m)
+    forces3 = Forces(My=50*kNm)
     node.add_forces(forces3)
     debug(node.forces_list)
 
