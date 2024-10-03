@@ -32,7 +32,7 @@ def main() -> None:
     s = N/A
     print(a, N.to_compact(), N.to('kip'),A, s)
     # Get only the value
-    debug(N.magnitude, N.to('kN'))
+    debug(N.magnitude, N.to('kN').magnitude)
     debug(a, N, A, s)
     wavelength = 1550 * ureg.nm
     frequency = (ureg.speed_of_light / wavelength).to('Hz')

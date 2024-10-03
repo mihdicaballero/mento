@@ -3,8 +3,8 @@ from mento.material import Concrete_ACI_318_19, Concrete_EN_1992, Concrete_EHE_0
 from mento.units import MPa, m, kg
 
 
-# Get only the value
-    # debug(N.magnitude, N.to('kN'))
+    # Get only the value
+    # debug(N.magnitude, N.to('kN').magnitude)
 
 def test_concrete_aci_318_19_properties() -> None:
     f_c = 25 * MPa
