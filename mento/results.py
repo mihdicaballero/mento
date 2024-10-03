@@ -1,11 +1,11 @@
-from IPython.display import Markdown, display
 import pandas as pd
+from typing import Optional
 
 class Formatter:
     """
-    Class to stly ethe results in a Markdown display and a DataFrame output.
+    Class to stlye the results in a Markdown display and a DataFrame output.
     """
-    def __init__(self):
+    def __init__(self) -> None:
         # Define colors in the constructor
         self.green = '#439b00'
         self.red = '#d43e36'
@@ -13,7 +13,7 @@ class Formatter:
         self.mid_value=0.95
         self.max_value=1
     
-    def FU(self, FU):
+    def FU(self, FU: float) -> str:
         # Determine color based on FU value
         if self.mid_value > FU:
             color = self.green
@@ -23,7 +23,8 @@ class Formatter:
             color = self.red
         
         return f"$\\color{{{color}}}{{\\text{{FU}}={round(FU,2)}}}$"
-    def FU_value(self, FU):
+    
+    def FU_value(self, FU: float) -> str:
         # Determine color based on FU value
         if self.mid_value > FU:
             color = self.green
@@ -34,36 +35,39 @@ class Formatter:
         
         return f"$\\color{{{color}}}{{{round(FU,2)}}}$"
     
-    def is_lower(self, value1, value2):
+    def is_lower(self, value1: float, value2: float) -> str:
         # Compare two values and return the appropriate formatted output
         if value1 < value2:
             return r"$\color{" + self.green + r"}{\, \checkmark}$"  # Green checkmark
         else:
             return r"$\color{" + self.red + r"}{\, \times}$"  # Red cross
     
-    def is_greater(self, value1, value2):
+    def is_greater(self, value1: float, value2: float) -> str:
         # Compare two values and return the appropriate formatted output
         if value1 > value2:
             return r"$\color{" + self.green + r"}{\, \checkmark}$"  # Green checkmark
         else:
             return r"$\color{" + self.red + r"}{\, \times}$"  # Red cross
     # Formatting functions outside the class
-    def FU_value_df(self,FU):
-        if isinstance(FU, (int, float)):
-            if self.mid_value > FU:
-                return f"color: {self.green}"
-            elif self.mid_value <= FU <= self.max_value:
-                return f"color: {self.yellow}"
-            else:
-                return f"color: {self.red}"
-        else: 
+
+    def FU_value_df(self,FU: Optional[float]) -> str:
+        # If FU is None or not a number, return an empty string
+        if FU is None or not isinstance(FU, (int, float)):
             return ""
 
-    def apply_FU_style(self,value):
+        # Determine the color based on FU value
+        if self.mid_value > FU:
+            return f"color: {self.green}"
+        elif self.mid_value <= FU <= self.max_value:
+            return f"color: {self.yellow}"
+        else:
+            return f"color: {self.red}"
+
+    def apply_FU_style(self,value: float) -> str:
         formatted_value = round(value, 2) if isinstance(value, (int, float)) else value
         return self.FU_value_df(formatted_value)
 
-    def color_FU_df(self,df, fu_columns):
+    def color_FU_df(self, df: pd.DataFrame, fu_columns: list) -> pd.io.formats:
         """
         Apply color styling to specified FU-related columns in the DataFrame.
         
@@ -72,10 +76,9 @@ class Formatter:
         :return: A styled DataFrame with colored FU values.
         """
         return df.style.applymap(self.apply_FU_style, subset=fu_columns).format(precision=2)
-    
 
 class SectionSummary:
-    def __init__(self, sections):
+    def __init__(self, sections: list):
         """
         Initializes the SectionSummary with a list of Section objects.
         
@@ -88,7 +91,7 @@ class SectionSummary:
                          "VRd", "FUb.inf", "FUb.sup", "FUv"]
         self.sections = sections  # Store the list of sections
 
-    def capacity(self):
+    def capacity(self) -> pd.DataFrame:
         """
         Creates a DataFrame from the list of Section objects and adds the units row.
         
@@ -119,7 +122,7 @@ class SectionSummary:
         df = pd.DataFrame(data, columns=self.capacity_columns)
         
         return df
-    def check(self):
+    def check(self) -> pd.DataFrame:
         """
         Creates a DataFrame for checking shear and bending for each section.
         Outputs necessary and real reinforcement, utilization factors for bending and shear.
@@ -163,13 +166,10 @@ class SectionSummary:
         # Apply color formatting to the specified FU columns
         return formatter.color_FU_df(df, self.fu_columns)
 
-def main():
-    #  Examples to run in a Jupyter Notebook
-    formatter = Formatter()
-    display(Markdown(formatter.FU(0.85)))
-    display(Markdown(formatter.FU_value(0.85)))
-    display(Markdown(formatter.is_lower(0.85,1)))
-    display(Markdown(formatter.is_greater(0.85,1)))
 
-if __name__ == "__main__":
-    main()
+    #  Examples to run in a Jupyter Notebook
+    # formatter = Formatter()
+    # display(Markdown(formatter.FU(0.85)))
+    # display(Markdown(formatter.FU_value(0.85)))
+    # display(Markdown(formatter.is_lower(0.85,1)))
+    # display(Markdown(formatter.is_greater(0.85,1)))

@@ -4,5 +4,7 @@
     ],
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,
-    "editor.fontFamily": "Fira Code, Consolas, 'Courier New', monospace"
+    "editor.fontFamily": "Fira Code, Consolas, 'Courier New', monospace",
+    "makefile.makefilePath": "",
+    "makefile.makePath": "",
 }
