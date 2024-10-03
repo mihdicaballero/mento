@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from mento.units import kN, kNm
+from pint import Quantity
 from devtools import debug
 from typing import Dict, Optional
 
@@ -28,7 +29,9 @@ class Forces:
     _last_id: int = field(default=0, init=False, repr=False)  # Class variable to keep track of last assigned ID
     label: Optional[str] = None
 
-    def __init__(self, label: Optional[str] = None, N_x: float = 0*kN, V_z: float = 0*kN, M_y: float = 0*kNm) -> None:
+    def __init__(self, label: Optional[str] = None, N_x: Quantity = 0 * kN, V_z: Quantity = 0 * kN,
+                  M_y: Quantity = 0 * kNm) -> None:
+ 
         # Increment the class variable for the next unique ID
         Forces._last_id += 1
         self._id = Forces._last_id  # Private ID assigned internally, unique per instance
@@ -47,18 +50,18 @@ class Forces:
         return self._id
 
     @property
-    def N_x(self) -> float:
+    def N_x(self) -> Quantity:
         return self._N_x
 
     @property
-    def V_z(self) -> float:
+    def V_z(self) -> Quantity:
         return self._V_z
 
     @property
-    def M_y(self) -> float:
+    def M_y(self) -> Quantity:
         return self._M_y
 
-    def get_forces(self) -> Dict[str, float]:
+    def get_forces(self) -> Dict[str, Quantity]:
         """Returns the forces as a dictionary."""
         return  {
             'N_x': self._N_x,
@@ -66,7 +69,7 @@ class Forces:
             'M_y': self._M_y
         }
 
-    def set_forces(self, N_x: float = 0*kN, V_z: float = 0*kN, M_y: float = 0*kNm) -> None:
+    def set_forces(self, N_x: Quantity = 0*kN, V_z: Quantity = 0*kN, M_y: Quantity = 0*kNm) -> None:
         """Sets the forces in the object."""
         self._N_x = N_x
         self._V_z = V_z

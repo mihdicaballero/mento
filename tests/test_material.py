@@ -14,8 +14,8 @@ def test_concrete_aci_318_19_properties() -> None:
     assert properties['f_c'] == f_c
     assert properties['design_code'] == "ACI 318-19" 
     assert properties['density'] == 2500 * kg / m**3 
-    assert properties['E_c'].value == pytest.approx(26875500000, rel=0.01)
-    assert properties['f_r'].value == pytest.approx(3125000, rel=0.01)   
+    assert properties['E_c'].to('MPa').magnitude == pytest.approx(26875, rel=0.01)
+    assert properties['f_r'].to('MPa').magnitude == pytest.approx(3.125, rel=0.01)   
 
 def test_concrete_en_1992_properties() -> None:
     f_c = 25 * MPa
@@ -25,8 +25,8 @@ def test_concrete_en_1992_properties() -> None:
     assert properties['f_c'] == f_c
     assert properties['design_code'] == "EN 1992"
     assert properties['density'] == 2500 * kg / m**3 
-    assert properties['E_cm'].value == pytest.approx(31475000000, rel=0.01)
-    assert properties['f_ctm'].value == pytest.approx(2564963, rel=0.01) 
+    assert properties['E_cm'].to('MPa').magnitude == pytest.approx(31475, rel=0.01)
+    assert properties['f_ctm'].to('MPa').magnitude == pytest.approx(2.564, rel=0.01) 
 
 def test_concrete_ehe_08_properties() -> None:
     f_c = 25 * MPa
@@ -38,8 +38,8 @@ def test_concrete_ehe_08_properties() -> None:
     assert properties['density'] == 2500 * kg / m**3 
     assert properties['f_ck'] == f_c
     assert properties['f_cm'] == f_c + 8 * MPa
-    assert properties['E_cm'].value == pytest.approx(27264000000 , rel=0.01)
-    assert properties['f_ctm'].value == pytest.approx(2560000 , rel=0.01) 
+    assert properties['E_cm'].to('MPa').magnitude == pytest.approx(27264 , rel=0.01)
+    assert properties['f_ctm'].to('MPa').magnitude == pytest.approx(2.56 , rel=0.01) 
 
 def test_steel_bar_properties() -> None:
     f_y = 500 * MPa
