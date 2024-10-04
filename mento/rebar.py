@@ -12,8 +12,7 @@ class Rebar:
         Initializes the Rebar object with the associated beam and settings.
         """
         self.beam = beam
-        self.settings = beam.get_settings()
-        self.clear_spacing = self.settings.get('clear_spacing')
+        self.clear_spacing = self.beam.cc
         self.rebar_diameters = [6*mm, 8*mm, 10*mm, 12*mm, 16*mm, 20*mm, 25*mm, 32*mm]
         self.rebar_areas = {d: (math.pi * d ** 2) / 4 for d in self.rebar_diameters}
 
@@ -28,7 +27,7 @@ class Rebar:
             A dictionary containing the best combination of rebar details.
         """
         self.A_s_req = A_s_req
-        effective_width = self.beam._width - 2 * (self.beam.cc + self.beam.stirrup_d_b)
+        effectivewidth = self.beam.width - 2 * (self.beam.cc + self.beam.stirrup_d_b)
 
         # Variables to track the best combination
         best_combination = None
@@ -41,13 +40,13 @@ class Rebar:
             num_bars = 2  # Start with 2 bars minimum
             total_as = 0 * cm**2
             
-            while num_bars * diameter + (num_bars - 1) * self.clear_spacing <= effective_width:
+            while num_bars * diameter + (num_bars - 1) * self.clear_spacing <= effectivewidth:
                 total_as = num_bars * rebar_area
                 
                 if total_as >= A_s_req:
                     if total_as < min_total_area:
                         min_total_area = total_as
-                        available_spacing = (effective_width - (num_bars * diameter)) / (num_bars - 1)
+                        available_spacing = (effectivewidth - (num_bars * diameter)) / (num_bars - 1)
                         best_combination = {
                             'layer_1': layer,
                             'num_bars_1': num_bars,
@@ -86,7 +85,7 @@ class Rebar:
         """
         f_c=self.beam.concrete.f_c
         lambda_factor = self.beam._settings.get_setting('lambda')
-        A_cv = self.beam._width*self.beam.d
+        A_cv = self.beam.width*self.beam.d
 
         # Check if V_s_req <= 4 * lambda * sqrt(f_c) * A_cv
         if V_s_req <= 4 * lambda_factor * math.sqrt(f_c / psi) * psi * A_cv:
@@ -95,29 +94,29 @@ class Rebar:
             # Maximum spacing across the width of the beam
             s_max_w = min(self.beam.d, 24*inch) 
             # Spacing along length
-            s = math.floor(self.beam.d / 2)*inch
+            s = math.floor(self.beam.d / (2*inch)) * inch
         else:
             # Maximum spacing across the length of the beam
             s_max_l = min(self.beam.d / 4, 12*inch) 
             # Maximum spacing across the width of the beam
             s_max_w = min(self.beam.d / 2, 12*inch) 
             # Spacing along length
-            s = math.floor(self.beam.d / 4) *inch
+            s = math.floor(self.beam.d/(4*inch))*inch
 
         # Ensure that the calculated spacing is within the maximum allowed spacing
         s = min(s, s_max_l)
         # Required transverse rebar per stirrup distance
         A_vs_req = A_v_req*s
         # Number of legs of the stirrups across the beam width
-        n_legs_req = math.ceil((self.beam._width - 2 * self.beam.cc - self.beam.stirrup_d_b) / s_max_w) + 1
+        n_legs_req = math.ceil((self.beam.width - 2 * self.beam.cc - self.beam.stirrup_d_b) / s_max_w) + 1
         n_stirrups = math.ceil(n_legs_req/2)
         n_legs = n_stirrups*2
         # Spacing along the width of the beam
-        s_w = (self.beam._width - 2 * self.beam.cc - self.beam.stirrup_d_b) / (n_legs - 1)
+        s_w = (self.beam.width - 2 * self.beam.cc - self.beam.stirrup_d_b) / (n_legs - 1)
         # Ensure that spacing along the width is within the maximum allowed spacing
         s_w = min(s_w, s_max_w)
         # Minimum bar diameter (in inches)
-        d_b_min = math.sqrt((4 * A_vs_req.value) / (math.pi * n_legs))*m
+        d_b_min = math.sqrt((4 * A_vs_req/(m**2)) / (math.pi * n_legs))*m
 
         # Find the smallest available bar diameter greater than or equal to d_bmin
         d_b = max(3/8*inch, min(filter(lambda db: db >= d_b_min, self.rebar_diameters)))

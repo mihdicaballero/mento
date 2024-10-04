@@ -1,6 +1,6 @@
 from mento.concrete.beam import Beam
 from mento import material
-
+from mento.units import inch, kip, psi, ft, ksi
 import pytest
 
 @pytest.fixture()

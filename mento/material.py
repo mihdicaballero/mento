@@ -2,9 +2,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, Any, Union, TYPE_CHECKING
 import math
-from mento.units import kg, m, MPa
+from mento.units import kg, m, MPa, ksi
 from devtools import debug
-from abc import abstractmethod
 
 # Conditional import for type checking only
 if TYPE_CHECKING:
@@ -198,6 +197,11 @@ class Steel(Material):
     @property
     def density(self) -> Quantity:
         return self._density
+    
+    # Maximum f_yt for Imperial system
+    @property 
+    def f_yt(self) -> Quantity:
+        return min(self.f_y, 60*ksi)
 
 @dataclass
 class SteelBar(Steel):
