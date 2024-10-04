@@ -1,6 +1,6 @@
 from mento.concrete.beam import Beam
 from mento import material
-from mento.units import ksi, psi, kip, inch
+
 import pytest
 
 @pytest.fixture()
@@ -57,6 +57,28 @@ def test_shear_design_ACI_318_19(beam_example: Beam) -> None:
     # Assert non-numeric values directly
     assert results['shear_ok'] is True
     assert results['max_shear_ok'] is True
+
+# ------- Flexural test --------------
+# LO QUE ME ESTÁ FALTANDO ES SETEAR EL MEC COVER.
+# Example 6.6 CRSI Design Guide
+concreteFlexureTest1=material.create_concrete(name="fc4000",f_c=4000*psi, design_code="ACI 318-19") # type: ignore
+steelBarFlexureTest1=material.SteelBar(name="G60", f_y=60000*psi) # type: ignore
+sectionFlexureTest1 = Beam(
+        name="B-12x24",
+        concrete=concreteFlexureTest1,
+        steelBar=steelBarFlexureTest1,
+        width=12 * inch,  # type: ignore
+        depth=24 * inch,  # type: ignore
+    )
+
+def test_flexural_design():
+    results = sectionFlexureTest1.design_flexure(258.3*kip*ft)  # type: ignore
+    # Compare dictionaries with a tolerance for floating-point values, in m 
+    assert results['As_min_code'].value  == pytest.approx(0.0005548, rel=1e-3)
+    assert results['As_required'].value  == pytest.approx(0.0019173, rel=1e-3)
+    assert results['As_max'].value  == pytest.approx(0.0030065, rel=1e-3)
+    assert results['As_adopted'].value  == pytest.approx(0.0019173, rel=1e-3)
+    assert results['As_compression'].value  == pytest.approx(0, rel=1e-3)
 
 
 # This is where pytest will collect the tests and run them
