@@ -18,7 +18,7 @@ sec = ureg.second
 # Imperial system units
 psi = ureg.psi
 lb = ureg.pound
-kip = 1e3 * ureg.pound
+kip = 1e3 * ureg.force_pound
 ksi = 1e3 * ureg.psi
 inch = ureg.inch
 ft = ureg.foot

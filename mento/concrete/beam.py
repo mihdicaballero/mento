@@ -44,10 +44,10 @@ class Beam(RectangularConcreteSection):
         rebar_properties=self.steel_bar.get_properties()
         epsilon_y=rebar_properties["epsilon_y"]
 
-        if epsilon_mas_deformado<=epsilon_ty:
+        if epsilon_mas_deformado<=self.epsilon_ty:
             return 0.65
-        elif epsilon_mas_deformado<=epsilon_ty+epsilon_c:
-            return (0.9-0.65)*(epsilon_mas_deformado-epsilon_ty)/epsilon_c+0.65
+        elif epsilon_mas_deformado<=self.epsilon_ty+epsilon_c:
+            return (0.9-0.65)*(epsilon_mas_deformado-self.epsilon_ty)/epsilon_c+0.65
         else:
             return 0.9
 
@@ -58,14 +58,13 @@ class Beam(RectangularConcreteSection):
         concrete_properties=self.concrete.get_properties()
         f_c=concrete_properties['f_c']
         beta_1=concrete_properties['beta_1']
-        rebar_properties=self.steelBar.get_properties()
+        rebar_properties=self.steel_bar.get_properties()
         f_y=rebar_properties['f_y']
         epsilon_ty=rebar_properties['epsilon_ty']
         E_s=rebar_properties['E_s']
 
-        d=0.9*self._depth # Asumption, this is the main difference between design and check.
+        d=0.9*self._height # Asumption, this is the main difference between design and check.
         b=self._width
-
         
         # Determination of minimum reinforcement
         A_s_min=max((3*np.sqrt(f_c / psi)*psi/f_y*d*self._width) , (200*psi/f_y*d*self._width))# type: ignore
@@ -110,11 +109,11 @@ class Beam(RectangularConcreteSection):
             self._A_s_calculated=A_s
             self._A_s_comp=A_s_prima
             result={
-                'As_min_code':A_s_min,
-                'As_required':self._A_s_calculated,
-                'As_max':A_s_max,
-                'As_adopted':self._A_s_calculated,
-                'As_compression':self._A_s_comp
+                'As_min_code':A_s_min.to("inch**2"),
+                'As_required':self._A_s_calculated.to("inch**2"),
+                'As_max':A_s_max.to("inch**2"),
+                'As_adopted':self._A_s_calculated.to("inch**2"),
+                'As_compression':self._A_s_comp.to("inch**2")
             }
             return result
 
@@ -157,7 +156,6 @@ class Beam(RectangularConcreteSection):
         # reduced by 0.5ϕVc. It is assumed that minimum reinforcement is required.
         # Rebar needed, V_u > φ_v*V_c/2
         A_v_min = max((0.75 * math.sqrt(f_c / psi) * psi/ f_yt) * self.width , (50 * psi/f_yt) * self.width)  
-        
         # Shear reinforcement calculations
         A_db = (d_b ** 2) * math.pi / 4  # Area of one stirrup leg
         A_vs = n_legs * A_db  # Total area of stirrups
@@ -367,18 +365,18 @@ class Beam(RectangularConcreteSection):
         return markdown_content
 
 
-def main() -> None:
-    concrete=material.create_concrete(name="H30",f_c=30*MPa, design_code="ACI 318-19") 
-    steelBar=material.SteelBar(name="ADN 420", f_y=420*MPa) 
+def flexure() -> None:
+    concrete=material.create_concrete(name="fc4000",f_c=4000*psi, design_code="ACI 318-19") 
+    steelBar=material.SteelBar(name="G60", f_y=60000*psi) 
     section = Beam(
-        name="B-12x24",
+        name="B-10x15",
         concrete=concrete,
         steel_bar=steelBar,
-        width=400 * mm,  
-        height=500 * mm,  
+        width=10 * inch,  
+        height=15 * inch,   
     )
-    debug(f"Nombre de la seself.cción: {section.get_name()}")
-    resultados=section.design_flexure(500*kN*m)  
+    debug(f"Nombre de la sección: {section.label}")
+    resultados=section.design_flexure(1460.4*kip*inch)  
     debug(resultados)
 
 
@@ -388,10 +386,10 @@ def shear() -> None:
     section = Beam(name="V-10x16",concrete=concrete,steel_bar=steelBar,width=10*inch, height=16*inch)
     section.cc = 1.5*inch
     section.stirrup_d_b = 0.5*inch
-    f = Forces(Vz=37.727*kip, Nx=0*kip)
+    f = Forces(V_z=37.727*kip, N_x=0*kip)
     debug(f.get_forces()) 
     A_s=0.847*inch**2 
-    results=section.check_shear(f.Vz, f.Nx, A_s, d_b=12*mm, s=6*inch, n_legs=2) 
+    results=section.check_shear(f.V_z, f.N_x, A_s, d_b=12*mm, s=6*inch, n_legs=2) 
     debug(results)
     section.design_shear(f.Vz, f.Nx, A_s) 
     debug(section.shear_results)
@@ -417,4 +415,4 @@ def rebar() -> None:
 
 if __name__ == "__main__":
     flexure()
-    shear()
+    #shear()
