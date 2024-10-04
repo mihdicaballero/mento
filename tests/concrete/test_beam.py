@@ -12,7 +12,7 @@ def beam_example() -> Beam:
         concrete=concrete,
         steel_bar=steelBar,
         width=10*inch,
-        depth=16*inch,
+        height=16*inch,
     )
     section.cc = 1.5*inch
     section.stirrup_d_b = 0.5*inch

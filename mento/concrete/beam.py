@@ -11,12 +11,13 @@ from IPython.display import Markdown, display
 import numpy as np
 import math
 from typing import Optional, Dict, Any
+from pint import Quantity
 
 @dataclass
 class Beam(RectangularConcreteSection):
     def __init__(self, name: str, concrete: material.Concrete, steel_bar: material.SteelBar, 
-                 width: float, depth: float, settings: Optional[Settings] = None):   
-        super().__init__(name, concrete, steel_bar, width, depth, settings)
+                 width: Quantity, height: Quantity, settings: Optional[Settings] = None):   
+        super().__init__(name, concrete, steel_bar, width, height, settings)
         self.shear_design_results: Optional[Dict[str, Any]] = None
         self.transverse_rebar: Dict[str, Any]
 
@@ -155,7 +156,7 @@ class Beam(RectangularConcreteSection):
         # is greater than half the shear capacity of the concrete,
         # reduced by 0.5ϕVc. It is assumed that minimum reinforcement is required.
         # Rebar needed, V_u > φ_v*V_c/2
-        A_v_min = max((0.75 * math.sqrt(f_c / psi) * psi/ f_yt) * self._width , (50 * psi/f_yt) * self._width)  
+        A_v_min = max((0.75 * math.sqrt(f_c / psi) * psi/ f_yt) * self.width , (50 * psi/f_yt) * self.width)  
         
         # Shear reinforcement calculations
         A_db = (d_b ** 2) * math.pi / 4  # Area of one stirrup leg
@@ -166,8 +167,8 @@ class Beam(RectangularConcreteSection):
         phi_V_s = phi_v * V_s  # Reduced shear contribution of reinforcement
 
         # Effective shear area and longitudinal reinforcement ratio
-        A_cv = self._width * self.d  # Effective shear area
-        A_g = self._width * self._depth  # Gross area
+        A_cv = self.width * self.d  # Effective shear area
+        A_g = self.width * self.height  # Gross area
         rho_w = A_s / A_cv  # Longitudinal reinforcement ratio
         
         # Size modification factor
@@ -198,7 +199,7 @@ class Beam(RectangularConcreteSection):
             A_v_min = 0*inch
             max_shear_ok = True
         elif phi_V_c/2 < V_u < phi_V_max:
-            A_v_min = max((0.75 * math.sqrt(f_c / psi) * psi/ f_yt) * self._width , (50 * psi/f_yt) * self._width)  
+            A_v_min = max((0.75 * math.sqrt(f_c / psi) * psi/ f_yt) * self.width , (50 * psi/f_yt) * self.width)  
             max_shear_ok = True
         else:
             max_shear_ok = False 
@@ -239,8 +240,8 @@ class Beam(RectangularConcreteSection):
         self.N_u = N_u
         self.A_s = A_s 
         # Effective shear area and longitudinal reinforcement ratio
-        A_cv = self._width * self.d  # Effective shear area
-        A_g = self._width * self._depth  # Gross area
+        A_cv = self.width * self.d  # Effective shear area
+        A_g = self.A_x # Gross area
         rho_w = A_s / A_cv  # Longitudinal reinforcement ratio
         
         # Concrete shear strength calculation
@@ -269,7 +270,7 @@ class Beam(RectangularConcreteSection):
             A_v_min = 0*inch
             max_shear_ok = True
         elif phi_V_c/2 < V_u < phi_V_max:
-            A_v_min = max((0.75 * math.sqrt(f_c / psi) * psi/ f_yt) * self._width , (50 * psi/f_yt) * self._width) 
+            A_v_min = max((0.75 * math.sqrt(f_c / psi) * psi/ f_yt) * self.width , (50 * psi/f_yt) * self.width) 
             max_shear_ok = True
         else:
             max_shear_ok = False 
@@ -374,7 +375,7 @@ def main() -> None:
         concrete=concrete,
         steel_bar=steelBar,
         width=400 * mm,  
-        depth=500 * mm,  
+        height=500 * mm,  
     )
     debug(f"Nombre de la seself.cción: {section.get_name()}")
     resultados=section.design_flexure(500*kN*m)  
@@ -384,7 +385,7 @@ def main() -> None:
 def shear() -> None:
     concrete=material.create_concrete(name="C4",f_c=4000*psi, design_code="ACI 318-19") 
     steelBar=material.SteelBar(name="ADN 420", f_y=60*ksi) 
-    section = Beam(name="V-10x16",concrete=concrete,steel_bar=steelBar,width=10*inch, depth=16*inch)
+    section = Beam(name="V-10x16",concrete=concrete,steel_bar=steelBar,width=10*inch, height=16*inch)
     section.cc = 1.5*inch
     section.stirrup_d_b = 0.5*inch
     f = Forces(Vz=37.727*kip, Nx=0*kip)
@@ -405,7 +406,7 @@ def rebar() -> None:
         concrete=concrete,
         steel_bar=steelBar,
         width=20*cm,  
-        depth=50*cm,  
+        height=50*cm,  
     )
     section.cc = 30*mm
     section.stirrup_d_b = 8*mm

@@ -4,7 +4,7 @@ from typing import Dict, Any, Union, TYPE_CHECKING
 import math
 from mento.units import kg, m, MPa
 from devtools import debug
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 
 # Conditional import for type checking only
 if TYPE_CHECKING:
@@ -31,18 +31,17 @@ class Concrete(Material):
         properties['density'] = self.density
         return properties
     
-    @property
-    @abstractmethod
-    def E_c(self) -> Quantity:
-        """Modulus of elasticity."""
-        pass
+    # @property
+    # @abstractmethod
+    # def E_c(self) -> Quantity:
+    #     """Modulus of elasticity."""
+    #     pass
 
-    @property
-    @abstractmethod
-    def f_r(self) -> Quantity:
-        """Modulus of rupture."""
-        pass
-
+    # @property
+    # @abstractmethod
+    # def f_r(self) -> Quantity:
+    #     """Modulus of rupture."""
+    #     pass
 
 @dataclass
 class Concrete_ACI_318_19(Concrete):
@@ -57,7 +56,7 @@ class Concrete_ACI_318_19(Concrete):
         self._f_r = 0.625 * math.sqrt(self.f_c / MPa) * MPa
         self._beta_1 = self.__beta_1()
 
-    def get_properties(self) -> Dict[str, Union[Quantity, str, float]]:
+    def get_properties(self) -> Dict[str, Union[Quantity, float]]:
         properties = super().get_properties()       
         properties['E_c'] = self._E_c
         properties['f_r'] = self._f_r
@@ -96,8 +95,8 @@ class Concrete_EN_1992(Concrete):
     _f_cm: Quantity = field(init=False) # mean compressive strength
     _f_ctm: Quantity = field(init=False) # Mean tensile strength
 
-    def __init__(self, name: str, f_c: Quantity):
-        super().__init__(name=name, f_c=f_c)
+    def __init__(self, name: str, f_ck: Quantity):
+        super().__init__(name=name, f_c=f_ck)
         self.design_code = "EN 1992"
         self._f_ck = self.f_c
         self._f_cm = self._f_ck + 8 * MPa
@@ -115,7 +114,7 @@ class Concrete_EN_1992(Concrete):
         return 1.0  # Typically, this value is taken as 1.0 for normal weight concrete
     
     @property
-    def E_c(self) -> Quantity:
+    def E_cm(self) -> Quantity:
         return self._E_cm
 
     @property
@@ -136,8 +135,8 @@ class Concrete_EHE_08(Concrete):
     _f_ctm: Quantity = field(init=False) # Mean tensile strength
     _f_ctm_fl: Quantity = field(init=False) # Mean flexure tensile strength
 
-    def __init__(self, name: str, f_c: Quantity):
-        super().__init__(name=name, f_c=f_c)
+    def __init__(self, name: str, f_ck: Quantity):
+        super().__init__(name=name, f_c=f_ck)
         self.design_code = "EHE-08"
         # Calculate _E_cm and f_ctk based on f_c
         # Formulas are based on EHE-08 specifications
@@ -157,6 +156,20 @@ class Concrete_EHE_08(Concrete):
     def alpha_cc(self) -> float:
         # Example implementation for alpha_cc as per EHE-08
         return 0.85  # Example value, modify according to EHE-08 standards
+    
+    @property
+    def E_cm(self) -> Quantity:
+        return self._E_cm
+
+    @property
+    def f_ck(self) -> Quantity:
+        return self._f_ck
+    @property
+    def f_cm(self) -> Quantity:
+        return self._f_cm
+    @property
+    def f_ctm(self) -> Quantity:
+        return self._f_ctm
 
 # Factory function
 def create_concrete(name: str, f_c: Quantity, design_code: str) -> Concrete:
@@ -168,7 +181,6 @@ def create_concrete(name: str, f_c: Quantity, design_code: str) -> Concrete:
         return Concrete_EHE_08(name=name, f_c=f_c)
     else:
         raise ValueError(f"Invalid design code: {design_code}. Options: ACI 318-19, EN 1992, EHE-08.")
-
 @dataclass
 class Steel(Material):
     _f_y: Quantity = field(init=False)
@@ -179,6 +191,14 @@ class Steel(Material):
         self._f_y = f_y
         self._density = density
 
+    @property
+    def f_y(self) -> Quantity:
+        return self._f_y
+    
+    @property
+    def density(self) -> Quantity:
+        return self._density
+
 @dataclass
 class SteelBar(Steel):
     _E_s: Quantity = field(default=200000*MPa)
@@ -187,6 +207,14 @@ class SteelBar(Steel):
     def __init__(self, name: str, f_y: Quantity, density: Quantity =7850 *kg/m**3):
         super().__init__(name, f_y, density)
         self._epsilon_y = self._f_y / self._E_s # 21.2.2.1 - Page 392
+
+    @property
+    def E_s(self) -> Quantity:
+        return self._E_s
+
+    @property
+    def epsilon_y(self) -> Quantity:
+        return self._epsilon_y
 
     def get_properties(self) -> Dict[str, Union[Quantity, str, float]]:
         properties = super().get_properties()
@@ -212,6 +240,14 @@ class SteelStrand(Steel):
         properties['f_y'] = self._f_y
         properties['f_u'] = self._f_u
         return properties
+    
+    @property
+    def f_u(self) -> Quantity:
+        return self._f_u
+    
+    @property
+    def E_s(self) -> Quantity:
+        return self._E_s
 
 def main() -> None:
     # Test cases
@@ -223,7 +259,8 @@ def main() -> None:
     debug(steelstrand.get_properties())
     print(concrete.f_c.to('MPa'), concrete.f_c.to('MPa').magnitude)
     print(concrete.get_properties()['E_c'].to('MPa'))
-    print(concrete.E_c)
+    concrete = Concrete_ACI_318_19(name="H25",f_c=25*MPa)
+    print(concrete.f_r, concrete.E_c)
 
 if __name__ == "__main__":
     main()
