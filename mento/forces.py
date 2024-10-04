@@ -80,7 +80,6 @@ def main() -> None:
     f = Forces(M_y=10 * kNm, N_x=2 * kN)
     debug(f) 
     print(f.M_y, f.id)
-    # f.Nx = 20 * kN # This doesn't work, since you must use the set_forces method. 
     debug(f.N_x)
     debug(f.get_forces())
     f.set_forces(N_x=10*kN,M_y=15*kNm)

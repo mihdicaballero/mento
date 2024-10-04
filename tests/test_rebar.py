@@ -13,7 +13,7 @@ def beam_example_imperial() -> Beam:
         concrete=concrete,
         steel_bar=steelBar,
         width=10*inch,  
-        depth=16*inch,  
+        height=16*inch,  
     )
     section.cc = 1.5*inch
     section.stirrup_d_b = 0.5*inch
@@ -28,7 +28,7 @@ def beam_example_metric() -> Beam:
         concrete=concrete,
         steel_bar=steelBar,
         width=20*cm,  
-        depth=50*cm,  
+        height=50*cm,  
     )
     section.cc = 30*mm
     section.stirrup_d_b = 8*mm

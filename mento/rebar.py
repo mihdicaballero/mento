@@ -84,8 +84,7 @@ class Rebar:
         Returns:
             A dictionary containing the transverse rebar design.
         """
-        concrete_properties=self.beam.concrete.get_properties()
-        f_c=concrete_properties["f_c"]
+        f_c=self.beam.concrete.f_c
         lambda_factor = self.beam._settings.get_setting('lambda')
         A_cv = self.beam._width*self.beam.d
 

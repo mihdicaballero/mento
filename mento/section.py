@@ -35,7 +35,6 @@ class Section:
         """Updates settings with new values."""
         self._settings.update(new_settings)
 
-
 def main() -> None:
     section = Section(label="V-10x16")
     debug(section.label, section.settings, section.id)

@@ -7,4 +7,5 @@
     "editor.fontFamily": "Fira Code, Consolas, 'Courier New', monospace",
     "makefile.makefilePath": "",
     "makefile.makePath": "",
+    "python.REPL.enableREPLSmartSend": false,
 }
