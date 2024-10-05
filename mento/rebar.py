@@ -4,10 +4,10 @@ from mento.units import psi, mm, inch, m, cm
 from typing import Any, Dict, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from beam import Beam  # Import only for type checking to avoid circular import issues
+    from beam import RectangularConcreteBeam  # Import only for type checking to avoid circular import issues
 
 class Rebar:
-    def __init__(self, beam: Beam):
+    def __init__(self, beam: RectangularConcreteBeam):
         """
         Initializes the Rebar object with the associated beam and settings.
         """
@@ -84,7 +84,7 @@ class Rebar:
             A dictionary containing the transverse rebar design.
         """
         f_c=self.beam.concrete.f_c
-        lambda_factor = self.beam._settings.get_setting('lambda')
+        lambda_factor = self.beam.settings.get_setting('lambda')
         A_cv = self.beam.width*self.beam.d
 
         # Check if V_s_req <= 4 * lambda * sqrt(f_c) * A_cv

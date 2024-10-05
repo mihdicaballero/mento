@@ -1,9 +1,5 @@
 from devtools import debug
-from pint import UnitRegistry
-
-# Initialize the environment
-ureg = UnitRegistry(system='mks')
-ureg.formatter.default_format = '.2f~P'
+from mento import ureg
 
 # Metric system units
 m = ureg.meter
@@ -12,6 +8,7 @@ mm = 1e-3 * ureg.meter
 kN = 1e3 * ureg.newton
 kNm = 1e3 * ureg.newton * ureg.meter
 MPa = 1e6 * ureg.pascal
+GPa = 1e9 * ureg.pascal
 kg = 1e3 * ureg.gram
 sec = ureg.second
 

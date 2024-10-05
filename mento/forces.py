@@ -1,8 +1,10 @@
 from dataclasses import dataclass, field
 from mento.units import kN, kNm
-from pint import Quantity
 from devtools import debug
 from typing import Dict, Optional
+from pint import Quantity
+from pint.facets.plain import PlainQuantity
+
 
 @dataclass
 class Forces:
@@ -28,21 +30,21 @@ class Forces:
     _id: int = field(init=False, repr=False)  # Instance ID, assigned internally
     _last_id: int = field(default=0, init=False, repr=False)  # Class variable to keep track of last assigned ID
     label: Optional[str] = None
+    _N_x: Quantity = field(default=0 *kN)  # Ensure you use the correct unit type here
+    _V_z: Quantity = field(default=0 * kN)
+    _M_y: Quantity = field(default=0 * kNm)
 
-    def __init__(self, label: Optional[str] = None, N_x: Quantity = 0 * kN, V_z: Quantity = 0 * kN,
-                  M_y: Quantity = 0 * kNm) -> None:
- 
+    def __init__(self, label: Optional[str] = None, N_x: Quantity = 0 * kN,
+                 V_z: Quantity = 0 * kN, M_y: Quantity = 0 * kNm) -> None:
         # Increment the class variable for the next unique ID
         Forces._last_id += 1
         self._id = Forces._last_id  # Private ID assigned internally, unique per instance
 
-        # Initialize label (user-defined or None by default)
+        # Initialize the label
         self.label = label
-
-        # Set the forces
-        self._N_x = N_x
-        self._V_z = V_z
-        self._M_y = M_y
+        
+        # Set the forces upon initialization
+        self.set_forces(N_x, V_z, M_y)
 
     @property
     def id(self) -> int:
@@ -50,23 +52,23 @@ class Forces:
         return self._id
 
     @property
-    def N_x(self) -> Quantity:
-        return self._N_x
+    def N_x(self) -> PlainQuantity:
+        return self._N_x.to('kN')
 
     @property
-    def V_z(self) -> Quantity:
-        return self._V_z
+    def V_z(self) -> PlainQuantity:
+        return self._V_z.to('kN')
 
     @property
-    def M_y(self) -> Quantity:
-        return self._M_y
+    def M_y(self) -> PlainQuantity:
+        return self._M_y.to('kN*m')
 
-    def get_forces(self) -> Dict[str, Quantity]:
+    def get_forces(self) -> Dict[str, PlainQuantity]:
         """Returns the forces as a dictionary."""
         return  {
-            'N_x': self._N_x,
-            'V_z': self._V_z,
-            'M_y': self._M_y
+            'N_x': self._N_x.to('kN'),
+            'V_z': self._V_z.to('kN'),
+            'M_y': self._M_y.to('kN*m')
         }
 
     def set_forces(self, N_x: Quantity = 0*kN, V_z: Quantity = 0*kN, M_y: Quantity = 0*kNm) -> None:

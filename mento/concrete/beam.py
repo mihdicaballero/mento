@@ -1,7 +1,7 @@
 from devtools import debug
 from dataclasses import dataclass
 from mento.concrete.rectangular import RectangularConcreteSection
-from mento import material
+from mento.material import Concrete, SteelBar, Concrete_ACI_318_19 
 from mento.settings import Settings
 from mento.rebar import Rebar
 from mento.units import MPa, ksi, psi, kip, mm, inch, kN, m, cm
@@ -10,73 +10,66 @@ from mento.forces import Forces
 from IPython.display import Markdown, display
 import numpy as np
 import math
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, cast
 from pint import Quantity
+from pint.facets.plain import PlainQuantity
 
 @dataclass
-class Beam(RectangularConcreteSection):
-    def __init__(self, name: str, concrete: material.Concrete, steel_bar: material.SteelBar, 
-                 width: Quantity, height: Quantity, settings: Optional[Settings] = None):   
-        super().__init__(name, concrete, steel_bar, width, height, settings)
+class RectangularConcreteBeam(RectangularConcreteSection):
+    label: Optional[str] = None
+
+    def __init__(self, label: Optional[str], concrete: Concrete, steel_bar: SteelBar, 
+                 width: PlainQuantity, height: PlainQuantity, settings: Optional[Settings] = None):   
+        super().__init__(concrete, steel_bar, width, height, settings)
+        self.label = label
         self.shear_design_results: Optional[Dict[str, Any]] = None
         self.transverse_rebar: Dict[str, Any]
 
-    def __determine_maximum_flexural_reinforcement_ratio_ACI_318_19(self) -> float:
-        # Determination of maximum reinforcement ratio
-        concrete_properties=self.concrete.get_properties()
-        beta_1=concrete_properties["beta_1"]
-        f_c=concrete_properties["f_c"]
-        epsilon_c=concrete_properties["epsilon_c"]
-        rebar_properties=self.steel_bar.get_properties()
-        f_y=rebar_properties["f_y"]
-        epsilon_ty=rebar_properties['epsilon_ty']
+        if settings:
+            self.settings.update(settings.settings)  # Update with any provided settings
+    
+    def __maximum_flexural_reinforcement_ratio(self) -> float:
+        if self.concrete.design_code=="ACI 318-19":
+            concrete_aci = cast(Concrete_ACI_318_19, self.concrete)  # Cast to the specific subclass
+            # Determination of maximum reinforcement ratio
+            epsilon_min_rebar_ACI_318_19=self.steel_bar.epsilon_y+concrete_aci.epsilon_c # TODO: REVISAR
 
-        epsilon_min_rebar_ACI_318_19=epsilon_ty+epsilon_c # ESTO CHEQUEARLO BIEN, CREO QUE ES ASI, PERO REVISAR
-
-        rho_max=0.85*beta_1*f_c/f_y*(epsilon_c/(epsilon_c+epsilon_min_rebar_ACI_318_19))
-        return rho_max
+            rho_max=0.85*concrete_aci.beta_1/self.steel_bar.f_y*(concrete_aci.epsilon_c/(concrete_aci.epsilon_c+epsilon_min_rebar_ACI_318_19))
+            
+            return rho_max
+        else: 
+            return 0
 
     def __calculate_phi_ACI_318_19(self, epsilon_mas_deformado:float) -> float:
-        # CREO QUE NO LA USO PARA NADA, PERO OJO, NO SE. 
-        rebar_properties=self.steel_bar.get_properties()
         concrete_properties=self.concrete.get_properties()
         epsilon_c=concrete_properties["epsilon_c"]
-        rebar_properties=self.steel_bar.get_properties()
-        epsilon_y=rebar_properties["epsilon_y"]
 
-        if epsilon_mas_deformado<=epsilon_ty:
+        if epsilon_mas_deformado<=self.steel_bar.epsilon_y:
             return 0.65
-        elif epsilon_mas_deformado<=epsilon_ty+epsilon_c:
-            return (0.9-0.65)*(epsilon_mas_deformado-epsilon_ty)/epsilon_c+0.65
+        elif epsilon_mas_deformado<=self.steel_bar.epsilon_y+epsilon_c:
+            return (0.9-0.65)*(epsilon_mas_deformado-self.steel_bar.epsilon_y)/epsilon_c+0.65
         else:
             return 0.9
 
     def design_flexure_ACI_318_19(self, M_u:float)-> Dict[str, Any]:
-        self._settings.load_aci_318_19_settings()
-        phi = self._settings.get_setting('phi_t')
-        setting_flexural_min_reduction = self._settings.get_setting('flexural_min_reduction')
+        self.settings.load_aci_318_19_settings()
+        phi = self.settings.get_setting('phi_t')
+        setting_flexural_min_reduction = self.settings.get_setting('flexural_min_reduction')
         concrete_properties=self.concrete.get_properties()
         f_c=concrete_properties['f_c']
         beta_1=concrete_properties['beta_1']
-        rebar_properties=self.steelBar.get_properties()
-        f_y=rebar_properties['f_y']
-        epsilon_ty=rebar_properties['epsilon_ty']
-        E_s=rebar_properties['E_s']
-
-        d=0.9*self._depth # Asumption, this is the main difference between design and check.
-        b=self._width
-
         
         # Determination of minimum reinforcement
-        A_s_min=max((3*np.sqrt(f_c / psi)*psi/f_y*d*self._width) , (200*psi/f_y*d*self._width))# type: ignore
+        A_s_min=max((3*np.sqrt(f_c / psi)*psi/self.steel_bar.f_y*self.d*self._width),
+                     (200*psi/self.steel_bar.f_y*self.d*self._width))
 
         # Determination of maximum reinforcement
-        rho_max=self.__determine_maximum_flexural_reinforcement_ratio_ACI_318_19()
-        A_s_max=rho_max*d*b
+        rho_max=self.__maximum_flexural_reinforcement_ratio()
+        A_s_max=rho_max*self.d*self._width
 
         # Determination of required reinforcement
-        R_n=M_u/(phi*b*d**2)
-        A_s_calc=0.85*f_c*b*d/f_y*(1-np.sqrt(1-2*R_n/(0.85*f_c)))
+        R_n=M_u/(phi*self._width*self.d**2)
+        A_s_calc=0.85*f_c*self._width*self.d/self.steel_bar.f_y*(1-np.sqrt(1-2*R_n/(0.85*f_c)))
 
         if A_s_calc>A_s_min:
             self._A_s_calculated=A_s_calc
@@ -98,15 +91,15 @@ class Beam(RectangularConcreteSection):
             }
             return result
         else:
-            rho=0.85*beta_1*f_c/f_y*(0.003/(epsilon_ty+0.006))
-            M_n_t=rho*f_y*(d-0.59*rho*f_y*d/f_c)*b*d
+            rho=0.85*beta_1*f_c/self.steel_bar.f_y*(0.003/(self.steel_bar.epsilon_y+0.006))
+            M_n_t=rho*self.steel_bar.f_y*(self.d-0.59*rho*self.steel_bar.f_y*self.d/f_c)*self.width*self.d
             M_n_prima=M_u/phi-M_n_t
-            c_t=0.003*d/(epsilon_ty+0.006)
+            c_t=0.003*self.d/(self.steel_bar.epsilon_y+0.006)
             # HAY QUE VER DONDE ESTA DEFINIDO EL d_prima por ahora asumo
             d_prima=5*cm
-            f_s_prima=min(0.003*E_s*(1-d_prima/c_t),f_y)
-            A_s_prima=M_n_prima/(f_s_prima*(d-d_prima))
-            A_s=rho*b*d+A_s_prima
+            f_s_prima=min(0.003*self.steel_bar.E_s*(1-d_prima/c_t),self.steel_bar.f_y)
+            A_s_prima=M_n_prima/(f_s_prima*(self.d-d_prima))
+            A_s=rho*self.width*self.d+A_s_prima
             self._A_s_calculated=A_s
             self._A_s_comp=A_s_prima
             result={
@@ -145,9 +138,9 @@ class Beam(RectangularConcreteSection):
         N_u = Force.N_x
         V_u = Force.V_z
         f_c=self.concrete.f_c
-        self._settings.load_aci_318_19_settings()
-        phi_v = self._settings.get_setting('phi_v')
-        self.lambda_factor = self._settings.get_setting('lambda')
+        self.settings.load_aci_318_19_settings()
+        phi_v = self.settings.get_setting('phi_v')
+        self.lambda_factor = self.settings.get_setting('lambda')
         f_yt = self.steel_bar.f_yt
 
         # Minimum shear reinforcement calculation
@@ -225,14 +218,14 @@ class Beam(RectangularConcreteSection):
             "FUv" : V_u / phi_V_n 
         }
     
-    def design_shear_ACI_318_19(self, Force:Forces, A_s:Quantity) -> Dict[str, Any]:
+    def design_shear_ACI_318_19(self, Force:Forces, A_s:PlainQuantity) -> Dict[str, Any]:
         N_u = Force.N_x
         V_u = Force.V_z
         f_c = self.concrete.f_c
         f_yt = self.steel_bar.f_yt
-        self._settings.load_aci_318_19_settings()
-        phi_v = self._settings.get_setting('phi_v')
-        self.lambda_factor = self._settings.get_setting('lambda')
+        self.settings.load_aci_318_19_settings()
+        phi_v = self.settings.get_setting('phi_v')
+        self.lambda_factor = self.settings.get_setting('lambda')
         # Inputs into class
         self.V_u = V_u
         self.N_u = N_u
@@ -322,7 +315,7 @@ class Beam(RectangularConcreteSection):
         pass
   
     # Factory method to select the shear design method
-    def design_shear(self, Force: Forces, A_s: float) -> Dict[str, Any]:
+    def design_shear(self, Force: Forces, A_s: PlainQuantity) -> Dict[str, Any]:
         if self.concrete.design_code=="ACI 318-19":
             return self.design_shear_ACI_318_19(Force, A_s)
         # elif self.concrete.design_code=="EN 1992":
@@ -343,18 +336,18 @@ class Beam(RectangularConcreteSection):
         else:
             raise ValueError(f"Shear design method not implemented for concrete type: {type(self.concrete).__name__}")
 
-    def calculate_A_v_min(self):
+    def calculate_A_v_min(self) -> PlainQuantity:
         # Formula for A_v_min for Imperial system
         A_v_min = max((0.75 * math.sqrt(self.concrete.f_c / psi) * psi / self.steel_bar.f_yt) * self.width,
                       (50 * psi / self.steel_bar.f_yt) * self.width)
         return A_v_min    
     
-    def calculate_V_max(self):
+    def calculate_V_max(self) -> PlainQuantity:
         "Formula for maximum total shear capacity (V_max)"
         V_max = self.V_c + (8 * self.lambda_factor * math.sqrt(self.concrete.f_c / psi) * psi) * self.A_cv
         return V_max
     
-    def calculate_V_cmax(self):
+    def calculate_V_cmax(self) -> PlainQuantity:
         "Maximum concrete shear strength"
         V_cmax = (5 * self.lambda_factor * math.sqrt(self.concrete.f_c / psi) * psi) * self.A_cv
         return V_cmax 
@@ -383,25 +376,27 @@ class Beam(RectangularConcreteSection):
 
 
 def flexure() -> None:
-    concrete=material.create_concrete(name="H30",f_c=30*MPa, design_code="ACI 318-19") 
-    steelBar=material.SteelBar(name="ADN 420", f_y=420*MPa) 
-    section = Beam(
-        name="B-12x24",
+    concrete = Concrete_ACI_318_19(name="H30",f_c=30*MPa) 
+    steelBar = SteelBar(name="ADN 420", f_y=420*MPa) 
+    section = RectangularConcreteBeam(
+        label="B-12x24",
         concrete=concrete,
         steel_bar=steelBar,
         width=400 * mm,  
         height=500 * mm,  
     )
-    debug(f"Nombre de la seself.cción: {section.get_name()}")
+    debug(f"Nombre de la sección: {section.label}")
     resultados=section.design_flexure(500*kN*m)  
     debug(resultados)
 
 
 def shear() -> None:
-    concrete=material.create_concrete(name="C4",f_c=4000*psi, design_code="ACI 318-19") 
-    steelBar=material.SteelBar(name="ADN 420", f_y=60*ksi) 
-    section = Beam(name="V-10x16",concrete=concrete,steel_bar=steelBar,width=10*inch, height=16*inch)
+    concrete= Concrete_ACI_318_19(name="C4",f_c=4000*psi) 
+    steelBar= SteelBar(name="ADN 420", f_y=60*ksi) 
+    section = RectangularConcreteBeam(label="V-10x16",
+                                      concrete=concrete,steel_bar=steelBar,width=10*inch, height=16*inch)
     section.cc = 1.5*inch
+    debug(section)
     section.stirrup_d_b = 0.5*inch
     f = Forces(V_z=37.727*kip, N_x=0*kip)
     debug(f.get_forces()) 
@@ -414,10 +409,10 @@ def shear() -> None:
     debug(section.transverse_rebar)
 
 def rebar() -> None:
-    concrete=material.create_concrete(name="H30",f_c=30*MPa, design_code="ACI 318-19") 
-    steelBar=material.SteelBar(name="ADN 420", f_y=420*MPa) 
-    section = Beam(
-        name="V 20x50",
+    concrete= Concrete_ACI_318_19(name="H30",f_c=30*MPa) 
+    steelBar= SteelBar(name="ADN 420", f_y=420*MPa) 
+    section = RectangularConcreteBeam(
+        label="V 20x50",
         concrete=concrete,
         steel_bar=steelBar,
         width=20*cm,  
