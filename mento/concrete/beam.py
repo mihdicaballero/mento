@@ -4,14 +4,13 @@ from mento.concrete.rectangular import RectangularConcreteSection
 from mento.material import Concrete, SteelBar, Concrete_ACI_318_19 
 from mento.settings import Settings
 from mento.rebar import Rebar
-from mento.units import MPa, ksi, psi, kip, mm, inch, kN, m, cm
+from mento import MPa, ksi, psi, kip, mm, inch, kN, m, cm, Quantity
 from mento.results import Formatter
 from mento.forces import Forces
 from IPython.display import Markdown, display
 import numpy as np
 import math
 from typing import Optional, Dict, Any, cast
-from pint import Quantity
 from pint.facets.plain import PlainQuantity
 
 @dataclass
@@ -133,7 +132,7 @@ class RectangularConcreteBeam(RectangularConcreteSection):
     # def check_flexure_ACI_318_19(self, M_u:float, A_s, d_b=0.5, n_bars=2) -> None:
     #     pass
 
-    def check_shear_ACI_318_19(self, Force:Forces, A_s:Quantity, d_b:Quantity, s:Quantity, 
+    def check_shear_ACI_318_19(self, Force:Forces, A_s:PlainQuantity, d_b:PlainQuantity, s:PlainQuantity, 
                                n_legs:int) -> Dict[str, Any]:
         N_u = Force.N_x
         V_u = Force.V_z
@@ -155,7 +154,7 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         A_vs = n_legs * A_db  # Total area of stirrups
         A_v = A_vs / s  # Stirrup area per unit length
 
-        V_s = A_v * f_yt * self.d  # Shear contribution of reinforcement
+        V_s: PlainQuantity = A_v * f_yt * self.d  # Shear contribution of reinforcement
         phi_V_s = phi_v * V_s  # Reduced shear contribution of reinforcement
 
         # Effective shear area and longitudinal reinforcement ratio
@@ -181,11 +180,11 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         
         # Calculate actual concrete shear strength
         self.V_c = min(V_cmax, max(V_cmin, k_c_min_rebar * self.A_cv))
-        phi_V_c = phi_v * self.V_c  # Reduced concrete shear strength
+        phi_V_c: PlainQuantity = phi_v * self.V_c  # Reduced concrete shear strength
         
         # Maximum total shear capacity
         V_max = self.calculate_V_max()
-        phi_V_max = phi_v * V_max  # Reduced maximum shear capacity
+        phi_V_max: PlainQuantity = phi_v * V_max  # Reduced maximum shear capacity
 
         if V_u < phi_V_c/2:
             A_v_min = 0*inch
@@ -197,25 +196,25 @@ class RectangularConcreteBeam(RectangularConcreteSection):
             max_shear_ok = False 
 
         # Total shear strength
-        phi_V_n = phi_v * (self.V_c + V_s)  # Total reduced shear strength (concrete + rebar)
+        phi_V_n: PlainQuantity = phi_v * (self.V_c + V_s)  # Total reduced shear strength (concrete + rebar)
 
         # Required shear reinforcing nominal strength
-        V_s_req = V_u-phi_V_c
+        V_s_req: PlainQuantity = V_u-phi_V_c
         # Required shear reinforcing
-        A_v_req = max(V_s_req/(phi_v*f_yt*self.d), A_v_min)
+        A_v_req: PlainQuantity = max(V_s_req/(phi_v*f_yt*self.d), A_v_min)
 
         # Check results
         return {
-            'A_v_min': A_v_min.to('in ** 2 / ft'),  # Minimum shear reinforcement area
-            'A_v_req': A_v_req.to('in ** 2 / ft'), # Required shear reinforcing area
-            'A_v': A_v.to('in ** 2 / ft'),  # Provided stirrup reinforcement per unit length
-            'phi_V_c': phi_V_c.to('kip'),  # Concrete contribution to shear capacity
-            'phi_V_s': phi_V_s.to('kip'),  # Reinforcement contribution to shear capacity
-            'phi_V_n': phi_V_n.to('kip'),  # Total shear capacity
-            'phi_V_max': phi_V_max.to('kip'),  # Maximum shear capacity
+            'A_v_min': A_v_min.to('cm ** 2 / m'),  # Minimum shear reinforcement area
+            'A_v_req': A_v_req.to('cm ** 2 / m'), # Required shear reinforcing area
+            'A_v': A_v.to('cm ** 2 / m'),  # Provided stirrup reinforcement per unit length
+            'phi_V_c': phi_V_c.to('kN'),  # Concrete contribution to shear capacity
+            'phi_V_s': phi_V_s.to('kN'),  # Reinforcement contribution to shear capacity
+            'phi_V_n': phi_V_n.to('kN'),  # Total shear capacity
+            'phi_V_max': phi_V_max.to('kN'),  # Maximum shear capacity
             'shear_ok': V_u <= phi_V_n,  # Check if applied shear is within total capacity
             'max_shear_ok': max_shear_ok,  # Check if applied shear is within max shear capacity
-            "FUv" : V_u / phi_V_n 
+            "FUv" : (V_u.to('kN') / phi_V_n.to('kN')) 
         }
     
     def design_shear_ACI_318_19(self, Force:Forces, A_s:PlainQuantity) -> Dict[str, Any]:
@@ -231,9 +230,9 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         self.N_u = N_u
         self.A_s = A_s 
         # Effective shear area and longitudinal reinforcement ratio
-        A_cv = self.width * self.d  # Effective shear area
+        self.A_cv = self.width * self.d  # Effective shear area
         A_g = self.A_x # Gross area
-        rho_w = A_s / A_cv  # Longitudinal reinforcement ratio
+        rho_w = A_s / self.A_cv  # Longitudinal reinforcement ratio
         
         # Concrete shear strength calculation
         sigma_Nu = min(N_u / (6 * A_g), 0.05 * f_c)  # Axial stress influence
@@ -246,12 +245,12 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         V_cmax = self.calculate_V_cmax()
         
         # Calculate actual concrete shear strength
-        self.V_c = min(V_cmax, max(V_cmin, k_c_min_rebar * A_cv))
-        phi_V_c = phi_v * self.V_c  # Reduced concrete shear strength
+        self.V_c = min(V_cmax, max(V_cmin, k_c_min_rebar * self.A_cv))
+        phi_V_c: PlainQuantity = phi_v * self.V_c  # Reduced concrete shear strength
         
         # Maximum total shear capacity for Imperial system
         V_max = self.calculate_V_max()
-        phi_V_max = phi_v * V_max  # Reduced maximum shear capacity
+        phi_V_max: PlainQuantity = phi_v * V_max  # Reduced maximum shear capacity
 
         # Minimum shear reinforcement calculation
         # Minimum reinforcement should be placed if the factored shear Vu 
@@ -268,51 +267,51 @@ class RectangularConcreteBeam(RectangularConcreteSection):
 
         # Shear reinforcement calculations
         # Required shear reinforcing nominal strength
-        V_s_req = V_u-phi_V_c
+        V_s_req: PlainQuantity = V_u-phi_V_c
         # Required shear reinforcing
-        A_v_req = max(V_s_req/(phi_v*self.steel_bar.f_yt*self.d), A_v_min)
+        A_v_req: PlainQuantity = max(V_s_req/(phi_v*self.steel_bar.f_yt*self.d), A_v_min)
 
-        A_v_design = Rebar(self).beam_transverse_rebar(A_v_req, V_s_req)
+        A_v_design: dict[str,PlainQuantity] = Rebar(self).beam_transverse_rebar(A_v_req, V_s_req)
         # Store the final rebar design results as a property of the Beam instance
         self.transverse_rebar = {
             'n_stirrups': A_v_design['n_stirrups'],
-            'd_b': A_v_design['d_b'],
-            'spacing': A_v_design['spacing'],
-            'A_v': A_v_design['A_v']
+            'd_b': A_v_design['d_b'].to('mm'),
+            'spacing': A_v_design['spacing'].to('cm'),
+            'A_v': A_v_design['A_v'].to('cm ** 2 / m')
         }
 
-        A_v =  A_v_design['A_v']
+        A_v: PlainQuantity =  A_v_design['A_v']
         V_s = A_v * f_yt * self.d  # Shear contribution of reinforcement
-        phi_V_s = phi_v * V_s  # Reduced shear contribution of reinforcement
+        phi_V_s: PlainQuantity = phi_v * V_s  # Reduced shear contribution of reinforcement
         # Total shear strength
-        phi_V_n = phi_v * (self.V_c + V_s)  # Total reduced shear strength (concrete + rebar)
+        phi_V_n: PlainQuantity = phi_v * (self.V_c + V_s)  # Total reduced shear strength (concrete + rebar)
 
         # Design results
         self.shear_design_results = {
             'A_v_min': A_v_min.to('cm ** 2 / m'),  # Minimum shear reinforcement area
             'A_v_req': A_v_req.to('cm ** 2 / m'), # Required shear reinforcing area
             'A_v': A_v.to('cm ** 2 / m'),  # Provided stirrup reinforcement per unit length
-            'phi_V_c': phi_V_c,  # Concrete contribution to shear capacity
-            'phi_V_s': phi_V_s,  # Reinforcement contribution to shear capacity
-            'phi_V_n': phi_V_n,  # Total shear capacity
-            'phi_V_max': phi_V_max,  # Maximum shear capacity
+            'phi_V_c': phi_V_c.to('kN'),  # Concrete contribution to shear capacity
+            'phi_V_s': phi_V_s.to('kN'),  # Reinforcement contribution to shear capacity
+            'phi_V_n': phi_V_n.to('kN'),  # Total shear capacity
+            'phi_V_max': phi_V_max.to('kN'),  # Maximum shear capacity
             'shear_ok': V_u <= phi_V_n,  # Check if applied shear is within total capacity
             'max_shear_ok': max_shear_ok,  # Check if applied shear is within max shear capacity
-            "FUv" : V_u / phi_V_n 
+            "FUv" : (V_u.to('kN') / phi_V_n.to('kN')) 
         }
         return self.shear_design_results
     
-    def check_shear_EN_1992(self, V_u: float, N_u: float, A_s: float) -> None:
-        pass
+    def check_shear_EN_1992(self, Force:Forces, A_s:PlainQuantity) -> None:
+        return None
  
-    def design_shear_EN_1992(self, V_u: float, N_u: float, A_s: float) -> None:
-        pass
+    def design_shear_EN_1992(self, Force:Forces, A_s:PlainQuantity) -> None:
+        return None
 
-    def design_shear_EHE_08(self, V_u: float, N_u: float, A_s: float) -> None:
-        pass
+    def design_shear_EHE_08(self, Force:Forces, A_s:PlainQuantity) -> None:
+        return None
 
-    def check_shear_EHE_08(self, V_u: float, N_u: float, A_s: float) -> None:
-        pass
+    def check_shear_EHE_08(self, Force:Forces, A_s:PlainQuantity) -> None:
+        return None
   
     # Factory method to select the shear design method
     def design_shear(self, Force: Forces, A_s: PlainQuantity) -> Dict[str, Any]:
@@ -326,7 +325,8 @@ class RectangularConcreteBeam(RectangularConcreteSection):
             raise ValueError(f"Shear design method not implemented for concrete type: {type(self.concrete).__name__}")
     
     # Factory method to select the shear check method
-    def check_shear(self, Force: Forces, A_s: Quantity, d_b:Quantity, s:Quantity, n_legs:int) -> Dict[str, Any]:
+    def check_shear(self, Force: Forces, A_s: PlainQuantity, d_b:PlainQuantity, 
+                    s:PlainQuantity, n_legs:int) -> Dict[str, PlainQuantity]:
         if self.concrete.design_code=="ACI 318-19":
             return self.check_shear_ACI_318_19(Force, A_s, d_b, s, n_legs)
         # elif self.concrete.design_code=="EN 1992":

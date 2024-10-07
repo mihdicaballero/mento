@@ -1,8 +1,9 @@
 import pytest
-from mento.material import Concrete_ACI_318_19, SteelBar
-from mento.concrete.beam import RectangularConcreteBeam
 from mento.rebar import Rebar
+from mento.concrete.beam import RectangularConcreteBeam
+from mento.material import Concrete_ACI_318_19, SteelBar
 from mento.units import psi, kip, mm, inch, ksi, cm, MPa
+from mento.forces import Forces
 
 @pytest.fixture()
 def beam_example_imperial() -> RectangularConcreteBeam:
@@ -54,10 +55,9 @@ def test_beam_longitudinal_rebar_ACI_318_19_fail(beam_example_imperial: Rectangu
         Rebar(beam_example_imperial).beam_longitudinal_rebar_ACI_318_19(A_s_req=as_nec)
 
 def test_beam_transverse_rebar_ACI_318_19(beam_example_imperial: RectangularConcreteBeam) -> None:
-    V_u=37.727*kip 
-    N_u = 0*kip 
+    f = Forces(V_z=37.727*kip, N_x = 0*kip )
     A_s=0.847*inch**2 
-    beam_example_imperial.design_shear(V_u, N_u, A_s) 
+    beam_example_imperial.design_shear(f, A_s) 
     best_combination = beam_example_imperial.transverse_rebar
     assert best_combination is not None
     assert best_combination['n_stirrups'] == 1

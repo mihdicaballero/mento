@@ -3,8 +3,10 @@ import math
 from mento.units import psi, mm, inch, m, cm
 from typing import Any, Dict, TYPE_CHECKING
 
+
 if TYPE_CHECKING:
     from beam import RectangularConcreteBeam  # Import only for type checking to avoid circular import issues
+    from pint.facets.plain import PlainQuantity
 
 class Rebar:
     def __init__(self, beam: RectangularConcreteBeam):
@@ -16,7 +18,7 @@ class Rebar:
         self.rebar_diameters = [6*mm, 8*mm, 10*mm, 12*mm, 16*mm, 20*mm, 25*mm, 32*mm]
         self.rebar_areas = {d: (math.pi * d ** 2) / 4 for d in self.rebar_diameters}
 
-    def beam_longitudinal_rebar_ACI_318_19(self, A_s_req: float) -> Dict[str, Any]:
+    def beam_longitudinal_rebar_ACI_318_19(self, A_s_req: PlainQuantity) -> Dict[str, PlainQuantity]:
         """
         Computes the required longitudinal reinforcement based on ACI 318-19.
         
@@ -66,13 +68,14 @@ class Rebar:
                 
         return best_combination
     
-    def beam_longitudinal_rebar_EN_1992(self, A_s_req: float) -> None:
+    def beam_longitudinal_rebar_EN_1992(self, A_s_req: PlainQuantity) -> None:
         pass
 
-    def beam_longitudinal_rebar_EHE_08(self, A_s_req: float) -> None:
+    def beam_longitudinal_rebar_EHE_08(self, A_s_req: PlainQuantity) -> None:
         pass
 
-    def beam_transverse_rebar_ACI_318_19(self, A_v_req: float, V_s_req: float) -> Dict[str, Any]:
+    def beam_transverse_rebar_ACI_318_19(self, A_v_req: PlainQuantity, 
+                                         V_s_req: PlainQuantity) -> Dict[str, PlainQuantity]:
         """
         Computes the required transverse reinforcement based on ACI 318-19.
 
@@ -135,14 +138,14 @@ class Rebar:
                 'A_v': A_v,
             }
     
-    def beam_transverse_rebar_EN_1992(self, A_v_req: float, V_s_req: float) -> None:
+    def beam_transverse_rebar_EN_1992(self, A_v_req: PlainQuantity, V_s_req: PlainQuantity) -> None:
         pass
 
-    def beam_transverse_rebar_EHE_08(self, A_v_req: float, V_s_req: float) -> None:
+    def beam_transverse_rebar_EHE_08(self, A_v_req: PlainQuantity, V_s_req: PlainQuantity) -> None:
         pass
     
     # Factory method to select the transverse rebar method
-    def beam_longitudinal_rebar(self, A_s_req: float) -> Dict[str, Any]:
+    def beam_longitudinal_rebar(self, A_s_req: PlainQuantity) -> Dict[str, Any]:
         """
         Selects the appropriate longitudinal rebar method based on the design code.
         """
@@ -157,7 +160,7 @@ class Rebar:
                              for concrete type: {type(self.beam.concrete).__name__}")
     
     # Factory method to select the longitudinal rebar method
-    def beam_transverse_rebar(self, A_v_req: float, V_s_req: float) -> Dict[str, Any]:
+    def beam_transverse_rebar(self, A_v_req: PlainQuantity, V_s_req: PlainQuantity) -> Dict[str, PlainQuantity]:
         """
         Selects the appropriate transverse rebar method based on the design code.
         """
