@@ -4,7 +4,7 @@ from mento.concrete.rectangular import RectangularConcreteSection
 from mento.material import Concrete, SteelBar, Concrete_ACI_318_19 
 from mento.settings import Settings
 from mento.rebar import Rebar
-from mento import MPa, ksi, psi, kip, mm, inch, kN, m, cm, Quantity
+from mento import MPa, ksi, psi, kip, mm, inch, kN, m, cm
 from mento.results import Formatter
 from mento.forces import Forces
 from IPython.display import Markdown, display
@@ -403,10 +403,11 @@ def shear() -> None:
     A_s=0.847*inch**2 
     results=section.check_shear(f, A_s, d_b=12*mm, s=6*inch, n_legs=2) 
     debug(results)
-    section.design_shear(f, A_s) 
-    debug(section.shear_results)
-    debug(section.shear_design_results)
-    debug(section.transverse_rebar)
+    shear_design = section.design_shear(f, A_s)
+    print(shear_design)
+    # debug(section.shear_results)
+    # debug(section.shear_design_results)
+    # debug(section.transverse_rebar)
 
 def rebar() -> None:
     concrete= Concrete_ACI_318_19(name="H30",f_c=30*MPa) 
@@ -418,12 +419,17 @@ def rebar() -> None:
         width=20*cm,  
         height=50*cm,  
     )
+    debug(section.settings.get_setting('clear_spacing'))
     section.cc = 30*mm
     section.stirrup_d_b = 8*mm
-    as_nec = 5 * cm**2
-    best_combination = Rebar(section).beam_longitudinal_rebar_ACI_318_19(A_s_req=as_nec)
-    debug(best_combination)
-
+    as_req = 5 * cm**2
+    debug(as_req)
+    beam_rebar = Rebar(section)
+    long_rebar_df = beam_rebar.beam_longitudinal_rebar_ACI_318_19(A_s_req=as_req)
+    print(long_rebar_df)
+    best_design = beam_rebar.beam_longitudinal_rebar_design
+    print(best_design)
+    # print(long_rebar_df.iloc[0]['total_as'])
 
 if __name__ == "__main__":
     shear()

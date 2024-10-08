@@ -198,7 +198,7 @@ class SteelBar(Steel):
 
     def __init__(self, name: str, f_y: PlainQuantity, density: PlainQuantity =7850 *kg/m**3):
         super().__init__(name, f_y, density)
-        self._epsilon_y = self._f_y / self._E_s # 21.2.2.1 - Page 392
+        self._epsilon_y = f_y.to('MPa') /(self._E_s.to('MPa')) # 21.2.2.1 - Page 392
 
     @property
     def E_s(self) -> PlainQuantity:

@@ -37,15 +37,17 @@ def beam_example_metric() -> RectangularConcreteBeam:
 
 # Tests
 def test_beam_longitudinal_rebar_ACI_318_19(beam_example_metric: RectangularConcreteBeam) -> None:
-    as_nec = 5 * cm**2
-    best_combination = Rebar(beam_example_metric).beam_longitudinal_rebar_ACI_318_19(A_s_req=as_nec)
+    A_s_req = 5 * cm**2
+    beam_rebar = Rebar(beam_example_metric)
+    long_rebar_df = beam_rebar.beam_longitudinal_rebar_ACI_318_19(A_s_req=A_s_req)
+    best_combination = long_rebar_df.iloc[0]
 
     assert best_combination is not None
     assert best_combination['layer_1'] == 1
     assert best_combination['num_bars_1'] == 3
     assert best_combination['diameter_1'] ==  16*mm 
-    assert best_combination['total_as'].value == pytest.approx(0.0006033,rel=1e-3)
-    assert best_combination['available_spacing_1'] == 38*mm 
+    assert best_combination['total_as'].magnitude == pytest.approx(6.033,rel=1e-3)
+    assert best_combination['available_spacing_1'].magnitude == pytest.approx(38,rel=1e-3)
 
 def test_beam_longitudinal_rebar_ACI_318_19_fail(beam_example_imperial: RectangularConcreteBeam) -> None:
     as_nec = 150 * cm**2
@@ -63,7 +65,7 @@ def test_beam_transverse_rebar_ACI_318_19(beam_example_imperial: RectangularConc
     assert best_combination['n_stirrups'] == 1
     assert best_combination['d_b'] == 12*mm 
     assert best_combination['spacing'] ==  7*inch 
-    assert best_combination['A_v'].value == pytest.approx(0.001272,rel=1e-3)
+    assert best_combination['A_v'].mangnitude == pytest.approx(12.72,rel=1e-3)
 
 # This is where pytest will collect the tests and run them
 if __name__ == "__main__":
