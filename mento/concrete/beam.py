@@ -29,6 +29,7 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         self._stirrup_s_l: PlainQuantity = 0*cm
         self._stirrup_n: int = 0
         self._stirrup_A_v: PlainQuantity = 0*cm**2/m
+        self._phi_V_n: PlainQuantity = 0*kN
 
         if settings:
             self.settings.update(settings.settings)  # Update with any provided settings
@@ -224,16 +225,17 @@ class RectangularConcreteBeam(RectangularConcreteSection):
 
         # Check results
         results: Dict[str,Any] = {
-            'A_v_min': A_v_min.to('cm ** 2 / m'),  # Minimum shear reinforcement area
-            'A_v_req': A_v_req.to('cm ** 2 / m'), # Required shear reinforcing area
-            'A_v': A_v.to('cm ** 2 / m'),  # Provided stirrup reinforcement per unit length
-            'phi_V_c': phi_V_c.to('kN'),  # Concrete contribution to shear capacity
-            'phi_V_s': phi_V_s.to('kN'),  # Reinforcement contribution to shear capacity
-            'phi_V_n': self._phi_V_n.to('kN'),  # Total shear capacity
-            'phi_V_max': phi_V_max.to('kN'),  # Maximum shear capacity
-            'shear_ok': self._V_u <= self._phi_V_n,  # Check if applied shear is within total capacity
-            'max_shear_ok': max_shear_ok,  # Check if applied shear is within max shear capacity
-            "FUv" : self._FUv 
+            'Av,min': A_v_min.to('cm ** 2 / m'),  # Minimum shear reinforcement area
+            'Av,req': A_v_req.to('cm ** 2 / m'), # Required shear reinforcing area
+            'Av': A_v.to('cm ** 2 / m'),  # Provided stirrup reinforcement per unit length
+            'Vu': self._V_u.to('kN'), # Max Vu for the design
+            'ØVc': phi_V_c.to('kN'),  # Concrete contribution to shear capacity
+            'ØVs': phi_V_s.to('kN'),  # Reinforcement contribution to shear capacity
+            'ØVn': self._phi_V_n.to('kN'),  # Total shear capacity
+            'ØVmax': phi_V_max.to('kN'),  # Maximum shear capacity
+            'Vu<ØVmax': max_shear_ok,  # Check if applied shear is within max shear capacity
+            'Vu<ØVn': self._V_u <= self._phi_V_n,  # Check if applied shear is within total capacity
+            "FUv" :  self._FUv
         }
 
         return pd.DataFrame([results], index=[0])
@@ -301,22 +303,23 @@ class RectangularConcreteBeam(RectangularConcreteSection):
 
         A_v: PlainQuantity =  best_design['A_v']
         V_s = A_v * f_yt * self.d  # Shear contribution of reinforcement
-        phi_V_s: PlainQuantity = phi_v * V_s  # Reduced shear contribution of reinforcement
+        phi_V_s = phi_v * V_s  # Reduced shear contribution of reinforcement
         # Total shear strength
-        self._phi_V_n : PlainQuantity = phi_v * (self.V_c + V_s)  # Total reduced shear strength (concrete + rebar)
+        self._phi_V_n = phi_v * (self.V_c + V_s)  # Total reduced shear strength (concrete + rebar)
         self._FUv = (V_u.to('kN') / self._phi_V_n.to('kN'))
 
         # Design results
         results = {
-            'A_v_min': A_v_min.to('cm ** 2 / m'),  # Minimum shear reinforcement area
-            'A_v_req': A_v_req.to('cm ** 2 / m'), # Required shear reinforcing area
-            'A_v': A_v.to('cm ** 2 / m'),  # Provided stirrup reinforcement per unit length
-            'phi_V_c': phi_V_c.to('kN'),  # Concrete contribution to shear capacity
-            'phi_V_s': phi_V_s.to('kN'),  # Reinforcement contribution to shear capacity
-            'phi_V_n': self._phi_V_n.to('kN'),  # Total shear capacity
-            'phi_V_max': phi_V_max.to('kN'),  # Maximum shear capacity
-            'shear_ok': V_u <= self._phi_V_n,  # Check if applied shear is within total capacity
-            'max_shear_ok': max_shear_ok,  # Check if applied shear is within max shear capacity
+            'Av,min': A_v_min.to('cm ** 2 / m'),  # Minimum shear reinforcement area
+            'Av,req': A_v_req.to('cm ** 2 / m'), # Required shear reinforcing area
+            'Av': A_v.to('cm ** 2 / m'),  # Provided stirrup reinforcement per unit length
+            'Vu': self._V_u.to('kN'), # Max Vu for the design
+            'ØVc': phi_V_c.to('kN'),  # Concrete contribution to shear capacity
+            'ØVs': phi_V_s.to('kN'),  # Reinforcement contribution to shear capacity
+            'ØVn': self._phi_V_n.to('kN'),  # Total shear capacity
+            'ØVmax': phi_V_max.to('kN'),  # Maximum shear capacity
+            'Vu<ØVmax': max_shear_ok,  # Check if applied shear is within max shear capacity
+            'Vu<ØVn': self._V_u <= self._phi_V_n,  # Check if applied shear is within total capacity
             "FUv" :  self._FUv
         }
 
@@ -382,7 +385,7 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         # Create FUFormatter instance and format FU value
         formatter = Formatter()
         formatted_FU = formatter.FU(self._FUv )
-        rebar_v = f"{self._stirrup_n}eØ{self._stirrup_d_b.to('mm').magnitude}/{self._stirrup_s_l.to('cm').magnitude} cm" 
+        rebar_v = f"{self._stirrup_n}eØ{self._stirrup_d_b.to('mm').magnitude}/{self._stirrup_s_l.to('cm').magnitude} cm"
         # Print results
         markdown_content = f"Armadura transversal {rebar_v}, $A_v$={self._stirrup_A_v.to('cm**2/m')}"\
                          f", $V_u$={self._V_u.to('kN')}, $\\phi V_n$={self._phi_V_n.to('kN')} → {formatted_FU}"
@@ -422,7 +425,7 @@ def shear() -> None:
     shear_design = section.design_shear(f, A_s)
     print(shear_design)
     print(section.shear_design_results)
-    print(section.shear_results)
+    # print(section.shear_results)
 
 def rebar() -> None:
     concrete= Concrete_ACI_318_19(name="H30",f_c=30*MPa) 
