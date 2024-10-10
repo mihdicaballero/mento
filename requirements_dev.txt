@@ -1,7 +1,7 @@
 devtools
 ruff
+pint==0.24.3
 pytest==7.4.2
-forallpeople==1.2.0
 pandas==2.2.3
 IPython
 mypy
