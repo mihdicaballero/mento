@@ -71,6 +71,13 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         concrete_properties=self.concrete.get_properties()
         f_c=concrete_properties['f_c']
         beta_1=concrete_properties['beta_1']
+        rebar_properties=self.steel_bar.get_properties()
+        f_y=rebar_properties['f_y']
+        epsilon_ty=rebar_properties['epsilon_ty']
+        E_s=rebar_properties['E_s']
+
+        d=0.9*self._height # Asumption, this is the main difference between design and check.
+        b=self._width
         
         # Determination of minimum reinforcement
         A_s_min=max((3*np.sqrt(f_c / psi)*psi/self.steel_bar.f_y*self.d*self._width),
@@ -81,8 +88,8 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         A_s_max=rho_max*self.d*self._width
 
         # Determination of required reinforcement
-        R_n=M_u/(phi*self._width*self.d**2)
-        A_s_calc=0.85*f_c*self._width*self.d/self.steel_bar.f_y*(1-np.sqrt(1-2*R_n/(0.85*f_c)))
+        R_n=M_u/(phi*b*d**2)
+        A_s_calc=0.85*f_c*b*d/f_y*(1-np.sqrt(1-2*R_n/(0.85*f_c)))
 
         if A_s_calc>A_s_min:
             self._A_s_calculated=A_s_calc
@@ -116,11 +123,11 @@ class RectangularConcreteBeam(RectangularConcreteSection):
             self._A_s_calculated=A_s
             self._A_s_comp=A_s_prima
             result={
-                'As_min_code':A_s_min,
-                'As_required':self._A_s_calculated,
-                'As_max':A_s_max,
-                'As_adopted':self._A_s_calculated,
-                'As_compression':self._A_s_comp
+                'As_min_code':A_s_min.to("inch**2"),
+                'As_required':self._A_s_calculated.to("inch**2"),
+                'As_max':A_s_max.to("inch**2"),
+                'As_adopted':self._A_s_calculated.to("inch**2"),
+                'As_compression':self._A_s_comp.to("inch**2")
             }
             return result
 
@@ -166,7 +173,6 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         # reduced by 0.5ϕVc. It is assumed that minimum reinforcement is required.
         # Rebar needed, V_u > φ_v*V_c/2 for Imperial system
         A_v_min = max((0.75 * math.sqrt(f_c / psi) * psi/ f_yt) * self.width , (50 * psi/f_yt) * self.width)  
-        
         # Shear reinforcement calculations
         A_db = (d_b ** 2) * math.pi / 4  # Area of one stirrup leg
         A_vs = n_legs * A_db  # Total area of stirrups
@@ -402,8 +408,8 @@ def flexure() -> None:
         label="B-12x24",
         concrete=concrete,
         steel_bar=steelBar,
-        width=400 * mm,  
-        height=500 * mm,  
+        width=10 * inch,  
+        height=15 * inch,   
     )
     debug(f"Nombre de la sección: {section.label}")
     resultados=section.design_flexure(500*kN*m)  
@@ -418,14 +424,14 @@ def shear() -> None:
     section.cc = 1.5*inch
     section.stirrup_d_b = 0.5*inch
     f = Forces(V_z=37.727*kip, N_x=0*kip)
-    A_s=0.847*inch**2
-    section.set_transverse_rebar(n_stirrups=1, d_b=12*mm, s_l=6*inch) 
-    results=section.check_shear(f, A_s) 
-    print(results)
-    shear_design = section.design_shear(f, A_s)
-    print(shear_design)
-    print(section.shear_design_results)
-    # print(section.shear_results)
+    debug(f.get_forces()) 
+    A_s=0.847*inch**2 
+    results=section.check_shear(f.V_z, f.N_x, A_s, d_b=12*mm, s=6*inch, n_legs=2) 
+    debug(results)
+    section.design_shear(f.Vz, f.Nx, A_s) 
+    debug(section.shear_results)
+    debug(section.shear_design_results)
+    debug(section.transverse_rebar)
 
 def rebar() -> None:
     concrete= Concrete_ACI_318_19(name="H30",f_c=30*MPa) 
@@ -453,4 +459,5 @@ def rebar() -> None:
     # print(trans_rebar)
 
 if __name__ == "__main__":
-    shear()
+    flexure()
+    #shear()
