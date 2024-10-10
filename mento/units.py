@@ -1,25 +1,26 @@
 from devtools import debug
 from pint import UnitRegistry
 
-# Initialize the environment
+# Initialize UnitRegistry
 ureg = UnitRegistry(system='mks')
-ureg.formatter.default_format = '.2f~P'
+ureg.formatter.default_format = '.2f~P'  # Standardize output formatting
 
 # Metric system units
 m = ureg.meter
-cm = 1e-2 * ureg.meter
-mm = 1e-3 * ureg.meter
+cm = ureg.centimeter
+mm = ureg.millimeter
 kN = 1e3 * ureg.newton
-kNm = 1e3 * ureg.newton * ureg.meter
-MPa = 1e6 * ureg.pascal
-kg = 1e3 * ureg.gram
+kNm = kN * m
+MPa = ureg.megapascal
+GPa = ureg.gigapascal
+kg = ureg.kilogram
 sec = ureg.second
 
 # Imperial system units
 psi = ureg.psi
-lb = ureg.force_pound
-kip = 1e3 * ureg.force_pound
-ksi = 1e3 * ureg.psi
+lb = ureg.pound_force
+kip = 1e3 * lb
+ksi = ureg.ksi
 inch = ureg.inch
 ft = ureg.foot
 

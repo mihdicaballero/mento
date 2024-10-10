@@ -1,6 +1,6 @@
 import pytest
 from mento.material import Concrete_ACI_318_19, Concrete_EN_1992, Concrete_EHE_08, SteelBar, SteelStrand
-from mento.units import MPa, m, kg
+from mento.units import MPa, m, kg, GPa
 
 
 # Get only the value
@@ -44,8 +44,8 @@ def test_steel_bar_properties() -> None:
 
     assert steelbar.name == "ADN 500"
     assert steelbar.f_y == f_y
-    assert steelbar.E_s == 200000 * MPa
-    assert steelbar.epsilon_y == pytest.approx(f_y /( steelbar.E_s), rel=0.01) 
+    assert steelbar.E_s == 200 * GPa
+    assert steelbar.epsilon_y == pytest.approx(f_y.to('MPa') /( steelbar.E_s.to('MPa')), rel=0.01) 
 
 def test_steel_strand_properties() -> None:
     f_y = 1700 * MPa
@@ -54,7 +54,7 @@ def test_steel_strand_properties() -> None:
     assert steelstrand.name == "Y1860"
     assert steelstrand.f_y == f_y
     assert steelstrand.f_u == 1860 * MPa
-    assert steelstrand.E_s == 190000 * MPa
+    assert steelstrand.E_s == 190 * GPa
 
 # This is where pytest will collect the tests and run them
 if __name__ == "__main__":

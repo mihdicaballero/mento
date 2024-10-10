@@ -22,15 +22,15 @@ class Node:
 def main() -> None:
     # Ejemplo de uso
     section = Section(label="V10")
-    forces1 = Forces(My=100*kNm)
-    forces2 = Forces(My=200*kNm)
+    forces1 = Forces(M_y=100*kNm)
+    forces2 = Forces(M_y=200*kNm)
 
     node = Node(section=section, forces_list=[forces1, forces2])
 
     debug(node.forces_list)
 
     # Añadir otra instancia de Forces
-    forces3 = Forces(My=50*kNm)
+    forces3 = Forces(M_y=50*kNm)
     node.add_forces(forces3)
     debug(node.forces_list)
 

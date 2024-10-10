@@ -11,6 +11,10 @@ def test_default_settings() -> None:
     assert settings.get_setting('vibrator_size') == 30 * mm
     assert settings.get_setting('layers_spacing') == 25 * mm
 
+def test_get_setting_existing_key() -> None:
+    settings = Settings()
+    assert settings.get_setting('clear_cover') == 25 * mm
+
 def test_custom_settings() -> None:
     custom_settings = {
         'clear_cover': 30 * mm,
@@ -20,11 +24,7 @@ def test_custom_settings() -> None:
     assert settings.get_setting('clear_cover') == 30 * mm
     assert settings.get_setting('stirrup_diameter') == 8 * mm
     assert settings.get_setting('clear_spacing') == 20 * mm 
-
-def test_get_setting_existing_key() -> None:
-    settings = Settings()
-    assert settings.get_setting('clear_cover') == 25 * mm
-
+    
 def test_get_setting_non_existent_key() -> None:
     settings = Settings()
     with pytest.raises(KeyError):
