@@ -3,7 +3,7 @@ from typing import Any, Dict, TYPE_CHECKING
 import math
 import pandas as pd
 
-from mento.units import psi, mm, inch, m, cm
+from mento.units import psi, mm, cm
 
 if TYPE_CHECKING:
     from mento.concrete.beam import RectangularConcreteBeam
@@ -54,7 +54,7 @@ class Rebar:
             A dictionary containing the best combination of rebar details.
         """
         self.A_s_req = A_s_req
-        effectivewidth = self.beam.width - 2 * (self.beam.cc + self.beam.stirrup_d_b)
+        effectivewidth = self.beam.width - 2 * (self.beam.c_c + self.beam._stirrup_d_b)
 
         # Variables to track the combinations
         valid_combinations = []
@@ -129,7 +129,7 @@ class Rebar:
             # Maximum spacing across the length of the beam
             s_max_l = min(self.beam.d / 4, 30*cm)
             # Maximum spacing across the width of the beam
-            s_max_w = min(self.beam.d / 2, 30*cm)
+            s_max_w = min(self.beam.d / 2, 30*cm)  # noqa: F841
 
         # Prepare the list for valid combinations
         valid_combinations = []     
@@ -147,7 +147,7 @@ class Rebar:
                 n_stirrups = math.ceil(n_legs / 2)  # Number of stirrups based on number of legs
                 n_legs_actual = n_stirrups * 2      # Ensure legs are even
                 # Consider 1 leg less for spacing laong width
-                s_w = (self.beam.width - 2 * self.beam.cc - self.beam.stirrup_d_b) / (n_legs_actual - 1)
+                s_w = (self.beam.width - 2 * self.beam.c_c - self.beam._stirrup_d_b) / (n_legs_actual - 1)  # noqa: F841
 
                 A_db = self.rebar_areas[d_b]  # Area of a stirrup bar
                 A_vs = n_legs_actual * A_db  # Area of vertical stirrups
@@ -162,10 +162,8 @@ class Rebar:
                         's_l': s_l.to('cm'),  # spacing along length
                         'A_v': A_v.to('cm**2/m'),
                     })
-
-                    # If the spacing is at the max and A_v is sufficient, stop further iterations
-                    if s_l <= s_max_l:
-                        break  # Stop checking larger diameters
+                    # Stop checking larger diameters
+                    break  
                     
                 # If A_v is insufficient, reduce s_l by 1 cm
                 s_l -= 1 * cm
