@@ -10,7 +10,6 @@ import math
 
 from mento.concrete.rectangular import RectangularConcreteSection
 from mento.material import Concrete, SteelBar, Concrete_ACI_318_19 
-from mento.settings import Settings
 from mento.rebar import Rebar
 from mento import MPa, ksi, psi, kip, mm, inch, kN, m, cm,ft
 from mento.results import Formatter
@@ -21,19 +20,22 @@ class RectangularConcreteBeam(RectangularConcreteSection):
     label: Optional[str] = None
 
     def __init__(self, label: Optional[str], concrete: Concrete, steel_bar: SteelBar, 
-                 width: PlainQuantity, height: PlainQuantity, settings: Optional[Settings] = None):   
+                 width: PlainQuantity, height: PlainQuantity, settings: Optional[Dict[str, Any]] = None):   
         super().__init__(concrete, steel_bar, width, height, settings)
+        if settings:
+            self.settings.update(settings)  # Update with any provided settings
+
         self.label = label
         self.shear_design_results: DataFrame = None
-        self._stirrup_d_b: PlainQuantity = 0*mm
         self._stirrup_s_l: PlainQuantity = 0*cm
         self._stirrup_n: int = 0
         self._stirrup_A_v: PlainQuantity = 0*cm**2/m
         self._phi_V_n: PlainQuantity = 0*kN
-
-        if settings:
-            self.settings.update(settings.settings)  # Update with any provided settings
     
+    @property
+    def d(self) -> PlainQuantity:
+        "Effective height."
+        return self._d
     
     def set_transverse_rebar(self, n_stirrups: int = 0, d_b:PlainQuantity = 0*mm, s_l:PlainQuantity = 0*cm) -> None:
         """Sets the transverse rebar in the object."""
@@ -183,6 +185,7 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         # reduced by 0.5ϕVc. It is assumed that minimum reinforcement is required.
         # Rebar needed, V_u > φ_v*V_c/2 for Imperial system
         A_v_min = max((0.75 * math.sqrt(f_c / psi) * psi/ f_yt) * self.width , (50 * psi/f_yt) * self.width)  
+        
         # Shear reinforcement calculations
         A_db = (d_b ** 2) * math.pi / 4  # Area of one stirrup leg
         A_vs = n_legs * A_db  # Total area of stirrups
@@ -392,7 +395,7 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         return V_cmax 
 
     
-    # Beam results forJjupyter Notebook
+    # Beam results for Jupyter Notebook
     @property
     def shear_results(self) -> None:
         if not self._stirrup_A_v:
@@ -429,20 +432,24 @@ def flexure() -> None:
 
 def shear() -> None:
     concrete= Concrete_ACI_318_19(name="C4",f_c=4000*psi) 
-    steelBar= SteelBar(name="ADN 420", f_y=60*ksi) 
+    steelBar= SteelBar(name="ADN 420", f_y=60*ksi)
+    custom_settings = {'clear_cover': 1.5*inch, 'stirrup_diameter_ini':0.5*inch,
+                       'longitudinal_diameter_ini': 1*inch}
     section = RectangularConcreteBeam(label="V-10x16",
-                                      concrete=concrete,steel_bar=steelBar,width=10*inch, height=16*inch)
-    section.cc = 1.5*inch
-    section.stirrup_d_b = 0.5*inch
-    f = Forces(V_z=37.727*kip, N_x=0*kip)
-    debug(f.get_forces()) 
-    A_s=0.847*inch**2 
-    results=section.check_shear(f.V_z, f.N_x, A_s, d_b=12*mm, s=6*inch, n_legs=2) 
-    debug(results)
-    section.design_shear(f.Vz, f.Nx, A_s) 
-    debug(section.shear_results)
-    debug(section.shear_design_results)
-    debug(section.transverse_rebar)
+                                      concrete=concrete,steel_bar=steelBar,width=10*inch, height=16*inch,
+                                       settings=custom_settings)
+    debug(section.settings.default_settings)
+    debug(section.get_settings)
+    f = Forces(V_z=37.727*kip)
+    A_s=0.847*inch**2
+    section.set_transverse_rebar(n_stirrups=1, d_b=0.5*inch, s_l=6*inch) 
+    results=section.check_shear(f, A_s)
+    debug(section._d, section.c_c, section._stirrup_d_b, section._long_d_b)
+    print(results)
+    results = section.design_shear(f, A_s)
+    print(results)
+    print(section.shear_design_results)
+    # print(section.shear_results)
 
 def rebar() -> None:
     concrete= Concrete_ACI_318_19(name="H30",f_c=30*MPa) 
@@ -455,8 +462,7 @@ def rebar() -> None:
         height=50*cm,  
     )
     section.settings.load_aci_318_19_settings()
-    section.cc = 30*mm
-    section.stirrup_d_b = 6*mm
+    section.c_c = 30*mm
     as_req = 5 * cm**2
     beam_rebar = Rebar(section)
     long_rebar_df = beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=as_req)
@@ -470,5 +476,4 @@ def rebar() -> None:
     # print(trans_rebar)
 
 if __name__ == "__main__":
-    flexure()
-    #shear()
+    shear()

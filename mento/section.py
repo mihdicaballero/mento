@@ -9,13 +9,15 @@ class Section:
     settings: Settings = field(default_factory=Settings)
     _last_id: int = field(default=0, init=False, repr=False)  # Class variable to keep track of last assigned ID
 
-    def __init__(self, settings: Optional[Settings] = None) -> None:
+    def __init__(self, settings: Optional[Dict[str, Any]] = None) -> None:
         # Initialize the private ID automatically
         Section._last_id += 1  # Increment the class variable for the next ID
         self._id = Section._last_id  # Assign the next available ID
-        self.settings = Settings() # Initialize with default settings
+        
+        # Initialize with default settings
+        self.settings = Settings() 
         if settings:
-            self.settings.update(settings.settings)  # Update with any provided settings
+            self.settings.update(settings)  # Update with any provided settings
 
     @property
     def id(self) -> int:
@@ -37,7 +39,8 @@ def main() -> None:
     debug(section.get_settings, section.id)
     custom_settings = {'clear_cover': 20}
     section.update_settings(custom_settings)
-    debug(section.settings)
+    debug(section.settings.default_settings)
+    debug(section.get_settings)
 
 if __name__ == "__main__":
     main()
