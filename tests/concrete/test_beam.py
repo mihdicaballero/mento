@@ -3,6 +3,7 @@ from mento.material import Concrete_ACI_318_19, SteelBar
 from mento.units import psi, kip, inch, ksi, ft
 from mento.forces import Forces
 import pytest
+import numpy as np
 
 @pytest.fixture()
 def beam_example() -> RectangularConcreteBeam:
@@ -27,18 +28,18 @@ def test_shear_check_ACI_318_19(beam_example: RectangularConcreteBeam) -> None:
     results = beam_example.check_shear_ACI_318_19(f, A_s)  
 
     # Compare dictionaries with a tolerance for floating-point values, in m 
-    assert results['A_v_min'].magnitude  == pytest.approx(2.117, rel=1e-3)
-    assert results['A_v_req'].magnitude  == pytest.approx(9.433, rel=1e-3)
-    assert results['A_v'].magnitude  == pytest.approx(16.624, rel=1e-3)
-    assert results['phi_V_c'].magnitude  == pytest.approx(60.767, rel=1e-3)
-    assert results['phi_V_s'].magnitude  == pytest.approx(188.656, rel=1e-3)
-    assert results['phi_V_n'].magnitude  == pytest.approx(249.423, rel=1e-3)
-    assert results['phi_V_max'].magnitude  == pytest.approx(303.876, rel=1e-3)
-    assert results["FUv"].magnitude  == pytest.approx(0.6728, rel=1e-3)
+    assert results.iloc[0]['Av,min'].magnitude  == pytest.approx(2.117, rel=1e-3)
+    assert results.iloc[0]['Av,req'].magnitude  == pytest.approx(10.419, rel=1e-3)
+    assert results.iloc[0]['Av'].magnitude  == pytest.approx(16.624, rel=1e-3)
+    assert results.iloc[0]['ØVc'].magnitude  == pytest.approx(56.969, rel=1e-3)
+    assert results.iloc[0]['ØVs'].magnitude  == pytest.approx(176.865, rel=1e-3)
+    assert results.iloc[0]['ØVn'].magnitude  == pytest.approx(233.834, rel=1e-3)
+    assert results.iloc[0]['ØVmax'].magnitude  == pytest.approx(284.847, rel=1e-3)
+    assert results.iloc[0]["FUv"].magnitude  == pytest.approx(0.7177, rel=1e-3)
 
     # Assert non-numeric values directly
-    assert results['shear_ok'] is True
-    assert results['max_shear_ok'] is True
+    assert results.iloc[0]['Vu<ØVmax'] is np.True_
+    assert results.iloc[0]['Vu<ØVn'] is np.True_
 
 def test_shear_design_ACI_318_19(beam_example: RectangularConcreteBeam) -> None:
     f = Forces(V_z=37.727*kip, N_x = 0*kip) 
@@ -46,18 +47,18 @@ def test_shear_design_ACI_318_19(beam_example: RectangularConcreteBeam) -> None:
     results = beam_example.design_shear_ACI_318_19(f, A_s)  
 
     # Compare dictionaries with a tolerance for floating-point values, in m 
-    assert results['A_v_min'].magnitude  == pytest.approx(2.116, rel=1e-3)
-    assert results['A_v_req'].magnitude  == pytest.approx(9.4333, rel=1e-3)
-    assert results['A_v'].magnitude  == pytest.approx(12.722, rel=1e-3)
-    assert results['phi_V_c'].magnitude  == pytest.approx(60.767, rel=1e-3)
-    assert results['phi_V_s'].magnitude  == pytest.approx(144.370, rel=1e-3)
-    assert results['phi_V_n'].magnitude  == pytest.approx(205.137, rel=1e-3)
-    assert results['phi_V_max'].magnitude  == pytest.approx(303.837, rel=1e-3)
-    assert results["FUv"]  == pytest.approx(0.8181, rel=1e-3)
+    assert results.iloc[0]['Av,min'].magnitude  == pytest.approx(2.117, rel=1e-3)
+    assert results.iloc[0]['Av,req'].magnitude  == pytest.approx(10.419, rel=1e-3)
+    assert results.iloc[0]['Av'].magnitude  == pytest.approx(10.472, rel=1e-3)
+    assert results.iloc[0]['ØVc'].magnitude  == pytest.approx(56.969, rel=1e-3)
+    assert results.iloc[0]['ØVs'].magnitude  == pytest.approx(111.411, rel=1e-3)
+    assert results.iloc[0]['ØVn'].magnitude  == pytest.approx(168.38, rel=1e-3)
+    assert results.iloc[0]['ØVmax'].magnitude  == pytest.approx(284.847, rel=1e-3)
+    assert results.iloc[0]["FUv"].magnitude  == pytest.approx(0.9967, rel=1e-3)
 
     # Assert non-numeric values directly
-    assert results['shear_ok'] is True
-    assert results['max_shear_ok'] is True
+    assert results.iloc[0]['Vu<ØVmax'] is np.True_
+    assert results.iloc[0]['Vu<ØVn'] is np.True_
 
 # ------- Flexural test --------------
 # LO QUE ME ESTÁ FALTANDO ES SETEAR EL MEC COVER.

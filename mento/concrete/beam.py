@@ -148,7 +148,7 @@ class RectangularConcreteBeam(RectangularConcreteSection):
     # def check_flexure_ACI_318_19(self, M_u:float, A_s, d_b=0.5, n_bars=2) -> None:
     #     pass
 
-    def check_shear_ACI_318_19(self, Force:Forces, A_s:PlainQuantity = 0*cm**2) -> Dict[str, Any]:
+    def check_shear_ACI_318_19(self, Force:Forces, A_s:PlainQuantity = 0*cm**2) -> DataFrame:
         # Set the initial variables
         N_u = Force.N_x
         self._V_u = Force.V_z
