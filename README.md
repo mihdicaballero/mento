@@ -2,7 +2,7 @@
 *An intuitive tool for structural engineers to design concrete elements efficiently.*
 
 [![Tests](https://github.com/mihdicaballero/mento/actions/workflows/tests.yml/badge.svg)][tests]
-[![Docs](https://readthedocs.org/projects/mento-structures/badge/?version=latest)](https://mento-docs.readthedocs.io/en/latest/?badge=latest)
+[![Docs](https://readthedocs.org/projects/mento-docs/badge/?version=latest)](https://mento-docs.readthedocs.io/en/latest/?badge=latest)
 [![Codecov](https://codecov.io/gh/robbievanleeuwen/concrete-properties/branch/master/graph/badge.svg)][codecov]
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/charliermarsh/ruff/main/assets/badge/v2.json)][ruff]
 
