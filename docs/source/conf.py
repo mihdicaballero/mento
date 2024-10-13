@@ -48,7 +48,7 @@ extensions = [
     "sphinx_design",
 ]
 
-
+master_doc = "index"
 
 templates_path = ['_templates']
 
