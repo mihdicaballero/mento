@@ -55,9 +55,6 @@ templates_path = ['_templates']
 # The suffix of source filenames.
 source_suffix = ".rst"
 
-# The master toctree document.
-master_doc = "index"
-
 exclude_patterns = ["_build"]
 
 
