@@ -5,9 +5,7 @@
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,
     "editor.fontFamily": "Fira Code, Consolas, 'Courier New', monospace",
-    "python.linting.mypyEnabled": true,
-    "python.linting.enabled": true,
-    "python.linting.mypyArgs": [
-      "--strict"
-    ]
+    "makefile.makefilePath": "",
+    "makefile.makePath": "",
+    "python.REPL.enableREPLSmartSend": false,
 }
