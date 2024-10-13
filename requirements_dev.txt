@@ -3,5 +3,5 @@ ruff
 pint==0.24.3
 pytest==7.4.2
 pandas==2.2.3
-IPython
+IPython==8.27.0
 mypy
