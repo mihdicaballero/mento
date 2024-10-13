@@ -1,6 +1,6 @@
-from section import Section
-from forces import Forces
-from units import kNm
+from mento.section import Section
+from mento.forces import Forces
+from mento.units import kNm
 from devtools import debug
 from typing import List
 
@@ -21,7 +21,7 @@ class Node:
 
 def main() -> None:
     # Ejemplo de uso
-    section = Section(label="V10")
+    section = Section()
     forces1 = Forces(M_y=100*kNm)
     forces2 = Forces(M_y=200*kNm)
 

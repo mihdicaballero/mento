@@ -1,17 +1,21 @@
-.. mento documentation master file, created by
-   sphinx-quickstart on Sun Oct 13 10:30:35 2024.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
-
-mento documentation
+Mento
 ===================
 
-Add your content using ``reStructuredText`` syntax. See the
-`reStructuredText <https://www.sphinx-doc.org/en/master/usage/restructuredtext/index.html>`_
-documentation for details.
-
+An intuitive tool for structural engineers to design concrete elements efficiently.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
+   :caption: For Users:
+
+   Getting started <getting_started/index>
+   User Guide <user_guide/index>
+   Examples <examples/index>
+   API Reference <api/modules>
+
+.. toctree::
+   :maxdepth: 1
+   :caption: For Developers:
+
+   dev/contributing
+   dev/codeofconduct
 
