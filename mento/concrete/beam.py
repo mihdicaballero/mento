@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 from pandas import DataFrame
 import math
+import warnings
 
 from mento.concrete.rectangular import RectangularConcreteSection
 from mento.material import Concrete, SteelBar, Concrete_ACI_318_19 
@@ -380,9 +381,21 @@ class RectangularConcreteBeam(RectangularConcreteSection):
     
     # Beam results for Jupyter Notebook
     @property
+    def properties(self) -> None:
+        markdown_content = f"Viga {self.label}, $b$={self.width.to('cm')}"\
+                         f", $h$={self.height.to('cm')}, $r_{{geom}}$={self.c_c.to('cm')}, \
+                            Hormigón {self.concrete.name}, Acero {self.steel_bar.name}."
+        self._md_properties = markdown_content
+
+        return None
+
+    @property
     def shear_results(self) -> None:
         if not self._stirrup_A_v:
-            raise ValueError("Shear design has not been performed yet. Call check_shear or design_shear first.")
+            warnings.warn("Shear design has not been performed yet. Call check_shear or "
+                          "design_shear first.", UserWarning)
+            self._md_shear_results = "Shear results are not available."
+            return None
 
         # Create FUFormatter instance and format FU value
         formatter = Formatter()
@@ -391,8 +404,23 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         # Print results
         markdown_content = f"Armadura transversal {rebar_v}, $A_v$={self._stirrup_A_v.to('cm**2/m')}"\
                          f", $V_u$={self._V_u.to('kN')}, $\\phi V_n$={self._phi_V_n.to('kN')} → {formatted_FU}"
-        # Display the content
-        display(Markdown(markdown_content)) #type: ignore
+        self._md_shear_results = markdown_content
+
+        return None
+    
+    # Beam results for Jupyter Notebook
+    @property
+    def results(self) -> None:
+        # Ensure that both properties and shear results are available
+        if not hasattr(self, '_md_properties'):
+            self.properties  # This will generate _md_properties
+        if not hasattr(self, '_md_shear_results'):
+            self.shear_results  # This will generate _md_shear_results
+        # Combine the markdown content for properties and shear results
+        markdown_content = f"{self._md_properties}\n\n{self._md_shear_results}"
+        
+        # Display the combined content
+        display(Markdown(markdown_content))  # type: ignore
 
         return None
 

@@ -9,7 +9,7 @@ ureg.formatter.default_format = '.2f~P'  # Standardize output formatting
 m = ureg.meter
 cm = ureg.centimeter
 mm = ureg.millimeter
-kN = 1e3 * ureg.newton
+kN = ureg.kilonewton
 kNm = kN * m
 MPa = ureg.megapascal
 GPa = ureg.gigapascal
@@ -19,7 +19,7 @@ sec = ureg.second
 # Imperial system units
 psi = ureg.psi
 lb = ureg.pound_force
-kip = 1e3 * lb
+kip = ureg.kip
 ksi = ureg.ksi
 inch = ureg.inch
 ft = ureg.foot

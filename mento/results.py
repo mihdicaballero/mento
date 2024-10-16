@@ -77,94 +77,94 @@ class Formatter:
         """
         return df.style.applymap(self.apply_FU_style, subset=fu_columns).format(precision=2)
 
-class SectionSummary:
-    def __init__(self, sections: list):
-        """
-        Initializes the SectionSummary with a list of Section objects.
+# class SectionSummary:
+#     def __init__(self, beam_list):
+#         """
+#         Initializes the SectionSummary with a list of Section objects.
         
-        :param sections: List of Section objects
-        """
-        self.capacity_columns = ["Viga", "b", "h", "As.inf", "As.sup", "Av", 
-                        "As.inf.real", "As.sup.real", "Av.real", "ØMn", "ØVn"]
-        self.check_columns = ["Viga", "b", "h", "Vu", "Mu", "As.inf.real", "As.inf.nec", 
-                         "As.sup.real", "As.sup.nec", "Av.real", "Av.nec", "MRd.inf","MRd.sup", 
-                         "VRd", "FUb.inf", "FUb.sup", "FUv"]
-        self.sections = sections  # Store the list of sections
+#         :param sections: List of Section objects
+#         """
+#         self.capacity_columns = ["Viga", "b", "h", "As.inf", "As.sup", "Av", 
+#                         "As.inf.real", "As.sup.real", "Av.real", "ØMn", "ØVn"]
+#         self.check_columns = ["Viga", "b", "h", "Vu", "Mu", "As.inf.real", "As.inf.nec", 
+#                          "As.sup.real", "As.sup.nec", "Av.real", "Av.nec", "MRd.inf","MRd.sup", 
+#                          "VRd", "FUb.inf", "FUb.sup", "FUv"]
+#         self.sections = sections  # Store the list of sections
 
-    def capacity(self) -> pd.DataFrame:
-        """
-        Creates a DataFrame from the list of Section objects and adds the units row.
+#     def capacity(self) -> pd.DataFrame:
+#         """
+#         Creates a DataFrame from the list of Section objects and adds the units row.
         
-        :return: A pandas DataFrame with the data from Section objects and units as the first row.
-        """
-        # Convert each section object to a row dictionary
-        data = [section.to_capacity_dict() for section in self.sections]
+#         :return: A pandas DataFrame with the data from Section objects and units as the first row.
+#         """
+#         # Convert each section object to a row dictionary
+#         data = [section.to_capacity_dict() for section in self.sections]
         
-        # Add units row
-        units_row = {
-            "Viga": "",
-            "b": "cm",
-            "h": "cm",
-            "As.inf": "",
-            "As.sup": "",
-            "Av": "",
-            "As.inf.real": "cm²",
-            "As.sup.real": "cm²",
-            "Av.real": "cm²/m",
-            "MRd": "kNm",
-            "VRd": "kN",
-        }
+#         # Add units row
+#         units_row = {
+#             "Viga": "",
+#             "b": "cm",
+#             "h": "cm",
+#             "As.inf": "",
+#             "As.sup": "",
+#             "Av": "",
+#             "As.inf.real": "cm²",
+#             "As.sup.real": "cm²",
+#             "Av.real": "cm²/m",
+#             "MRd": "kNm",
+#             "VRd": "kN",
+#         }
         
-        # Combine units row with section data
-        data.insert(0, units_row)
+#         # Combine units row with section data
+#         data.insert(0, units_row)
         
-        # Create a DataFrame from the data
-        df = pd.DataFrame(data, columns=self.capacity_columns)
+#         # Create a DataFrame from the data
+#         df = pd.DataFrame(data, columns=self.capacity_columns)
         
-        return df
-    def check(self) -> pd.DataFrame:
-        """
-        Creates a DataFrame for checking shear and bending for each section.
-        Outputs necessary and real reinforcement, utilization factors for bending and shear.
+#         return df
+#     def check(self) -> pd.DataFrame:
+#         """
+#         Creates a DataFrame for checking shear and bending for each section.
+#         Outputs necessary and real reinforcement, utilization factors for bending and shear.
         
-        :return: A pandas DataFrame summarizing the check of each section.
-        """
+#         :return: A pandas DataFrame summarizing the check of each section.
+#         """
 
-        # Convert each section object to a row dictionary
-        data = [section.to_check_dict() for section in self.sections]
+#         # Convert each section object to a row dictionary
+#         data = [section.to_check_dict() for section in self.sections]
 
-        # Create a DataFrame from the data
-        df = pd.DataFrame(data, columns=self.check_columns)
+#         # Create a DataFrame from the data
+#         df = pd.DataFrame(data, columns=self.check_columns)
 
-        # Add units row
-        units_row = {
-            "Viga": "",
-            "b": "cm",
-            "h": "cm",
-            "Vu": "kN",
-            "Mu": "kNm",
-            "As.inf.real": "cm²",
-            "As.inf.nec": "cm²",
-            "As.sup.real": "cm²",
-            "As.sup.nec": "cm²",
-            "Av.real": "cm²/m",
-            "Av.nec": "cm²/m",
-            "MRd.inf": "kNm",
-            "MRd.sup": "kNm",
-            "VRd": "kN",
-            "FUb.inf": "", 
-            "FUb.sup": "",
-            "FUv": "" 
-        }
+#         # Add units row
+#         units_row = {
+#             "Viga": "",
+#             "b": "cm",
+#             "h": "cm",
+#             "Vu": "kN",
+#             "Mu": "kNm",
+#             "As.inf.real": "cm²",
+#             "As.inf.nec": "cm²",
+#             "As.sup.real": "cm²",
+#             "As.sup.nec": "cm²",
+#             "Av.real": "cm²/m",
+#             "Av.nec": "cm²/m",
+#             "MRd.inf": "kNm",
+#             "MRd.sup": "kNm",
+#             "VRd": "kN",
+#             "FUb.inf": "", 
+#             "FUb.sup": "",
+#             "FUv": "" 
+#         }
         
-        # Append the units row to the top of the DataFrame
-        df = pd.concat([pd.DataFrame([units_row]), df], ignore_index=True)
+#         # Append the units row to the top of the DataFrame
+#         df = pd.concat([pd.DataFrame([units_row]), df], ignore_index=True)
         
-        # Add style to FU columns
-        self.fu_columns = ["FUb.inf", "FUb.sup", "FUv"]  # Columns to be styled based on FU value
-        formatter = Formatter()
-        # Apply color formatting to the specified FU columns
-        return formatter.color_FU_df(df, self.fu_columns)
+#         # Add style to FU columns
+#         self.fu_columns = ["FUb.inf", "FUb.sup", "FUv"]  # Columns to be styled based on FU value
+#         formatter = Formatter()
+#         # Apply color formatting to the specified FU columns
+#         return formatter.color_FU_df(df, self.fu_columns)
 
 
     #  Examples to run in a Jupyter Notebook
