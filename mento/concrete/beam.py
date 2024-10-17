@@ -352,7 +352,7 @@ class RectangularConcreteBeam(RectangularConcreteSection):
             raise ValueError(f"Shear design method not implemented for concrete type: {type(self.concrete).__name__}")
     
     # Factory method to select the shear check method
-    def check_shear(self, Force: Forces, A_s: PlainQuantity = 0*cm**2) -> DataFrame:
+    def check_shear(self, Force: Forces = Forces(), A_s: PlainQuantity = 0*cm**2) -> DataFrame:
         if self.concrete.design_code=="ACI 318-19":
             return self.check_shear_ACI_318_19(Force, A_s)
         # elif self.concrete.design_code=="EN 1992":
@@ -459,7 +459,9 @@ def shear() -> None:
     results = section.design_shear(f, A_s)
     print(results)
     print(section.shear_design_results)
+    print(section._id)
     # print(section.shear_results)
+    
 
 def rebar() -> None:
     concrete= Concrete_ACI_318_19(name="H30",f_c=30*MPa) 
