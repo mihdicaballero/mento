@@ -75,7 +75,7 @@ class Formatter:
         :param fu_columns: List of column names to apply the FU styling to.
         :return: A styled DataFrame with colored FU values.
         """
-        return df.style.applymap(self.apply_FU_style, subset=fu_columns).format(precision=2)
+        return df.style.map(self.apply_FU_style, subset=fu_columns).format(precision=2)
 
 # class SectionSummary:
 #     def __init__(self, beam_list):

@@ -43,6 +43,9 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         self._stirrup_n = n_stirrups
         self._stirrup_d_b = d_b
         self._stirrup_s_l = s_l
+        # Update effective height d with new values
+        self._d = self._height -(self.c_c+self._stirrup_d_b+self._long_d_b/2) # Initial value 
+
     
     def __maximum_flexural_reinforcement_ratio(self) -> float:
         if self.concrete.design_code=="ACI 318-19":
@@ -153,7 +156,7 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         # Set the initial variables
         N_u = Force.N_x
         self._V_u = Force.V_z
-        d_b = self._stirrup_d_b
+        d_bs = self._stirrup_d_b
         s_l = self._stirrup_s_l
         n_legs = self._stirrup_n*2
 
@@ -161,7 +164,7 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         self.settings.load_aci_318_19_settings()
         phi_v = self.settings.get_setting('phi_v')
         self.lambda_factor = self.settings.get_setting('lambda')
-        f_yt = self.steel_bar.f_yt
+        f_yt = min(self.steel_bar.f_yt, 400*MPa)
 
         # Minimum shear reinforcement calculation
         # 'Minimum reinforcement should be placed if the factored shear Vu 
@@ -171,7 +174,7 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         A_v_min = max((0.75 * math.sqrt(f_c / psi) * psi/ f_yt) * self.width , (50 * psi/f_yt) * self.width)  
         
         # Shear reinforcement calculations
-        A_db = (d_b ** 2) * math.pi / 4  # Area of one stirrup leg
+        A_db = (d_bs ** 2) * math.pi / 4  # Area of one stirrup leg
         A_vs = n_legs * A_db  # Total area of stirrups
         A_v = A_vs / s_l  # Stirrup area per unit length
         self._stirrup_A_v = A_v
@@ -400,7 +403,7 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         # Create FUFormatter instance and format FU value
         formatter = Formatter()
         formatted_FU = formatter.FU(self._FUv )
-        rebar_v = f"{self._stirrup_n}eØ{self._stirrup_d_b.to('mm').magnitude}/{self._stirrup_s_l.to('cm').magnitude} cm"
+        rebar_v = f"{int(self._stirrup_n)}eØ{self._stirrup_d_b.to('mm').magnitude}/{self._stirrup_s_l.to('cm').magnitude} cm"
         # Print results
         markdown_content = f"Armadura transversal {rebar_v}, $A_v$={self._stirrup_A_v.to('cm**2/m')}"\
                          f", $V_u$={self._V_u.to('kN')}, $\\phi V_n$={self._phi_V_n.to('kN')} → {formatted_FU}"
