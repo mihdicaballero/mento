@@ -231,6 +231,7 @@ class RectangularConcreteBeam(RectangularConcreteSection):
 
         # Check results
         results: Dict[str,Any] = {
+            'Label': self.label, #Beam label
             'Av,min': A_v_min.to('cm ** 2 / m'),  # Minimum shear reinforcement area
             'Av,req': A_v_req.to('cm ** 2 / m'), # Required shear reinforcing area
             'Av': A_v.to('cm ** 2 / m'),  # Provided stirrup reinforcement per unit length
@@ -316,6 +317,7 @@ class RectangularConcreteBeam(RectangularConcreteSection):
 
         # Design results
         results = {
+            'Label': self.label, #Beam label
             'Av,min': A_v_min.to('cm ** 2 / m'),  # Minimum shear reinforcement area
             'Av,req': A_v_req.to('cm ** 2 / m'), # Required shear reinforcing area
             'Av': A_v.to('cm ** 2 / m'),  # Provided stirrup reinforcement per unit length
@@ -403,7 +405,8 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         # Create FUFormatter instance and format FU value
         formatter = Formatter()
         formatted_FU = formatter.FU(self._FUv )
-        rebar_v = f"{int(self._stirrup_n)}eØ{self._stirrup_d_b.to('mm').magnitude}/{self._stirrup_s_l.to('cm').magnitude} cm"
+        rebar_v = f"{int(self._stirrup_n)}eØ{self._stirrup_d_b.to('mm').magnitude}/"\
+                f"{self._stirrup_s_l.to('cm').magnitude} cm"
         # Print results
         markdown_content = f"Armadura transversal {rebar_v}, $A_v$={self._stirrup_A_v.to('cm**2/m')}"\
                          f", $V_u$={self._V_u.to('kN')}, $\\phi V_n$={self._phi_V_n.to('kN')} → {formatted_FU}"
