@@ -42,6 +42,7 @@ max-line-length = 120
 
 [tool.ruff]
 extend-select = ["C4", "SIM", "TCH"]
+extend-exclude = ["build/", "dist/"]
 ignore = []
 show-fixes = true
 line-length = 120

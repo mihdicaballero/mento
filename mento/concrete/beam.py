@@ -386,10 +386,20 @@ class RectangularConcreteBeam(RectangularConcreteSection):
     
     # Beam results for Jupyter Notebook
     @property
+    def data(self) -> None:
+        markdown_content = f"Beam {self.label}, $b$={self.width.to('cm')}"\
+                         f", $h$={self.height.to('cm')}, $c_{{c}}$={self.c_c.to('cm')}, \
+                            Concrete {self.concrete.name}, Rebar {self.steel_bar.name}."
+        # Display the combined content
+        display(Markdown(markdown_content))  # type: ignore
+
+        return None
+    
+    @property
     def properties(self) -> None:
-        markdown_content = f"Viga {self.label}, $b$={self.width.to('cm')}"\
-                         f", $h$={self.height.to('cm')}, $r_{{geom}}$={self.c_c.to('cm')}, \
-                            Hormigón {self.concrete.name}, Acero {self.steel_bar.name}."
+        markdown_content = f"Beam {self.label}, $b$={self.width.to('cm')}"\
+                         f", $h$={self.height.to('cm')}, $c_{{c}}$={self.c_c.to('cm')}, \
+                            Concrete {self.concrete.name}, Rebar {self.steel_bar.name}."
         self._md_properties = markdown_content
 
         return None
