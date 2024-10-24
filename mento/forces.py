@@ -82,7 +82,7 @@ class Forces:
 
 
 def main() -> None:
-    f = Forces(M_y=10 * kNm, N_x=2 * kN)
+    f = Forces(M_y=10 * kNm, N_x=2 * kN, V_z=10*kN)
     debug(f) 
     print(f.M_y, f.id)
     debug(f.N_x)

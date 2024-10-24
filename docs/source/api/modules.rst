@@ -1,7 +1,7 @@
 API reference
-=====
+===================
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
 
    mento

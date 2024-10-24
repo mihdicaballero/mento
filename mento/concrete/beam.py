@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 from pandas import DataFrame
 import math
+import warnings
 
 from mento.concrete.rectangular import RectangularConcreteSection
 from mento.material import Concrete, SteelBar, Concrete_ACI_318_19 
@@ -42,6 +43,9 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         self._stirrup_n = n_stirrups
         self._stirrup_d_b = d_b
         self._stirrup_s_l = s_l
+        # Update effective height d with new values
+        self._d = self._height -(self.c_c+self._stirrup_d_b+self._long_d_b/2) # Initial value 
+
     
     def __maximum_flexural_reinforcement_ratio(self) -> float:
         if self.concrete.design_code=="ACI 318-19":
@@ -152,7 +156,7 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         # Set the initial variables
         N_u = Force.N_x
         self._V_u = Force.V_z
-        d_b = self._stirrup_d_b
+        d_bs = self._stirrup_d_b
         s_l = self._stirrup_s_l
         n_legs = self._stirrup_n*2
 
@@ -160,7 +164,7 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         self.settings.load_aci_318_19_settings()
         phi_v = self.settings.get_setting('phi_v')
         self.lambda_factor = self.settings.get_setting('lambda')
-        f_yt = self.steel_bar.f_yt
+        f_yt = min(self.steel_bar.f_yt, 400*MPa)
 
         # Minimum shear reinforcement calculation
         # 'Minimum reinforcement should be placed if the factored shear Vu 
@@ -170,7 +174,7 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         A_v_min = max((0.75 * math.sqrt(f_c / psi) * psi/ f_yt) * self.width , (50 * psi/f_yt) * self.width)  
         
         # Shear reinforcement calculations
-        A_db = (d_b ** 2) * math.pi / 4  # Area of one stirrup leg
+        A_db = (d_bs ** 2) * math.pi / 4  # Area of one stirrup leg
         A_vs = n_legs * A_db  # Total area of stirrups
         A_v = A_vs / s_l  # Stirrup area per unit length
         self._stirrup_A_v = A_v
@@ -227,6 +231,7 @@ class RectangularConcreteBeam(RectangularConcreteSection):
 
         # Check results
         results: Dict[str,Any] = {
+            'Label': self.label, #Beam label
             'Av,min': A_v_min.to('cm ** 2 / m'),  # Minimum shear reinforcement area
             'Av,req': A_v_req.to('cm ** 2 / m'), # Required shear reinforcing area
             'Av': A_v.to('cm ** 2 / m'),  # Provided stirrup reinforcement per unit length
@@ -312,6 +317,7 @@ class RectangularConcreteBeam(RectangularConcreteSection):
 
         # Design results
         results = {
+            'Label': self.label, #Beam label
             'Av,min': A_v_min.to('cm ** 2 / m'),  # Minimum shear reinforcement area
             'Av,req': A_v_req.to('cm ** 2 / m'), # Required shear reinforcing area
             'Av': A_v.to('cm ** 2 / m'),  # Provided stirrup reinforcement per unit length
@@ -351,7 +357,7 @@ class RectangularConcreteBeam(RectangularConcreteSection):
             raise ValueError(f"Shear design method not implemented for concrete type: {type(self.concrete).__name__}")
     
     # Factory method to select the shear check method
-    def check_shear(self, Force: Forces, A_s: PlainQuantity = 0*cm**2) -> DataFrame:
+    def check_shear(self, Force: Forces = Forces(), A_s: PlainQuantity = 0*cm**2) -> DataFrame:
         if self.concrete.design_code=="ACI 318-19":
             return self.check_shear_ACI_318_19(Force, A_s)
         # elif self.concrete.design_code=="EN 1992":
@@ -380,19 +386,57 @@ class RectangularConcreteBeam(RectangularConcreteSection):
     
     # Beam results for Jupyter Notebook
     @property
+    def data(self) -> None:
+        markdown_content = f"Beam {self.label}, $b$={self.width.to('cm')}"\
+                         f", $h$={self.height.to('cm')}, $c_{{c}}$={self.c_c.to('cm')}, \
+                            Concrete {self.concrete.name}, Rebar {self.steel_bar.name}."
+        # Display the combined content
+        display(Markdown(markdown_content))  # type: ignore
+
+        return None
+    
+    @property
+    def properties(self) -> None:
+        markdown_content = f"Beam {self.label}, $b$={self.width.to('cm')}"\
+                         f", $h$={self.height.to('cm')}, $c_{{c}}$={self.c_c.to('cm')}, \
+                            Concrete {self.concrete.name}, Rebar {self.steel_bar.name}."
+        self._md_properties = markdown_content
+
+        return None
+
+    @property
     def shear_results(self) -> None:
         if not self._stirrup_A_v:
-            raise ValueError("Shear design has not been performed yet. Call check_shear or design_shear first.")
+            warnings.warn("Shear design has not been performed yet. Call check_shear or "
+                          "design_shear first.", UserWarning)
+            self._md_shear_results = "Shear results are not available."
+            return None
 
         # Create FUFormatter instance and format FU value
         formatter = Formatter()
         formatted_FU = formatter.FU(self._FUv )
-        rebar_v = f"{self._stirrup_n}eØ{self._stirrup_d_b.to('mm').magnitude}/{self._stirrup_s_l.to('cm').magnitude} cm"
+        rebar_v = f"{int(self._stirrup_n)}eØ{self._stirrup_d_b.to('mm').magnitude}/"\
+                f"{self._stirrup_s_l.to('cm').magnitude} cm"
         # Print results
         markdown_content = f"Armadura transversal {rebar_v}, $A_v$={self._stirrup_A_v.to('cm**2/m')}"\
                          f", $V_u$={self._V_u.to('kN')}, $\\phi V_n$={self._phi_V_n.to('kN')} → {formatted_FU}"
-        # Display the content
-        display(Markdown(markdown_content)) #type: ignore
+        self._md_shear_results = markdown_content
+
+        return None
+    
+    # Beam results for Jupyter Notebook
+    @property
+    def results(self) -> None:
+        # Ensure that both properties and shear results are available
+        if not hasattr(self, '_md_properties'):
+            self.properties  # This will generate _md_properties
+        if not hasattr(self, '_md_shear_results'):
+            self.shear_results  # This will generate _md_shear_results
+        # Combine the markdown content for properties and shear results
+        markdown_content = f"{self._md_properties}\n\n{self._md_shear_results}"
+        
+        # Display the combined content
+        display(Markdown(markdown_content))  # type: ignore
 
         return None
 
@@ -431,7 +475,9 @@ def shear() -> None:
     results = section.design_shear(f, A_s)
     print(results)
     print(section.shear_design_results)
+    print(section._id)
     # print(section.shear_results)
+    
 
 def rebar() -> None:
     concrete= Concrete_ACI_318_19(name="H30",f_c=30*MPa) 

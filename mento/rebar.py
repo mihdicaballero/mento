@@ -72,8 +72,8 @@ class Rebar:
                 if total_as >= A_s_req:
                     available_spacing: PlainQuantity = (effectivewidth - (num_bars * diameter)) / (num_bars - 1)
                     valid_combinations.append({
-                        'layer_1': layer,
-                        'num_bars_1': num_bars,
+                        'layer_1': int(layer),
+                        'num_bars_1': int(num_bars),
                         'diameter_1': diameter.to('mm'),
                         'total_as': total_as.to('cm**2'),
                         'available_spacing_1': available_spacing.to('mm')
@@ -157,7 +157,7 @@ class Rebar:
                 if A_v >= A_v_req:
                     # Store the valid combination if spacing is also valid
                     valid_combinations.append({
-                        'n_stir': n_stirrups,
+                        'n_stir': int(n_stirrups),
                         'd_b': d_b,
                         's_l': s_l.to('cm'),  # spacing along length
                         'A_v': A_v.to('cm**2/m'),
