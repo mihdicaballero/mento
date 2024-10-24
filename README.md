@@ -12,6 +12,8 @@
 
 This repository provides a comprehensive package for the design and structural analysis of concrete sections, beams, columns and footings. The package adheres to multiple design codes, ensuring broad applicability in structural engineering projects.
 
+> We are currently working on the v0.0.1 release. We are close! ( ͡° ͜ʖ ͡°)
+
 #### Features
 - Check and design for flexure and shear of:
     - Rectangular Concrete Beam
