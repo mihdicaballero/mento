@@ -496,12 +496,12 @@ def rebar() -> None:
     long_rebar_df = beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=as_req)
     print(long_rebar_df)
     best_design = beam_rebar.longitudinal_rebar_design
-    print(best_design)
-    print(long_rebar_df.iloc[0]['total_as'])
+    debug(best_design)
+    # print(long_rebar_df.iloc[0]['total_as'])
     # A_v_req = 8.045*cm**2/m
     # V_s_req = 108.602*kN
     # trans_rebar = beam_rebar.beam_transverse_rebar_ACI_318_19(A_v_req=A_v_req, V_s_req=V_s_req)
     # print(trans_rebar)
 
 if __name__ == "__main__":
-    shear()
+    rebar()
