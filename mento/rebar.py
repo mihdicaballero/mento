@@ -71,89 +71,87 @@ class Rebar:
                                 continue
 
                             n1 = 2 # This is a fixed value for every beam 
-                            # Now we iterate over possible numbers of bars in each group
-                            for n2 in range(0, self.max_bars_per_layer + 1): # n2 can be 0 or more
+                            # Iterate over possible numbers of bars in each group
+                            for n2 in range(0, self.max_bars_per_layer + 1):  # n2 can be 0 or more
                                 if n1 + n2 > self.max_bars_per_layer:
                                     continue  # Skip if the total bars in layer 1 exceed the limit
 
-                                # Calculate area for layer 1
-                                A_s_layer_1 = n1 * self.rebar_areas[d_b1] + n2 * self.rebar_areas[d_b2]
+                                # Set diameter for n2 only if n2 > 0
+                                d_b2_options = self.rebar_diameters if n2 > 0 else []
+
+                                for d_b2 in d_b2_options:
+                                    # Calculate area for layer 1
+                                    A_s_layer_1 = n1 * self.rebar_areas[d_b1] + (n2 * self.rebar_areas[d_b2] if n2 > 0 else 0*cm**2)
+
                                     # Condition 6 and 7: Check clear spacing in layer 1
-                                if not self._check_spacing(n1, n2, d_b1, d_b2, effective_width):
-                                    continue
+                                    if n2 > 0 and not self._check_spacing(n1, n2, d_b1, d_b2, effective_width):
+                                        continue
 
-                                # Check if total area from layer 1 is enough for required A_s
-                                if A_s_layer_1 >= A_s_req:
-                                    total_as = A_s_layer_1  # Only consider layer 1
-                                    total_bars = n1 + n2    # Total bars only in layer 1
-                                    # valid_combinations.append({
-                                    #     'layer_1': {'n_1': n1, 'd_b1': d_b1, 'n_2': n2, 'd_b2': d_b2},
-                                    #     'layer_2': {'n_3': 0, 'd_b3': None, 'n_4': 0, 'd_b4': None},  # No bars in layer 2
-                                    #     'total_as': total_as.to('cm**2'),
-                                    #     'total_bars': total_bars
-                                    # })
-                                    valid_combinations.append({
-                                        'n_1': n1,
-                                        'd_b1': d_b1,
-                                        'n_2': n2,
-                                        'd_b2': d_b2,
-                                        'n_3': 0,  # No bars in layer 2
-                                        'd_b3': 0,
-                                        'n_4': 0,  # No bars in layer 2
-                                        'd_b4': 0,
-                                        'total_as': total_as.to('cm**2'),
-                                        'total_bars': total_bars
-                                    })
+                                    # Check if total area from layer 1 is enough for required A_s
+                                    if A_s_layer_1 >= A_s_req:
+                                        total_as = A_s_layer_1  # Only consider layer 1
+                                        total_bars = n1 + n2    # Total bars only in layer 1
+                                        valid_combinations.append({
+                                            'n_1': n1,
+                                            'd_b1': d_b1,
+                                            'n_2': n2,
+                                            'd_b2': d_b2 if n2 > 0 else None,  # Display as None if n2 is 0
+                                            'n_3': 0,  # No bars in layer 2
+                                            'd_b3': None,
+                                            'n_4': 0,  # No bars in layer 2
+                                            'd_b4': None,
+                                            'total_as': total_as.to('cm**2'),
+                                            'total_bars': total_bars
+                                        })
 
-                            # Now check combinations where bars are added in layer 2 (n3 and n4)
-                            for n2 in range(0, self.max_bars_per_layer + 1):
-                                if n1 + n2 > self.max_bars_per_layer:
-                                    continue
+                                # Now check combinations where bars are added in layer 2 (n3 and n4)
+                                for d_b2 in d_b2_options:
+                                    for n3 in [0, 2]:  # n3 can be 0 or fixed at 2 if present
+                                        # Set diameter for n3 only if n3 > 0
+                                        d_b3_options = self.rebar_diameters if n3 > 0 else []
 
-                                for n3 in [0, 2]:  # n3 can be 0 or fixed at 2 if present
-                                    for n4 in range(0, self.max_bars_per_layer + 1):
-                                        if n3 == 0 and n4 > 0:
-                                            continue  # If n3 is 0, n4 must also be 0
-                                        if n3 + n4 > self.max_bars_per_layer:
-                                            continue  # Skip if the total bars in layer 2 exceed the limit
+                                        for d_b3 in d_b3_options:
+                                            for n4 in range(0, self.max_bars_per_layer + 1):
+                                                if n3 == 0 and n4 > 0:
+                                                    continue  # If n3 is 0, n4 must also be 0
+                                                if n3 + n4 > self.max_bars_per_layer:
+                                                    continue  # Skip if the total bars in layer 2 exceed the limit
 
-                                        # Calculate areas of each group of bars
-                                        A_s_layer_1 = n1 * self.rebar_areas[d_b1] + n2 * self.rebar_areas[d_b2]
-                                        A_s_layer_2 = n3 * self.rebar_areas[d_b3] + n4 * self.rebar_areas[d_b4]
+                                                # Set diameter for n4 only if n4 > 0
+                                                d_b4_options = self.rebar_diameters if n4 > 0 else []
 
-                                        # Condition 4: Area of layer 1 must be >= area of layer 2
-                                        if A_s_layer_1 < A_s_layer_2:
-                                            continue
+                                                for d_b4 in d_b4_options:
+                                                    # Calculate areas of each group of bars
+                                                    A_s_layer_1 = n1 * self.rebar_areas[d_b1] + (n2 * self.rebar_areas[d_b2] if n2 > 0 else 0*cm**2)
+                                                    A_s_layer_2 = n3 * self.rebar_areas[d_b3] + (n4 * self.rebar_areas[d_b4] if n4 > 0 else 0*cm**2)
 
-                                        # Condition 6 and 7: Check clear spacing in both layers
-                                        if not self._check_spacing(n1, n2, d_b1, d_b2, effective_width):
-                                            continue
-                                        if not self._check_spacing(n3, n4, d_b3, d_b4, effective_width):
-                                            continue
+                                                    # Condition 4: Area of layer 1 must be >= area of layer 2
+                                                    if A_s_layer_1 < A_s_layer_2:
+                                                        continue
 
-                                        # Check if total area is enough for required A_s
-                                        total_as = A_s_layer_1 + A_s_layer_2
-                                        if total_as >= A_s_req:
-                                            total_bars = n1 + n2 + n3 + n4  # Count the total number of bars
-                                            # valid_combinations.append({
-                                            #     'layer_1': {'n_1': n1, 'd_b1': d_b1, 'n_2': n2, 'd_b2': d_b2},
-                                            #     'layer_2': {'n_3': n3, 'd_b3': d_b3, 'n_4': n4, 'd_b4': d_b4},
-                                            #     'total_as': total_as.to('cm**2'),
-                                            #     'total_bars': total_bars
-                                            # })
+                                                    # Condition 6 and 7: Check clear spacing in both layers
+                                                    if n2 > 0 and not self._check_spacing(n1, n2, d_b1, d_b2, effective_width):
+                                                        continue
+                                                    if n4 > 0 and not self._check_spacing(n3, n4, d_b3, d_b4, effective_width):
+                                                        continue
 
-                                            valid_combinations.append({
-                                                'n_1': n1,
-                                                'd_b1': d_b1,
-                                                'n_2': n2,
-                                                'd_b2': d_b2,
-                                                'n_3': n3,
-                                                'd_b3': d_b3,
-                                                'n_4': n4,
-                                                'd_b4': d_b4,
-                                                'total_as': total_as.to('cm**2'),
-                                                'total_bars': total_bars
-                                            })
+                                                    # Check if total area is enough for required A_s
+                                                    total_as = A_s_layer_1 + A_s_layer_2
+                                                    if total_as >= A_s_req:
+                                                        total_bars = n1 + n2 + n3 + n4  # Count the total number of bars
+                                                        valid_combinations.append({
+                                                            'n_1': n1,
+                                                            'd_b1': d_b1,
+                                                            'n_2': n2,
+                                                            'd_b2': d_b2 if n2 > 0 else None,
+                                                            'n_3': n3,
+                                                            'd_b3': d_b3 if n3 > 0 else None,
+                                                            'n_4': n4,
+                                                            'd_b4': d_b4 if n4 > 0 else None,
+                                                            'total_as': total_as.to('cm**2'),
+                                                            'total_bars': total_bars
+                                                        })
+
 
         # If no valid combination is found, raise an error
         if not valid_combinations:
@@ -162,6 +160,8 @@ class Rebar:
 
         # Convert valid combinations to DataFrame
         df = pd.DataFrame(valid_combinations)
+        # Drop duplicate rows based on the specified columns
+        df = df.drop_duplicates(subset=['n_1', 'd_b1', 'n_2', 'd_b2', 'n_3', 'd_b3', 'n_4', 'd_b4'])
 
         # Sort by 'total_as' first, then by 'total_bars' to prioritize fewer bars
         df.sort_values(by=['total_as', 'total_bars'], inplace=True)
