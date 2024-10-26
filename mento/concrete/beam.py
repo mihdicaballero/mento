@@ -1,7 +1,7 @@
 from devtools import debug
 from dataclasses import dataclass
 from IPython.display import Markdown, display
-from typing import Optional, Dict, Any, cast
+from typing import Optional, Dict, Any, cast, List
 from pint.facets.plain import PlainQuantity
 import numpy as np
 import pandas as pd
@@ -32,6 +32,7 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         self._stirrup_n: int = 0
         self._stirrup_A_v: PlainQuantity = 0*cm**2/m
         self._phi_V_n: PlainQuantity = 0*kN
+        self._A_s_req_bot: PlainQuantity = 0*cm**2
     
     @property
     def d(self) -> PlainQuantity:
@@ -46,6 +47,21 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         # Update effective height d with new values
         self._d = self._height -(self.c_c+self._stirrup_d_b+self._long_d_b/2) # Initial value 
 
+    def set_longitudinal_rebar_bot(self, n1: int, d_b1: PlainQuantity, n2: int, d_b2: PlainQuantity, 
+                                n3: int, d_b3: PlainQuantity, n4: int, d_b4: PlainQuantity, 
+                                total_as: PlainQuantity, total_bars: int, clear_spacing: PlainQuantity) -> None:
+        """Sets the longitudinal rebar in the object."""
+        self._longitudinal_n1 = n1
+        self._longitudinal_d_b1 = d_b1
+        self._longitudinal_n2 = n2
+        self._longitudinal_d_b2 = d_b2 if n2 > 0 else None
+        self._longitudinal_n3 = n3
+        self._longitudinal_d_b3 = d_b3 if n3 > 0 else None
+        self._longitudinal_n4 = n4
+        self._longitudinal_d_b4 = d_b4 if n4 > 0 else None
+        self._total_as_bot = total_as
+        self._total_bars_bot = total_bars
+        self._clear_spacing_bot = clear_spacing
     
     def __maximum_flexural_reinforcement_ratio(self) -> float:
         if self.concrete.design_code=="ACI 318-19":
@@ -88,22 +104,22 @@ class RectangularConcreteBeam(RectangularConcreteSection):
 
         # Determination of required reinforcement
         R_n=M_u/(phi*self._width*self.d**2)
-        A_s_calc=0.85*f_c*self._width*self.d/self.steel_bar.f_y*(1-np.sqrt(1-2*R_n/(0.85*f_c)))
+        A_s_req=0.85*f_c*self._width*self.d/self.steel_bar.f_y*(1-np.sqrt(1-2*R_n/(0.85*f_c)))
 
-        if A_s_calc>A_s_min:
-            self._A_s_calculated=A_s_calc
-        elif  4*A_s_calc/3 > A_s_min:
+        if A_s_req>A_s_min:
+            self._A_s_calculated=A_s_req
+        elif  4*A_s_req/3 > A_s_min:
             self._A_s_calculated=A_s_min
         else: 
             if setting_flexural_min_reduction=='True':
-                self._A_s_calculated=4*A_s_calc/3
+                self._A_s_calculated=4*A_s_req/3
             else:
                 self._A_s_calculated=A_s_min
         if self._A_s_calculated <= A_s_max: 
             self._A_s_comp=0
             result={
                 'As_min_code':A_s_min,
-                'As_required':A_s_calc,
+                'As_required':A_s_req,
                 'As_max':A_s_max,
                 'As_adopted':self._A_s_calculated,
                 'As_compression':self._A_s_comp
@@ -114,7 +130,7 @@ class RectangularConcreteBeam(RectangularConcreteSection):
             M_n_t=rho*self.steel_bar.f_y*(self.d-0.59*rho*self.steel_bar.f_y*self.d/f_c)*self.width*self.d
             M_n_prima=M_u/phi-M_n_t
             c_t=0.003*self.d/(self.steel_bar.epsilon_y+0.006)
-            # HAY QUE VER DONDE ESTA DEFINIDO EL d_prima por ahora asumo
+            # TODO: HAY QUE VER DONDE ESTA DEFINIDO EL d_prima por ahora asumo
             d_prima=5*cm
             f_s_prima=min(0.003*self.steel_bar.E_s*(1-d_prima/c_t),self.steel_bar.f_y)
             A_s_prima=M_n_prima/(f_s_prima*(self.d-d_prima))
@@ -492,6 +508,7 @@ def rebar() -> None:
     section.settings.load_aci_318_19_settings()
     section.c_c = 30*mm
     as_req = 5 * cm**2
+
     beam_rebar = Rebar(section)
     long_rebar_df = beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=as_req)
     print(long_rebar_df)
@@ -504,4 +521,5 @@ def rebar() -> None:
     # print(trans_rebar)
 
 if __name__ == "__main__":
+    # shear()
     rebar()

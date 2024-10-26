@@ -11,8 +11,9 @@ class Settings:
             'longitudinal_diameter_ini': 16*mm,
             'vibrator_size': 30 * mm, 
             'layers_spacing': 25 * mm,
-            'max_diameter_diff': 10*mm,
+            'max_diameter_diff': 5*mm,
             'max_bars_per_layer': 5,
+            'minimum_longitudinal_diameter': 12*mm,
         }
     
     def __init__(self, settings: Optional[Dict[str, Any]] = None):

@@ -16,13 +16,16 @@ class Rebar:
         Initializes the Rebar object with the associated beam and settings.
         """
         self.beam = beam
-        self.clear_spacing = self.beam.settings.get_setting('clear_spacing')
+        self.min_clear_spacing = self.beam.settings.get_setting('clear_spacing')
+        self.vibrator_size = self.beam.settings.get_setting('vibrator_size')
         self.max_diameter_diff = self.beam.settings.get_setting('max_diameter_diff')
         self.max_bars_per_layer = self.beam.settings.get_setting('max_bars_per_layer')
+        self.min_long_rebar = self.beam.settings.get_setting('minimum_longitudinal_diameter')
         self.rebar_diameters = [6*mm, 8*mm, 10*mm, 12*mm, 16*mm, 20*mm, 25*mm, 32*mm]
         self.rebar_areas = {d: (math.pi * d ** 2) / 4 for d in self.rebar_diameters}
         self._long_combos_df: DataFrame = None
         self._trans_combos_df: DataFrame = None
+        self._clear_spacing: PlainQuantity = 0*mm
 
     @property
     def longitudinal_rebar_design(self) -> DataFrame:
@@ -60,97 +63,108 @@ class Rebar:
 
         # Variables to track the combinations
         valid_combinations = []
+        # Create a list of rebar diameters that are equal to or greater than the minimum diameter
+        valid_rebar_diameters = [d for d in self.rebar_diameters if d >= self.min_long_rebar]
 
-        for d_b1 in self.rebar_diameters[1:]: # Without taking Ø6 as a possible solution
-                for d_b2 in [d for d in self.rebar_diameters[1:] if d <= d_b1]:
-                    for d_b3 in [d for d in self.rebar_diameters[1:] if d <= d_b2]:
-                        for d_b4 in [d for d in self.rebar_diameters[1:] if d <= d_b3]:
+        for d_b1 in valid_rebar_diameters: # Without taking Ø6 as a possible solution
+                for d_b2 in [d for d in valid_rebar_diameters if d <= d_b1]:
+                    for d_b3 in [d for d in valid_rebar_diameters if d <= d_b2]:
+                        for d_b4 in [d for d in valid_rebar_diameters if d <= d_b3]:
 
                             # Condition 5: |d_b1 - d_b2| and |d_b3 - d_b4| must not exceed max_diameter_diff
-                            if abs(d_b1 - d_b2) > self.max_diameter_diff or abs(d_b3 - d_b4) > self.max_diameter_diff:
-                                continue
+                            # Ensure all diameter combinations satisfy the ordering constraint
+                            if not (d_b1 >= d_b2 >= d_b3 >= d_b4):
+                                continue  # Skip combinations that do not meet the ordering condition
+                            # Apply diameter difference condition across all combinations
+                            # Ensure that no two bars exceed `max_diameter_diff`
+                            diameters = [d_b1, d_b2, d_b3, d_b4]
+                            diameters = [d for d in diameters if d is not None]  #Filter out None values for unused bars
+                            
+                            # Apply the diameter difference check across all bars
+                            if not self._check_diameter_differences(diameters):
+                                continue  # Skip this combination if any diameter pair exceeds max_diameter_diff`
 
                             n1 = 2 # This is a fixed value for every beam 
+                            
                             # Iterate over possible numbers of bars in each group
                             for n2 in range(0, self.max_bars_per_layer + 1):  # n2 can be 0 or more
+                                # Check spacing for the first set of bars 
+                                self._check_spacing(n1, n2, d_b1, d_b2, effective_width)
+
                                 if n1 + n2 > self.max_bars_per_layer:
                                     continue  # Skip if the total bars in layer 1 exceed the limit
 
-                                # Set diameter for n2 only if n2 > 0
-                                d_b2_options = self.rebar_diameters if n2 > 0 else []
+                                # Calculate area for layer 1
+                                A_s_layer_1 = (
+                                    n1 * self.rebar_areas[d_b1] +
+                                    (n2 * self.rebar_areas[d_b2] if n2 > 0 else 0*cm**2)
+                                )
 
-                                for d_b2 in d_b2_options:
-                                    # Calculate area for layer 1
-                                    A_s_layer_1 = n1 * self.rebar_areas[d_b1] + (n2 * self.rebar_areas[d_b2] if n2 > 0 else 0*cm**2)
+                                # Condition 6 and 7: Check clear spacing in layer 1
+                                if n2 > 0 and not self._check_spacing(n1, n2, d_b1, d_b2, effective_width):
+                                    continue
 
-                                    # Condition 6 and 7: Check clear spacing in layer 1
-                                    if n2 > 0 and not self._check_spacing(n1, n2, d_b1, d_b2, effective_width):
-                                        continue
-
-                                    # Check if total area from layer 1 is enough for required A_s
-                                    if A_s_layer_1 >= A_s_req:
-                                        total_as = A_s_layer_1  # Only consider layer 1
-                                        total_bars = n1 + n2    # Total bars only in layer 1
-                                        valid_combinations.append({
-                                            'n_1': n1,
-                                            'd_b1': d_b1,
-                                            'n_2': n2,
-                                            'd_b2': d_b2 if n2 > 0 else None,  # Display as None if n2 is 0
-                                            'n_3': 0,  # No bars in layer 2
-                                            'd_b3': None,
-                                            'n_4': 0,  # No bars in layer 2
-                                            'd_b4': None,
-                                            'total_as': total_as.to('cm**2'),
-                                            'total_bars': total_bars
-                                        })
+                                A_s_max = max(1.25*A_s_req, n1 * self.rebar_areas[self.min_long_rebar])
+                                # Check if total area from layer 1 is enough for required A_s
+                                # And also less than 25% greater than A_s_req
+                                if A_s_layer_1 >= A_s_req and A_s_layer_1 <= A_s_max:
+                                    total_as = A_s_layer_1  # Only consider layer 1
+                                    total_bars = n1 + n2    # Total bars only in layer 1
+                                    valid_combinations.append({
+                                        'n_1': n1,
+                                        'd_b1': d_b1,
+                                        'n_2': n2,
+                                        'd_b2': d_b2 if n2 > 0 else None,  # Display as None if n2 is 0
+                                        'n_3': 0,  # No bars in layer 2
+                                        'd_b3': None,
+                                        'n_4': 0,  # No bars in layer 2
+                                        'd_b4': None,
+                                        'total_as': total_as.to('cm**2'),
+                                        'total_bars': total_bars,
+                                        'clear_spacing': self._clear_spacing.to('mm'),
+                                    })
 
                                 # Now check combinations where bars are added in layer 2 (n3 and n4)
-                                for d_b2 in d_b2_options:
-                                    for n3 in [0, 2]:  # n3 can be 0 or fixed at 2 if present
-                                        # Set diameter for n3 only if n3 > 0
-                                        d_b3_options = self.rebar_diameters if n3 > 0 else []
+                                for n3 in [0, 2]:  # n3 can be 0 or fixed at 2 if present
+                                    for n4 in range(0, self.max_bars_per_layer + 1):
+                                        # Ensure layer 2 bars are not more than layer 1 bars
+                                        if n3 + n4 > n1 + n2:
+                                            continue  # Skip if layer 2 bars exceed layer 1 bars
+                                        if n3 == 0 and n4 > 0:
+                                            continue  # If n3 is 0, n4 must also be 0
+                                        if n3 + n4 > self.max_bars_per_layer:
+                                            continue  # Skip if the total bars in layer 2 exceed the limit
 
-                                        for d_b3 in d_b3_options:
-                                            for n4 in range(0, self.max_bars_per_layer + 1):
-                                                if n3 == 0 and n4 > 0:
-                                                    continue  # If n3 is 0, n4 must also be 0
-                                                if n3 + n4 > self.max_bars_per_layer:
-                                                    continue  # Skip if the total bars in layer 2 exceed the limit
+                                        # Layer 2 area calculation handling zero values
+                                        A_s_layer_2 = (
+                                            n3 * self.rebar_areas[d_b3] +
+                                            (n4 * self.rebar_areas[d_b4] if n4 > 0 else 0 * cm ** 2)
+                                        )
+                                        # Condition 4: Area of layer 1 must be >= area of layer 2
+                                        if A_s_layer_1 < A_s_layer_2:
+                                            continue
 
-                                                # Set diameter for n4 only if n4 > 0
-                                                d_b4_options = self.rebar_diameters if n4 > 0 else []
+                                        # Condition 6 and 7: Check clear spacing in layer 2
+                                        if n4 > 0 and not self._check_spacing(n3, n4, d_b3, d_b4, effective_width):
+                                            continue
 
-                                                for d_b4 in d_b4_options:
-                                                    # Calculate areas of each group of bars
-                                                    A_s_layer_1 = n1 * self.rebar_areas[d_b1] + (n2 * self.rebar_areas[d_b2] if n2 > 0 else 0*cm**2)
-                                                    A_s_layer_2 = n3 * self.rebar_areas[d_b3] + (n4 * self.rebar_areas[d_b4] if n4 > 0 else 0*cm**2)
-
-                                                    # Condition 4: Area of layer 1 must be >= area of layer 2
-                                                    if A_s_layer_1 < A_s_layer_2:
-                                                        continue
-
-                                                    # Condition 6 and 7: Check clear spacing in both layers
-                                                    if n2 > 0 and not self._check_spacing(n1, n2, d_b1, d_b2, effective_width):
-                                                        continue
-                                                    if n4 > 0 and not self._check_spacing(n3, n4, d_b3, d_b4, effective_width):
-                                                        continue
-
-                                                    # Check if total area is enough for required A_s
-                                                    total_as = A_s_layer_1 + A_s_layer_2
-                                                    if total_as >= A_s_req:
-                                                        total_bars = n1 + n2 + n3 + n4  # Count the total number of bars
-                                                        valid_combinations.append({
-                                                            'n_1': n1,
-                                                            'd_b1': d_b1,
-                                                            'n_2': n2,
-                                                            'd_b2': d_b2 if n2 > 0 else None,
-                                                            'n_3': n3,
-                                                            'd_b3': d_b3 if n3 > 0 else None,
-                                                            'n_4': n4,
-                                                            'd_b4': d_b4 if n4 > 0 else None,
-                                                            'total_as': total_as.to('cm**2'),
-                                                            'total_bars': total_bars
-                                                        })
+                                        # Check if total area is enough for required A_s
+                                        total_as = A_s_layer_1 + A_s_layer_2
+                                        if total_as >= A_s_req and total_as <= A_s_max:
+                                            total_bars = n1 + n2 + n3 + n4  # Count the total number of bars
+                                            valid_combinations.append({
+                                                'n_1': n1,
+                                                'd_b1': d_b1,
+                                                'n_2': n2,
+                                                'd_b2': d_b2 if n2 > 0 else None,
+                                                'n_3': n3,
+                                                'd_b3': d_b3 if n3 > 0 else None,
+                                                'n_4': n4,
+                                                'd_b4': d_b4 if n4 > 0 else None,
+                                                'total_as': total_as.to('cm**2'),
+                                                'total_bars': total_bars,
+                                                'clear_spacing': self._clear_spacing.to('mm'),
+                                            })
 
 
         # If no valid combination is found, raise an error
@@ -164,34 +178,41 @@ class Rebar:
         df = df.drop_duplicates(subset=['n_1', 'd_b1', 'n_2', 'd_b2', 'n_3', 'd_b3', 'n_4', 'd_b4'])
 
         # Sort by 'total_as' first, then by 'total_bars' to prioritize fewer bars
-        df.sort_values(by=['total_as', 'total_bars'], inplace=True)
+        df.sort_values(by=['total_bars', 'total_as'], inplace=True)
         df.reset_index(drop=True, inplace=True)
         self._long_combos_df = df
 
-        return df.head(10)
-
-        # # Convert the list of valid combinations to a pandas DataFrame
-        # df = pd.DataFrame(valid_combinations)
-
-        # # Sort the DataFrame by 'total_as' (total area of steel)
-        # df.sort_values(by='total_as', inplace=True)
-        # df.reset_index(drop=True, inplace=True)
-        # self._long_combos_df = df
+        return df.head(7)
         
         # return df
-    def _check_spacing(self, n1, n2, d_b1, d_b2, effective_width) -> bool:
-        """Checks the clear spacing between rebars in a layer."""
+    def _check_spacing(self, n1:int, n2:int, d_b1: PlainQuantity, d_b2:PlainQuantity,
+                       effective_width: PlainQuantity) -> bool:
+        """
+        Checks the clear spacing between rebars in a layer.
+        """
         # Total bar width including diameters
         total_bar_width = n1 * d_b1 + n2 * d_b2
         
         if n1 + n2 - 1 > 0:
             # Calculate available clear spacing
-            clear_spacing = (effective_width - total_bar_width) / (n1 + n2 - 1)
+            self._clear_spacing = (effective_width - total_bar_width) / (n1 + n2 - 1)
             
+            max_clear_spacing = max(self.min_clear_spacing, self.vibrator_size, max(d_b1, d_b2))
             # Check if spacing is within limits
-            if clear_spacing < self.clear_spacing:
+            if self._clear_spacing < max_clear_spacing:
                 return False
             
+        return True
+    
+    def _check_diameter_differences(self, diameters: list) -> bool:
+        """
+        Checks that all diameter differences between bars in the list
+        do not exceed max_diameter_diff.
+        """
+        for i, d1 in enumerate(diameters):
+            for d2 in diameters[i + 1:]:
+                if abs(d1 - d2) > self.max_diameter_diff:
+                    return False
         return True
     
     def longitudinal_rebar_EN_1992(self, A_s_req: PlainQuantity) -> None:
