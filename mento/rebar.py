@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any, Dict, TYPE_CHECKING
+from typing import Any, Dict, TYPE_CHECKING, Tuple
 import math
 import pandas as pd
 
@@ -233,21 +233,10 @@ class Rebar:
         Returns:
             A dictionary containing the transverse rebar design.
         """
-        f_c=self.beam.concrete.f_c
-        lambda_factor = self.beam.settings.get_setting('lambda')
+
         A_cv = self.beam.width*self.beam.d
 
-        # Check if V_s_req <= 4 * lambda * sqrt(f_c) * A_cv
-        if V_s_req <= 4 * lambda_factor * math.sqrt(f_c / psi) * psi * A_cv:
-            # Maximum spacing across the length of the beam
-            s_max_l = min(self.beam.d / 2, 60*cm)
-            # Maximum spacing across the width of the beam
-            s_max_w = min(self.beam.d, 60*cm) 
-        else:
-            # Maximum spacing across the length of the beam
-            s_max_l = min(self.beam.d / 4, 30*cm)
-            # Maximum spacing across the width of the beam
-            s_max_w = min(self.beam.d / 2, 30*cm)  # noqa: F841
+        s_max_l, s_max_w = self.calculate_max_spacing(V_s_req, A_cv)
 
         # Prepare the list for valid combinations
         valid_combinations = []     
@@ -271,14 +260,17 @@ class Rebar:
                 A_vs = n_legs_actual * A_db  # Area of vertical stirrups
                 A_v: PlainQuantity = A_vs / s_l  # Area of vertical stirrups per unit length
 
-                 # Check if the calculated A_v meets or exceeds the required A_v
+                # Check if the calculated A_v meets or exceeds the required A_v
                 if A_v >= A_v_req:
                     # Store the valid combination if spacing is also valid
                     valid_combinations.append({
                         'n_stir': int(n_stirrups),
                         'd_b': d_b,
                         's_l': s_l.to('cm'),  # spacing along length
+                        's_w': s_w.to('cm'), # spacing along width
                         'A_v': A_v.to('cm**2/m'),
+                        's_max_l': s_max_l.to('cm'),
+                        's_max_w': s_max_w.to('cm')
                     })
                     # Stop checking larger diameters
                     break  
@@ -338,4 +330,35 @@ class Rebar:
             raise ValueError(f"Shear design method not implemented \
                              for concrete type: {type(self.beam.concrete).__name__}")
         
+    def calculate_max_spacing(self, V_s_req: PlainQuantity, A_cv: PlainQuantity) -> Tuple[PlainQuantity, PlainQuantity]:
+        """
+        Calculate the maximum allowable spacing across the length and width of the beam
+        based on design requirements.
+
+        Parameters:
+        -----------
+        V_s_req : float
+            Required shear force for the rebar.
+        A_cv : float
+            Effective shear area of the concrete section.
+
+        Returns:
+        --------
+        tuple
+            (s_max_l, s_max_w): The maximum spacing across the length and width of the beam.
+        """
+
+        f_c=self.beam.concrete.f_c
+        lambda_factor = self.beam.settings.get_setting('lambda')
         
+        # Determine maximum spacing based on V_s_req condition
+        if V_s_req <= 4 * lambda_factor * math.sqrt(f_c / psi) * psi * A_cv:
+            # Maximum spacing for lower shear demand
+            s_max_l = min(self.beam.d / 2, 60 * cm)
+            s_max_w = min(self.beam.d, 60 * cm)
+        else:
+            # Maximum spacing for higher shear demand
+            s_max_l = min(self.beam.d / 4, 30 * cm)
+            s_max_w = min(self.beam.d / 2, 30 * cm)
+        
+        return s_max_l, s_max_w   

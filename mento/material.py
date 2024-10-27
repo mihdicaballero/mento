@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, TYPE_CHECKING
 import math
-from mento.units import kg, m, MPa, ksi, GPa
+from mento.units import kg, m, MPa, ksi, GPa, psi, Pa, lb, ft
 from devtools import debug
 from mento import ureg
 
@@ -17,13 +17,25 @@ class Material:
 @dataclass
 class Concrete(Material):
     f_c: PlainQuantity = field(default=25*MPa)
-    density: PlainQuantity = 2500*kg/m**3
     design_code: str = field(default="ACI 318-19")
+    unit_system: str = field(init=False)
+
+    def __post_init__(self) -> None:
+        # Detect the unit system based on f_c
+        if self.f_c.units == MPa or self.f_c.units == Pa:
+            self.unit_system = "metric"
+            self.density: PlainQuantity = 2500*kg/m**3
+        elif self.f_c.units == psi or self.f_c.units == ksi:
+            self.unit_system = "imperial"
+            self.density = 155*lb/ft**3
+        else:
+            raise ValueError("Unsupported unit system for f_c. Please use MPa or ksi.")
 
     def get_properties(self) -> Dict[str, PlainQuantity]:
+        # Return properties in the appropriate unit system
         properties = {
-            'f_c': self.f_c.to('MPa'),
-            'density': self.density.to('kg / meter ** 3')
+            'f_c': self.f_c,
+            'density': self.density
         }
         return properties
 
@@ -35,18 +47,24 @@ class Concrete_ACI_318_19(Concrete):
     _beta_1: float = field(init=False)
 
     def __post_init__(self) -> None:
+        super().__post_init__()
         # Ensure name is properly set, either hardcode or pass during instantiation
         if not self.name:
             self.name = "Concrete ACI"  # You can set a default name here
         self.design_code = "ACI 318-19"
-        self._E_c = ((self.density / (kg / m**3)) ** 1.5) * 0.043 * math.sqrt(self.f_c / MPa) * MPa
-        self._f_r = 0.625 * math.sqrt(self.f_c / MPa) * MPa
+        # Adjust calculations based on unit system
+        if self.unit_system == "metric":
+            self._E_c = ((self.density / (kg / m**3)) ** 1.5) * 0.043 * math.sqrt(self.f_c / MPa) * MPa
+            self._f_r = 0.625 * math.sqrt(self.f_c / MPa) * MPa
+        else:  # imperial
+            self._E_c = ((self.density / (lb / ft**3)) ** 1.5) * 33 * math.sqrt(self.f_c / psi) * psi
+            self._f_r = 7.5 * math.sqrt(self.f_c / psi) * psi
         self._beta_1 = self.__beta_1()
 
     def get_properties(self) -> Dict[str, PlainQuantity]:
         properties = super().get_properties()       
-        properties['E_c'] = self._E_c.to('MPa')
-        properties['f_r'] = self._f_r.to('MPa')
+        properties['E_c'] = self._E_c
+        properties['f_r'] = self._f_r
         properties['beta_1'] = ureg.Quantity(self._beta_1, '')
         properties['epsilon_c']=ureg.Quantity(self.epsilon_c, '')
         return properties
@@ -75,6 +93,7 @@ class Concrete_ACI_318_19(Concrete):
     @property
     def beta_1(self) -> float:
         return self._beta_1
+
 @dataclass
 class Concrete_EN_1992(Concrete):
     _E_cm: PlainQuantity = field(init=False)  # Secant modulus of elasticity
@@ -245,7 +264,7 @@ class SteelStrand(Steel):
 
 def main() -> None:
     # Test cases
-    concrete = Concrete_ACI_318_19(name="H25",f_c=25*MPa)
+    concrete = Concrete_ACI_318_19(name="H25",f_c=4*ksi)
     debug(concrete.name, concrete.design_code)
     debug(concrete.get_properties())
     steelbar = SteelBar(name="ADN 500",f_y=500*MPa)
@@ -253,6 +272,7 @@ def main() -> None:
     steelstrand = SteelStrand(name='Y1860',f_y=1700*MPa)
     debug(steelstrand.get_properties())
     print(concrete.f_c.to('MPa'), concrete.f_c.to('MPa').magnitude)
+    print(concrete.unit_system)
 
 if __name__ == "__main__":
     main()

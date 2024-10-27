@@ -34,6 +34,9 @@ Desktop.ini
 #mypy cache
 .mypy_cache
 
+#ruff cache
+.ruff_cache
+
 # Coverage reports
 htmlcov/
 .coverage
@@ -62,7 +65,7 @@ dist/
 
 # Documentation files
 *.pdf
-*.docx
+# *.docx
 
 # Editor and OS swap/backup files
 *~

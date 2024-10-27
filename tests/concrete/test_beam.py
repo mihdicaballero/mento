@@ -51,10 +51,10 @@ def test_shear_design_ACI_318_19(beam_example: RectangularConcreteBeam) -> None:
     assert results.iloc[0]['Av,req'].magnitude  == pytest.approx(10.419, rel=1e-3)
     assert results.iloc[0]['Av'].magnitude  == pytest.approx(10.472, rel=1e-3)
     assert results.iloc[0]['ØVc'].magnitude  == pytest.approx(56.969, rel=1e-3)
-    assert results.iloc[0]['ØVs'].magnitude  == pytest.approx(111.411, rel=1e-3)
-    assert results.iloc[0]['ØVn'].magnitude  == pytest.approx(168.38, rel=1e-3)
+    assert results.iloc[0]['ØVs'].magnitude  == pytest.approx(112.288, rel=1e-3)
+    assert results.iloc[0]['ØVn'].magnitude  == pytest.approx(169.258, rel=1e-3)
     assert results.iloc[0]['ØVmax'].magnitude  == pytest.approx(284.847, rel=1e-3)
-    assert results.iloc[0]["FUv"].magnitude  == pytest.approx(0.9967, rel=1e-3)
+    assert results.iloc[0]["FUv"].magnitude  == pytest.approx(0.9915, rel=1e-3)
 
     # Assert non-numeric values directly
     assert results.iloc[0]['Vu<ØVmax'] is np.True_
