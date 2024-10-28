@@ -42,6 +42,7 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         self._k_c_min: PlainQuantity = 0*MPa
         self._sigma_u: PlainQuantity = 0*MPa
         self._A_s: PlainQuantity = 0*cm**2
+        self._A_v_req: PlainQuantity = 0*cm**2
     
     @property
     def d(self) -> PlainQuantity:
@@ -249,7 +250,7 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         # Required shear reinforcing nominal strength
         V_s_req: PlainQuantity = self._V_u-self._phi_V_c
         # Required shear reinforcing
-        A_v_req: PlainQuantity = max(V_s_req/(phi_v*f_yt*self.d), self._A_v_min)
+        self._A_v_req = max(V_s_req/(phi_v*f_yt*self.d), self._A_v_min)
         self._FUv = (self._V_u.to('kN') / self._phi_V_n.to('kN'))
 
         # Rebar spacing checks
@@ -263,7 +264,7 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         results: Dict[str,Any] = {
             'Label': self.label, #Beam label
             'Av,min': self._A_v_min.to('cm ** 2 / m'),  # Minimum shear reinforcement area
-            'Av,req': A_v_req.to('cm ** 2 / m'), # Required shear reinforcing area
+            'Av,req': self._A_v_req.to('cm ** 2 / m'), # Required shear reinforcing area
             'Av': A_v.to('cm ** 2 / m'),  # Provided stirrup reinforcement per unit length
             'Vu': self._V_u.to('kN'), # Max Vu for the design
             'ØVc': self._phi_V_c.to('kN'),  # Concrete contribution to shear capacity
@@ -332,10 +333,10 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         # Required shear reinforcing nominal strength
         V_s_req: PlainQuantity = self._V_u-self._phi_V_c
         # Required shear reinforcing
-        A_v_req: PlainQuantity = max(V_s_req/(phi_v*self.steel_bar.f_yt*self.d), self._A_v_min)
+        self._A_v_req = max(V_s_req/(phi_v*self.steel_bar.f_yt*self.d), self._A_v_min)
 
         section_rebar = Rebar(self)
-        self.shear_design_results = section_rebar.transverse_rebar(A_v_req, V_s_req)
+        self.shear_design_results = section_rebar.transverse_rebar(self._A_v_req, V_s_req)
         # Store the final rebar design results as a property of the Beam instance
         best_design = section_rebar.transverse_rebar_design
         self._s_l = best_design['s_l']
@@ -356,7 +357,7 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         results = {
             'Label': self.label, #Beam label
             'Av,min': self._A_v_min.to('cm ** 2 / m'),  # Minimum shear reinforcement area
-            'Av,req': A_v_req.to('cm ** 2 / m'), # Required shear reinforcing area
+            'Av,req': self._A_v_req.to('cm ** 2 / m'), # Required shear reinforcing area
             'Av': A_v.to('cm ** 2 / m'),  # Provided stirrup reinforcement per unit length
             'Vu': self._V_u.to('kN'), # Max Vu for the design
             'ØVc': self._phi_V_c.to('kN'),  # Concrete contribution to shear capacity
@@ -369,7 +370,7 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         }
         self._initialize_dicts_ACI_318_19()
 
-        return pd.DataFrame([results], index=False)
+        return pd.DataFrame([results], index=[0])
     
     def check_shear_EN_1992(self, Force:Forces, A_s:PlainQuantity = 0*cm**2) -> None:
         return None
@@ -495,7 +496,8 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         self._data_min_max = {
             'Check': ['Stirrup spacing along length', 'Stirrup spacing along width', 'Minimum shear reinforcement'],
             'Unit': ['cm', 'cm', 'cm²/m'],
-            'Value': [self._s_l.to('cm').magnitude, self._s_w.to('cm').magnitude, round(self._stirrup_A_v.to('cm**2/m').magnitude,2)],
+            'Value': [round(self._s_l.to('cm').magnitude,2), round(self._s_w.to('cm').magnitude,2),
+            round(self._stirrup_A_v.to('cm**2/m').magnitude,2)],
             'Min.': ["", "", round(self._A_v_min.to('cm**2/m').magnitude,2)],
             'Max.': [round(self._s_max_l.to('cm').magnitude,2), round(self._s_max_w.to('cm').magnitude,2), ""],
             'Ok?': checks
@@ -507,15 +509,17 @@ class RectangularConcreteBeam(RectangularConcreteSection):
                 "Stirrup spacing",
                 "Effective height",
                 "Minimum shear reinforcing",
+                "Required shear reinforcing",
                 "Shear reinforcing",
                 "Shear steel strength"
             ],
-            "Variable": ["ns", "db", "s", "d", "Av,min","Av", "ØVs"],
+            "Variable": ["ns", "db", "s", "d", "Av,min","Av,req","Av", "ØVs"],
             "Value": [self._stirrup_n, self._stirrup_d_b.to('mm').magnitude, self._stirrup_s_l.to('cm').magnitude,
-                    self.d.to('cm').magnitude, round(self._A_v_min.to('cm**2/m').magnitude,2), 
+                    self.d.to('cm').magnitude, round(self._A_v_min.to('cm**2/m').magnitude,2),
+                    round(self._A_v_req.to('cm**2/m').magnitude,2),
                     round(self._stirrup_A_v.to('cm**2/m').magnitude,2),
                     round(self._phi_V_s.to('kN').magnitude,2)],
-            "Unit": ["", "mm", "cm", "cm", "cm²/m", "cm²/m","kN"]
+            "Unit": ["", "mm", "cm", "cm", "cm²/m","cm²/m", "cm²/m","kN"]
         }
         check_max = '✔️' if self._max_shear_ok else '❌'
         check_FU = '✔️' if self._FUv < 1 else '❌'
@@ -715,6 +719,7 @@ def shear_ACI_imperial() -> None:
     section.check_shear(f, A_s=0.847*inch**2)
     section.design_shear(f, A_s=0.847*inch**2)
     section.shear_results_detailed  
+    section.shear_results_detailed_doc
 
 def rebar() -> None:
     concrete= Concrete_ACI_318_19(name="H30",f_c=30*MPa) 
