@@ -136,33 +136,50 @@ class Concrete_EN_1992(Concrete):
 @dataclass
 class Concrete_EHE_08(Concrete):
     _E_cm: PlainQuantity = field(init=False)  # Secant modulus of elasticity
-    _f_ck: PlainQuantity = field(init=False) # Characteristic concrete strength
-    _f_cm: PlainQuantity = field(init=False) # mean compressive strength
-    _f_ctm: PlainQuantity = field(init=False) # Mean tensile strength
-    _f_ctm_fl: PlainQuantity = field(init=False) # Mean flexure tensile strength
+    _f_ck: PlainQuantity = field(init=False)  # Characteristic concrete strength
+    _f_cm: PlainQuantity = field(init=False)  # Mean compressive strength
+    _f_ctm: PlainQuantity = field(init=False)  # Mean tensile strength
+    _f_ctk: PlainQuantity = field(init=False)  # Characteristic tensile strength
+    _f_cd: PlainQuantity = field(init=False)  # Design strength of concrete
+    _f_1cd: PlainQuantity = field(init=False)  # Design strength for shear
+    _f_ctd: PlainQuantity = field(init=False)  # Tensile strength of concrete
 
     def __init__(self, name: str, f_ck: PlainQuantity):
         super().__init__(name=name, f_c=f_ck)
-        self.design_code = "EHE-08"
-        # Calculate _E_cm and f_ctk based on f_c
-        # Formulas are based on EHE-08 specifications
+        gamma_c: float = 1.5
+        self.design_code: str = "EHE-08"
+        
+        # Assign provided characteristic concrete strength
         self._f_ck = self.f_c
-        self._f_cm = self._f_ck+8*MPa
-        self._E_cm = 8500 *(self._f_cm / MPa)**(1/3) * MPa 
-        self._f_ctm = 0.3 * (self._f_ck / MPa)**(2/3) * MPa 
+        
+        # Calculate mean compressive strength, tensile strength, and secant modulus of elasticity
+        self._f_cm = self._f_ck + 8 * MPa
+        self._E_cm = 8500 * (self._f_cm / MPa) ** (1 / 3) * MPa
+        self._f_ctm = 0.3 * (self._f_ck / MPa) ** (2 / 3) * MPa
+        self._f_ctk = 0.7 * self._f_ctm
+        
+        # Calculate design strengths based on partial safety factor gamma_c
+        self._f_cd = self._f_ck / gamma_c
+        self._f_1cd = (
+            0.6 * self._f_cd if self._f_ck <= 60 * MPa 
+            else max((0.9 - self._f_ck / (200 * MPa)) * self._f_cd, 0.5 * self._f_cd)
+        )
+        self._f_ctd = self._f_ctk / gamma_c
 
     def get_properties(self) -> Dict[str, PlainQuantity]:
         properties = super().get_properties()
-        properties['E_cm'] = self._E_cm.to('MPa')
-        properties['f_ck'] = self._f_ck.to('MPa')
-        properties['f_cm'] = self._f_cm.to('MPa')
-        properties['f_ctm'] = self._f_ctm.to('MPa')
+        properties.update({
+            'E_cm': self._E_cm.to('MPa'),
+            'f_ck': self._f_ck.to('MPa'),
+            'f_cm': self._f_cm.to('MPa'),
+            'f_ctm': self._f_ctm.to('MPa'),
+            'f_ctk': self._f_ctk.to('MPa'),
+            'f_cd': self._f_cd.to('MPa'),
+            'f_1cd': self._f_1cd.to('MPa'),
+            'f_ctd': self._f_ctd.to('MPa')
+        })
         return properties
 
-    def alpha_cc(self) -> float:
-        # Example implementation for alpha_cc as per EHE-08
-        return 0.85  # Example value, modify according to EHE-08 standards
-    
     @property
     def E_cm(self) -> PlainQuantity:
         return self._E_cm
@@ -170,12 +187,30 @@ class Concrete_EHE_08(Concrete):
     @property
     def f_ck(self) -> PlainQuantity:
         return self._f_ck
+
     @property
     def f_cm(self) -> PlainQuantity:
         return self._f_cm
+
     @property
     def f_ctm(self) -> PlainQuantity:
         return self._f_ctm
+
+    @property
+    def f_ctk(self) -> PlainQuantity:
+        return self._f_ctk
+
+    @property
+    def f_cd(self) -> PlainQuantity:
+        return self._f_cd
+
+    @property
+    def f_1cd(self) -> PlainQuantity:
+        return self._f_1cd
+
+    @property
+    def f_ctd(self) -> PlainQuantity:
+        return self._f_ctd
 
 # # Factory function
 # def create_concrete(name: str, f_c: Quantity, design_code: str) -> Concrete:
@@ -204,11 +239,6 @@ class Steel(Material):
     @property
     def density(self) -> PlainQuantity:
         return self._density
-    
-    # Maximum f_yt for Imperial system
-    @property 
-    def f_yt(self) -> PlainQuantity:
-        return min(self.f_y, 60*ksi)
 
 @dataclass
 class SteelBar(Steel):
@@ -264,15 +294,19 @@ class SteelStrand(Steel):
 
 def main() -> None:
     # Test cases
-    concrete = Concrete_ACI_318_19(name="H25",f_c=4*ksi)
+    # concrete = Concrete_ACI_318_19(name="H25",f_c=4*ksi)
+    # debug(concrete.name, concrete.design_code)
+    # debug(concrete.get_properties())
+    # steelbar = SteelBar(name="ADN 500",f_y=500*MPa)
+    # debug(steelbar.get_properties())
+    # steelstrand = SteelStrand(name='Y1860',f_y=1700*MPa)
+    # debug(steelstrand.get_properties())
+    # print(concrete.f_c.to('MPa'), concrete.f_c.to('MPa').magnitude)
+    # print(concrete.unit_system)
+    concrete = Concrete_EHE_08(name="H25",f_ck=25*MPa)
     debug(concrete.name, concrete.design_code)
     debug(concrete.get_properties())
-    steelbar = SteelBar(name="ADN 500",f_y=500*MPa)
-    debug(steelbar.get_properties())
-    steelstrand = SteelStrand(name='Y1860',f_y=1700*MPa)
-    debug(steelstrand.get_properties())
-    print(concrete.f_c.to('MPa'), concrete.f_c.to('MPa').magnitude)
-    print(concrete.unit_system)
+    debug(concrete.f_ctm)
 
 if __name__ == "__main__":
     main()

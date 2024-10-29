@@ -10,7 +10,7 @@ import math
 import warnings
 
 from mento.concrete.rectangular import RectangularConcreteSection
-from mento.material import Concrete, SteelBar, Concrete_ACI_318_19 
+from mento.material import Concrete, SteelBar, Concrete_ACI_318_19, Concrete_EHE_08
 from mento.rebar import Rebar
 from mento import MPa, ksi, psi, kip, mm, inch, kN, m, cm
 from mento.results import Formatter, TablePrinter, DocumentBuilder
@@ -191,10 +191,10 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         self.settings.load_aci_318_19_settings()
         phi_v = self.settings.get_setting('phi_v')
         self.lambda_factor = self.settings.get_setting('lambda')
-        f_yt = self.calculate_f_yt()
+        f_yt = self.calculate_f_yt_aci()
 
         # Minimum shear reinforcement calculation
-        self._A_v_min = self.calculate_A_v_min(f_c)
+        self._A_v_min = self.calculate_A_v_min_ACI(f_c)
          
         # Shear reinforcement calculations
         A_db = (d_bs ** 2) * math.pi / 4  # Area of one stirrup leg
@@ -238,10 +238,10 @@ class RectangularConcreteBeam(RectangularConcreteSection):
             self._A_v_min = 0*inch
             self._max_shear_ok = True
         elif self._phi_V_c/2 < self._V_u < self._phi_V_max:
-            self._A_v_min = self.calculate_A_v_min(f_c)
+            self._A_v_min = self.calculate_A_v_min_ACI(f_c)
             self._max_shear_ok = True
         else:
-            self._A_v_min = self.calculate_A_v_min(f_c)
+            self._A_v_min = self.calculate_A_v_min_ACI(f_c)
             self._max_shear_ok = False 
 
         # Total shear strength
@@ -283,7 +283,7 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         self._N_u = Force.N_x
         self._V_u = Force.V_z
         f_c = self.concrete.f_c
-        f_yt = self.steel_bar.f_yt
+        f_yt = self.calculate_f_yt_aci()
         self.settings.load_aci_318_19_settings()
         phi_v = self.settings.get_setting('phi_v')
         self.lambda_factor = self.settings.get_setting('lambda')
@@ -323,17 +323,17 @@ class RectangularConcreteBeam(RectangularConcreteSection):
             self._A_v_min = 0*inch
             self._max_shear_ok = True
         elif self._phi_V_c/2 < self._V_u < self._phi_V_max:
-            self._A_v_min = self.calculate_A_v_min(f_c)
+            self._A_v_min = self.calculate_A_v_min_ACI(f_c)
             self._max_shear_ok = True
         else:
-            self._A_v_min = self.calculate_A_v_min(f_c)
+            self._A_v_min = self.calculate_A_v_min_ACI(f_c)
             self._max_shear_ok = False 
 
         # Shear reinforcement calculations
         # Required shear reinforcing nominal strength
         V_s_req: PlainQuantity = self._V_u-self._phi_V_c
         # Required shear reinforcing
-        self._A_v_req = max(V_s_req/(phi_v*self.steel_bar.f_yt*self.d), self._A_v_min)
+        self._A_v_req = max(V_s_req/(phi_v*f_yt*self.d), self._A_v_min)
 
         section_rebar = Rebar(self)
         self.shear_design_results = section_rebar.transverse_rebar(self._A_v_req, V_s_req)
@@ -382,7 +382,112 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         return None
 
     def check_shear_EHE_08(self, Force:Forces, A_s:PlainQuantity = 0*cm**2) -> None:
-        return None
+        if isinstance(self.concrete, Concrete_EHE_08):
+            # Load relevant settings for EHE-08
+            f_ctm = self.concrete.f_ctm
+            f_yk = self.steel_bar.f_y
+            f_ck = self.concrete.f_ck
+            f_cd = self.concrete.f_cd
+            f_ctk = self.concrete.f_ctk
+            f_ctd = self.concrete.f_ctd
+            
+            # Set the initial variables
+            self._N_u = Force.N_x
+            self._V_u = Force.V_z
+            self._M_u = Force.M_y
+            d_bs = self._stirrup_d_b
+            s_l = self._stirrup_s_l
+            n_legs = self._stirrup_n*2
+            self._A_s = A_s
+
+            f_ck=self.concrete.f_ck
+            self.settings.load_ehe_08_settings()
+            gamma_c = self.settings.get_setting('gamma_c')
+            gamma_s = self.settings.get_setting('gamma_s')
+            f_yd = f_yk/gamma_s
+            # Minimum shear reinforcement calculation
+            self._A_v_min = f_ctm * self.width / (7.5 * f_yd)
+            
+            # Shear reinforcement calculations
+            A_db = (d_bs ** 2) * math.pi / 4  # Area of one stirrup leg
+            A_vs = n_legs * A_db  # Total area of stirrups
+            A_v = A_vs / s_l  # Stirrup area per unit length
+            self._stirrup_A_v = A_v
+
+            # Maximum shear strength check
+            cot_theta = 1  # Assuming angle of struts theta = 45deg
+            cot_alpha = 1 / math.tan(math.radians(90))
+            A_g = self.A_x # Gross area
+            sigma_cd = self._N_u / A_g  # Axial force coefficient
+            K_value = self.calculate_axial_coefficient_ehe(sigma_cd, f_cd)
+            self._V_u1 = K_value * f_cd * self.width * self.d * (cot_theta + cot_alpha) / (1 + cot_theta**2)
+
+            A_g = self.A_x  # Gross area
+            # Shear calculation for cracked sections
+            xi = min(1 + math.sqrt(200 * mm / self.d), 2)
+            A_p = 0*cm**2 # No prestressing 
+            rho_l = min((A_s + A_p) / (self.width * self.d), 0.02)
+            f_cv = f_ck
+            sigma_cd_max = min(self._N_u/A_g,0.3*f_cd)
+            if self._stirrup_n == 0:
+                W_y = self.width*self.height**2/6
+                # Positive of compression
+                sigma_t_min = -self._M_u/W_y+self._N_u/A_g
+
+                if sigma_t_min < -f_ctd:
+                    # Total shear capacity without rebar (case without cracking)
+                    alpha_l = 1
+                    S_y = self.width * self.height ** 2 / 8
+                    V_u2 = (self.I_y * self.width / S_y) * math.sqrt(f_ck ** 2 + alpha_l*sigma_cd * f_ctd)
+                else:
+                    # Total shear capacity without rebar (case with cracking)
+                    V_u2_min = (0.075 / gamma_c * xi ** (3 / 2) * (f_cv / MPa) ** (1 / 2) + 0.15 * sigma_cd_max / MPa)\
+                            * MPa * self.width * self.d
+                    V_u2 = (0.18 / gamma_c * xi * (100 * rho_l * f_cv / MPa) ** (1 / 3) + 0.15 * sigma_cd_max / MPa)\
+                            * MPa * self.width * self.d
+                    V_u2 = max(V_u2_min, V_u2)
+
+            else:
+                # Total shear strength with rebar (case with rebar and cracking)
+                theta_e = 45  # Cracks angle (assumed 45 degrees)
+                cot_theta_e = 1 / math.tan(math.radians(theta_e))
+
+                if 0.5 <= cot_theta < cot_theta_e:
+                    beta = (2 * cot_theta - 1) / (2 * cot_theta_e - 1)
+                elif cot_theta_e <= cot_theta <= 2:
+                    beta = (cot_theta - 2) / (cot_theta_e - 2)
+                else:
+                    beta = 1  # Default value if condition is not met
+
+                V_cu = (0.15 / gamma_c * xi * (100 * rho_l * f_cv / MPa) ** (1 / 3) + 0.15 * sigma_cd_max / MPa)\
+                    * MPa * beta * self.width * self.d
+                V_u2_min = (0.075 / gamma_c * xi ** (3 / 2) * (f_cv / MPa) ** (1 / 2) + 0.15 * sigma_cd_max / MPa)\
+                    * MPa * self.width * self.d
+                V_cu = max(V_cu, V_u2_min)
+
+                z = 0.9 * self.d
+                V_su = z * math.sin(math.radians(90)) * (cot_alpha + cot_theta) * A_v * f_yd
+                self._V_u2: PlainQuantity = V_cu + V_su
+
+                self._FUv = (self._V_u.to('kN') / self._V_u2.to('kN'))
+
+                # Design results
+                results = {
+                    'Label': self.label, #Beam label
+                    'Av,min': self._A_v_min.to('cm ** 2 / m'),  # Minimum shear reinforcement area
+                    'Av,req': self._A_v_req.to('cm ** 2 / m'), # Required shear reinforcing area
+                    'Av': A_v.to('cm ** 2 / m'),  # Provided stirrup reinforcement per unit length
+                    'Vu': self._V_u.to('kN'), # Max Vu for the design
+                    'Vc': self._phi_V_c.to('kN'),  # Concrete contribution to shear capacity
+                    'Vs': self._phi_V_s.to('kN'),  # Reinforcement contribution to shear capacity
+                    'Vu2': self._V_u2.to('kN'),  # Total shear capacity
+                    'Vu1': self._V_u1.to('kN'),  # Maximum shear capacity
+                    'Vu<ØVmax': self._max_shear_ok,  # Check if applied shear is within max shear capacity
+                    'Vu<ØVn': self._V_u <= self._V_u2,  # Check if applied shear is within total capacity
+                    "DCR" :  self._FUv
+                }
+        else:
+            raise ValueError("Concrete type is not compatible with EHE-08 shear check.")
   
     # Factory method to select the shear design method
     def design_shear(self, Force: Forces, A_s: PlainQuantity = 0*cm**2) -> DataFrame:
@@ -401,18 +506,18 @@ class RectangularConcreteBeam(RectangularConcreteSection):
             return self.check_shear_ACI_318_19(Force, A_s)
         # elif self.concrete.design_code=="EN 1992":
         #     return self.check_shear_EN_1992(V_u, N_u, A_s, d_b, s, n_legs)
-        # elif self.concrete.design_code=="EHE-08":
-        #     return self.check_shear_EHE_08(V_u, N_u, A_s, d_b, s, n_legs)
+        elif self.concrete.design_code=="EHE-08":
+            return self.check_shear_EHE_08(Force, A_s)
         else:
             raise ValueError(f"Shear design method not implemented for concrete type: {type(self.concrete).__name__}")
 
-    def calculate_A_v_min(self, f_c: PlainQuantity) -> PlainQuantity:
+    def calculate_A_v_min_ACI(self, f_c: PlainQuantity) -> PlainQuantity:
         """Calculate the minimum shear reinforcement based on unit system."""
         # 'Minimum reinforcement should be placed if the factored shear Vu 
         # is greater than half the shear capacity of the concrete,
         # reduced by 0.5ϕVc. It is assumed that minimum reinforcement is required.
         # Rebar needed, V_u > φ_v*V_c/2 for Imperial system
-        f_yt = self.calculate_f_yt()
+        f_yt = self.calculate_f_yt_aci()
         
         if self.concrete.unit_system == "metric":
             A_v_min = max(
@@ -437,12 +542,22 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         V_cmax = (5 * self.lambda_factor * math.sqrt(self.concrete.f_c / psi) * psi) * self._A_cv
         return V_cmax 
 
-    def calculate_f_yt(self) -> PlainQuantity:
+    def calculate_f_yt_aci(self) -> PlainQuantity:
         """Determine the yield strength of steel based on unit system."""
         if self.concrete.unit_system == "metric":
-            return min(self.steel_bar.f_yt, 400 * MPa)
+            return min(self.steel_bar.f_y, 400 * MPa)
         else:
-            return min(self.steel_bar.f_yt, 60 * ksi)
+            return min(self.steel_bar.f_y, 60 * ksi)
+        
+    def calculate_axial_coefficient_ehe(self, sigma_cd: PlainQuantity, f_cd: PlainQuantity) -> float:
+        if sigma_cd == 0:
+            return 1
+        elif sigma_cd <= 0.25 * f_cd:
+            return 1 + sigma_cd / f_cd
+        elif sigma_cd < 0.5 * f_cd:
+            return 1.25
+        else:
+            return 2.5 * (1 - sigma_cd / f_cd)
 
     def _initialize_dicts_ACI_318_19(self) -> None:
         """Initialize the dictionaries used in check and design methods."""
@@ -746,7 +861,20 @@ def rebar() -> None:
     # trans_rebar = beam_rebar.beam_transverse_rebar_ACI_318_19(A_v_req=A_v_req, V_s_req=V_s_req)
     # print(trans_rebar)
 
+def shear_EHE_08() -> None:
+    concrete= Concrete_EHE_08(name="C25",f_ck=25*MPa) 
+    steelBar= SteelBar(name="B500S", f_y=500*MPa)
+    custom_settings = {'clear_cover': 2.5*cm, 'stirrup_diameter_ini':8*mm,
+                       'longitudinal_diameter_ini': 16*mm}
+    section = RectangularConcreteBeam(label="V-20x60",
+                                      concrete=concrete,steel_bar=steelBar,width=20*cm, height=60*cm,
+                                       settings=custom_settings)
+    f = Forces(V_z=100*kN)
+    section.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=20*cm) 
+    results=section.check_shear(f)
+
 if __name__ == "__main__":
-    shear_ACI_imperial()
+    # shear_ACI_imperial()
+    shear_EHE_08()
     # shear_ACI_metric()
     # rebar()
