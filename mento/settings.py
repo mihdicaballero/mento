@@ -11,6 +11,9 @@ class Settings:
             'longitudinal_diameter_ini': 16*mm,
             'vibrator_size': 30 * mm, 
             'layers_spacing': 25 * mm,
+            'max_diameter_diff': 5*mm,
+            'max_bars_per_layer': 5,
+            'minimum_longitudinal_diameter': 12*mm,
         }
     
     def __init__(self, settings: Optional[Dict[str, Any]] = None):
@@ -28,6 +31,11 @@ class Settings:
                 'phi_t': 0.90,  # Tension controlled strength reduction factor
                 'flexural_min_reduction': "True"  # True selects 4/3 of calculated steel if it's less than minimum
             }
+        self.ehe_08_settings : Dict[str, Any] = {
+                'gamma_c': 1.5,
+                'gamma_s': 1.15, 
+                'alpha_cc': 0.85, 
+            }
     def load_aci_318_19_settings(self) -> None:
         """
         Load settings specific to ACI 318-19.
@@ -35,6 +43,14 @@ class Settings:
         """
         # Update current settings with ACI 318-19 specific settings
         self.add_settings(self.aci_318_19_settings)
+
+    def load_ehe_08_settings(self) -> None:
+        """
+        Load settings specific to ACI 318-19.
+        This will override only the settings that are different in ACI 318-19.
+        """
+        # Update current settings with ACI 318-19 specific settings
+        self.add_settings(self.ehe_08_settings)
     
     def get_setting(self, key: str) -> Any:
         if key in self.settings:

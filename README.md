@@ -2,6 +2,7 @@
 *An intuitive tool for structural engineers to design concrete elements efficiently.*
 
 [![Tests](https://github.com/mihdicaballero/mento/actions/workflows/tests.yml/badge.svg)][tests]
+[![Docs](https://readthedocs.org/projects/mento-docs/badge/?version=latest)](https://mento-docs.readthedocs.io/en/latest/?badge=latest)
 [![Codecov](https://codecov.io/gh/robbievanleeuwen/concrete-properties/branch/master/graph/badge.svg)][codecov]
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/charliermarsh/ruff/main/assets/badge/v2.json)][ruff]
 
@@ -10,6 +11,8 @@
 [codecov]: https://app.codecov.io/github/mihdicaballero/mento
 
 This repository provides a comprehensive package for the design and structural analysis of concrete sections, beams, columns and footings. The package adheres to multiple design codes, ensuring broad applicability in structural engineering projects.
+
+> We are currently working on the v0.0.1 release. We are close! ( ͡° ͜ʖ ͡°)
 
 #### Features
 - Check and design for flexure and shear of:
@@ -22,7 +25,7 @@ This repository provides a comprehensive package for the design and structural a
 - Interactive usage in Jupyter Notebooks, allowing users to create custom calculations using package modules.
 - Results are presented in markdown format within the notebook and as pandas DataFrames for easy handling of multiple checks.
 - Ability to generate detailed reports in LaTeX format.
-- Comprehensive testing for design code compliance, including ACI 318-19, EN 1992, EHE-08, and CIRSOC 201-2005, with validation of checks and designs included.
+- Comprehensive testing for design code compliance, including ACI 318-19, EN 1992-2024, EHE-08, and CIRSOC 201-2024, with validation of checks and designs included.
 
 
 #### Roadmap

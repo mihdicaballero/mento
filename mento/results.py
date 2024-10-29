@@ -1,5 +1,8 @@
 import pandas as pd
-from typing import Optional
+from typing import Optional, List, Any
+from tabulate import tabulate
+from docx import Document
+from docx.shared import Pt, Cm
 
 class Formatter:
     """
@@ -13,27 +16,27 @@ class Formatter:
         self.mid_value=0.95
         self.max_value=1
     
-    def FU(self, FU: float) -> str:
-        # Determine color based on FU value
-        if self.mid_value > FU:
+    def DCR(self, DCR: float) -> str:
+        # Determine color based on DCR value
+        if self.mid_value > DCR:
             color = self.green
-        elif self.mid_value <= FU <= self.max_value:
+        elif self.mid_value <= DCR <= self.max_value:
             color = self.yellow
         else:
             color = self.red
         
-        return f"$\\color{{{color}}}{{\\text{{FU}}={round(FU,2)}}}$"
+        return f"$\\color{{{color}}}{{\\text{{DCR}}={round(DCR,2)}}}$"
     
-    def FU_value(self, FU: float) -> str:
-        # Determine color based on FU value
-        if self.mid_value > FU:
+    def DCR_value(self, DCR: float) -> str:
+        # Determine color based on DCR value
+        if self.mid_value > DCR:
             color = self.green
-        elif self.mid_value <= FU <= 1:
+        elif self.mid_value <= DCR <= 1:
             color = self.yellow
         else:
             color = self.red
         
-        return f"$\\color{{{color}}}{{{round(FU,2)}}}$"
+        return f"$\\color{{{color}}}{{{round(DCR,2)}}}$"
     
     def is_lower(self, value1: float, value2: float) -> str:
         # Compare two values and return the appropriate formatted output
@@ -50,126 +53,317 @@ class Formatter:
             return r"$\color{" + self.red + r"}{\, \times}$"  # Red cross
     # Formatting functions outside the class
 
-    def FU_value_df(self,FU: Optional[float]) -> str:
-        # If FU is None or not a number, return an empty string
-        if FU is None or not isinstance(FU, (int, float)):
+    def DCR_value_df(self,DCR: Optional[float]) -> str:
+        # If DCR is None or not a number, return an empty string
+        if DCR is None or not isinstance(DCR, (int, float)):
             return ""
 
-        # Determine the color based on FU value
-        if self.mid_value > FU:
+        # Determine the color based on DCR value
+        if self.mid_value > DCR:
             return f"color: {self.green}"
-        elif self.mid_value <= FU <= self.max_value:
+        elif self.mid_value <= DCR <= self.max_value:
             return f"color: {self.yellow}"
         else:
             return f"color: {self.red}"
 
-    def apply_FU_style(self,value: float) -> str:
+    def apply_DCR_style(self,value: float) -> str:
         formatted_value = round(value, 2) if isinstance(value, (int, float)) else value
-        return self.FU_value_df(formatted_value)
+        return self.DCR_value_df(formatted_value)
 
-    def color_FU_df(self, df: pd.DataFrame, fu_columns: list) -> pd.io.formats:
+    def color_DCR_df(self, df: pd.DataFrame, DCR_columns: list) -> pd.io.formats:
         """
-        Apply color styling to specified FU-related columns in the DataFrame.
+        Apply color styling to specified DCR-related columns in the DataFrame.
         
-        :param df: DataFrame with FU values to color.
-        :param fu_columns: List of column names to apply the FU styling to.
-        :return: A styled DataFrame with colored FU values.
+        :param df: DataFrame with DCR values to color.
+        :param DCR_columns: List of column names to apply the DCR styling to.
+        :return: A styled DataFrame with colored DCR values.
         """
-        return df.style.applymap(self.apply_FU_style, subset=fu_columns).format(precision=2)
+        return df.style.map(self.apply_DCR_style, subset=DCR_columns).format(precision=2)
 
-class SectionSummary:
-    def __init__(self, sections: list):
-        """
-        Initializes the SectionSummary with a list of Section objects.
-        
-        :param sections: List of Section objects
-        """
-        self.capacity_columns = ["Viga", "b", "h", "As.inf", "As.sup", "Av", 
-                        "As.inf.real", "As.sup.real", "Av.real", "ØMn", "ØVn"]
-        self.check_columns = ["Viga", "b", "h", "Vu", "Mu", "As.inf.real", "As.inf.nec", 
-                         "As.sup.real", "As.sup.nec", "Av.real", "Av.nec", "MRd.inf","MRd.sup", 
-                         "VRd", "FUb.inf", "FUb.sup", "FUv"]
-        self.sections = sections  # Store the list of sections
+class TablePrinter:
+    """
+    A class for printing tables with customizable formatting options.
+    
+    Attributes:
+    -----------
+    title : Optional[str]
+        Optional title displayed above the printed table.
 
-    def capacity(self) -> pd.DataFrame:
+    Methods:
+    --------
+    print_table_data(data: List[List[Any]], headers: List[str], tablefmt: str = "fancygrid", numalign: str = "right")
+      -> None
+        Prints table data with customizable formatting.
+        
+    print_table_min_max(data: List[List[Any]], headers: List[str], tablefmt: str = "fancygrid", numalign: str = "right")
+      -> None
+        Prints table data with column alignment for minimum and maximum values.
+    """
+    
+    def __init__(self, title: Optional[str] = None) -> None:
         """
-        Creates a DataFrame from the list of Section objects and adds the units row.
+        Initializes the TablePrinter with an optional title.
         
-        :return: A pandas DataFrame with the data from Section objects and units as the first row.
+        Parameters:
+        -----------
+        title : Optional[str], default=None
+            Title to be displayed above the table, if provided.
         """
-        # Convert each section object to a row dictionary
-        data = [section.to_capacity_dict() for section in self.sections]
-        
-        # Add units row
-        units_row = {
-            "Viga": "",
-            "b": "cm",
-            "h": "cm",
-            "As.inf": "",
-            "As.sup": "",
-            "Av": "",
-            "As.inf.real": "cm²",
-            "As.sup.real": "cm²",
-            "Av.real": "cm²/m",
-            "MRd": "kNm",
-            "VRd": "kN",
-        }
-        
-        # Combine units row with section data
-        data.insert(0, units_row)
-        
-        # Create a DataFrame from the data
-        df = pd.DataFrame(data, columns=self.capacity_columns)
-        
-        return df
-    def check(self) -> pd.DataFrame:
-        """
-        Creates a DataFrame for checking shear and bending for each section.
-        Outputs necessary and real reinforcement, utilization factors for bending and shear.
-        
-        :return: A pandas DataFrame summarizing the check of each section.
-        """
+        self.title = title
 
-        # Convert each section object to a row dictionary
-        data = [section.to_check_dict() for section in self.sections]
-
-        # Create a DataFrame from the data
-        df = pd.DataFrame(data, columns=self.check_columns)
-
-        # Add units row
-        units_row = {
-            "Viga": "",
-            "b": "cm",
-            "h": "cm",
-            "Vu": "kN",
-            "Mu": "kNm",
-            "As.inf.real": "cm²",
-            "As.inf.nec": "cm²",
-            "As.sup.real": "cm²",
-            "As.sup.nec": "cm²",
-            "Av.real": "cm²/m",
-            "Av.nec": "cm²/m",
-            "MRd.inf": "kNm",
-            "MRd.sup": "kNm",
-            "VRd": "kN",
-            "FUb.inf": "", 
-            "FUb.sup": "",
-            "FUv": "" 
-        }
+    def print_table_data(self, data: dict[str, list[Any]], headers: str, tablefmt: str = "fancygrid",
+                         numalign: str = "right") -> None:
+        """
+        Prints table data with customizable formatting options.
         
-        # Append the units row to the top of the DataFrame
-        df = pd.concat([pd.DataFrame([units_row]), df], ignore_index=True)
+        Parameters:
+        -----------
+        data : List[List[Any]]
+            The data to be printed in table format, where each inner list represents a row.
         
-        # Add style to FU columns
-        self.fu_columns = ["FUb.inf", "FUb.sup", "FUv"]  # Columns to be styled based on FU value
-        formatter = Formatter()
-        # Apply color formatting to the specified FU columns
-        return formatter.color_FU_df(df, self.fu_columns)
+        headers : List[str]
+            Column headers for the table.
+        
+        tablefmt : str, default="fancygrid"
+            Table formatting style supported by tabulate (e.g., "plain", "grid", "fancygrid").
+        
+        numalign : str, default="right"
+            Number alignment in the table. Common options are "right", "center", or "left".
+        
+        Returns:
+        --------
+        None
+        """
+        # if self.title:
+        #     print(f"======= {self.title} ======= \n")
+        
+        colalign = ("left", "center", "right", "left")
+        table = tabulate(
+            data,
+            headers=headers,
+            tablefmt=tablefmt,
+            numalign=numalign,
+            colalign=colalign
+        )
+        print(table, '\n')
+        
+    def print_table_min_max(self, data: dict[str, list[Any]], headers: str, tablefmt: str = "fancygrid",
+                            numalign: str = "right") -> None:
+        """
+        Prints table data with column alignment for minimum and maximum values.
+        
+        Parameters:
+        -----------
+        data : List[List[Any]]
+            The data to be printed in table format, where each inner list represents a row.
+        
+        headers : List[str]
+            Column headers for the table.
+        
+        tablefmt : str, default="fancygrid"
+            Table formatting style supported by tabulate (e.g., "plain", "grid", "fancygrid").
+        
+        numalign : str, default="right"
+            Number alignment in the table. Common options are "right", "center", or "left".
+        
+        Returns:
+        --------
+        None
+        """
+        if self.title:
+            print(f"======= {self.title} ======= \n")
+        
+        colalign = ("left", "center", "center", "center", "center", "center", "left")
+        table = tabulate(
+            data,
+            headers=headers,
+            tablefmt=tablefmt,
+            numalign=numalign,
+            colalign=colalign
+        )
+        print(table, '\n')
+
+class DocumentBuilder:
+    """
+    A class to build and style a Word document, including adding headings and tables from data frames.
+    
+    Attributes:
+    -----------
+    title : str
+        Title of the document, displayed at the beginning.
+        
+    font_name : str
+        Default font name for the document text.
+        
+    font_size : int
+        Default font size for the document text.
+        
+    doc : Document
+        The Document object representing the Word document being built.
+
+    Methods:
+    --------
+    set_document_style() -> None
+        Configures the document's default style with the specified font name and size.
+        
+    add_heading(text: str, level: int) -> None
+        Adds a heading to the document at the specified level.
+        
+    set_col_widths(table: 'docx.table.Table', column_widths: List[Cm]) -> None
+        Sets the width for each column in a given table.
+        
+    add_table(df: pd.DataFrame, column_widths: List[Cm]) -> None
+        Adds a table to the document, with data from a DataFrame and custom column widths.
+        
+    save(filename: str) -> None
+        Saves the document to a specified filename.
+    """
+    
+    def __init__(self, title: str, font_name: str = 'Lato', font_size: int = 9) -> None:
+        """
+        Initializes the DocumentBuilder with a title, font name, and font size.
+        
+        Parameters:
+        -----------
+        title : str
+            Title to be displayed in the document.
+            
+        font_name : str, default='Lato'
+            Font name to be used for the document text.
+            
+        font_size : int, default=9
+            Font size for the document text.
+        """
+        self.doc = Document()
+        self.title = title
+        self.font_name = font_name
+        self.font_size = font_size
+        self.set_document_style()
+
+    def set_document_style(self) -> None:
+        """
+        Sets the default style of the document, applying the font name and size.
+        
+        Returns:
+        --------
+        None
+        """
+        style = self.doc.styles['Normal']
+        font = style.font
+        font.name = self.font_name
+        font.size = Pt(self.font_size)
+
+    def add_heading(self, text: str, level: int) -> None:
+        """
+        Adds a heading to the document at the specified level.
+        
+        Parameters:
+        -----------
+        text : str
+            The text for the heading.
+            
+        level : int
+            The heading level (e.g., 0 for title, 1 for main headings, etc.).
+        
+        Returns:
+        --------
+        None
+        """
+        heading = self.doc.add_heading(text, level=level)
+        heading.paragraph_format.space_before = Pt(0)  # Remove space after the paragraph
+
+    def add_text(self, text: str) -> None:
+        """ Adds a paragraph to the document """
+        self.doc.add_paragraph(text)
+        
+    def set_col_widths(self, table: Any, column_widths: List[Cm]) -> None:
+        """
+        Sets the width of each column in the table.
+        
+        Parameters:
+        -----------
+        table : docx.table.Table
+            The table object whose column widths need to be set.
+            
+        column_widths : List[Cm]
+            List of widths for each column, in centimeters.
+        
+        Returns:
+        --------
+        None
+        """
+        for row in table.rows:
+            for idx, width in enumerate(column_widths):
+                row.cells[idx].width = width
+
+    def add_table(self, df: pd.DataFrame, column_widths: List[Cm]) -> None:
+        """
+        Adds a table to the document, populated with data from a DataFrame.
+        
+        Parameters:
+        -----------
+        df : pd.DataFrame
+            The DataFrame containing the data for the table.
+            
+        column_widths : List[Cm]
+            List of column widths for the table.
+        
+        Returns:
+        --------
+        None
+        """
+        # Initialize the table with the DataFrame dimensions
+        table = self.doc.add_table(rows=df.shape[0] + 1, cols=df.shape[1])
+        # Apply table style
+        table.style = "Light Shading"
+        # Set column widths
+        self.set_col_widths(table, column_widths)
+        # Populate column headers
+        for j in range(df.shape[1]):
+            table.cell(0, j).text = str(df.columns[j])
+        # Populate table data
+        for i in range(df.shape[0]):
+            for j in range(df.shape[1]):
+                cell = df.iat[i, j]
+                table.cell(i + 1, j).text = str(cell)
+        # Customize style for first column
+        for row in table.rows[1:]:
+            cell = row.cells[0]
+            run = cell.paragraphs[0].runs[0]
+            run.font.bold = False
+        # Add a spacer paragraph after the table
+        spacer = self.doc.add_paragraph()
+        spacer.paragraph_format.space_after = Pt(0)  # Remove space after the paragraph
+
+    def add_table_data(self, df: pd.DataFrame) -> None:
+        column_widths = [Cm(12), Cm(2), Cm(2), Cm(2)]
+        self.add_table(df, column_widths)
+    
+    def add_table_min_max(self, df: pd.DataFrame) -> None:
+        column_widths = [Cm(10), Cm(2), Cm(2), Cm(2), Cm(2), Cm(1)]
+        self.add_table(df, column_widths)
+
+
+    def save(self, filename: str) -> None:
+        """
+        Saves the document to a specified file.
+        
+        Parameters:
+        -----------
+        filename : str
+            The filename (including path) where the document will be saved.
+        
+        Returns:
+        --------
+        None
+        """
+        self.doc.save(filename)
+
 
 
     #  Examples to run in a Jupyter Notebook
     # formatter = Formatter()
-    # display(Markdown(formatter.FU(0.85)))
-    # display(Markdown(formatter.FU_value(0.85)))
+    # display(Markdown(formatter.DCR(0.85)))
+    # display(Markdown(formatter.DCR_value(0.85)))
     # display(Markdown(formatter.is_lower(0.85,1)))
     # display(Markdown(formatter.is_greater(0.85,1)))

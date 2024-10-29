@@ -53,18 +53,21 @@ class Forces:
 
     @property
     def N_x(self) -> PlainQuantity:
+        """Axial force along the x-axis (default is 0 kN)."""
         return self._N_x.to('kN')
 
     @property
     def V_z(self) -> PlainQuantity:
+        """Shear force along the z-axis (default is 0 kN)."""
         return self._V_z.to('kN')
 
     @property
     def M_y(self) -> PlainQuantity:
+        """Bending moment about the y-axis (default is 0 kN*m)."""
         return self._M_y.to('kN*m')
 
     def get_forces(self) -> Dict[str, PlainQuantity]:
-        """Returns the forces as a dictionary."""
+        """Returns the forces as a dictionary with keys 'N_x', 'V_z', and 'M_y'."""
         return  {
             'N_x': self._N_x.to('kN'),
             'V_z': self._V_z.to('kN'),
@@ -79,7 +82,7 @@ class Forces:
 
 
 def main() -> None:
-    f = Forces(M_y=10 * kNm, N_x=2 * kN)
+    f = Forces(M_y=10 * kNm, N_x=2 * kN, V_z=10*kN)
     debug(f) 
     print(f.M_y, f.id)
     debug(f.N_x)

@@ -31,6 +31,12 @@ Desktop.ini
 # PyTest cache
 .pytest_cache/
 
+#mypy cache
+.mypy_cache
+
+#ruff cache
+.ruff_cache
+
 # Coverage reports
 htmlcov/
 .coverage
@@ -59,8 +65,7 @@ dist/
 
 # Documentation files
 *.pdf
-*.docx
-*.xlsx
+# *.docx
 
 # Editor and OS swap/backup files
 *~

@@ -8,3 +8,4 @@ Quantity = ureg.Quantity
 from .forces import Forces # noqa: F401, E402
 from .material import Concrete_ACI_318_19, SteelBar # noqa: F401, E402
 from .concrete.beam import RectangularConcreteBeam # noqa: F401, E402
+from .results import Formatter, TablePrinter, DocumentBuilder # noqa: F401, E402
