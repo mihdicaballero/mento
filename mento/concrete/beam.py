@@ -162,7 +162,8 @@ class RectangularConcreteBeam(RectangularConcreteSection):
             self._d_b3=best_design["d_b3"] # First diameter of second layer
             self._d_b4=best_design["d_b4"] # Second diameter of second layer
             
-            SEPARACION_CAPAS=1*inch # TODO VER COMO SE DEFINE ESTO.
+            self._layers_spacing = self.settings.get_setting('layers_spacing')
+
             if self._d_b3 is None and self._d_b4 is None:
                 # Usa 0 como valor predeterminado para _d_b2 si es None
                 d_b2_value = self._d_b2 if self._d_b2 is not None else 0
@@ -172,9 +173,7 @@ class RectangularConcreteBeam(RectangularConcreteSection):
                 d_b2_value = self._d_b2 if self._d_b2 is not None else 0
                 d_b3_value = self._d_b3 if self._d_b3 is not None else 0
                 d_b4_value = self._d_b4 if self._d_b4 is not None else 0
-                heigth_of_bars = (max(self._d_b1, d_b2_value) + SEPARACION_CAPAS + max(d_b3_value, d_b4_value)) / 2
-            
-
+                heigth_of_bars = (max(self._d_b1, d_b2_value) + self._layers_spacing + max(d_b3_value, d_b4_value)) / 2
 
             self.total_as_adopted=best_design["total_as"]
             self.avaiable_spaciong=best_design["clear_spacing"]
