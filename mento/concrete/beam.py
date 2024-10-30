@@ -12,7 +12,7 @@ import warnings
 from mento.concrete.rectangular import RectangularConcreteSection
 from mento.material import Concrete, SteelBar, Concrete_ACI_318_19, Concrete_EHE_08
 from mento.rebar import Rebar
-from mento import MPa, ksi, psi, kip, mm, inch, kN, m, cm
+from mento import MPa, ksi, psi, kip, mm, inch, kN, m, cm, ft
 from mento.results import Formatter, TablePrinter, DocumentBuilder
 from mento.forces import Forces  
 
@@ -95,7 +95,8 @@ class RectangularConcreteBeam(RectangularConcreteSection):
         else:
             return 0.9
 
-    def design_flexure_ACI_318_19(self, M_u:float)-> Dict[str, Any]:
+    def design_flexure_ACI_318_19(self, Force:Forces)-> Dict[str, Any]:
+        M_u = Force.M_y
         self.settings.load_aci_318_19_settings()
         phi = self.settings.get_setting('phi_t')
         setting_flexural_min_reduction = self.settings.get_setting('flexural_min_reduction')
@@ -155,14 +156,30 @@ class RectangularConcreteBeam(RectangularConcreteSection):
             self.flexure_design_results = section_rebar.longitudinal_rebar_ACI_318_19(self._A_s_calculated)
             #debug(self.flexure_design_results)
             best_design=section_rebar.longitudinal_rebar_design
-            #debug(best_design)
-            self.number_of_layers_adopted=best_design["layer_1"]
-            self.bars_per_layer_adopted=best_design["num_bars_1"]
-            self.db_adopted=best_design["diameter_1"]
-            self.total_as_adopted=best_design["total_as"]
-            self.avaiable_spaciong=best_design["available_spacing_1"]
+            debug(best_design)
+            self._d_b1=best_design["d_b1"] # First diameter of first layer
+            self._d_b2=best_design["d_b2"] # Second diameter of first layer
+            self._d_b3=best_design["d_b3"] # First diameter of second layer
+            self._d_b4=best_design["d_b4"] # Second diameter of second layer
+            
+            SEPARACION_CAPAS=1*inch # TODO VER COMO SE DEFINE ESTO.
+            if self._d_b3 is None and self._d_b4 is None:
+                # Usa 0 como valor predeterminado para _d_b2 si es None
+                d_b2_value = self._d_b2 if self._d_b2 is not None else 0
+                heigth_of_bars = max(self._d_b1, d_b2_value) / 2
+            else:
+                # Usa 0 como valor predeterminado para _d_b2, _d_b3, y _d_b4 si alguno es None
+                d_b2_value = self._d_b2 if self._d_b2 is not None else 0
+                d_b3_value = self._d_b3 if self._d_b3 is not None else 0
+                d_b4_value = self._d_b4 if self._d_b4 is not None else 0
+                heigth_of_bars = (max(self._d_b1, d_b2_value) + SEPARACION_CAPAS + max(d_b3_value, d_b4_value)) / 2
+            
 
-            rec_mec_calculo=self.cc+self.stirrup_d_b+self.db_adopted/2 # OJO QUE SI HAY MAS CAPAS NO ES ASI!!!! #TODO
+
+            self.total_as_adopted=best_design["total_as"]
+            self.avaiable_spaciong=best_design["clear_spacing"]
+
+            rec_mec_calculo=self.c_c + self._stirrup_d_b + heigth_of_bars # OJO QUE SI HAY MAS CAPAS NO ES ASI!!!! #TODO
             Err=abs(rec_mec_calculo-rec_mec)
             rec_mec=rec_mec_calculo
 
@@ -181,9 +198,9 @@ class RectangularConcreteBeam(RectangularConcreteSection):
     def design_flexure_EHE_08(self, M_u: float) -> None:
         pass
 
-    def design_flexure(self, M_u:float) -> Dict[str, Any]:
+    def design_flexure(self,Force:Forces) -> Dict[str, Any]:
         if self.concrete.design_code=="ACI 318-19":
-            return self.design_flexure_ACI_318_19(M_u)
+            return self.design_flexure_ACI_318_19(Force)
         # elif self.concrete.design_code=="EN 1992":
         #     return self.design_flexure_EN_1992(M_u)
         # elif self.concrete.design_code=="EHE-08":
@@ -192,8 +209,8 @@ class RectangularConcreteBeam(RectangularConcreteSection):
             raise ValueError(f"Longitudinal design method not implemented \
                     for concrete type: {type(self.concrete).__name__}")
 
-    # def check_flexure_ACI_318_19(self, M_u:float, A_s, d_b=0.5, n_bars=2) -> None:
-    #     pass
+    def check_flexure_ACI_318_19(self, Force:Forces, A_s:PlainQuantity = 0*cm**2) -> None:
+        pass
 
     def check_shear_ACI_318_19(self, Force:Forces, A_s:PlainQuantity = 0*cm**2) -> DataFrame:
         # Set the initial variables
@@ -805,7 +822,8 @@ def flexure() -> None:
         height=24 * inch,   
     )
     debug(f"Nombre de la sección: {section.label}")
-    resultados=section.design_flexure(258.3*kip*ft)  
+    f = Forces(M_y=258.3*kip*ft)
+    resultados=section.design_flexure(f)  
     debug(resultados)
 
 
@@ -892,7 +910,8 @@ def shear_EHE_08() -> None:
     results=section.check_shear(f)
 
 if __name__ == "__main__":
+    flexure()
     # shear_ACI_imperial()
-    shear_EHE_08()
+    #shear_EHE_08()
     # shear_ACI_metric()
     # rebar()
