@@ -236,7 +236,7 @@ class Rebar:
 
         A_cv = self.beam.width*self.beam.d
 
-        s_max_l, s_max_w = self.calculate_max_spacing(V_s_req, A_cv)
+        s_max_l, s_max_w = self.calculate_max_spacing_ACI(V_s_req, A_cv)
 
         # Prepare the list for valid combinations
         valid_combinations = []     
@@ -330,7 +330,8 @@ class Rebar:
             raise ValueError(f"Shear design method not implemented \
                              for concrete type: {type(self.beam.concrete).__name__}")
         
-    def calculate_max_spacing(self, V_s_req: PlainQuantity, A_cv: PlainQuantity) -> Tuple[PlainQuantity, PlainQuantity]:
+    def calculate_max_spacing_ACI(self, V_s_req: PlainQuantity,
+                                   A_cv: PlainQuantity) -> Tuple[PlainQuantity, PlainQuantity]:
         """
         Calculate the maximum allowable spacing across the length and width of the beam
         based on design requirements.
@@ -361,4 +362,37 @@ class Rebar:
             s_max_l = min(self.beam.d / 4, 30 * cm)
             s_max_w = min(self.beam.d / 2, 30 * cm)
         
-        return s_max_l, s_max_w   
+        return s_max_l, s_max_w  
+    
+    def calculate_max_spacing_EHE(self, V_rd2: PlainQuantity, V_u1: PlainQuantity,
+                                 alpha: float) -> Tuple[PlainQuantity, PlainQuantity]:
+        """
+        Calculate the maximum allowable spacing across the length and width of the beam
+        based on design requirements for EHE-08.
+        
+        Parameters:
+        -----------
+        V_rd2 : PlainQuantity
+            Design shear resistance of the concrete.
+        V_u1 : PlainQuantity
+            Applied shear force.
+        alpha : float
+            Angle in radians used in spacing calculation.
+
+        Returns:
+        --------
+        tuple
+            (s_max_l, s_max_w): The maximum spacing along the length and width of the beam.
+        """
+        # Determine maximum spacing s_max based on V_rd2 and V_u1 conditions
+        if V_rd2 < V_u1 / 5:
+            s_max_l = min(0.75 * self.beam.d * (1 + math.atan(alpha)), 60 * cm)
+        elif V_rd2 < V_u1 * 2 / 3:
+            s_max_l = min(0.6 * self.beam.d * (1 + math.atan(alpha)), 45 * cm)
+        else:
+            s_max_l = min(0.3 * self.beam.d * (1 + math.atan(alpha)), 30 * cm)
+
+        s_max_w = min(self.beam.d, 50 * cm)
+        
+        
+        return s_max_l, s_max_w
