@@ -22,7 +22,7 @@ This repository provides a comprehensive package for the design and structural a
 - Unit-sensitive design, allowing users to input variables with their respective units for accurate calculations.
 - Interactive usage in Jupyter Notebooks, allowing users to create custom calculations using package modules.
 - Results are presented in markdown format within the notebook and as pandas DataFrames for easy handling of multiple checks.
-- Ability to generate detailed reports in LaTeX format.
+- Ability to generate detailed calculation reports in Word.
 - Comprehensive testing for design code compliance, including ACI 318-19, EN 1992-2024, EHE-08, and CIRSOC 201-2024.
 
 
