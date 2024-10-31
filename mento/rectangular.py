@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from mento.concrete.section import ConcreteSection
+from mento.section import Section
 from mento.material import SteelBar, Concrete
 from mento.units import ksi, inch
 from devtools import debug
@@ -7,7 +7,7 @@ from pint.facets.plain import PlainQuantity
 from typing import Optional, Dict, Any
     
 @dataclass
-class RectangularConcreteSection(ConcreteSection):
+class RectangularSection(Section):
     def __init__(self, concrete: Concrete, steel_bar: SteelBar, width: PlainQuantity, height: PlainQuantity, 
                  settings: Optional[Dict[str, Any]] = None) -> None:
         super().__init__(concrete, steel_bar, settings)
@@ -51,7 +51,7 @@ class RectangularConcreteSection(ConcreteSection):
 def main() -> None:
     concrete = Concrete('C25') 
     steel_bar = SteelBar(name="ADN 420", f_y=60*ksi) 
-    section = RectangularConcreteSection(concrete=concrete, steel_bar=steel_bar, width=10*inch, height=16*inch)
+    section = RectangularSection(concrete=concrete, steel_bar=steel_bar, width=10*inch, height=16*inch)
     debug(section.width, section.height)
     debug(section.A_x, section.I_y, section.I_z)
     debug(section.get_settings)
