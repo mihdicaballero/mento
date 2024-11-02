@@ -1,0 +1,250 @@
+from typing import List, Dict, Optional
+from pandas import DataFrame
+import pandas as pd
+
+from mento.material import Concrete, SteelBar, Concrete_ACI_318_19
+from mento.forces import Forces
+from mento.beam import RectangularBeam
+from mento import mm, cm, kN, MPa, m, inch, ft, kNm
+
+class BeamSummary:
+    def __init__(self, concrete: Concrete, steel_bar: SteelBar, beam_list: DataFrame) -> None:
+        self.concrete: Concrete = concrete
+        self.steel_bar: SteelBar = steel_bar
+        self.beam_list: DataFrame = beam_list
+        self.units_row: List[str] = []
+        self.data: DataFrame = None
+        self.beams: List[Dict] = []
+        self._beam_summary: List = []
+        self.check_and_process_input()
+        self.convert_to_beams()
+
+    def check_and_process_input(self) -> None:
+        # Separate the header, units, and data
+        self.units_row = self.beam_list.iloc[0].tolist()  # Second row (units)
+        data = self.beam_list.iloc[1:].copy()  # Data rows (after removing the units row)
+
+        # Convert NaN in units to "dimensionless"
+        self.units_row = ['' if pd.isna(unit) else unit for unit in self.units_row]
+
+        # Validate the units row
+        self.validate_units(self.units_row)
+
+        # Convert NaN to 0 in the data rows
+        data.fillna(0, inplace=True)
+
+        # Apply units to the corresponding columns, skipping the first column
+        for i in range(1, len(self.units_row)):  # Start from the second column (index 1)
+            unit_str = self.units_row[i]
+            if unit_str != '':
+                unit = self.get_unit_variable(unit_str)
+                if isinstance(data.iloc[:, i], pd.Series):
+                    data.iloc[:, i] = data.iloc[:, i].apply(lambda x: x * unit)
+
+        # Store the processed data
+        self.data = data
+        # print("Processed Data: Ok")
+
+    def validate_units(self, units_row: List) -> None:
+        valid_units = {"m", "mm", "cm", "inch", "ft", "kN", "kNm", ''}
+        for unit_str in units_row:
+            if unit_str and unit_str not in valid_units:
+                raise ValueError(f"Invalid unit '{unit_str}' detected. Allowed units: {valid_units}")
+        # print("Processed Units: Ok")
+    
+    def get_unit_variable(self, unit_str: str) -> Dict:
+        # Map strings to actual unit variables (predefined in the script)
+        unit_map = {
+            'mm': mm,
+            'cm': cm,
+            'm': m,
+            'in': inch,
+            'ft': ft,
+            'kN': kN,
+            'kNm': kNm,
+            'MPa': MPa,
+        }
+        if unit_str in unit_map:
+            return unit_map[unit_str]
+        else:
+            raise ValueError(f"Unit '{unit_str}' is not recognized.")
+        
+    def convert_to_beams(self) -> None:
+        self.beams = []
+
+        for index, row in self.data.iterrows():
+            # Extract forces for each row
+            M_y = row['My']  # Example: My in kNm
+            N_x = row['Nx']  # Example: Nx in kN
+            V_z = row['Vz']  # Example: Vz in kN
+
+            # Ensure these are pint.Quantity objects with correct units
+            forces = Forces(M_y=M_y, N_x=N_x, V_z=V_z)
+
+            # Extract geometric properties of the beam (width and height)
+            width = row['b']  # Example: width in cm
+            height = row['h']  # Example: height in cm
+
+            # Create a rectangular concrete beam using the extracted values
+            section = RectangularBeam(label=row['Label'],
+                                              concrete=self.concrete,
+                                              steel_bar=self.steel_bar,
+                                              width=width,
+                                              height=height)        
+
+            # Set transverse rebar (stirrups) for the beam
+            n_stirrups = row['ns']  # Number of stirrups
+            d_b = row['dbs']  # Diameter of rebar (mm)
+            s_l = row['sl']  # Spacing of stirrups (cm)
+
+            section.set_transverse_rebar(n_stirrups=n_stirrups, d_b=d_b, s_l=s_l)
+
+            # Store the section and its corresponding forces
+            self.beams.append({'section': section, 'forces': forces})
+
+    def capacity(self) -> DataFrame:
+        results_list = []
+        for item in self.beams:
+            beam = item['section']
+            shear_results = beam.check_shear()
+            rebar_v = f"{int(beam._stirrup_n)}eØ{beam._stirrup_d_b.to('mm').magnitude}/{beam._stirrup_s_l.to('cm').magnitude}"
+            # Design results
+            results_dict = {
+                'Beam': beam.label,  # Minimum shear reinforcement area
+                'b': beam.width.magnitude, # Required shear reinforcing area
+                'h': beam.height.magnitude,  # Provided stirrup reinforcement per unit length
+                'Av': rebar_v,  # Reinforcement contribution to shear capacity
+                'Av,real': round(shear_results['Av'][0].magnitude,2),  # Reinforcement contribution to shear capacity
+                'ØVn': round(shear_results['ØVn'][0].magnitude,2),  # Check if applied shear is within total capacity
+            }
+            # Add the results to the list
+            results_list.append(results_dict)
+
+         # Convert results list into a DataFrame
+        results_df = pd.DataFrame(results_list)
+        # Create a units row as a DataFrame
+        units_row = pd.DataFrame([{
+            'Beam': '',
+            'b': 'cm',
+            'h': 'cm',
+            'Av': '',
+            'Av,real': 'cm²/m',
+            'ØVn': 'kN',
+        }])
+        # Combine the units row with the results DataFrame
+        final_df = pd.concat([units_row, results_df], ignore_index=True)
+
+        return final_df
+    
+    def check(self) -> DataFrame:
+        results_list = []
+        for item in self.beams:
+            beam = item['section']
+            forces = item['forces']
+            shear_results = beam.check_shear(forces)
+            # Design results
+            results_dict = {
+                'Beam': beam.label,  # Minimum shear reinforcement area
+                'b': beam.width.magnitude, # Required shear reinforcing area
+                'h': beam.height.magnitude,  # Provided stirrup reinforcement per unit length
+                'Vu': round(shear_results['Vu'][0].magnitude, 2),  # Max Vu for the design
+                'Av,req': round(shear_results['Av,req'][0].magnitude, 2), # Reinforcement contribution to shear capacity
+                'Av,real': round(shear_results['Av'][0].magnitude, 2),  # Reinforcement contribution to shear capacity
+                'ØVn': round(shear_results['ØVn'][0].magnitude, 2),  # Check if applied shear is within total capacity
+                'DCRv': round(shear_results['DCR'][0].magnitude,2),  # Check if applied shear is within total capacity
+            }
+            # Add the results to the list
+            results_list.append(results_dict)
+
+         # Convert results list into a DataFrame
+        results_df = pd.DataFrame(results_list)
+        # Create a units row as a DataFrame
+        units_row = pd.DataFrame([{
+            'Beam': '',
+            'b': 'cm',
+            'h': 'cm',
+            'Vu': 'kN',
+            'Av,req': 'cm²/m',
+            'Av,real': 'cm²/m',
+            'ØVn': 'kN',
+            'DCRv': '',
+        }])
+        # Combine the units row with the results DataFrame
+        final_df = pd.concat([units_row, results_df], ignore_index=True)
+        return final_df
+    
+    def shear_results(self, index: Optional[int] = None, capacity: bool = False) -> DataFrame:
+        """
+        Access the beam by its index from the beam_summary list and retrieve 
+        detailed results and beam data. If no index is provided, calculate
+        shear results for all beams and return a complete DataFrame.
+        
+        :param index: Optional index of the beam in beam_summary.beams list.
+        :return: A DataFrame of detailed results for the specific beam, 
+                or a DataFrame of all beams if no index is provided.
+        """
+        # If index is provided, return results for the specific beam
+        if index is not None:
+            if index - 1 >= len(self.beams):
+                raise IndexError(f"Index {index} is out of range for the beam list.")
+            
+            # Access the specific beam item
+            item = self.beams[max(index - 1, 0)]
+            beam = item['section']
+            forces = item['forces']  # Use existing forces or defaults to zero forces
+
+            if forces is None:
+                forces = Forces()  # Defaults to zero forces
+            shear_results = beam.check_shear(forces) if capacity is False else beam.check_shear()
+
+            return shear_results  # Return as a DataFrame with one row
+
+        # If no index is provided, calculate results for all beams
+        all_shear_results = []
+        
+        for item in self.beams:
+            beam = item['section']
+            forces = item['forces'] or Forces()  # Defaults to zero forces if None
+            shear_results = beam.check_shear(forces) if capacity is False else beam.check_shear()
+
+            all_shear_results.append(shear_results)
+        
+        # Combine all shear results into a single DataFrame
+        return pd.concat(all_shear_results, ignore_index=True)
+
+def main() -> None:
+    conc = Concrete_ACI_318_19(name="C25", f_c=25*MPa)
+    steel = SteelBar(name="ADN 420", f_y=420*MPa)
+    # input_df = pd.read_excel('Mento-Input.xlsx', sheet_name='Beams', usecols='B:R', skiprows=4)
+    data = {'Label': ['', 'V101', 'V102', 'V103', 'V104'],
+            'b': ['cm', 20, 20, 20, 20],
+            'h': ['cm', 50, 30, 40, 40],
+            'Nx': ['kN', 00, 15, 20, 25],
+            'Vz': ['kN', 100, 25, 30, 35],
+            'My': ['kNm', 00, 35, 40, 45],
+            'ns': ['', 1.0, 1.0, 1.0, 1.0],
+            'dbs': ['mm', 6, 8, 6, 8],
+            'sl': ['cm', 20, 20, 20, 20],
+            'n1': ['', 2.0, 2.0, 2.0, 2.0],
+            'db1': ['mm', 12, 12, 12, 12],
+            'n2': ['', 1.0, 0.0, 1.0, 0.0],
+            'db2': ['mm', 10, 0, 10, 0],
+            'n3': ['', 2.0, 0.0, 2.0, 0.0],
+            'db3': ['mm', 12, 0, 0, 0],
+            'n4': ['', 1.0, 0.0, 1.0, 0.0],
+            'db4': ['mm', 10, 0, 0, 0]}
+    input_df = pd.DataFrame(data)
+    # print(input_df)
+    beam_summary = BeamSummary(concrete=conc, steel_bar=steel, beam_list=input_df)
+    # print(beam_summary.data)
+    capacity = beam_summary.capacity()
+    print(capacity)
+    check = beam_summary.check()
+    print(check)
+    # beam_summary.check().to_excel('hola.xlsx', index=False)
+    results = beam_summary.shear_results(capacity=False)
+    print(results)
+    # print(beam_summary.beams[0]['section'].shear_results_detailed)
+
+if __name__ == "__main__":
+    main()

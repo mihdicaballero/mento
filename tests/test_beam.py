@@ -116,6 +116,44 @@ def test_shear_check_ACI_318_19(beam_example_imperial: RectangularBeam) -> None:
     assert results.iloc[0]['Vu<ØVmax'] is np.True_
     assert results.iloc[0]['Vu<ØVn'] is np.True_
 
+def test_shear_check_ACI_318_19_no_rebar_1(beam_example_imperial: RectangularBeam) -> None:
+    f = Forces(V_z=8*kip, N_x = 0*kip)  
+    A_s = 0.847*inch**2 
+    results = beam_example_imperial.check_shear_ACI_318_19(f, A_s)  
+
+    # Compare dictionaries with a tolerance for floating-point values, in m 
+    assert results.iloc[0]['Av,min'].magnitude  == pytest.approx(2.117, rel=1e-3)
+    assert results.iloc[0]['Av,req'].magnitude  == pytest.approx(2.117, rel=1e-3)
+    assert results.iloc[0]['Av'].magnitude  == pytest.approx(0, rel=1e-3)
+    assert results.iloc[0]['ØVc'].magnitude  == pytest.approx(38.773, rel=1e-3)
+    assert results.iloc[0]['ØVs'].magnitude  == pytest.approx(0, rel=1e-3)
+    assert results.iloc[0]['ØVn'].magnitude  == pytest.approx(38.773, rel=1e-3)
+    assert results.iloc[0]['ØVmax'].magnitude  == pytest.approx(266.651, rel=1e-3)
+    assert results.iloc[0]["DCR"].magnitude  == pytest.approx(0.9178, rel=1e-3)
+
+    # Assert non-numeric values directly
+    assert results.iloc[0]['Vu<ØVmax'] is np.True_
+    assert results.iloc[0]['Vu<ØVn'] is np.True_
+
+def test_shear_check_ACI_318_19_no_rebar_2(beam_example_imperial: RectangularBeam) -> None:
+    f = Forces(V_z=6*kip, N_x = 0*kip)  
+    A_s = 0.847*inch**2 
+    results = beam_example_imperial.check_shear_ACI_318_19(f, A_s)  
+
+    # Compare dictionaries with a tolerance for floating-point values, in m 
+    assert results.iloc[0]['Av,min'].magnitude  == pytest.approx(0, rel=1e-3)
+    assert results.iloc[0]['Av,req'].magnitude  == pytest.approx(0, rel=1e-3)
+    assert results.iloc[0]['Av'].magnitude  == pytest.approx(0, rel=1e-3)
+    assert results.iloc[0]['ØVc'].magnitude  == pytest.approx(56.969, rel=1e-3)
+    assert results.iloc[0]['ØVs'].magnitude  == pytest.approx(0, rel=1e-3)
+    assert results.iloc[0]['ØVn'].magnitude  == pytest.approx(56.969, rel=1e-3)
+    assert results.iloc[0]['ØVmax'].magnitude  == pytest.approx(284.847, rel=1e-3)
+    assert results.iloc[0]["DCR"].magnitude  == pytest.approx(0.4685, rel=1e-3)
+
+    # Assert non-numeric values directly
+    assert results.iloc[0]['Vu<ØVmax'] is np.True_
+    assert results.iloc[0]['Vu<ØVn'] is np.True_
+
 def test_shear_design_ACI_318_19(beam_example_imperial: RectangularBeam) -> None:
     f = Forces(V_z=37.727*kip, N_x = 0*kip) 
     A_s = 0.847*inch**2  
