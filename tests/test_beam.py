@@ -96,7 +96,7 @@ def test_shear_check_EHE_08_no_rebar_2(beam_example_ehe: RectangularBeam) -> Non
     assert results.iloc[0]['Vrd,1<Vu1'] is np.True_
     assert results.iloc[0]['Vrd,2<Vu2'] is np.True_
 
-def test_shear_check_ACI_318_19(beam_example_imperial: RectangularBeam) -> None:
+def test_shear_check_ACI_318_19_1(beam_example_imperial: RectangularBeam) -> None:
     f = Forces(V_z=37.727*kip, N_x = 0*kip)  
     A_s = 0.847*inch**2 
     beam_example_imperial.set_transverse_rebar(n_stirrups=1, d_b=0.5*inch, s_l=6*inch) 
@@ -111,6 +111,26 @@ def test_shear_check_ACI_318_19(beam_example_imperial: RectangularBeam) -> None:
     assert results.iloc[0]['ØVn'].magnitude  == pytest.approx(233.834, rel=1e-3)
     assert results.iloc[0]['ØVmax'].magnitude  == pytest.approx(284.847, rel=1e-3)
     assert results.iloc[0]["DCR"].magnitude  == pytest.approx(0.7177, rel=1e-3)
+
+    # Assert non-numeric values directly
+    assert results.iloc[0]['Vu<ØVmax'] is np.True_
+    assert results.iloc[0]['Vu<ØVn'] is np.True_
+
+def test_shear_check_ACI_318_19_2(beam_example_imperial: RectangularBeam) -> None:
+    f = Forces(V_z=37.727*kip, N_x = 20*kip)  
+    A_s = 0.847*inch**2 
+    beam_example_imperial.set_transverse_rebar(n_stirrups=1, d_b=0.5*inch, s_l=6*inch) 
+    results = beam_example_imperial.check_shear_ACI_318_19(f, A_s)  
+
+    # Compare dictionaries with a tolerance for floating-point values, in m 
+    assert results.iloc[0]['Av,min'].magnitude  == pytest.approx(2.117, rel=1e-3)
+    assert results.iloc[0]['Av,req'].magnitude  == pytest.approx(9.537, rel=1e-3)
+    assert results.iloc[0]['Av'].magnitude  == pytest.approx(16.624, rel=1e-3)
+    assert results.iloc[0]['ØVc'].magnitude  == pytest.approx(66.352, rel=1e-3)
+    assert results.iloc[0]['ØVs'].magnitude  == pytest.approx(176.865, rel=1e-3)
+    assert results.iloc[0]['ØVn'].magnitude  == pytest.approx(243.217, rel=1e-3)
+    assert results.iloc[0]['ØVmax'].magnitude  == pytest.approx(294.23, rel=1e-3)
+    assert results.iloc[0]["DCR"].magnitude  == pytest.approx(0.69, rel=1e-3)
 
     # Assert non-numeric values directly
     assert results.iloc[0]['Vu<ØVmax'] is np.True_

@@ -40,6 +40,7 @@ class RectangularBeam(RectangularSection):
         self._s_w: PlainQuantity = 0*cm
         self._s_max_l: PlainQuantity = 0*cm
         self._s_max_w: PlainQuantity = 0*cm
+        self._shear_checked = False  # Tracks if shear check or design has been done
     
     @property
     def d(self) -> PlainQuantity:
@@ -315,10 +316,11 @@ class RectangularBeam(RectangularSection):
 
     def _check_minimum_reinforcement_requirement_aci(self) -> None:
         if self._V_u < self.phi_v*self.lambda_factor*math.sqrt(self.concrete.f_c / psi) * psi*self._A_cv:
+            self._A_v_req = 0 * inch**2/ft
             self._A_v_min = 0 * inch**2/ft
             self._max_shear_ok = True
-            if self._V_u != 0*kN:
-                self._stirrup_d_b = 0*inch
+            # if self._V_u != 0*kN:
+            #     self._stirrup_d_b = 0*inch
         elif self.phi_v*self.lambda_factor*math.sqrt(self.concrete.f_c / psi) * psi*self._A_cv\
               < self._V_u < self._phi_V_max:
             self._calculate_A_v_min_ACI(self.concrete.f_c)
@@ -352,6 +354,7 @@ class RectangularBeam(RectangularSection):
             'Av,req': self._A_v_req.to('cm ** 2 / m'),
             'Av': self._A_v.to('cm ** 2 / m'),
             'Vu': self._V_u.to('kN'),
+            'Nu': self._N_u.to('kN'),
             'ØVc': self._phi_V_c.to('kN'),
             'ØVs': self._phi_V_s.to('kN'),
             'ØVn': self._phi_V_n.to('kN'),
@@ -456,7 +459,7 @@ class RectangularBeam(RectangularSection):
         self._s_max_l = best_design['s_max_l']
         self._s_max_w = best_design['s_max_w']
         self.set_transverse_rebar(best_design['n_stir'], best_design['d_b'], best_design['s_l'])
-        self._stirrup_A_v = best_design['A_v']
+        self._A_v = best_design['A_v']
         self._A_v = best_design['A_v']
         V_s = self._A_v * self.f_yt * self.d  # Shear contribution of reinforcement
         self._phi_V_s = self.phi_v * V_s  # Reduced shear contribution of reinforcement
@@ -641,24 +644,28 @@ class RectangularBeam(RectangularSection):
     # Factory method to select the shear design method
     def design_shear(self, Force: Forces, A_s: PlainQuantity = 0*cm**2) -> DataFrame:
         if self.concrete.design_code=="ACI 318-19":
-            return self.design_shear_ACI_318_19(Force, A_s)
+            result =  self.design_shear_ACI_318_19(Force, A_s)
         # elif self.concrete.design_code=="EN 1992":
-        #     return self.design_shear_EN_1992(V_u, N_u, A_s)
+        #     result =  self.design_shear_EN_1992(V_u, N_u, A_s)
         # elif self.concrete.design_code=="EHE-08":
-        #     return self.design_shear_EHE_08(V_u, N_u, A_s)
+        #     result =  self.design_shear_EHE_08(V_u, N_u, A_s)
         else:
             raise ValueError(f"Shear design method not implemented for concrete type: {type(self.concrete).__name__}")
+        self._shear_checked = True  # Mark shear as checked
+        return result
     
     # Factory method to select the shear check method
     def check_shear(self, Force: Forces = Forces(), A_s: PlainQuantity = 0*cm**2) -> DataFrame:
         if self.concrete.design_code=="ACI 318-19":
-            return self.check_shear_ACI_318_19(Force, A_s)
+            result = self.check_shear_ACI_318_19(Force, A_s)
         # elif self.concrete.design_code=="EN 1992":
-        #     return self.check_shear_EN_1992(V_u, N_u, A_s, d_b, s, n_legs)
+        #     result =  self.check_shear_EN_1992(V_u, N_u, A_s, d_b, s, n_legs)
         elif self.concrete.design_code=="EHE-08":
-            return self.check_shear_EHE_08(Force, A_s)
+            result = self.check_shear_EHE_08(Force, A_s)
         else:
             raise ValueError(f"Shear design method not implemented for concrete type: {type(self.concrete).__name__}")
+        self._shear_checked = True  # Mark shear as checked
+        return result
 
     def _initialize_dicts_ACI_318_19(self) -> None:
         """Initialize the dictionaries used in check and design methods."""
@@ -892,7 +899,7 @@ class RectangularBeam(RectangularSection):
 
     @property
     def shear_results(self) -> None:
-        if not self._Fuv:
+        if not self._shear_checked:
             warnings.warn("Shear design has not been performed yet. Call check_shear or "
                           "design_shear first.", UserWarning)
             self._md_shear_results = "Shear results are not available."
@@ -904,7 +911,7 @@ class RectangularBeam(RectangularSection):
         rebar_v = f"{int(self._stirrup_n)}eØ{self._stirrup_d_b.to('mm').magnitude}/"\
                 f"{self._stirrup_s_l.to('cm').magnitude} cm"
         # Print results
-        markdown_content = f"Shear reinforcing {rebar_v}, $A_v$={self._stirrup_A_v.to('cm**2/m')}"\
+        markdown_content = f"Shear reinforcing {rebar_v}, $A_v$={self._A_v.to('cm**2/m')}"\
                          f", $V_u$={self._V_u.to('kN')}, $\\phi V_n$={self._phi_V_n.to('kN')} → {formatted_DCR}"
         self._md_shear_results = markdown_content
 
@@ -928,7 +935,7 @@ class RectangularBeam(RectangularSection):
     
     @property
     def shear_results_detailed(self) -> None:
-        if self._FUv == 0:
+        if not self._shear_checked:
             warnings.warn("Shear check has not been performed yet. Call check_shear or " 
                           "design_shear first.", UserWarning)
             self._md_shear_results = "Shear results are not available."
@@ -950,7 +957,7 @@ class RectangularBeam(RectangularSection):
 
     @property
     def shear_results_detailed_doc(self) -> None:
-        if self._FUv == 0:
+        if not self._shear_checked:
             warnings.warn("Shear design has not been performed yet. Call check_shear or "
                           "design_shear first.", UserWarning)
             self._md_shear_results = "Shear results are not available."

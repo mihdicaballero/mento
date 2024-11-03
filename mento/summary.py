@@ -7,6 +7,8 @@ from mento.forces import Forces
 from mento.beam import RectangularBeam
 from mento import mm, cm, kN, MPa, m, inch, ft, kNm
 
+pd.set_option('future.no_silent_downcasting', True)
+
 class BeamSummary:
     def __init__(self, concrete: Concrete, steel_bar: SteelBar, beam_list: DataFrame) -> None:
         self.concrete: Concrete = concrete
@@ -29,9 +31,14 @@ class BeamSummary:
 
         # Validate the units row
         self.validate_units(self.units_row)
-
+        
         # Convert NaN to 0 in the data rows
-        data.fillna(0, inplace=True)
+        data.iloc[:, 1:] = data.iloc[:, 1:].fillna(0).astype(float)
+        # Convert specific columns to int and others to float
+        columns_to_int = ['ns', 'n1', 'n2', 'n3', 'n4']
+        for col in columns_to_int:
+            if col in data.columns:
+                data[col] = data[col].astype(int)
 
         # Apply units to the corresponding columns, skipping the first column
         for i in range(1, len(self.units_row)):  # Start from the second column (index 1)
@@ -39,6 +46,7 @@ class BeamSummary:
             if unit_str != '':
                 unit = self.get_unit_variable(unit_str)
                 if isinstance(data.iloc[:, i], pd.Series):
+                    # data.iloc[:, i] = data.iloc[:, i].apply(lambda x: x * unit)
                     data.iloc[:, i] = data.iloc[:, i].apply(lambda x: x * unit)
 
         # Store the processed data
@@ -107,7 +115,10 @@ class BeamSummary:
         for item in self.beams:
             beam = item['section']
             shear_results = beam.check_shear()
-            rebar_v = f"{int(beam._stirrup_n)}eØ{beam._stirrup_d_b.to('mm').magnitude}/{beam._stirrup_s_l.to('cm').magnitude}"
+            if beam._stirrup_n ==0:
+                rebar_v = '-'
+            else:
+                rebar_v = f"{int(beam._stirrup_n)}eØ{int(beam._stirrup_d_b.to('mm').magnitude)}/{beam._stirrup_s_l.to('cm').magnitude}"  # noqa: E501
             # Design results
             results_dict = {
                 'Beam': beam.label,  # Minimum shear reinforcement area
@@ -148,6 +159,7 @@ class BeamSummary:
                 'b': beam.width.magnitude, # Required shear reinforcing area
                 'h': beam.height.magnitude,  # Provided stirrup reinforcement per unit length
                 'Vu': round(shear_results['Vu'][0].magnitude, 2),  # Max Vu for the design
+                'Nu': round(shear_results['Nu'][0].magnitude, 2),  # Max Nu for the design
                 'Av,req': round(shear_results['Av,req'][0].magnitude, 2), # Reinforcement contribution to shear capacity
                 'Av,real': round(shear_results['Av'][0].magnitude, 2),  # Reinforcement contribution to shear capacity
                 'ØVn': round(shear_results['ØVn'][0].magnitude, 2),  # Check if applied shear is within total capacity
@@ -164,6 +176,7 @@ class BeamSummary:
             'b': 'cm',
             'h': 'cm',
             'Vu': 'kN',
+            'Nu': 'kN',
             'Av,req': 'cm²/m',
             'Av,real': 'cm²/m',
             'ØVn': 'kN',
@@ -215,25 +228,25 @@ class BeamSummary:
 def main() -> None:
     conc = Concrete_ACI_318_19(name="C25", f_c=25*MPa)
     steel = SteelBar(name="ADN 420", f_y=420*MPa)
-    # input_df = pd.read_excel('Mento-Input.xlsx', sheet_name='Beams', usecols='B:R', skiprows=4)
-    data = {'Label': ['', 'V101', 'V102', 'V103', 'V104'],
-            'b': ['cm', 20, 20, 20, 20],
-            'h': ['cm', 50, 30, 40, 40],
-            'Nx': ['kN', 00, 15, 20, 25],
-            'Vz': ['kN', 100, 25, 30, 35],
-            'My': ['kNm', 00, 35, 40, 45],
-            'ns': ['', 1.0, 1.0, 1.0, 1.0],
-            'dbs': ['mm', 6, 8, 6, 8],
-            'sl': ['cm', 20, 20, 20, 20],
-            'n1': ['', 2.0, 2.0, 2.0, 2.0],
-            'db1': ['mm', 12, 12, 12, 12],
-            'n2': ['', 1.0, 0.0, 1.0, 0.0],
-            'db2': ['mm', 10, 0, 10, 0],
-            'n3': ['', 2.0, 0.0, 2.0, 0.0],
-            'db3': ['mm', 12, 0, 0, 0],
-            'n4': ['', 1.0, 0.0, 1.0, 0.0],
-            'db4': ['mm', 10, 0, 0, 0]}
-    input_df = pd.DataFrame(data)
+    input_df = pd.read_excel(r'.\tests\examples\Mento-Input.xlsx', sheet_name='Beams', usecols='B:R', skiprows=4)
+    # # data = {'Label': ['', 'V101', 'V102', 'V103', 'V104'],
+    #         'b': ['cm', 20, 20, 20, 20],
+    #         'h': ['cm', 50, 50, 50, 50],
+    #         'Nx': ['kN', 0, 0, 0, 50],
+    #         'Vz': ['kN', 20, 50, 100, 100],
+    #         'My': ['kNm', 0, 35, 40, 45],
+    #         'ns': ['', 0, 1.0, 1.0, 1.0],
+    #         'dbs': ['mm', 0, 6, 6, 6],
+    #         'sl': ['cm', 0, 20, 20, 20],
+    #         'n1': ['', 2.0, 2.0, 2.0, 2.0],
+    #         'db1': ['mm', 12, 12, 12, 12],
+    #         'n2': ['', 1.0, 0.0, 1.0, 0.0],
+    #         'db2': ['mm', 10, 0, 10, 0],
+    #         'n3': ['', 2.0, 0.0, 2.0, 0.0],
+    #         'db3': ['mm', 12, 0, 0, 0],
+    #         'n4': ['', 1.0, 0.0, 1.0, 0.0],
+    #         'db4': ['mm', 10, 0, 0, 0]}
+    # input_df = pd.DataFrame(data)
     # print(input_df)
     beam_summary = BeamSummary(concrete=conc, steel_bar=steel, beam_list=input_df)
     # print(beam_summary.data)
