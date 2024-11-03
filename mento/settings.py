@@ -1,6 +1,5 @@
 from mento.units import mm
 from typing import Optional, Dict, Any
-from devtools import debug
 
 class Settings:
     default_settings: Dict[str, Any] = {
@@ -72,15 +71,3 @@ class Settings:
     def update(self, new_settings: Dict[str, Any]) -> None:
         """Updates the settings dictionary with new values."""
         self.add_settings(new_settings)
-
-def main() -> None:
-    settings_test = Settings()
-    debug(settings_test.default_settings, settings_test.aci_318_19_settings)
-    custom_settings = {'clear_cover': 50*mm, 'longitudinal_diameter_ini': 25*mm}
-    settings_test.update(custom_settings)
-    debug(settings_test.default_settings)
-    debug(settings_test.settings)
-
-
-if __name__ == "__main__":
-    main()
