@@ -2,3 +2,5 @@ pint==0.24.3
 pandas==2.2.3
 IPython
 ipykernel
+tabulate
+python-docx
