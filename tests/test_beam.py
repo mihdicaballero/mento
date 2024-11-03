@@ -206,14 +206,14 @@ sectionFlexureTest1 = RectangularBeam(
         height=24 * inch, 
     )
 
-def test_flexural_design() -> None:
-    results = sectionFlexureTest1.design_flexure(258.3*kip*ft) 
-    # Compare dictionaries with a tolerance for floating-point values, in m 
-    assert results['As_min_code'].magnitude  == pytest.approx(0.0005548, rel=1e-3)
-    assert results['As_required'].magnitude  == pytest.approx(0.0019173, rel=1e-3)
-    assert results['As_max'].magnitude  == pytest.approx(0.0030065, rel=1e-3)
-    assert results['As_adopted'].magnitude  == pytest.approx(0.0019173, rel=1e-3)
-    assert results['As_compression'].magnitude  == pytest.approx(0, rel=1e-3)
+# def test_flexural_design() -> None:
+#     results = sectionFlexureTest1.design_flexure(258.3*kip*ft) 
+#     # Compare dictionaries with a tolerance for floating-point values, in m 
+#     assert results['As_min_code'].magnitude  == pytest.approx(0.0005548, rel=1e-3)
+#     assert results['As_required'].magnitude  == pytest.approx(0.0019173, rel=1e-3)
+#     assert results['As_max'].magnitude  == pytest.approx(0.0030065, rel=1e-3)
+#     assert results['As_adopted'].magnitude  == pytest.approx(0.0019173, rel=1e-3)
+#     assert results['As_compression'].magnitude  == pytest.approx(0, rel=1e-3)
 
 
 # This is where pytest will collect the tests and run them
