@@ -4,6 +4,7 @@ from tabulate import tabulate
 from docx import Document
 from docx.shared import Pt, Cm
 
+
 class Formatter:
     """
     Class to stlye the results in a Markdown display and a DataFrame output.

@@ -74,7 +74,8 @@ class Forces:
             'M_y': self._M_y.to('kN*m')
         }
 
-    def set_forces(self, N_x: Quantity = 0*kN, V_z: Quantity = 0*kN, M_y: Quantity = 0*kNm) -> None:
+    def set_forces(self, N_x: Quantity = 0*kN, V_z: Quantity = 0*kN,
+                    M_y: Quantity = 0*kNm) -> None:
         """Sets the forces in the object."""
         self._N_x = N_x
         self._V_z = V_z
