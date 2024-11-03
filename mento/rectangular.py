@@ -1,8 +1,6 @@
 from dataclasses import dataclass
 from mento.section import Section
 from mento.material import SteelBar, Concrete
-from mento.units import ksi, inch
-from devtools import debug
 from pint.facets.plain import PlainQuantity
 from typing import Optional, Dict, Any
     
@@ -47,14 +45,3 @@ class RectangularSection(Section):
     def I_z(self) -> PlainQuantity:
         "Moment of inertia about the Z axis."
         return self._I_z.to('cm**4')
-    
-def main() -> None:
-    concrete = Concrete('C25') 
-    steel_bar = SteelBar(name="ADN 420", f_y=60*ksi) 
-    section = RectangularSection(concrete=concrete, steel_bar=steel_bar, width=10*inch, height=16*inch)
-    debug(section.width, section.height)
-    debug(section.A_x, section.I_y, section.I_z)
-    debug(section.get_settings)
-
-if __name__ == "__main__":
-    main()

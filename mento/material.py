@@ -292,23 +292,4 @@ class SteelStrand(Steel):
     def E_s(self) -> PlainQuantity:
         return self._E_s
 
-def main() -> None:
-    # Test cases
-    # concrete = Concrete_ACI_318_19(name="H25",f_c=4*ksi)
-    # debug(concrete.name, concrete.design_code)
-    # debug(concrete.get_properties())
-    # steelbar = SteelBar(name="ADN 500",f_y=500*MPa)
-    # debug(steelbar.get_properties())
-    # steelstrand = SteelStrand(name='Y1860',f_y=1700*MPa)
-    # debug(steelstrand.get_properties())
-    # print(concrete.f_c.to('MPa'), concrete.f_c.to('MPa').magnitude)
-    # print(concrete.unit_system)
-    concrete = Concrete_EHE_08(name="H25",f_ck=25*MPa)
-    debug(concrete.name, concrete.design_code)
-    debug(concrete.get_properties())
-    debug(concrete.f_ctm)
-
-if __name__ == "__main__":
-    main()
-
 
