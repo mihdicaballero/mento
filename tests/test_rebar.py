@@ -40,15 +40,21 @@ def beam_example_metric() -> RectangularBeam:
 def test_beam_longitudinal_rebar_ACI_318_19(beam_example_metric: RectangularBeam) -> None:
     A_s_req = 5 * cm**2
     beam_rebar = Rebar(beam_example_metric)
-    long_rebar_df = beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=A_s_req)
-    best_combination = long_rebar_df.iloc[0]
+    beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=A_s_req)
+    best_design = beam_rebar.longitudinal_rebar_design
 
-    assert best_combination is not None
-    assert best_combination['layer_1'] == 1
-    assert best_combination['num_bars_1'] == 3
-    assert best_combination['diameter_1'] ==  16*mm 
-    assert best_combination['total_as'].magnitude == pytest.approx(6.033,rel=1e-3)
-    assert best_combination['available_spacing_1'].magnitude == pytest.approx(38,rel=1e-3)
+    assert best_design is not None
+    assert best_design['n_1'] == 2
+    assert best_design['d_b1'] == 16*mm
+    assert best_design['n_2'] == 1
+    assert best_design['d_b2'] == 12*mm
+    assert best_design['n_3'] == 0
+    assert best_design['d_b3'] is None
+    assert best_design['n_4'] == 0
+    assert best_design['d_b3'] is None
+    assert best_design['total_as'].magnitude == pytest.approx(5.1522,rel=1e-3)
+    assert best_design['total_bars'] == 3
+    assert best_design['clear_spacing'].magnitude == pytest.approx(40,rel=1e-3)
 
 def test_beam_longitudinal_rebar_ACI_318_19_fail(beam_example_imperial: RectangularBeam) -> None:
     as_nec = 150 * cm**2
@@ -65,7 +71,7 @@ def test_beam_transverse_rebar_ACI_318_19(beam_example_imperial: RectangularBeam
     assert beam_example_imperial._stirrup_n == 1
     assert beam_example_imperial._stirrup_d_b == 10*mm 
     assert beam_example_imperial._stirrup_s_l ==  15*cm 
-    assert beam_example_imperial._stirrup_A_v.magnitude == pytest.approx(10.47,rel=1e-3)
+    assert beam_example_imperial._A_v.magnitude == pytest.approx(10.47,rel=1e-3)
 
 # This is where pytest will collect the tests and run them
 if __name__ == "__main__":
