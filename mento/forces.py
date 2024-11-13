@@ -26,6 +26,8 @@ class Forces:
         Returns the forces as a dictionary with keys 'N_x', 'V_z', and 'M_y'.
     set_forces() -> None
         Sets the forces of the object with the provided values.
+    compare_to(other: 'Forces', by: str = 'V_z') -> bool
+        Compares this force with another force based on a given attribute.
     """
     _id: int = field(init=False, repr=False)  # Instance ID, assigned internally
     _last_id: int = field(default=0, init=False, repr=False)  # Class variable to keep track of last assigned ID
@@ -81,6 +83,28 @@ class Forces:
         self._V_z = V_z
         self._M_y = M_y
 
+    def compare_to(self, other: 'Forces', by: str = 'V_z') -> bool:
+        """Compares this force with another force based on a selected attribute.
+        
+        Parameters
+        ----------
+        other : Forces
+            Another Forces instance to compare with.
+        by : str
+            The attribute to compare by ('N_x', 'V_z', or 'M_y').
+
+        Returns
+        -------
+        bool
+            True if this force is greater than the other force by the selected attribute.
+        """
+        if by not in ['N_x', 'V_z', 'M_y']:
+            raise ValueError("Comparison attribute must be one of 'N_x', 'V_z', or 'M_y'")
+        return getattr(self, by).magnitude > getattr(other, by).magnitude
+    def __str__(self) -> str:
+        return (f"Force ID: {self.id}, Label: {self.label}, "
+                f"N_x: {self.N_x}, V_z: {self.V_z}, M_y: {self.M_y}")
+
 
 def main() -> None:
     f = Forces(M_y=10 * kNm, N_x=2 * kN, V_z=10*kN)
@@ -92,6 +116,7 @@ def main() -> None:
     f.label = "Crane load"
     debug(f)
     debug(f.get_forces())
+    print(f)
 
 if __name__ == "__main__":
     main()
