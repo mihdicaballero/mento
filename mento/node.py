@@ -19,6 +19,6 @@ class Node:
             raise TypeError("forces must be an instance of class Forces,")
         self.forces_list.append(forces)
 
-    def get_forces(self) -> List[Forces]:
+    def get_forces_list(self) -> List[Forces]:
         """Returns the list of forces applied to this node."""
         return self.forces_list
