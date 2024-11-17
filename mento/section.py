@@ -1,19 +1,19 @@
 from mento.settings import Settings
 from dataclasses import dataclass, field
 from typing import Optional, TYPE_CHECKING, Dict, Any
-from devtools import debug
 
-from mento.units import MPa
 from mento.material import Concrete, SteelBar
 
 if TYPE_CHECKING:
     from pint.facets.plain import PlainQuantity
+    from mento.node import Node
 
 @dataclass
 class Section:
     _id: int
     settings: Settings = field(default_factory=Settings)
     _last_id: int = field(default=0, init=False, repr=False)  # Class variable to keep track of last assigned ID
+    node: Optional["Node"] = None  # Use forward declaration with Optional["Node"]
 
     def __init__(self, concrete: Concrete, steel_bar: SteelBar, settings: Optional[Dict[str, Any]] = None) -> None:
         # Initialize the private ID automatically
