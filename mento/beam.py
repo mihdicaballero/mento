@@ -134,7 +134,18 @@ class RectangularBeam(RectangularSection):
             return 0.9
 
     def design_flexure_ACI_318_19(self, Force:Forces)-> Dict[str, Any]:
-        M_u = Force.M_y
+        # Si el argumento Forces no es una lista, lo convierte en una lista de un solo elemento
+        if not isinstance(Force, list):
+            Force = [Force]
+
+        M_u_min=0*kNm # Negativo es el que hace que armemos arriba
+        M_u_max=0*kNm # Positlivo es el que hace que armemos abajo
+        for item in Force:
+            if item._M_y > M_u_max:
+                M_u_max=item._M_y
+            if item._M_y < M_u_min:
+                M_u_min=item._M_y
+
         self.settings.load_aci_318_19_settings()
         phi = self.settings.get_setting('phi_t')
         setting_flexural_min_reduction = self.settings.get_setting('flexural_min_reduction')
@@ -144,8 +155,11 @@ class RectangularBeam(RectangularSection):
         rebar_properties=self.steel_bar.get_properties()
         f_y=rebar_properties['f_y']
 
-        rec_mec=0.1*self.height # Asumption, this is the main difference between design and check.
-        #EMPEZAMOS A ITERAR HASTA QUE SEPAMOS EL VERDADERO REC MEC
+        rec_mec=self.c_c + self._stirrup_d_b +1*inch # Asumption, this is the main difference between design and check.
+        d_prima=self.c_c + self._stirrup_d_b +1*inch # Asumption, this is the main difference between design and check.
+
+
+        #EMPEZAMOS A ITERAR HASTA QUE SEPAMOS EL VERDADERO REC MEC 
         tol=0.01*cm
         Err=2*tol
         Contador=0
@@ -162,39 +176,37 @@ class RectangularBeam(RectangularSection):
             rho_max=self.__maximum_flexural_reinforcement_ratio()
             A_s_max=rho_max*self.d*self._width
 
-            # Determination of required reinforcement
-            R_n=M_u/(phi*b*d**2)
-            A_s_calc=0.85*f_c*b*d/f_y*(1-np.sqrt(1-2*R_n/(0.85*f_c)))
+            # Determination of required reinforcement at bottom
+            R_n_bot=M_u_max/(phi*b*d**2)
+            A_s_calc_bot=0.85*f_c*b*d/f_y*(1-np.sqrt(1-2*R_n_bot/(0.85*f_c)))
 
-            if A_s_calc>A_s_min:
-                self._A_s_calculated=A_s_calc
-            elif  4*A_s_calc/3 > A_s_min:
-                self._A_s_calculated=A_s_min
+            if A_s_calc_bot>A_s_min:
+                self._A_s_calculated_bot=A_s_calc_bot
+            elif  4*A_s_calc_bot/3 > A_s_min:
+                self._A_s_calculated_bot=A_s_min
             else: 
                 if setting_flexural_min_reduction=='True':
-                    self._A_s_calculated=4*A_s_calc/3
+                    self._A_s_calculated_bot=4*A_s_calc_bot/3
                 else:
-                    self._A_s_calculated=A_s_min
-            if self._A_s_calculated <= A_s_max: 
-                self._A_s_comp=0*cm**2
+                    self._A_s_calculated_bot=A_s_min
+            if self._A_s_calculated_bot <= A_s_max: 
+                self._A_s_comp_top=0*cm**2
             else:
                 rho=0.85*beta_1*f_c/self.steel_bar.f_y*(0.003/(self.steel_bar.epsilon_y+0.006))
                 M_n_t=rho*self.steel_bar.f_y*(self.d-0.59*rho*self.steel_bar.f_y*self.d/f_c)*self.width*self.d
-                M_n_prima=M_u/phi-M_n_t
+                M_n_prima=M_u_max/phi-M_n_t
                 c_t=0.003*self.d/(self.steel_bar.epsilon_y+0.006)
-                # HAY QUE VER DONDE ESTA DEFINIDO EL d_prima por ahora asumo
-                d_prima=5*cm
+
                 f_s_prima=min(0.003*self.steel_bar.E_s*(1-d_prima/c_t),self.steel_bar.f_y)
-                A_s_prima=M_n_prima/(f_s_prima*(self.d-d_prima))
-                A_s=rho*self.width*self.d+A_s_prima
-                self._A_s_calculated=A_s
-                self._A_s_comp=A_s_prima
-            #Rebar
+                A_s_prima_top=M_n_prima/(f_s_prima*(self.d-d_prima))
+                A_s=rho*self.width*self.d+A_s_prima_top
+                self._A_s_calculated_bot=A_s
+                self._A_s_comp_top=A_s_prima_top
+            #Rebar bottom
             section_rebar = Rebar(self)
-            self.flexure_design_results = section_rebar.longitudinal_rebar_ACI_318_19(self._A_s_calculated)
+            self.flexure_design_results = section_rebar.longitudinal_rebar_ACI_318_19(self._A_s_calculated_bot)
             #debug(self.flexure_design_results)
             best_design=section_rebar.longitudinal_rebar_design
-            debug(best_design)
             self._d_b1=best_design["d_b1"] # First diameter of first layer
             self._d_b2=best_design["d_b2"] # Second diameter of first layer
             self._d_b3=best_design["d_b3"] # First diameter of second layer
@@ -213,19 +225,26 @@ class RectangularBeam(RectangularSection):
                 d_b4_value = self._d_b4 if self._d_b4 is not None else 0
                 heigth_of_bars = (max(self._d_b1, d_b2_value) + self._layers_spacing + max(d_b3_value, d_b4_value)) / 2
 
+
+
+            #TODO AHORA HAY QUE REHACER TODO LO MISMO PARA EL M_u_min si es negativo pero armando al reves y quedarse con los mayores en top y bottom.
+            # TAMBIEN FALTA DISENAR CON REBAR EL TOP
+
+
+
             self.total_as_adopted=best_design["total_as"]
             self.avaiable_spaciong=best_design["clear_spacing"]
 
-            rec_mec_calculo=self.c_c + self._stirrup_d_b + heigth_of_bars # OJO QUE SI HAY MAS CAPAS NO ES ASI!!!! #TODO
+            rec_mec_calculo=self.c_c + self._stirrup_d_b + heigth_of_bars
             Err=abs(rec_mec_calculo-rec_mec)
             rec_mec=rec_mec_calculo
 
         results={
             'As_min_code':A_s_min.to("inch**2"),
-            'As_required':self._A_s_calculated.to("inch**2"),
+            'As_required':self._A_s_calculated_bot.to("inch**2"),
             'As_max':A_s_max.to("inch**2"),
-            'As_adopted':self.total_as_adopted.to("inch**2"),
-            'As_compression':self._A_s_comp.to("inch**2")
+            'As_adopted':self.total_as_adopted_bot.to("inch**2"),
+            'As_compression':self._A_s_comp_top.to("inch**2")
         }
         return pd.DataFrame([results], index=[0])
 
@@ -632,16 +651,8 @@ class RectangularBeam(RectangularSection):
         else:
             raise ValueError("Concrete type is not compatible with EHE-08 shear check.")
   
-    def design_shear_EHE_08(self, Force:Forces, A_s:PlainQuantity = 0*cm**2) -> None:
-        return None
-# ======== EN 1992 methods =========
-    def check_shear_EN_1992(self, Force:Forces, A_s:PlainQuantity = 0*cm**2) -> None:
-        return None
- 
-    def design_shear_EN_1992(self, Force:Forces, A_s:PlainQuantity = 0*cm**2) -> None:
-        return None
-
-    # Factory method to select the shear design method
+    # Factory metho
+    # d to select the shear design method
     def design_shear(self, Force: Forces, A_s: PlainQuantity = 0*cm**2) -> DataFrame:
         if self.concrete.design_code=="ACI 318-19":
             result =  self.design_shear_ACI_318_19(Force, A_s)
