@@ -3,7 +3,6 @@ from dataclasses import dataclass, field
 from typing import Dict, TYPE_CHECKING
 import math
 from mento.units import kg, m, MPa, ksi, GPa, psi, Pa, lb, ft
-from devtools import debug
 from mento import ureg
 
 # Conditional import for type checking only

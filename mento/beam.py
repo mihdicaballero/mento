@@ -1,7 +1,7 @@
 from devtools import debug
 from dataclasses import dataclass
 from IPython.display import Markdown, display
-from typing import Optional, Dict, Any, cast
+from typing import Optional, Dict, Any, cast, Union
 from pint.facets.plain import PlainQuantity
 import numpy as np
 import pandas as pd
@@ -285,8 +285,8 @@ class RectangularBeam(RectangularSection):
             if self._A_v < self._A_v_min:
                 if A_s == 0*cm**2:
                     warnings.warn("Longitudinal rebar As cannot be zero if A_v is less than A_v_min.", UserWarning)
-                self._k_c_min = 0.66 * self._lambda_s * self.lambda_factor * self._rho_w ** (1/3) * math.sqrt(f_c / MPa)\
-                      * MPa + self._sigma_Nu
+                self._k_c_min = 0.66 * self._lambda_s * self.lambda_factor * self._rho_w ** (1/3)\
+                    * math.sqrt(f_c / MPa)* MPa + self._sigma_Nu
             else:
                 self._k_c_min = max(0.17 * self.lambda_factor * math.sqrt(f_c / MPa) * MPa + self._sigma_Nu,
                                 0.66 * self.lambda_factor * self._rho_w ** (1/3) * math.sqrt(f_c / MPa) * MPa\
@@ -442,9 +442,9 @@ class RectangularBeam(RectangularSection):
         self._initialize_dicts_ACI_318_19()
         return pd.DataFrame([results], index=[0])
 
-    def design_shear_ACI_318_19(self, Force: Forces, A_s: PlainQuantity = 0 * cm ** 2) -> pd.DataFrame:
+    def design_shear_ACI_318_19(self, force: Forces, A_s: PlainQuantity = 0 * cm ** 2) -> pd.DataFrame:
         # Set the initial variables
-        self._set_initial_conditions_aci(Force, A_s)
+        self._set_initial_conditions_aci(force, A_s)
 
         # Minimum shear reinforcement calculation
         self._calculate_A_v_min_ACI(self.concrete.f_c)
@@ -455,7 +455,7 @@ class RectangularBeam(RectangularSection):
         self._calculate_effective_shear_area_aci()
 
         # Concrete shear strength calculation
-        self._calculate_concrete_shear_strength_aci()
+        self._calculate_concrete_shear_strength_aci(A_s)
 
         # Maximum total shear capacity
         self._calculate_max_shear_capacity_aci()
@@ -468,7 +468,7 @@ class RectangularBeam(RectangularSection):
 
         # Shear reinforcement calculations
         section_rebar = Rebar(self)
-        self.shear_design_results = section_rebar.transverse_rebar(self._A_v_req, self._V_s_req)
+        section_rebar.transverse_rebar(self._A_v_req, self._V_s_req)
         best_design = section_rebar.transverse_rebar_design
         self._s_l = best_design['s_l']
         self._s_w = best_design['s_w']
@@ -485,7 +485,7 @@ class RectangularBeam(RectangularSection):
         self._FUv = (self._V_u.to('kN') / self._phi_V_n.to('kN'))
 
         # Design results and return DataFrame
-        results = self._compile_results_aci_shear()
+        results = self._compile_results_aci_shear(force)
         self._initialize_dicts_ACI_318_19()
         return pd.DataFrame([results], index=[0])
 
@@ -658,31 +658,62 @@ class RectangularBeam(RectangularSection):
         return None
 
     # Factory method to select the shear design method
-    def design_shear(self, Force: Forces, A_s: PlainQuantity = 0*cm**2) -> DataFrame:
-        if not self.node or not self.node.forces_list:
+    def design_shear(self, A_s: PlainQuantity = 0*cm**2) -> DataFrame:
+        if not self.node or not self.node.forces:
             raise ValueError("No Node or forces list associated with this beam.")
         
-        if self.concrete.design_code=="ACI 318-19":
-            result =  self.design_shear_ACI_318_19(Force, A_s)
-        # elif self.concrete.design_code=="EN 1992":
-        #     result =  self.design_shear_EN_1992(V_u, N_u, A_s)
-        # elif self.concrete.design_code=="EHE-08":
-        #     result =  self.design_shear_EHE_08(V_u, N_u, A_s)
-        else:
-            raise ValueError(f"Shear design method not implemented for concrete type: {type(self.concrete).__name__}")
-        self._shear_checked = True  # Mark shear as checked
-        return result
+        self._shear_results_list = []  # Store individual results for each force
+        self._shear_results_detailed_list = {}  # Store detailed results by force ID
+        max_A_v_req = 0*cm # Track the maximum A_v_req to identify the limiting case
+
+        for force in self.node.forces:
+            if self.concrete.design_code=="ACI 318-19":
+                result =  self.design_shear_ACI_318_19(force, A_s)
+            # elif self.concrete.design_code=="EN 1992":
+            #     result =  self.design_shear_EN_1992(V_u, N_u, A_s)
+            # elif self.concrete.design_code=="EHE-08":
+            #     result =  self.design_shear_EHE_08(V_u, N_u, A_s)
+            else:
+                raise ValueError(f"Shear design method not implemented for concrete type:"\
+                    f"{type(self.concrete).__name__}")
+            self._shear_results_list.append(result)
+            self._shear_results_detailed_list[force.id] = {
+                'forces': self._forces.copy(),
+                'shear_reinforcement': self._shear_reinforcement.copy(),
+                'min_max': self._data_min_max.copy(),
+                'shear_concrete': self._shear_concrete.copy(),
+            }
+            # Check if this result is the limiting case
+            current_A_v_req = result['Av,req'][0]
+            if current_A_v_req > max_A_v_req:
+                max_A_v_req = current_A_v_req
+                self._limiting_case_shear = result
+                self._limiting_case_shear_details = self._shear_results_detailed_list[force.id]
+
+                # Update shear design results for the worst case
+                section_rebar = Rebar(self)
+                self.shear_design_results = section_rebar.transverse_rebar(self._A_v_req, self._V_s_req)
+                self._best_rebar_design = section_rebar.transverse_rebar_design
+
+        # Compile all results into a single DataFrame
+        all_results = pd.concat(self._shear_results_list, ignore_index=True)
+
+        # Identify the most limiting case by Av,required
+        self.limiting_case_shear = all_results.loc[all_results['Av,req'].idxmax()]  # Select row with highest Av,req
+        # Mark shear as checked
+        self._shear_checked = True  
+        return all_results
     
     # Factory method to select the shear check method
     def check_shear(self, A_s: PlainQuantity = 0*cm**2) -> DataFrame:
-        if not self.node or not self.node.forces_list:
+        if not self.node or not self.node.forces:
             raise ValueError("No Node or forces list associated with this beam.")
         
         self._shear_results_list = []  # Store individual results for each force
         self._shear_results_detailed_list = {}  # Store detailed results by force ID
         max_dcr = 0  # Track the maximum DCR to identify the limiting case
 
-        for force in self.node.forces_list:
+        for force in self.node.forces:
             # Select the method based on design code
             if self.concrete.design_code=="ACI 318-19":
                 result = self.check_shear_ACI_318_19(force, A_s)
@@ -714,7 +745,7 @@ class RectangularBeam(RectangularSection):
         self.limiting_case_shear = all_results.loc[all_results['DCR'].idxmax()]  # Select row with highest DCR
 
         self._shear_checked = True  # Mark shear as checked
-        return all_results, self.limiting_case_shear
+        return all_results
 
     def _initialize_dicts_ACI_318_19(self) -> None:
         """Initialize the dictionaries used in check and design methods."""
@@ -795,7 +826,7 @@ class RectangularBeam(RectangularSection):
         }
         check_max = '✔️' if self._max_shear_ok else '❌'
         check_FU = '✔️' if self._FUv < 1 else '❌'
-        self._shear_concrete = {
+        self._shear_concrete: dict[str, list[Union[str, float, None]]] = {
             "Concrete strength": [
                 "Effective shear area",
                 "Longitudinal reinforcement ratio",
@@ -879,7 +910,8 @@ class RectangularBeam(RectangularSection):
                 for curr, min_val, max_val in zip(current_values, min_values, max_values)
             ]
             self._data_min_max = {
-                'Check': ['Separación de estribos longitudinal', 'Separación de estribos transversal', 'Armadura transversal mínima'],
+                'Check': ['Separación de estribos longitudinal', 
+                          'Separación de estribos transversal', 'Armadura transversal mínima'],
                 'Unidad': ['cm', 'cm', 'cm²/m'],
                 'Valor': [round(self._s_l.to('cm').magnitude,2), round(self._s_w.to('cm').magnitude,2),
                 round(self._A_v.to('cm**2/m').magnitude,2)],
@@ -953,16 +985,37 @@ class RectangularBeam(RectangularSection):
                           "design_shear first.", UserWarning)
             self._md_shear_results = "Shear results are not available."
             return None
+        # Use limiting case results
+        result_data = self._limiting_case_shear_details
+        limiting_reinforcement = result_data['shear_reinforcement']
+        limiting_forces = result_data['forces']
+        limiting_shear_concrete = result_data['shear_concrete']
 
         # Create FUFormatter instance and format FU value
         formatter = Formatter()
-        formatted_DCR = formatter.DCR(self._FUv )
-        rebar_v = f"{int(self._stirrup_n)}eØ{self._stirrup_d_b.to('mm').magnitude}/"\
-                f"{self._stirrup_s_l.to('cm').magnitude} cm"
-        # Print results
-        markdown_content = f"Shear reinforcing {rebar_v}, $A_v$={self._A_v.to('cm**2/m')}"\
-                         f", $V_u$={self._V_u.to('kN')}, $\\phi V_n$={self._phi_V_n.to('kN')} → {formatted_DCR}"
+        formatted_DCR = formatter.DCR(limiting_shear_concrete['Value'][-1])
+        # rebar_v = f"{int(limiting_reinforcement['ns'])}eØ{limiting_reinforcement['db']} mm/"\
+        # f"{limiting_reinforcement['s']} cm"
+        rebar_v = f"{int(limiting_reinforcement['Value'][0])}eØ{limiting_reinforcement['Value'][1]}/"\
+        f"{limiting_reinforcement['Value'][2]} cm"
+
+        # Print results for the limiting case
+        # markdown_content = f"Shear reinforcing {rebar_v}, $A_v$={limiting_reinforcement['Av']} cm²/m"\
+        #                  f", $V_u$={limiting_forces['Vu']} kN, $\\phi V_n$={limiting_forces['ØVn']} kN → {formatted_DCR}"  # noqa: E501
+        markdown_content = f"Shear reinforcing {rebar_v}, $A_v$={limiting_reinforcement['Value'][6]} cm²/m"\
+                         f", $V_u$={limiting_forces['Value'][1]} kN, $\\phi V_n$={limiting_shear_concrete['Value'][7]} kN → {formatted_DCR}"  # noqa: E501
+
         self._md_shear_results = markdown_content
+
+        # # Create FUFormatter instance and format FU value
+        # formatter = Formatter()
+        # formatted_DCR = formatter.DCR(self._FUv )
+        # rebar_v = f"{int(self._stirrup_n)}eØ{self._stirrup_d_b.to('mm').magnitude}/"\
+        #         f"{self._stirrup_s_l.to('cm').magnitude} cm"
+        # # Print results
+        # markdown_content = f"Shear reinforcing {rebar_v}, $A_v$={self._A_v.to('cm**2/m')}"\
+        #                  f", $V_u$={self._V_u.to('kN')}, $\\phi V_n$={self._phi_V_n.to('kN')} → {formatted_DCR}"
+        # self._md_shear_results = markdown_content
 
         return None
     
@@ -974,6 +1027,7 @@ class RectangularBeam(RectangularSection):
             self.properties  # This will generate _md_properties
         if not hasattr(self, '_md_shear_results'):
             self.shear_results  # This will generate _md_shear_results
+        #TODO: Flexure results missing
         # Combine the markdown content for properties and shear results
         markdown_content = f"{self._md_properties}\n\n{self._md_shear_results}"
         
@@ -1099,21 +1153,19 @@ def shear_ACI_metric() -> None:
     beam = RectangularBeam(label="101",
                                       concrete=concrete,steel_bar=steelBar,width=20*cm, height=50*cm,
                                        settings=custom_settings)
-    # debug(section.settings.default_settings)
-    # debug(section.get_settings)
     f1 = Forces(label='1.4D', V_z=50*kN)
-    f2 = Forces(label='1.2D+1.6L', V_z=100*kN)
-    f3 = Forces(label='W', V_z=200*kN)
+    f2 = Forces(label='1.2D+1.6L', V_z=155*kN)
+    f3 = Forces(label='W', V_z=220*kN)
     f4 = Forces(label='S', V_z=80*kN)
     f5 = Forces(label='E', V_z=10*kN)
-    node = Node(section=beam, forces_list=[f1, f2, f3, f4, f5])
+    Node(section=beam, forces=[f1, f2, f3, f4, f5])
     # beam.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=20*cm) 
-    # results=section.check_shear(f)
-    # debug(section._d, section.c_c, section._stirrup_d_b, section._long_d_b)
-    results, limiting_case = beam.check_shear(A_s=5*cm**2)
+    # results, limiting_case = beam.check_shear(A_s=5*cm**2)
+    results = beam.design_shear(A_s=5*cm**2)
     print(results)
-    # print(limiting_case)
-    # beam.shear_results_detailed(force=None)
+    beam.shear_results_detailed()
+    print(beam.shear_design_results)
+    print(beam.results)
     # beam.shear_results_detailed_doc(f2)
 
 def shear_ACI_imperial() -> None:
@@ -1121,23 +1173,23 @@ def shear_ACI_imperial() -> None:
     steelBar = SteelBar(name="ADN 420", f_y=60*ksi)  
     custom_settings = {'clear_cover': 1.5*inch, 'stirrup_diameter_ini':0.5*inch,
                        'longitudinal_diameter_ini': 1*inch} 
-    section = RectangularBeam(
-        label="V-10x16",
+    beam = RectangularBeam(
+        label="102",
         concrete=concrete,
         steel_bar=steelBar,
         width=10*inch,  
         height=16*inch,
         settings=custom_settings  
     )
-    # debug(section.settings.default_settings)
-    # debug(section.get_settings)
-    f = Forces(V_z=37.727*kip)
-    f = Forces(V_z=6*kip) # No shear reinforcing
-    # section.set_transverse_rebar(n_stirrups=1, d_b=0.5*inch, s_l=6*inch) 
-    # results = section.check_shear(f, A_s=0.847*inch**2)
-    # print(results)
+
+    f1 = Forces(label='D', V_z=37.727*kip, N_x=20*kip)
+    f2 = Forces(label='L', V_z=6*kip) # No shear reinforcing
+    Node(section=beam, forces=[f1, f2])
+    beam.set_transverse_rebar(n_stirrups=1, d_b=0.5*inch, s_l=6*inch) 
+    results = beam.check_shear(A_s=0.847*inch**2)
+    print(results)
     # section.design_shear(f, A_s=0.847*inch**2)
-    section.shear_results_detailed  
+    # section.shear_results_detailed  
     # section.shear_results_detailed_doc
 
 def rebar() -> None:
@@ -1170,14 +1222,15 @@ def shear_EHE_08() -> None:
     steelBar= SteelBar(name="B500S", f_y=500*MPa)
     custom_settings = {'clear_cover': 2.6*cm, 'stirrup_diameter_ini':8*mm,
                        'longitudinal_diameter_ini': 16*mm}
-    section = RectangularBeam(label="V-20x60",
+    beam = RectangularBeam(label="V-20x60",
                                       concrete=concrete,steel_bar=steelBar,width=20*cm, height=60*cm,
                                        settings=custom_settings)
     # f = Forces(V_z=100*kN, M_y=100*kNm)
     f = Forces(V_z=150*kN, M_y=50*kNm)
     A_s = 8.04*cm**2
-    section.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=20*cm) 
-    # section.check_shear(f, A_s)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=20*cm)
+    Node(beam, f)
+    beam.check_shear(A_s)
     # section.shear_results_detailed
     # section.shear_results_detailed_doc
 
