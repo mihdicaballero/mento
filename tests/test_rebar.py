@@ -4,6 +4,7 @@ from mento.beam import RectangularBeam
 from mento.material import Concrete_ACI_318_19, SteelBar
 from mento.units import psi, kip, mm, inch, ksi, cm, MPa
 from mento.forces import Forces
+from mento.node import Node
 
 @pytest.fixture()
 def beam_example_imperial() -> RectangularBeam:
@@ -65,8 +66,9 @@ def test_beam_longitudinal_rebar_ACI_318_19_fail(beam_example_imperial: Rectangu
 
 def test_beam_transverse_rebar_ACI_318_19(beam_example_imperial: RectangularBeam) -> None:
     f = Forces(V_z=37.727*kip)
-    A_s=0.847*inch**2 
-    results = beam_example_imperial.design_shear(f, A_s)
+    A_s=0.847*inch**2
+    Node(beam_example_imperial, forces=f)
+    results = beam_example_imperial.design_shear(A_s)
     assert results is not None
     assert beam_example_imperial._stirrup_n == 1
     assert beam_example_imperial._stirrup_d_b == 10*mm 
