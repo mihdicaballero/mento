@@ -1254,8 +1254,8 @@ def shear_EHE_08() -> None:
     # section.shear_results_detailed_doc
 
 if __name__ == "__main__":
-    # flexure()
+    flexure()
     # shear_ACI_imperial()
     # shear_EHE_08()
-    shear_ACI_metric()
+    #shear_ACI_metric()
     # rebar()
