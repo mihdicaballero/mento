@@ -132,7 +132,7 @@ class RectangularBeam(RectangularSection):
         # Si el argumento Forces no es una lista, lo convierte en una lista de un solo elemento
         if not isinstance(Force, list):
             Force = [Force]
-
+        debug(Force)
         M_u_min=0*kNm # Negativo es el que hace que armemos arriba
         M_u_max=0*kNm # Positlivo es el que hace que armemos abajo
         for item in Force:
@@ -1222,5 +1222,5 @@ if __name__ == "__main__":
     flexure()
     # shear_ACI_imperial()
     # shear_EHE_08()
-    #shear_ACI_metric()
+    # shear_ACI_metric()
     # rebar()
