@@ -94,11 +94,13 @@ class Concrete_ACI_318_19(Concrete):
         return self._beta_1
 
 @dataclass
-class Concrete_EN_1992(Concrete):
+class Concrete_EN_1992_2004(Concrete):
     _E_cm: PlainQuantity = field(init=False)  # Secant modulus of elasticity
-    _f_ck: PlainQuantity = field(init=False) # Characteristic concrete strength
-    _f_cm: PlainQuantity = field(init=False) # mean compressive strength
-    _f_ctm: PlainQuantity = field(init=False) # Mean tensile strength
+    _f_ck: PlainQuantity = field(init=False)  # Characteristic concrete strength
+    _f_cm: PlainQuantity = field(init=False)  # Mean compressive strength
+    _f_ctm: PlainQuantity = field(init=False)  # Mean tensile strength
+    _f_cd: PlainQuantity = field(init=False)  # Design strength of concrete
+
 
     def __init__(self, name: str, f_ck: PlainQuantity):
         super().__init__(name=name, f_c=f_ck)
@@ -108,63 +110,10 @@ class Concrete_EN_1992(Concrete):
         self._E_cm = 22000 * (self._f_cm / (10 * MPa)) ** 0.3 * MPa       
         self._f_ctm = 0.3 * (self._f_ck / MPa) ** (2/3) * MPa
 
-    def get_properties(self) -> Dict[str, PlainQuantity]:
-        properties = super().get_properties()
-        properties['E_cm'] = self._E_cm.to('MPa')
-        properties['f_ctm'] = self._f_ctm.to('MPa')
-        return properties
-
     def alpha_cc(self) -> float:
         # Example implementation for alpha_cc, as per Eurocode EN 1992-1-1
         return 1.0  # Typically, this value is taken as 1.0 for normal weight concrete
     
-    @property
-    def E_cm(self) -> PlainQuantity:
-        return self._E_cm
-
-    @property
-    def f_ck(self) -> PlainQuantity:
-        return self._f_ck
-    @property
-    def f_cm(self) -> PlainQuantity:
-        return self._f_cm
-    @property
-    def f_ctm(self) -> PlainQuantity:
-        return self._f_ctm
-
-@dataclass
-class Concrete_EHE_08(Concrete):
-    _E_cm: PlainQuantity = field(init=False)  # Secant modulus of elasticity
-    _f_ck: PlainQuantity = field(init=False)  # Characteristic concrete strength
-    _f_cm: PlainQuantity = field(init=False)  # Mean compressive strength
-    _f_ctm: PlainQuantity = field(init=False)  # Mean tensile strength
-    _f_ctk: PlainQuantity = field(init=False)  # Characteristic tensile strength
-    _f_cd: PlainQuantity = field(init=False)  # Design strength of concrete
-    _f_1cd: PlainQuantity = field(init=False)  # Design strength for shear
-    _f_ctd: PlainQuantity = field(init=False)  # Tensile strength of concrete
-
-    def __init__(self, name: str, f_ck: PlainQuantity):
-        super().__init__(name=name, f_c=f_ck)
-        gamma_c: float = 1.5
-        self.design_code: str = "EHE-08"
-        
-        # Assign provided characteristic concrete strength
-        self._f_ck = self.f_c
-        
-        # Calculate mean compressive strength, tensile strength, and secant modulus of elasticity
-        self._f_cm = self._f_ck + 8 * MPa
-        self._E_cm = 8500 * (self._f_cm / MPa) ** (1 / 3) * MPa
-        self._f_ctm = 0.3 * (self._f_ck / MPa) ** (2 / 3) * MPa
-        self._f_ctk = 0.7 * self._f_ctm
-        
-        # Calculate design strengths based on partial safety factor gamma_c
-        self._f_cd = self._f_ck / gamma_c
-        self._f_1cd = (
-            0.6 * self._f_cd if self._f_ck <= 60 * MPa 
-            else max((0.9 - self._f_ck / (200 * MPa)) * self._f_cd, 0.5 * self._f_cd)
-        )
-        self._f_ctd = self._f_ctk / gamma_c
-
     def get_properties(self) -> Dict[str, PlainQuantity]:
         properties = super().get_properties()
         properties.update({
@@ -172,10 +121,7 @@ class Concrete_EHE_08(Concrete):
             'f_ck': self._f_ck.to('MPa'),
             'f_cm': self._f_cm.to('MPa'),
             'f_ctm': self._f_ctm.to('MPa'),
-            'f_ctk': self._f_ctk.to('MPa'),
             'f_cd': self._f_cd.to('MPa'),
-            'f_1cd': self._f_1cd.to('MPa'),
-            'f_ctd': self._f_ctd.to('MPa')
         })
         return properties
 
@@ -194,33 +140,10 @@ class Concrete_EHE_08(Concrete):
     @property
     def f_ctm(self) -> PlainQuantity:
         return self._f_ctm
-
-    @property
-    def f_ctk(self) -> PlainQuantity:
-        return self._f_ctk
-
     @property
     def f_cd(self) -> PlainQuantity:
         return self._f_cd
 
-    @property
-    def f_1cd(self) -> PlainQuantity:
-        return self._f_1cd
-
-    @property
-    def f_ctd(self) -> PlainQuantity:
-        return self._f_ctd
-
-# # Factory function
-# def create_concrete(name: str, f_c: Quantity, design_code: str) -> Concrete:
-#     if design_code == "ACI 318-19":
-#         return Concrete_ACI_318_19(name=name, f_c=f_c)
-#     elif design_code == "EN 1992":
-#         return Concrete_EN_1992(name=name, f_c=f_c)
-#     elif design_code == "EHE-08":
-#         return Concrete_EHE_08(name=name, f_c=f_c)
-#     else:
-#         raise ValueError(f"Invalid design code: {design_code}. Options: ACI 318-19, EN 1992, EHE-08.")
 @dataclass
 class Steel(Material):
     _f_y: PlainQuantity = field(init=False)
