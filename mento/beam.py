@@ -10,7 +10,7 @@ import math
 import warnings
 
 from mento.rectangular import RectangularSection
-from mento.material import Concrete, SteelBar, Concrete_ACI_318_19, Concrete_EHE_08
+from mento.material import Concrete, SteelBar, Concrete_ACI_318_19, Concrete_EN_1992_2004
 from mento.rebar import Rebar
 from mento import MPa, ksi, psi, kip, mm, inch, kN, m, cm, kNm, ft
 from mento.results import Formatter, TablePrinter, DocumentBuilder
@@ -51,8 +51,8 @@ class RectangularBeam(RectangularSection):
     def initialize_code_attributes(self) -> None:
         if isinstance(self.concrete, Concrete_ACI_318_19):
             self._initialize_aci_318_attributes()
-        elif isinstance(self.concrete, Concrete_EHE_08):
-            self._initialize_ehe_08_attributes()
+        elif isinstance(self.concrete, Concrete_EN_1992_2004):
+            self._initialize_en_1992_attributes()
 
     def _initialize_aci_318_attributes(self) -> None:
         if isinstance(self.concrete, Concrete_ACI_318_19):
@@ -66,25 +66,19 @@ class RectangularBeam(RectangularSection):
             self._k_c_min: PlainQuantity = 0*MPa
             self._sigma_Nu: PlainQuantity = 0*MPa
 
-    def _initialize_ehe_08_attributes(self) -> None:
-        if isinstance(self.concrete, Concrete_EHE_08):
-            # Set EHE-specific attributes
-            self._f_ctm = self.concrete.f_ctm
+    def _initialize_en_1992_attributes(self) -> None:
+        if isinstance(self.concrete, Concrete_EN_1992_2004):
             self._f_yk = self.steel_bar.f_y
             self._f_ck = self.concrete.f_ck
             self._f_cd = self.concrete.f_cd
-            self._f_ctk = self.concrete.f_ctk
-            self._f_ctd = self.concrete.f_ctd
-            self._f_1cd = self.concrete.f_1cd
-            self._f_yda: PlainQuantity = 0*MPa
             self._V_rd_1: PlainQuantity = 0*kN
             self._V_rd_2: PlainQuantity = 0*kN
             self._N_rd: PlainQuantity = 0*kN
             self._sigma_cd: PlainQuantity = 0*MPa
-            self._V_cu: PlainQuantity = 0*kN
-            self._V_su: PlainQuantity = 0*kN
-            self._V_u2: PlainQuantity = 0*kN
-            self._K_value:float = 0
+            self._V_Rd_c: PlainQuantity = 0*kN
+            self._V_Rd_s: PlainQuantity = 0*kN
+            self._V_Rd_max: PlainQuantity = 0*kN
+            self._k_value:float = 0
             self._rho_l: float = 0
 
     def set_transverse_rebar(self, n_stirrups: int = 0, d_b:PlainQuantity = 0*mm, s_l:PlainQuantity = 0*cm) -> None:
@@ -250,9 +244,6 @@ class RectangularBeam(RectangularSection):
         return pd.DataFrame([results], index=[0])
 
     def design_flexure_EN_1992(self, M_u: float) -> None:
-        pass
-
-    def design_flexure_EHE_08(self, M_u: float) -> None:
         pass
 
     def design_flexure(self,Force:Forces) -> Dict[str, Any]:
@@ -508,34 +499,32 @@ class RectangularBeam(RectangularSection):
         self._initialize_dicts_ACI_318_19()
         return pd.DataFrame([results], index=[0])
 
-# ======== EHE-08 methods =========
+# ======== EN-1992-2004 methods =========
 
-    def _initialize_variables_ehe(self, Force: Forces, A_s: PlainQuantity) -> None:
-        if isinstance(self.concrete, Concrete_EHE_08):
+    def _initialize_variables_EN_1992_2004(self, Force: Forces, A_s: PlainQuantity) -> None:
+        if isinstance(self.concrete, Concrete_EN_1992_2004):
             # Set the initial variables
-            self._N_rd = Force.N_x
-            self._V_rd_1 = Force.V_z  # Consider the same shear at the edge of support and in d
-            self._V_rd_2 = Force.V_z  # Consider the same shear at the edge of support and in d
-            self._M_rd = Force.M_y
+            self._N_Ed = Force.N_x
+            self._V_Ed_1 = Force.V_z  # Consider the same shear at the edge of support and in d
+            self._V_Ed_2 = Force.V_z  # Consider the same shear at the edge of support and in d
             self._A_s = A_s
 
             # Load settings for gamma factors
-            self.settings.load_ehe_08_settings()
+            self.settings.load_en_1992_settings()
             self._gamma_c = self.settings.get_setting('gamma_c')
             self._gamma_s = self.settings.get_setting('gamma_s')
-            self._f_yd = self._f_yk / self._gamma_s
-            self._f_yda = min(400 * MPa, self._f_yd)
+            self._f_ywk = self._f_yk
+            self._f_ywd = self._f_ywk/self._gamma_s
 
             # Minimum shear reinforcement calculation
-            self._A_v_min = self._f_ctm * self.width / (7.5 * self._f_yda)
+            self._A_sw_min = 0.08*math.sqrt(self._f_ck.to('MPa').magnitude) / (self._f_ywk)*MPa
 
             # Compression stress, positive
             self._A_p = 0*cm**2 # No prestressing for now
             self._rho_l = min((A_s + self._A_p) / (self.width * self.d), 0.02)
 
             # Shear calculation for sections without rebar
-            self._xi = min(1 + math.sqrt(200 * mm / self.d), 2)
-            self._f_cv = self._f_ck
+            self._k_value = min(1 + math.sqrt(200 * mm / self.d), 2)
 
     def _calculate_V_u1(self) -> PlainQuantity:
         self._alpha = math.radians(90)
@@ -547,47 +536,26 @@ class RectangularBeam(RectangularSection):
         return self._K_value * self._f_1cd * self.width * self.d\
               * (self._cot_theta + self._cot_alpha) / (1 + self._cot_theta ** 2)
 
-    def _shear_without_rebar_EHE(self) -> PlainQuantity:
-        W_y = self.width * self.height ** 2 / 6
-        # Positive of compression
-        sigma_t_min = -self._M_rd / W_y + self._N_rd / self.A_x
+    def _shear_without_rebar_EN_1992_2004(self) -> PlainQuantity:
+        
         self._stirrup_d_b = 0*mm
         self._A_v_min = 0*cm**2/m
-        debug(sigma_t_min, -self._f_ctd)
+        # Positive of compression
+        self._sigm_cp = min(self._N_rd / self.A_x, 0.2*self._f_cd)
 
-        if sigma_t_min > -self._f_ctd:
-            # Total shear capacity without rebar (case without cracking)
-            alpha_l = 1
-            S_y = self.width * self.height ** 2 / 8
-            # Stress must be prestressing force really and not N_rd compression
-            self._sigma_cd =  0*MPa if self._A_p == 0*cm**2 else self._N_rd / self.A_x
-            return (self.I_y * self.width / S_y) *\
-                  math.sqrt(self._f_ctd.to('MPa').magnitude ** 2\
-                             + alpha_l * self._sigma_cd.to('MPa').magnitude * self._f_ctd.to('MPa').magnitude)*MPa
-        else:
-            # Total shear capacity without rebar (case with cracking)
-            xi = min(1 + math.sqrt(200 * mm / self.d), 2)
-            self._sigma_cd = min(self._N_rd / self.A_x, 0.3 * self._f_cd)
-            V_u2_min = (0.075 / self._gamma_c * xi ** (3 / 2) * (self._f_ck / MPa) ** (1 / 2)\
-                         + 0.15 * self._sigma_cd / MPa) * MPa * self.width * self.d
-            V_u2 = (0.18 / self._gamma_c * xi * (100 * self._rho_l * self._f_ck / MPa) ** (1 / 3)\
-                     + 0.15 * self._sigma_cd/ MPa) * MPa * self.width * self.d
-            return max(V_u2_min, V_u2)
-    
-    def _calculate_axial_coefficient_ehe(self, sigma_cd: PlainQuantity, f_cd: PlainQuantity) -> float:
-        if sigma_cd == 0:
-            return 1
-        elif sigma_cd <= 0.25 * f_cd:
-            return 1 + sigma_cd / f_cd
-        elif sigma_cd < 0.5 * f_cd:
-            return 1.25
-        else:
-            return 2.5 * (1 - sigma_cd / f_cd)
+        # Total shear capacity without rebar
+        C_rdc = 0.18/self._gamma_c
+        v_min = 0.035*self._k_value**(3/2)*math.sqrt(self._f_ck.to('MPa').magnitude)
+        k_1 = 0.15
+        V_Rd_c_min = (v_min+k_1*self._sigm_cp.to('MPa').magnitude)* self.width * self.d * MPa
+        V_Rd_c = (C_rdc*self._k_value*(100*self._rho_l*self._f_ck.to('MPa').magnitude)**(1/3)*MPa\
+                  +k_1*self._sigm_cp.to('MPa').magnitude)* self.width * self.d * MPa
+        return max(V_Rd_c_min, V_Rd_c)
         
-    def check_shear_EHE_08(self, Force:Forces, A_s:PlainQuantity = 0*cm**2) -> DataFrame:
-        if isinstance(self.concrete, Concrete_EHE_08):
+    def check_shear_EN_1992_2004(self, Force:Forces, A_s:PlainQuantity = 0*cm**2) -> DataFrame:
+        if isinstance(self.concrete, Concrete_EN_1992_2004):
             # Initialize all the code related variables
-            self._initialize_variables_ehe(Force,A_s)
+            self._initialize_variables_EN_1992_2004(Force,A_s)
             
             # Maximum shear strength check
             self._V_u1 = self._calculate_V_u1()
@@ -595,7 +563,7 @@ class RectangularBeam(RectangularSection):
             
             if self._stirrup_n == 0:
                 # Calculate V_u2 for no rebar scenario
-                self._V_u2 = self._shear_without_rebar_EHE()
+                self._V_u2 = self._shear_without_rebar_EN_1992_2004()
                 self._V_cu = self._V_u2
 
             else:
@@ -667,13 +635,7 @@ class RectangularBeam(RectangularSection):
         else:
             raise ValueError("Concrete type is not compatible with EHE-08 shear check.")
   
-    def design_shear_EHE_08(self, Force:Forces, A_s:PlainQuantity = 0*cm**2) -> None:
-        return None
-# ======== EN 1992 methods =========
-    def check_shear_EN_1992(self, Force:Forces, A_s:PlainQuantity = 0*cm**2) -> None:
-        return None
- 
-    def design_shear_EN_1992(self, Force:Forces, A_s:PlainQuantity = 0*cm**2) -> None:
+    def design_shear_EN_1992_2004(self, Force:Forces, A_s:PlainQuantity = 0*cm**2) -> None:
         return None
 
     # Factory method to select the shear design method
@@ -1239,8 +1201,8 @@ def rebar() -> None:
     # trans_rebar = beam_rebar.beam_transverse_rebar_ACI_318_19(A_v_req=A_v_req, V_s_req=V_s_req)
     # print(trans_rebar)
 
-def shear_EHE_08() -> None:
-    concrete= Concrete_EHE_08(name="C25",f_ck=25*MPa) 
+def shear_EN_1992() -> None:
+    concrete= Concrete_EN_1992_2004(name="C25",f_ck=25*MPa) 
     steelBar= SteelBar(name="B500S", f_y=500*MPa)
     custom_settings = {'clear_cover': 2.6*cm, 'stirrup_diameter_ini':8*mm,
                        'longitudinal_diameter_ini': 16*mm}
