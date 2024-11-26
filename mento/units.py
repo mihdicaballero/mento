@@ -1,4 +1,5 @@
 from pint import UnitRegistry
+import math
 
 # Initialize UnitRegistry
 ureg = UnitRegistry(system='mks')
@@ -15,6 +16,7 @@ MPa = ureg.megapascal
 GPa = ureg.gigapascal
 kg = ureg.kilogram
 sec = ureg.second
+deg = ureg.degree
 
 # Imperial system units
 psi = ureg.psi
@@ -24,3 +26,11 @@ kip = ureg.kip
 ksi = ureg.ksi
 inch = ureg.inch
 ft = ureg.foot
+
+def main():
+    print(45*deg)
+    a= 45*ureg.degree
+    print(a, math.cos(a))
+
+if __name__ == "__main__":
+    main()
