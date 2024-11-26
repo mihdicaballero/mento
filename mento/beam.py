@@ -71,9 +71,10 @@ class RectangularBeam(RectangularSection):
             self._f_yk = self.steel_bar.f_y
             self._f_ck = self.concrete.f_ck
             self._f_cd = self.concrete.f_cd
-            self._V_rd_1: PlainQuantity = 0*kN
-            self._V_rd_2: PlainQuantity = 0*kN
-            self._N_rd: PlainQuantity = 0*kN
+            self._V_Ed_1: PlainQuantity = 0*kN
+            self._V_Ed_2: PlainQuantity = 0*kN
+            self._N_Ed: PlainQuantity = 0*kN
+            self._M_Ed: PlainQuantity = 0*kNm
             self._sigma_cd: PlainQuantity = 0*MPa
             self._V_Rd_c: PlainQuantity = 0*kN
             self._V_Rd_s: PlainQuantity = 0*kN
