@@ -6,6 +6,7 @@ from mento.material import Concrete, SteelBar, Concrete_ACI_318_19
 from mento.forces import Forces
 from mento.beam import RectangularBeam
 from mento import mm, cm, kN, MPa, m, inch, ft, kNm
+from mento.node import Node
 
 pd.set_option('future.no_silent_downcasting', True)
 
@@ -16,7 +17,7 @@ class BeamSummary:
         self.beam_list: DataFrame = beam_list
         self.units_row: List[str] = []
         self.data: DataFrame = None
-        self.beams: List[Dict] = []
+        self.beams: List[RectangularBeam] = []
         self._beam_summary: List = []
         self.check_and_process_input()
         self.convert_to_beams()
@@ -94,134 +95,168 @@ class BeamSummary:
             height = row['h']  # Example: height in cm
 
             # Create a rectangular concrete beam using the extracted values
-            section = RectangularBeam(label=row['Label'],
+            beam = RectangularBeam(label=row['Label'],
                                               concrete=self.concrete,
                                               steel_bar=self.steel_bar,
                                               width=width,
                                               height=height)        
-
+            # Create a Node for each pair of beam and forces
+            Node(section=beam, forces=forces)
             # Set transverse rebar (stirrups) for the beam
             n_stirrups = row['ns']  # Number of stirrups
             d_b = row['dbs']  # Diameter of rebar (mm)
             s_l = row['sl']  # Spacing of stirrups (cm)
 
-            section.set_transverse_rebar(n_stirrups=n_stirrups, d_b=d_b, s_l=s_l)
+            beam.set_transverse_rebar(n_stirrups=n_stirrups, d_b=d_b, s_l=s_l)
 
             # Store the section and its corresponding forces
-            self.beams.append({'section': section, 'forces': forces})
-
-    def capacity(self) -> DataFrame:
+            self.beams.append(beam)
+    
+    def check(self, capacity_check: bool = False) -> DataFrame:
+        """
+        Perform a check on all beams in the summary.
+        
+        Parameters
+        ----------
+        capacity_check : bool, optional
+            If True, resets all forces in the node to zero to perform a capacity check. 
+            Otherwise, uses the forces currently assigned to the node.
+        
+        Returns
+        -------
+        DataFrame
+            A DataFrame with the results of the check.
+        """
         results_list = []
-        for item in self.beams:
-            beam = item['section']
-            shear_results = beam.check_shear()
-            if beam._stirrup_n ==0:
-                rebar_v = '-'
+
+        for beam in self.beams:
+            # Save the original forces
+            if beam.node is None:
+                raise ValueError(f"Node is not set for the section {beam.label}")
+            assert beam.node is not None  # Inform MyPy that node is not None
+            node = beam.node # get the node associated with the beam
+            original_forces = node.get_forces_list()
+
+            if capacity_check:
+                # Reset forces to zero for capacity check
+                node.reset_forces()
+                # Perform the shear check
+                shear_results = beam.check_shear()
+                
+                if beam._stirrup_n ==0:
+                    rebar_v = '-'
+                else:
+                    rebar_v = f"{int(beam._stirrup_n)}eØ{int(beam._stirrup_d_b.to('mm').magnitude)}/{beam._stirrup_s_l.to('cm').magnitude}"  # noqa: E501
+                # Design results
+                results_dict = {
+                    'Beam': beam.label,  # Minimum shear reinforcement area
+                    'b': beam.width.magnitude, # Required shear reinforcing area
+                    'h': beam.height.magnitude,  # Provided stirrup reinforcement per unit length
+                    'Av': rebar_v,  # Reinforcement contribution to shear capacity
+                    'Av,real': round(shear_results['Av'][0].magnitude,2),  #Reinforcement contribution to shear capacity
+                    'ØVn': round(shear_results['ØVn'][0].magnitude,2),  #Check if applied shear is within total capacity
+                }
+                # Create a units row as a DataFrame
+                units_row = pd.DataFrame([{
+                    'Beam': '',
+                    'b': 'cm',
+                    'h': 'cm',
+                    'Av': '',
+                    'Av,real': 'cm²/m',
+                    'ØVn': 'kN',
+                }])
             else:
-                rebar_v = f"{int(beam._stirrup_n)}eØ{int(beam._stirrup_d_b.to('mm').magnitude)}/{beam._stirrup_s_l.to('cm').magnitude}"  # noqa: E501
-            # Design results
-            results_dict = {
-                'Beam': beam.label,  # Minimum shear reinforcement area
-                'b': beam.width.magnitude, # Required shear reinforcing area
-                'h': beam.height.magnitude,  # Provided stirrup reinforcement per unit length
-                'Av': rebar_v,  # Reinforcement contribution to shear capacity
-                'Av,real': round(shear_results['Av'][0].magnitude,2),  # Reinforcement contribution to shear capacity
-                'ØVn': round(shear_results['ØVn'][0].magnitude,2),  # Check if applied shear is within total capacity
-            }
+                # Perform the shear check
+                shear_results = beam.check_shear()
+                # Design results
+                results_dict = {
+                    'Beam': beam.label,  # Minimum shear reinforcement area
+                    'b': beam.width.magnitude, # Required shear reinforcing area
+                    'h': beam.height.magnitude,  # Provided stirrup reinforcement per unit length
+                    'Vu': round(shear_results['Vu'][0].magnitude, 2),  # Max Vu for the design
+                    'Nu': round(shear_results['Nu'][0].magnitude, 2),  # Max Nu for the design
+                    'Av,req': round(shear_results['Av,req'][0].magnitude, 2), # Reinforcement contribution to shear capacity  # noqa: E501
+                    'Av,real': round(shear_results['Av'][0].magnitude, 2),  # Reinforcement contribution to shear capacity # noqa: E501
+                    'ØVn': round(shear_results['ØVn'][0].magnitude, 2),  # Check if applied shear is within total capacity # noqa: E501
+                    'DCRv': round(shear_results['DCR'][0].magnitude,2),  # Check if applied shear is within total capacity # noqa: E501
+                }
+                # Create a units row as a DataFrame
+                units_row = pd.DataFrame([{
+                    'Beam': '',
+                    'b': 'cm',
+                    'h': 'cm',
+                    'Vu': 'kN',
+                    'Nu': 'kN',
+                    'Av,req': 'cm²/m',
+                    'Av,real': 'cm²/m',
+                    'ØVn': 'kN',
+                    'DCRv': '',
+                }])
+            # Restore the original forces after capacity check
+            node.forces = original_forces
             # Add the results to the list
             results_list.append(results_dict)
 
-         # Convert results list into a DataFrame
+        # Convert results list into a DataFrame
         results_df = pd.DataFrame(results_list)
-        # Create a units row as a DataFrame
-        units_row = pd.DataFrame([{
-            'Beam': '',
-            'b': 'cm',
-            'h': 'cm',
-            'Av': '',
-            'Av,real': 'cm²/m',
-            'ØVn': 'kN',
-        }])
-        # Combine the units row with the results DataFrame
-        final_df = pd.concat([units_row, results_df], ignore_index=True)
-
-        return final_df
-    
-    def check(self) -> DataFrame:
-        results_list = []
-        for item in self.beams:
-            beam = item['section']
-            forces = item['forces']
-            shear_results = beam.check_shear(forces)
-            # Design results
-            results_dict = {
-                'Beam': beam.label,  # Minimum shear reinforcement area
-                'b': beam.width.magnitude, # Required shear reinforcing area
-                'h': beam.height.magnitude,  # Provided stirrup reinforcement per unit length
-                'Vu': round(shear_results['Vu'][0].magnitude, 2),  # Max Vu for the design
-                'Nu': round(shear_results['Nu'][0].magnitude, 2),  # Max Nu for the design
-                'Av,req': round(shear_results['Av,req'][0].magnitude, 2), # Reinforcement contribution to shear capacity
-                'Av,real': round(shear_results['Av'][0].magnitude, 2),  # Reinforcement contribution to shear capacity
-                'ØVn': round(shear_results['ØVn'][0].magnitude, 2),  # Check if applied shear is within total capacity
-                'DCRv': round(shear_results['DCR'][0].magnitude,2),  # Check if applied shear is within total capacity
-            }
-            # Add the results to the list
-            results_list.append(results_dict)
-
-         # Convert results list into a DataFrame
-        results_df = pd.DataFrame(results_list)
-        # Create a units row as a DataFrame
-        units_row = pd.DataFrame([{
-            'Beam': '',
-            'b': 'cm',
-            'h': 'cm',
-            'Vu': 'kN',
-            'Nu': 'kN',
-            'Av,req': 'cm²/m',
-            'Av,real': 'cm²/m',
-            'ØVn': 'kN',
-            'DCRv': '',
-        }])
+        
         # Combine the units row with the results DataFrame
         final_df = pd.concat([units_row, results_df], ignore_index=True)
         return final_df
     
-    def shear_results(self, index: Optional[int] = None, capacity: bool = False) -> DataFrame:
+    def shear_results(self, index: Optional[int] = None, capacity_check: bool = False) -> DataFrame:
         """
         Access the beam by its index from the beam_summary list and retrieve 
         detailed results and beam data. If no index is provided, calculate
         shear results for all beams and return a complete DataFrame.
-        
+
         :param index: Optional index of the beam in beam_summary.beams list.
+        :param capacity_check: If True, performs a capacity check (resets forces to zero).
         :return: A DataFrame of detailed results for the specific beam, 
                 or a DataFrame of all beams if no index is provided.
         """
+        def process_beam(beam: RectangularBeam) -> DataFrame:
+            """
+            Process a single beam to calculate shear results.
+
+            :param beam: A RectangularBeam object.
+            :return: A DataFrame with shear results for the beam.
+            """
+            if beam.node is None:
+                raise ValueError(f"Node is not set for the section {beam.label}")
+            assert beam.node is not None  # Inform MyPy that node is not None
+            node = beam.node # get the node associated with the beam
+            original_forces = node.get_forces_list()
+
+            # Perform capacity check by resetting forces to zero
+            if capacity_check:
+                beam.node.reset_forces()
+
+            # Run shear check
+            results = beam.check_shear()
+
+            # Restore original forces after capacity check
+            if capacity_check:
+                beam.node.forces = original_forces
+
+            return results
+
         # If index is provided, return results for the specific beam
         if index is not None:
             if index - 1 >= len(self.beams):
                 raise IndexError(f"Index {index} is out of range for the beam list.")
-            
+
             # Access the specific beam item
             item = self.beams[max(index - 1, 0)]
-            beam = item['section']
-            forces = item['forces']  # Use existing forces or defaults to zero forces
-
-            if forces is None:
-                forces = Forces()  # Defaults to zero forces
-            shear_results = beam.check_shear(forces) if capacity is False else beam.check_shear()
-
-            return shear_results  # Return as a DataFrame with one row
+            return process_beam(item)  # Return results for the specific beam
 
         # If no index is provided, calculate results for all beams
         all_shear_results = []
-        
-        for item in self.beams:
-            beam = item['section']
-            forces = item['forces'] or Forces()  # Defaults to zero forces if None
-            shear_results = beam.check_shear(forces) if capacity is False else beam.check_shear()
 
-            all_shear_results.append(shear_results)
-        
+        for item in self.beams:
+            results = process_beam(item)
+            all_shear_results.append(results)
+
         # Combine all shear results into a single DataFrame
         return pd.concat(all_shear_results, ignore_index=True)
 
@@ -250,14 +285,14 @@ def main() -> None:
     # print(input_df)
     beam_summary = BeamSummary(concrete=conc, steel_bar=steel, beam_list=input_df)
     # print(beam_summary.data)
-    capacity = beam_summary.capacity()
+    capacity = beam_summary.check(capacity_check=True)
     print(capacity)
     check = beam_summary.check()
     print(check)
     # beam_summary.check().to_excel('hola.xlsx', index=False)
-    results = beam_summary.shear_results(capacity=False)
+    results = beam_summary.shear_results(capacity_check=False)
     print(results)
-    # print(beam_summary.beams[0]['section'].shear_results_detailed)
+    # beam_summary.beams[0].shear_results_detailed()
 
 if __name__ == "__main__":
     main()
