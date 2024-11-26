@@ -41,3 +41,4 @@ class Node:
         elif isinstance(self.forces, list):
             # Replace each force in the list with a zero-initialized Forces object
             self.forces = [Forces() for _ in self.forces]
+

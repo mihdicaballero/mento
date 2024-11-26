@@ -913,7 +913,6 @@ class RectangularBeam(RectangularSection):
     def design_shear(self, A_s: PlainQuantity = 0*cm**2) -> DataFrame:
         if not self.node or not self.node.forces:
             raise ValueError("No Node or forces list associated with this beam.")
-
         self._shear_results_list = []  # Store individual results for each force
         self._shear_results_detailed_list = {}  # Store detailed results by force ID
         max_A_v_req = 0*cm # Track the maximum A_v_req to identify the limiting case
@@ -960,7 +959,6 @@ class RectangularBeam(RectangularSection):
     def check_shear(self, A_s: PlainQuantity = 0*cm**2) -> DataFrame:
         if not self.node or not self.node.forces:
             raise ValueError("No Node or forces list associated with this beam.")
-
         self._shear_results_list = []  # Store individual results for each force
         self._shear_results_detailed_list = {}  # Store detailed results by force ID
         max_dcr = 0  # Track the maximum DCR to identify the limiting case
@@ -1493,5 +1491,5 @@ if __name__ == "__main__":
     flexure()
     # shear_ACI_imperial()
     # shear_EHE_08()
-    # shear_ACI_metric()
+    shear_ACI_metric()
     # rebar()
