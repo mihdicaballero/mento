@@ -498,7 +498,7 @@ class RectangularBeam(RectangularSection):
             self._f_ywd = self._f_ywk/self._gamma_s
 
             # Minimum shear reinforcement calculation
-            self._A_sw_min = 0.08*math.sqrt(self._f_ck.to('MPa').magnitude) / (self._f_ywk)*MPa
+            self._A_v_min = 0.08*math.sqrt(self._f_ck.to('MPa').magnitude) / (self._f_ywk)*MPa
 
             # Compression stress, positive
             self._A_p = 0*cm**2 # No prestressing for now
@@ -536,16 +536,17 @@ class RectangularBeam(RectangularSection):
     def check_shear_EN_1992_2004(self, Force:Forces, A_s:PlainQuantity = 0*cm**2) -> DataFrame:
         if isinstance(self.concrete, Concrete_EN_1992_2004):
             # Initialize all the code related variables
-            self._initialize_variables_EN_1992_2004(Force,A_s)
-            
-            # Maximum shear strength check
-            self._V_u1 = self._calculate_V_u1()
-            self._max_shear_ok = self._V_rd_1 < self._V_u1
+            self._initialize_variables_EN_1992_2004(Force,A_s)            
             
             if self._stirrup_n == 0:
-                # Calculate V_u2 for no rebar scenario
-                self._V_u2 = self._shear_without_rebar_EN_1992_2004()
-                self._V_cu = self._V_u2
+                # Calculate V_Rd_c
+                self._V_Rd_c = self._shear_without_rebar_EN_1992_2004()
+                # According to EN1992-1-1 §6.2.1(4) minimum shear reinforcement should nevertheless be provided
+                # according to EN1992-1-1 §9.2.2. The minimum shear reinforcement may be omitted in members where
+                # transverse redistribution of loads is possible (such as slabs) and members of minor importance
+                # which do not contribute significantly to the overall resistance and stability of the structure.
+                self._A_v_req = self._A_v_min
+                self._max_shear_ok = self._V_Ed_1 < self._V_Rd_c
 
             else:
                 # Shear reinforcement calculations
@@ -556,8 +557,11 @@ class RectangularBeam(RectangularSection):
                 A_db = (d_bs ** 2) * math.pi / 4  # Area of one stirrup leg
                 A_vs = n_legs * A_db  # Total area of stirrups
                 self._A_v = A_vs / s_l  # Stirrup area per unit length
-                # Total shear strength with rebar (case with rebar and cracking)
-                theta_e = self._theta # Cracks angle (assumed 45 degrees)
+                # Total shear strength with rebar
+                alpha_cw = 1 #For non-prestressed members or members subject to tensile stress due to axial force
+                v_1 = 0.6*(1 - self._f_ck.to('MPa').magnitude/250)
+                # The θ angle is lmited between 21,8° ≤ θ ≤ 45°(1 ≤ cot(θ) ≤ 2.5)
+                self._theta = 21.8*degree # Cracks angle (assumed 45 degrees)
                 cot_theta_e = 1 / math.tan(theta_e)
 
                 if 0.5 <= self._cot_theta < cot_theta_e:
