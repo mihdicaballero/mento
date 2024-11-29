@@ -5,7 +5,7 @@ class Settings:
     default_settings: Dict[str, Any] = {
             # Beam design settings
             'clear_cover': 25 * mm, 
-            'clear_spacing': 20 * mm, 
+            'clear_spacing': 25 * mm, 
             'stirrup_diameter_ini': 8 * mm,
             'longitudinal_diameter_ini': 16*mm,
             'vibrator_size': 30 * mm, 
