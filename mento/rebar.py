@@ -121,7 +121,7 @@ class Rebar:
                                         'd_b4': None,
                                         'total_as': total_as.to('cm**2'),
                                         'total_bars': total_bars,
-                                        'clear_spacing': self._clear_spacing.to('mm'),
+                                        'clear_spacing': self._clear_spacing.to('mm')
                                     })
 
                                 # Now check combinations where bars are added in layer 2 (n3 and n4)
@@ -163,8 +163,10 @@ class Rebar:
                                                 'd_b4': d_b4 if n4 > 0 else None,
                                                 'total_as': total_as.to('cm**2'),
                                                 'total_bars': total_bars,
-                                                'clear_spacing': self._clear_spacing.to('mm'),
+                                                'clear_spacing': self._clear_spacing.to('mm')
                                             })
+
+
 
 
         # If no valid combination is found, raise an error
@@ -214,7 +216,8 @@ class Rebar:
                 if abs(d1 - d2) > self.max_diameter_diff:
                     return False
         return True
-    
+
+
     def longitudinal_rebar_EN_1992(self, A_s_req: PlainQuantity) -> None:
         pass
 
@@ -396,3 +399,7 @@ class Rebar:
         
         
         return s_max_l, s_max_w
+    
+
+
+

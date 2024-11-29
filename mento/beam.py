@@ -42,6 +42,8 @@ class RectangularBeam(RectangularSection):
         self._s_max_l: PlainQuantity = 0*cm
         self._s_max_w: PlainQuantity = 0*cm
         self._shear_checked = False  # Tracks if shear check or design has been done
+        self.layers_spacing = self.settings.get_setting('layers_spacing')
+                    
     
     @property
     def d(self) -> PlainQuantity:
@@ -65,6 +67,7 @@ class RectangularBeam(RectangularSection):
             self._A_cv: PlainQuantity = 0*cm**2
             self._k_c_min: PlainQuantity = 0*MPa
             self._sigma_Nu: PlainQuantity = 0*MPa
+
 
     def _initialize_en_1992_attributes(self) -> None:
         if isinstance(self.concrete, Concrete_EN_1992_2004):
@@ -105,6 +108,73 @@ class RectangularBeam(RectangularSection):
         self._total_as_b = total_as
         self._total_bars_b = total_bars
         self._clear_spacing_b = clear_spacing
+        self._bot_rebar_centroid=self.__calculate_long_rebar_centroid(n1, d_b1, n2, d_b2, n3, d_b3, n4, d_b4)
+
+    def set_longitudinal_rebar_top(self, n1: int, d_b1: PlainQuantity, n2: int, d_b2: PlainQuantity, 
+                                n3: int, d_b3: PlainQuantity, n4: int, d_b4: PlainQuantity, 
+                                total_as: PlainQuantity, total_bars: int, clear_spacing: PlainQuantity) -> None:
+        """Sets the longitudinal rebar in the object."""
+        self._longitudinal_n1_t = n1
+        self._longitudinal_d_b1_t = d_b1
+        self._longitudinal_n2_t = n2
+        self._longitudinal_d_b2_t = d_b2 if n2 > 0 else None
+        self._longitudinal_n3_t = n3
+        self._longitudinal_d_b3_t = d_b3 if n3 > 0 else None
+        self._longitudinal_n4_t = n4
+        self._longitudinal_d_b4_t = d_b4 if n4 > 0 else None
+        self._total_as_t = total_as
+        self._total_bars_t = total_bars
+        self._clear_spacing_t = clear_spacing
+        self._top_rebar_centroid=self.__calculate_long_rebar_centroid(n1, d_b1, n2, d_b2, n3, d_b3, n4, d_b4)
+
+
+    def __calculate_long_rebar_centroid(
+        self, 
+        n1: int, 
+        d_b1: PlainQuantity, 
+        n2: int = 0, 
+        d_b2: PlainQuantity = 0 * mm, 
+        n3: int = 0, 
+        d_b3: PlainQuantity = 0 * mm, 
+        n4: int = 0, 
+        d_b4: PlainQuantity = 0 * mm) -> PlainQuantity:
+        """
+        Calculates the centroid (baricenter) of a group of rebars based on their diameters, quantities, 
+        and layer spacing.
+
+        Returns:
+            float: The calculated centroid height of the rebar group.
+        """
+        # Default to 0 if any diameter or quantity is None
+        d_b1 = d_b1 if d_b1 is not None else 0*mm
+        d_b2 = d_b2 if d_b2 is not None else 0*mm
+        d_b3 = d_b3 if d_b3 is not None else 0*mm
+        d_b4 = d_b4 if d_b4 is not None else 0*mm
+
+        n1 = n1 if n1 is not None else 0
+        n2 = n2 if n2 is not None else 0
+        n3 = n3 if n3 is not None else 0
+        n4 = n4 if n4 is not None else 0
+
+        # Calculate the vertical positions of the bar layers
+        y1 = d_b1 / 2
+        y2 = d_b2 / 2
+        y3 = max(d_b1, d_b2) + self.layers_spacing + d_b3 / 2
+        y4 = max(d_b1, d_b2) + self.layers_spacing + d_b4 / 2
+
+        # Calculate the total area of each layer
+        A1 = n1 * d_b1  # Area proportional to number of bars and their diameter
+        A2 = n2 * d_b2
+        A3 = n3 * d_b3
+        A4 = n4 * d_b4
+
+        # Calculate the centroid as a weighted average
+        total_area = A1 + A2 + A3 + A4
+        if total_area == 0:
+            return 0*mm  # Avoid division by zero if no bars are present
+
+        centroid = (A1 * y1 + A2 * y2 + A3 * y3 + A4 * y4) / total_area
+        return centroid
 
 # ======== ACI 318-19 methods =========
 
@@ -153,6 +223,15 @@ class RectangularBeam(RectangularSection):
         else:
             return 0
 
+    def __minimum_flexural_reinforcement_ratio(self)->PlainQuantity:
+        concrete_properties = self.concrete.get_properties()
+        f_c = concrete_properties['f_c']
+        rebar_properties = self.steel_bar.get_properties()
+        f_y = rebar_properties['f_y']
+        minimum_ratio = max((3 * np.sqrt(f_c / psi) * psi / f_y), 
+                    (200 * psi / f_y))
+        return minimum_ratio
+    
 
     def __calculate_phi_ACI_318_19(self, epsilon_most_strained: float) -> float:
         """
@@ -187,58 +266,7 @@ class RectangularBeam(RectangularSection):
             return 0.9
 
 
-    #TODO VER CON MIHDI ESTA FUNCION DEBERIA SER DE REBAR MAS QUE DE ACA, PERO VER DONDE PONERLA #
-    def calculate_rebar_centroid(self, n1, d_b1, n2=0, d_b2=0*mm, n3=0, d_b3=0*mm, n4=0, d_b4=0*mm) -> float:
-        """
-        Calculates the centroid (baricenter) of a group of rebars based on their diameters, quantities, 
-        and layer spacing.
-        
-        Parameters:
-            n1 (int): Number of bars with diameter d_b1 in the first layer.
-            d_b1 (float): Diameter of the bars in the first layer.
-            n2 (int, optional): Number of bars with diameter d_b2 in the first layer. Default is 0.
-            d_b2 (float, optional): Diameter of the bars in the first layer. Default is 0.
-            n3 (int, optional): Number of bars with diameter d_b3 in the second layer. Default is 0.
-            d_b3 (float, optional): Diameter of the bars in the second layer. Default is 0.
-            n4 (int, optional): Number of bars with diameter d_b4 in the second layer. Default is 0.
-            d_b4 (float, optional): Diameter of the bars in the second layer. Default is 0.
-
-        Returns:
-            float: The calculated centroid height of the rebar group.
-        """
-        # Default to 0 if any diameter or quantity is None
-        d_b1 = d_b1 if d_b1 is not None else 0*mm
-        d_b2 = d_b2 if d_b2 is not None else 0*mm
-        d_b3 = d_b3 if d_b3 is not None else 0*mm
-        d_b4 = d_b4 if d_b4 is not None else 0*mm
-
-        n1 = n1 if n1 is not None else 0
-        n2 = n2 if n2 is not None else 0
-        n3 = n3 if n3 is not None else 0
-        n4 = n4 if n4 is not None else 0
-
-        # Calculate the vertical positions of the bar layers
-        y1 = d_b1 / 2
-        y2 = d_b2 / 2
-        y3 = max(d_b1, d_b2) + self._layers_spacing + d_b3 / 2
-        y4 = max(d_b1, d_b2) + self._layers_spacing + d_b4 / 2
-
-        # Calculate the total area of each layer
-        A1 = n1 * d_b1  # Area proportional to number of bars and their diameter
-        A2 = n2 * d_b2
-        A3 = n3 * d_b3
-        A4 = n4 * d_b4
-
-        # Calculate the centroid as a weighted average
-        total_area = A1 + A2 + A3 + A4
-        if total_area == 0:
-            return 0  # Avoid division by zero if no bars are present
-
-        centroid = (A1 * y1 + A2 * y2 + A3 * y3 + A4 * y4) / total_area
-        return centroid
-
-
-    def __calculate_flexural_reinforcement(self, M_u: float, d: float, d_prima: float):
+    def __calculate_flexural_reinforcement_ACI_318_19(self, M_u: float, d: float, d_prima: float)-> tuple[PlainQuantity, PlainQuantity, PlainQuantity, PlainQuantity]:
         """
         Calculates the flexural reinforcement (bottom tensile and top compression, if required) 
         for a given factored moment.
@@ -285,8 +313,8 @@ class RectangularBeam(RectangularSection):
         b = self._width
 
         # Determine minimum and maximum reinforcement
-        A_s_min = max((3 * np.sqrt(f_c / psi) * psi / f_y * d * b), 
-                    (200 * psi / f_y * d * b))
+        rho_min=self.__minimum_flexural_reinforcement_ratio()
+        A_s_min = rho_min * d * b
         rho_max = self.__maximum_flexural_reinforcement_ratio()
         A_s_max = rho_max * d * b
 
@@ -356,6 +384,39 @@ class RectangularBeam(RectangularSection):
         # Return both rows as a list of dictionaries
         return [bottom_result, top_result]
 
+
+    def check_flexure_ACI_318_19(self, Force: Forces) -> Dict[str, Any]:
+        '''
+            flexure_design_results_top: es el diccionario de armado de rebar que tiene las 4 posiciones
+        '''
+
+        # Load design settings for ACI 318-19
+        self.settings.load_aci_318_19_settings()
+
+        # Initial assumptions for mechanical cover and compression depth
+
+        rec_mec = self.c_c + self._stirrup_d_b + self._bot_rebar_centroid
+        d_prima = self.c_c + self._stirrup_d_b + self._top_rebar_centroid
+        d = self._height - rec_mec
+
+
+        for force in Force:
+            # RECORREMOS TODAS LAS FUERZAS ASI SACAMOS LOS DCR RATIO PARA CADA UNA
+            if force._M_y > 0:
+                (self._A_s_min_bot, self._A_s_max_bot, self._A_s_final_bot_Positive_M,
+                self._A_s_comp_top) = self.__calculate_flexural_reinforcement(force._M_y, d, d_prima)
+
+            else:
+                (self._A_s_min_top, self._A_s_max_top, self._A_s_final_top_Negative_M,
+                self._A_s_comp_bot) = self.__calculate_flexural_reinforcement(abs(force._M_y), d_prima, d)
+
+        results=self._compile_results_aci_flexure_metric()
+
+        return pd.DataFrame([results], index=[0])
+
+
+
+
     def design_flexure_ACI_318_19(self, Force: Forces) -> Dict[str, Any]:
         """
         Designs the flexural reinforcement for a beam cross-section 
@@ -386,12 +447,10 @@ class RectangularBeam(RectangularSection):
             areas and their spacing.
         """
 
-        #TODO: Esto no tendría que ir aca, el design_flexure itera por todas las fuerzas
         # Ensure Force is a list
         if not isinstance(Force, list):
             Force = [Force]
 
-        #TODO: Esto no tendría que ir aca, el design_flexure itera por todas las fuerzas
         # Initialize the maximum and minimum moments
         M_u_min = 0 * kNm  # Negative moment (tension at the top)
         M_u_max = 0 * kNm  # Positive moment (tension at the bottom)
@@ -415,7 +474,6 @@ class RectangularBeam(RectangularSection):
 
         while Err >= tol:
             iteration_count += 1
-
             # Update the effective depth for bottom tension reinforcement
             d = self._height - rec_mec
 
@@ -425,7 +483,7 @@ class RectangularBeam(RectangularSection):
                 self._A_s_max_bot,
                 self._A_s_final_bot_Positive_M,
                 self._A_s_comp_top,
-            ) = self.__calculate_flexural_reinforcement(M_u_max, d, d_prima)
+            ) = self.__calculate_flexural_reinforcement_ACI_318_19(M_u_max, d, d_prima)
 
             # Initialize bottom and top reinforcement
             self._A_s_bottom = self._A_s_final_bot_Positive_M
@@ -438,7 +496,7 @@ class RectangularBeam(RectangularSection):
                     self._A_s_max_top,
                     self._A_s_final_top_Negative_M,
                     self._A_s_comp_bot,
-                ) = self.__calculate_flexural_reinforcement(abs(M_u_min), d_prima, d)
+                ) = self.__calculate_flexural_reinforcement_ACI_318_19(abs(M_u_min), d_prima, d)
 
                 # Adjust reinforcement areas based on positive and negative moments
                 self._A_s_bottom = max(self._A_s_final_bot_Positive_M, self._A_s_comp_bot)
@@ -450,23 +508,25 @@ class RectangularBeam(RectangularSection):
             best_design = section_rebar_bot.longitudinal_rebar_design
 
             # Extract bar information
-            self._d_b1 = best_design["d_b1"]
-            self._n1 = best_design["n_1"]
-            self._d_b2 = best_design["d_b2"]
-            self._n2 = best_design["n_2"]
-            self._d_b3 = best_design["d_b3"]
-            self._n3 = best_design["n_3"]
-            self._d_b4 = best_design["d_b4"]
-            self._n4 = best_design["n_4"]
-            self._layers_spacing = self.settings.get_setting("layers_spacing")
+            d_b1_bot=best_design["d_b1"]
+            d_b2_bot=best_design["d_b2"]
+            d_b3_bot=best_design["d_b3"]
+            d_b4_bot=best_design["d_b4"]
+            n_1_bot=best_design["n_1"]
+            n_2_bot=best_design["n_2"]
+            n_3_bot=best_design["n_3"]
+            n_4_bot=best_design["n_4"]
+            total_as_adopted_bot = best_design["total_as"]
+            total_bars_bot=n_1_bot+n_2_bot+n_3_bot+n_4_bot
+            clearing_spacing_bot = best_design["clear_spacing"]
 
-            # Calculate centroid of bottom bars and update mechanical cover
-            centroid_of_bars_bot = self.calculate_rebar_centroid(
-                self._n1, self._d_b1, self._n2, self._d_b2, self._n3, self._d_b3, self._n4, self._d_b4
-            )
-            self.total_as_adopted_bot = best_design["total_as"]
-            self.available_spacing_bot = best_design["clear_spacing"]
-            rec_mec_calculo = self.c_c + self._stirrup_d_b + centroid_of_bars_bot
+
+            # Set rebar information to section
+            self.set_longitudinal_rebar_bot(n_1_bot, d_b1_bot, n_2_bot, d_b2_bot, 
+                                n_3_bot, d_b3_bot, n_4_bot, d_b4_bot, 
+                                total_as_adopted_bot, total_bars_bot, clearing_spacing_bot)
+
+            rec_mec_calculo = self.c_c + self._stirrup_d_b + self._bot_rebar_centroid
 
             # Design top reinforcement
             if self._A_s_top > 0:
@@ -475,28 +535,32 @@ class RectangularBeam(RectangularSection):
                 best_design_top = section_rebar_top.longitudinal_rebar_design
 
                 # Extract bar information for top reinforcement
-                self._d_b1_top = best_design_top["d_b1"]
-                self._n1_top = best_design_top["n_1"]
-                self._d_b2_top = best_design_top["d_b2"]
-                self._n2_top = best_design_top["n_2"]
-                self._d_b3_top = best_design_top["d_b3"]
-                self._n3_top = best_design_top["n_3"]
-                self._d_b4_top = best_design_top["d_b4"]
-                self._n4_top = best_design_top["n_4"]
+                d_b1_top=best_design_top["d_b1"]
+                d_b2_top=best_design_top["d_b2"]
+                d_b3_top=best_design_top["d_b3"]
+                d_b4_top=best_design_top["d_b4"]
+                n_1_top=best_design_top["n_1"]
+                n_2_top=best_design_top["n_2"]
+                n_3_top=best_design_top["n_3"]
+                n_4_top=best_design_top["n_4"]
+                total_as_adopted_top=n_1_top+n_2_top+n_3_top+n_4_top
+                total_bars_top = best_design_top["total_as"]
+                clearing_spacing_top = best_design_top["clear_spacing"]
 
-                # Calculate centroid of top bars and update compression depth
-                centroid_of_bars_top = self.calculate_rebar_centroid(
-                    self._n1_top, self._d_b1_top, self._n2_top, self._d_b2_top,
-                    self._n3_top, self._d_b3_top, self._n4_top, self._d_b4_top
-                )
-                self.total_as_adopted_top = best_design_top["total_as"]
-                self.available_spacing_top = best_design_top["clear_spacing"]
-                d_prima_calculo = self.c_c + self._stirrup_d_b + centroid_of_bars_top
+                # Set rebar information to section
+                self.set_longitudinal_rebar_top(n_1_top, d_b1_top, n_2_top, d_b2_top, 
+                                    n_3_top, d_b3_top, n_4_top, d_b4_top, 
+                                    total_as_adopted_top, total_bars_top, clearing_spacing_top)
+
+                d_prima_calculo = self.c_c + self._stirrup_d_b + self._top_rebar_centroid
             else:
                 # If no top reinforcement is required
                 d_prima_calculo = d_prima
-                self.total_as_adopted_top = 0 * inch**2
-                self.available_spacing_top = self._width - 2 * self.c_c - 2 * self._stirrup_d_b
+                total_as_adopted_top = 0 * inch**2
+                clearing_spacing_top = self._width - 2 * self.c_c - 2 * self._stirrup_d_b
+                # Set rebar information to section
+                self.set_longitudinal_rebar_top(0, 0*mm, 0, 0*mm, 
+                                    0, 0*mm, 0, 0*mm,total_as_adopted_top, 0, clearing_spacing_top)
 
             # Update error for iteration
             Err = max(abs(rec_mec_calculo - rec_mec), abs(d_prima_calculo - d_prima))
@@ -505,10 +569,10 @@ class RectangularBeam(RectangularSection):
 
         # Return results as a DataFrame
         results = {
-            "Bottom_As_adopted": self.total_as_adopted_bot.to("inch**2"),
-            "Bottom separation of bars": self.available_spacing_bot.to("inch"),
-            "As_compression_adopted": self.total_as_adopted_top.to("inch**2"),
-            "Top separation of bars": self.available_spacing_top.to("inch"),
+            "Bottom_As_adopted": self._total_as_b.to("inch**2"),
+            "Bottom separation of bars": self._clear_spacing_b.to("inch"),
+            "As_compression_adopted": self._total_as_t.to("inch**2"),
+            "Top separation of bars": self._clear_spacing_t.to("inch"),
         }
         return pd.DataFrame([results], index=[0])
 
@@ -1664,8 +1728,8 @@ def shear_EN_1992() -> None:
     # section.shear_results_detailed_doc
 
 if __name__ == "__main__":
-    # flexure()
+    flexure()
     # shear_ACI_imperial()
     # shear_EHE_08()
-    shear_ACI_metric()
+    #shear_ACI_metric()
     # rebar()
