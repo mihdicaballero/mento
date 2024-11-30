@@ -1,5 +1,6 @@
-from mento.units import mm
 from typing import Optional, Dict, Any
+
+from mento.units import mm
 
 class Settings:
     default_settings: Dict[str, Any] = {
@@ -71,3 +72,20 @@ class Settings:
     def update(self, new_settings: Dict[str, Any]) -> None:
         """Updates the settings dictionary with new values."""
         self.add_settings(new_settings)
+
+    def __str__(self) -> str:
+        """Customize the string representation for user-friendly display."""
+        output = "Settings:\n"
+        for key, value in self.settings.items():
+            output += f"  {key}: {value}\n"
+        return output.strip()
+
+def settings() -> None:
+    settings_test = Settings()
+    custom_settings = {'clear_cover': 50*mm, 'longitudinal_diameter_ini': 25*mm}
+    settings_test.update(custom_settings)
+
+    print(settings_test)
+
+if __name__ == "__main__":
+    settings()
