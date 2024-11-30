@@ -1,9 +1,10 @@
 from dataclasses import dataclass, field
-from mento.units import kN, kNm
 from devtools import debug
 from typing import Dict, Optional
 from pint import Quantity
 from pint.facets.plain import PlainQuantity
+
+from mento.units import kN, kNm
 
 
 @dataclass
@@ -101,22 +102,7 @@ class Forces:
         if by not in ['N_x', 'V_z', 'M_y']:
             raise ValueError("Comparison attribute must be one of 'N_x', 'V_z', or 'M_y'")
         return getattr(self, by).magnitude > getattr(other, by).magnitude
+    
     def __str__(self) -> str:
         return (f"Force ID: {self.id}, Label: {self.label}, "
                 f"N_x: {self.N_x}, V_z: {self.V_z}, M_y: {self.M_y}")
-
-
-def main() -> None:
-    f = Forces(M_y=10 * kNm, N_x=2 * kN, V_z=10*kN)
-    debug(f) 
-    print(f.M_y, f.id)
-    debug(f.N_x)
-    debug(f.get_forces())
-    f.set_forces(N_x=10*kN,M_y=15*kNm)
-    f.label = "Crane load"
-    debug(f)
-    debug(f.get_forces())
-    print(f)
-
-if __name__ == "__main__":
-    main()

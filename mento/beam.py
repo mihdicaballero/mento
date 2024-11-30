@@ -71,8 +71,6 @@ class RectangularBeam(RectangularSection):
 
     def _initialize_en_1992_attributes(self) -> None:
         if isinstance(self.concrete, Concrete_EN_1992_2004):
-    def _initialize_en_1992_attributes(self) -> None:
-        if isinstance(self.concrete, Concrete_EN_1992_2004):
             self._f_yk = self.steel_bar.f_y
             self._f_ck = self.concrete.f_ck
             self._f_cd = self.concrete.f_cd
@@ -962,8 +960,6 @@ class RectangularBeam(RectangularSection):
 
     def _initialize_variables_EN_1992_2004(self, Force: Forces, A_s: PlainQuantity) -> None:
         if isinstance(self.concrete, Concrete_EN_1992_2004):
-    def _initialize_variables_EN_1992_2004(self, Force: Forces, A_s: PlainQuantity) -> None:
-        if isinstance(self.concrete, Concrete_EN_1992_2004):
             # Set the initial variables
             self._N_Ed = Force.N_x
             self._V_Ed_1 = Force.V_z  # Consider the same shear at the edge of support and in d
@@ -1006,8 +1002,6 @@ class RectangularBeam(RectangularSection):
 
     def _shear_without_rebar_EN_1992_2004(self) -> PlainQuantity:
         
-    def _shear_without_rebar_EN_1992_2004(self) -> PlainQuantity:
-        
         self._stirrup_d_b = 0*mm
         self._A_v_min = 0*cm**2/m
         # Positive of compression
@@ -1033,8 +1027,6 @@ class RectangularBeam(RectangularSection):
                   +k_1*self._sigm_cp.to('MPa').magnitude)* self.width * self.d * MPa
         return max(V_Rd_c_min, V_Rd_c)
         
-    def check_shear_EN_1992_2004(self, Force:Forces, A_s:PlainQuantity = 0*cm**2) -> DataFrame:
-        if isinstance(self.concrete, Concrete_EN_1992_2004):
     def check_shear_EN_1992_2004(self, Force:Forces, A_s:PlainQuantity = 0*cm**2) -> DataFrame:
         if isinstance(self.concrete, Concrete_EN_1992_2004):
             # Initialize all the code related variables
@@ -1127,7 +1119,7 @@ class RectangularBeam(RectangularSection):
         else:
             raise ValueError("Concrete type is not compatible with EHE-08 shear check.")
   
-    def design_shear_EN_1992_2004(self, Force:Forces, A_s:PlainQuantity = 0*cm**2) -> None:
+
     def design_shear_EN_1992_2004(self, Force:Forces, A_s:PlainQuantity = 0*cm**2) -> None:
         return None
 
@@ -1831,8 +1823,6 @@ def rebar() -> None:
     # trans_rebar = beam_rebar.beam_transverse_rebar_ACI_318_19(A_v_req=A_v_req, V_s_req=V_s_req)
     # print(trans_rebar)
 
-def shear_EN_1992() -> None:
-    concrete= Concrete_EN_1992_2004(name="C25",f_ck=25*MPa) 
 def shear_EN_1992() -> None:
     concrete= Concrete_EN_1992_2004(name="C25",f_ck=25*MPa) 
     steelBar= SteelBar(name="B500S", f_y=500*MPa)

@@ -113,7 +113,7 @@ class TablePrinter:
         self.title = title
 
     def print_table_data(self, data: dict[str, list[Any]], headers: str, tablefmt: str = "fancygrid",
-                         numalign: str = "right") -> str:
+                         numalign: str = "right") -> None:
         """
         Prints table data with customizable formatting options.
         
@@ -146,7 +146,8 @@ class TablePrinter:
             numalign=numalign,
             colalign=colalign
         )
-        return table  # Return the formatted table string
+        print(table, '\n')
+        return None  
         
     def print_table_min_max(self, data: dict[str, list[Any]], headers: str, tablefmt: str = "fancygrid",
                             numalign: str = "right") -> None:

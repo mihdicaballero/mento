@@ -26,7 +26,7 @@ This repository provides a comprehensive package for the design and structural a
 - Comprehensive testing for design code compliance, including ACI 318-19, EN 1992-2024, and CIRSOC 201-2024.
 
 #### Basic Usage
-![Basic Usage](docs/assets/mento_general.gif)
+![Basic Usage](docs/assets/basic_usage.gif)
 
 
 #### Roadmap
