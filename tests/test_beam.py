@@ -1,6 +1,6 @@
 from mento.beam import RectangularBeam
 from mento.material import Concrete_ACI_318_19, SteelBar, Concrete_EN_1992_2004
-from mento.units import psi, kip, inch, ksi, ft, mm, kN, kNm, cm, MPa
+from mento.units import psi, kip, inch, ksi, mm, kN, kNm, cm, MPa
 from mento.forces import Forces
 import pytest
 import numpy as np
