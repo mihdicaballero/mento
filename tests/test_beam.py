@@ -1,5 +1,5 @@
 from mento.beam import RectangularBeam
-from mento.material import Concrete_ACI_318_19, SteelBar, Concrete_EHE_08
+from mento.material import Concrete_ACI_318_19, SteelBar, Concrete_EN_1992_2004
 from mento.units import psi, kip, inch, ksi, ft, mm, kN, kNm, cm, MPa
 from mento.forces import Forces
 import pytest
@@ -22,8 +22,8 @@ def beam_example_imperial() -> RectangularBeam:
     return section
 
 @pytest.fixture()
-def beam_example_ehe() -> RectangularBeam:
-    concrete= Concrete_EHE_08(name="C25",f_ck=25*MPa) 
+def beam_example_EN_1992_2004() -> RectangularBeam:
+    concrete= Concrete_EN_1992_2004(name="C25",f_ck=25*MPa) 
     steelBar= SteelBar(name="B500S", f_y=500*MPa)
     custom_settings = {'clear_cover': 2.6*cm, 'stirrup_diameter_ini':8*mm,
                        'longitudinal_diameter_ini': 16*mm}
@@ -32,11 +32,11 @@ def beam_example_ehe() -> RectangularBeam:
                                        settings=custom_settings)
     return section
 
-def test_shear_check_EHE_08(beam_example_ehe: RectangularBeam) -> None:
+def test_shear_check_EN_1992_2004(beam_example_EN_1992_2004: RectangularBeam) -> None:
     f = Forces(V_z=100*kN, M_y=100*kNm)
     A_s = 8.04*cm**2
-    beam_example_ehe.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=20*cm) 
-    results = beam_example_ehe.check_shear_EHE_08(f, A_s)  
+    beam_example_EN_1992_2004.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=20*cm) 
+    results = beam_example_EN_1992_2004.check_shear_EN_1992_2004(f, A_s)  
 
     # Compare dictionaries with a tolerance for floating-point values, in m 
     assert results.iloc[0]['Av,min'].magnitude  == pytest.approx(1.71, rel=1e-3)
@@ -54,10 +54,10 @@ def test_shear_check_EHE_08(beam_example_ehe: RectangularBeam) -> None:
     assert results.iloc[0]['Vrd,1<Vu1'] is np.True_
     assert results.iloc[0]['Vrd,2<Vu2'] is np.True_
 
-def test_shear_check_EHE_08_no_rebar_1(beam_example_ehe: RectangularBeam) -> None:
+def test_shear_check_EN_1992_2004_no_rebar_1(beam_example_ehe: RectangularBeam) -> None:
     f = Forces(V_z=50*kN)
     A_s = 8.04*cm**2
-    results = beam_example_ehe.check_shear_EHE_08(f, A_s)  
+    results = beam_example_ehe.check_shear_EN_1992_2004(f, A_s)  
 
     # Compare dictionaries with a tolerance for floating-point values, in m 
     assert results.iloc[0]['Av,min'].magnitude  == pytest.approx(0, rel=1e-3)
@@ -75,10 +75,10 @@ def test_shear_check_EHE_08_no_rebar_1(beam_example_ehe: RectangularBeam) -> Non
     assert results.iloc[0]['Vrd,1<Vu1'] is np.True_
     assert results.iloc[0]['Vrd,2<Vu2'] is np.True_
 
-def test_shear_check_EHE_08_no_rebar_2(beam_example_ehe: RectangularBeam) -> None:
+def test_shear_check_EN_1992_2004_no_rebar_2(beam_example_ehe: RectangularBeam) -> None:
     f = Forces(V_z=50*kN, M_y=50*kNm)
     A_s = 8.04*cm**2
-    results = beam_example_ehe.check_shear_EHE_08(f, A_s)  
+    results = beam_example_ehe.check_shear_EN_1992_2004(f, A_s)  
 
     # Compare dictionaries with a tolerance for floating-point values, in m 
     assert results.iloc[0]['Av,min'].magnitude  == pytest.approx(0, rel=1e-3)

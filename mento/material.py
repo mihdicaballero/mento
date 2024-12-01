@@ -92,6 +92,19 @@ class Concrete_ACI_318_19(Concrete):
     @property
     def beta_1(self) -> float:
         return self._beta_1
+    
+    def __str__(self) -> str:
+        """Customize the string representation for user-friendly display."""
+        properties = self.get_properties()
+        return (
+            f"Concrete Properties ({self.name}):\n"
+            f"  f_c: {properties['f_c']}\n"
+            f"  Density: {properties['density']}\n"
+            f"  E_c: {properties['E_c']}\n"
+            f"  f_r: {properties['f_r']}\n"
+            f"  beta_1: {properties['beta_1']}\n"
+            f"  epsilon_c: {properties['epsilon_c'].magnitude:.3f}"
+        )
 
 @dataclass
 class Concrete_EN_1992_2004(Concrete):
@@ -186,6 +199,16 @@ class SteelBar(Steel):
             'epsilon_y': self._epsilon_y
             }
         return properties
+    def __str__(self) -> str:
+        """Customize the string representation for user-friendly display."""
+        properties = self.get_properties()
+        return (
+            f"SteelBar Properties ({self.name}):\n"
+            f"  f_y: {properties['f_y']}\n"
+            f"  E_s: {properties['E_s']}\n"
+            f"  epsilon_y: {properties['epsilon_y'].magnitude:.4f}\n"
+            f"  Density: {self.density}"
+        )
 
 @dataclass
 class SteelStrand(Steel):

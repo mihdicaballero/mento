@@ -27,7 +27,7 @@ ksi = ureg.ksi
 inch = ureg.inch
 ft = ureg.foot
 
-def main():
+def main() -> None:
     print(45*deg)
     a= 45*ureg.degree
     print(a, math.cos(a))
