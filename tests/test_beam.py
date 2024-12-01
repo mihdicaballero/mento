@@ -219,6 +219,29 @@ def test_flexural_beam_determine_nominal_moment_simple_reinf_ACI_318_19() -> Non
     # Result: 1653.84kip.ft
     assert result.to(kip*ft).magnitude  == pytest.approx(1653.84, rel=1e-2)
 
+def test_flexural_beam_determine_nominal_moment_double_reinf_ACI_318_19() -> None:
+    '''
+        Test para la funcion que determina el momento nominal de una seccion doblemente armada
+        Example from https://www.youtube.com/watch?v=7BOuV1gCcgc
+    '''
+    concrete = Concrete_ACI_318_19(name="C4",f_c=4000*psi) 
+    steelBar = SteelBar(name="G60", f_y=60000*psi) 
+    beam = RectangularBeam(
+        label="B14x27",
+        concrete=concrete,
+        steel_bar=steelBar,
+        width=14 * inch,  
+        height=27 * inch,   
+    )
+    A_s=6 * inch**2
+    d=24*inch
+    c_mec=3*inch
+    d_prime=2.5*inch
+    A_s_prime=1.8*inch**2
+    result=beam._determine_nominal_moment_double_reinf_ACI_318_19(A_s, d, c_mec, d_prime, A_s_prime)
+    assert result.to(kip*ft).magnitude  == pytest.approx(1639.12, rel=1e-2)
+
+
 
 
 # LO QUE ME ESTÁ FALTANDO ES SETEAR EL MEC COVER.

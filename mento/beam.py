@@ -454,9 +454,8 @@ class RectangularBeam(RectangularSection):
             A = 0.85*f_c*b*beta_1
             B = A_s_prime * epsilon_c * E_s - A_s * f_y
             C = -d_prime*A_s_prime*epsilon_c*E_s
-            
-            c=(-B+sqrt(B**2-4*A*C))/(2*A)
-            a=b*beta_1
+            c=(-B+np.sqrt(B**2-4*A*C))/(2*A)
+            a=c*beta_1
             epsilon_s_prime=(c-d_prime)/c*epsilon_c
             f_s_prime=epsilon_s_prime*E_s
             A_s_2=A_s_prime*f_s_prime/f_y
@@ -1928,6 +1927,7 @@ def flexure() -> None:
     print(results)
 
 def flexure_Mn() -> None:
+    # MOMENTO NOMINAL SIMPLEMENTE ARMADO
     #Example from https://www.google.com/search?q=ACI+318+19+nominal+moment+of+section&oq=ACI+318+19+nominal+moment+of+section&gs_lcrp=EgZjaHJvbWUyBggAEEUYOTIHCAEQIRigAdIBCTIyNzkzajBqN6gCALACAA&sourceid=chrome&ie=UTF-8#fpstate=ive&vld=cid:dab5f5e7,vid:m4H0QbGDYIg,st:0
     concrete = Concrete_ACI_318_19(name="C6",f_c=6000*psi) 
     steelBar = SteelBar(name="G80", f_y=80000*psi) 
@@ -1945,6 +1945,26 @@ def flexure_Mn() -> None:
     result=beam._determine_nominal_moment_simple_reinf_ACI_318_19(A_s,d,c_mec)
     print(result.to(kip*ft))
 
+
+    # MOMENTO NOMINAL DOBLEMENTE ARMADO
+    concrete2 = Concrete_ACI_318_19(name="C4",f_c=4000*psi) 
+    steelBar2 = SteelBar(name="G60", f_y=60000*psi) 
+    beam2 = RectangularBeam(
+        label="B14x27",
+        concrete=concrete2,
+        steel_bar=steelBar2,
+        width=14 * inch,  
+        height=27 * inch,   
+    )
+    ''' VAMOS A PEDIR UN MOMENTO NOMINAL QUE CON LA FUNCION PRIVADA'''
+    A_s=6 * inch**2
+    d=24*inch
+    c_mec=3*inch
+    d_prime=2.5*inch
+    A_s_prime=1.8*inch**2
+    result=beam2._determine_nominal_moment_double_reinf_ACI_318_19(A_s, d, c_mec, d_prime, A_s_prime)
+    print(result.to(kip*ft))
+    
 
 
 def shear_ACI_metric() -> None:
@@ -2038,7 +2058,7 @@ def shear_EN_1992() -> None:
 
 if __name__ == "__main__":
     # flexure()
-    # flexure_Mn()
+    flexure_Mn()
     # shear_ACI_imperial()
     # shear_EHE_08()
     #shear_ACI_metric()
