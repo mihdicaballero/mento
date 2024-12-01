@@ -218,8 +218,6 @@ class Rebar:
     def longitudinal_rebar_EN_1992(self, A_s_req: PlainQuantity) -> None:
         pass
 
-    def longitudinal_rebar_EHE_08(self, A_s_req: PlainQuantity) -> None:
-        pass
 
     def transverse_rebar_ACI_318_19(self, A_v_req: PlainQuantity, 
                                          V_s_req: PlainQuantity) -> DataFrame:
@@ -294,11 +292,9 @@ class Rebar:
         self._trans_combos_df = df_combinations
         return df_combinations
     
-    def transverse_rebar_EN_1992(self, A_v_req: PlainQuantity, V_s_req: PlainQuantity) -> None:
+    def transverse_rebar_EN_1992_2004(self, A_v_req: PlainQuantity, V_s_req: PlainQuantity) -> None:
         pass
 
-    def transverse_rebar_EHE_08(self, A_v_req: PlainQuantity, V_s_req: PlainQuantity) -> None:
-        pass
     
     # Factory method to select the transverse rebar method
     def longitudinal_rebar(self, A_s_req: PlainQuantity) -> Dict[str, Any]:
@@ -364,35 +360,21 @@ class Rebar:
         
         return s_max_l, s_max_w  
     
-    def calculate_max_spacing_EHE(self, V_rd2: PlainQuantity, V_u1: PlainQuantity,
-                                 alpha: float) -> Tuple[PlainQuantity, PlainQuantity]:
+    def calculate_max_spacing_EN_1992_2004(self, alpha: float) -> Tuple[PlainQuantity, PlainQuantity]:
         """
         Calculate the maximum allowable spacing across the length and width of the beam
-        based on design requirements for EHE-08.
+        based on design requirements for EN 1992-2004.
         
         Parameters:
         -----------
-        V_rd2 : PlainQuantity
-            Design shear resistance of the concrete.
-        V_u1 : PlainQuantity
-            Applied shear force.
-        alpha : float
-            Angle in radians used in spacing calculation.
+        alpha: stirrups angle
 
         Returns:
         --------
         tuple
             (s_max_l, s_max_w): The maximum spacing along the length and width of the beam.
         """
-        # Determine maximum spacing s_max based on V_rd2 and V_u1 conditions
-        if V_rd2 < V_u1 / 5:
-            s_max_l = min(0.75 * self.beam.d * (1 + math.atan(alpha)), 60 * cm)
-        elif V_rd2 < V_u1 * 2 / 3:
-            s_max_l = min(0.6 * self.beam.d * (1 + math.atan(alpha)), 45 * cm)
-        else:
-            s_max_l = min(0.3 * self.beam.d * (1 + math.atan(alpha)), 30 * cm)
-
-        s_max_w = min(self.beam.d, 50 * cm)
-        
-        
+        s_max_l = 0.75*self.beam.d*(1+1 / math.tan(alpha))
+        s_max_w = min(0.75*self.beam.d, 60 * cm)
+           
         return s_max_l, s_max_w

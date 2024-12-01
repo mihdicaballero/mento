@@ -32,69 +32,134 @@ def beam_example_EN_1992_2004() -> RectangularBeam:
                                        settings=custom_settings)
     return section
 
-def test_shear_check_EN_1992_2004(beam_example_EN_1992_2004: RectangularBeam) -> None:
-    f = Forces(V_z=100*kN, M_y=100*kNm)
+def test_shear_check_EN_1992_2004_rebar_1(beam_example_EN_1992_2004: RectangularBeam) -> None:
+    f = Forces(V_z=100*kN)
     A_s = 8.04*cm**2
-    beam_example_EN_1992_2004.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=20*cm) 
+    beam_example_EN_1992_2004.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=25*cm) 
     results = beam_example_EN_1992_2004.check_shear_EN_1992_2004(f, A_s)  
 
     # Compare dictionaries with a tolerance for floating-point values, in m 
-    assert results.iloc[0]['Av,min'].magnitude  == pytest.approx(1.71, rel=1e-3)
-    assert results.iloc[0]['Av,req'].magnitude  == pytest.approx(2.156, rel=1e-3)
-    assert results.iloc[0]['Av'].magnitude  == pytest.approx(2.827, rel=1e-3)
-    assert results.iloc[0]['Vrd,1'].magnitude  == pytest.approx(100, rel=1e-3)
-    assert results.iloc[0]['Vrd,2'].magnitude  == pytest.approx(100, rel=1e-3)
-    assert results.iloc[0]['Vcu'].magnitude  == pytest.approx(56.541, rel=1e-3)
-    assert results.iloc[0]['Vsu'].magnitude  == pytest.approx(57.001, rel=1e-3)
-    assert results.iloc[0]['Vu2'].magnitude  == pytest.approx(113.542, rel=1e-3)
-    assert results.iloc[0]['Vu1'].magnitude  == pytest.approx(560, rel=1e-3)
-    assert results.iloc[0]["DCR"].magnitude  == pytest.approx(0.8807, rel=1e-3)
+    assert results.iloc[0]['Av,min'].magnitude  == pytest.approx(1.6, rel=1e-3)
+    assert results.iloc[0]['Av,req'].magnitude  == pytest.approx(1.825, rel=1e-3)
+    assert results.iloc[0]['Av'].magnitude  == pytest.approx(2.262, rel=1e-3)
+    assert results.iloc[0]['VEd,1'].magnitude  == pytest.approx(100, rel=1e-3)
+    assert results.iloc[0]['VEd,2'].magnitude  == pytest.approx(100, rel=1e-3)
+    assert results.iloc[0]['VRd,c'].magnitude  == pytest.approx(0, rel=1e-3)
+    assert results.iloc[0]['VRd,s'].magnitude  == pytest.approx(123.924, rel=1e-3)
+    assert results.iloc[0]['VRd'].magnitude  == pytest.approx(123.924, rel=1e-3)
+    assert results.iloc[0]['VRd,max'].magnitude  == pytest.approx(312.811, rel=1e-3)
+    assert results.iloc[0]["DCR"].magnitude  == pytest.approx(0.8069, rel=1e-3)
 
     # Assert non-numeric values directly
-    assert results.iloc[0]['Vrd,1<Vu1'] is np.True_
-    assert results.iloc[0]['Vrd,2<Vu2'] is np.True_
+    assert results.iloc[0]['VEd,1<VRd,max'] is np.True_
+    assert results.iloc[0]['VEd,2<VRd'] is np.True_
 
-def test_shear_check_EN_1992_2004_no_rebar_1(beam_example_ehe: RectangularBeam) -> None:
-    f = Forces(V_z=50*kN)
+def test_shear_check_EN_1992_2004_rebar_2(beam_example_EN_1992_2004: RectangularBeam) -> None:
+    f = Forces(V_z=350*kN)
     A_s = 8.04*cm**2
-    results = beam_example_ehe.check_shear_EN_1992_2004(f, A_s)  
+    beam_example_EN_1992_2004.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=25*cm) 
+    results = beam_example_EN_1992_2004.check_shear_EN_1992_2004(f, A_s)  
 
     # Compare dictionaries with a tolerance for floating-point values, in m 
-    assert results.iloc[0]['Av,min'].magnitude  == pytest.approx(0, rel=1e-3)
-    assert results.iloc[0]['Av,req'].magnitude  == pytest.approx(0, rel=1e-3)
-    assert results.iloc[0]['Av'].magnitude  == pytest.approx(0, rel=1e-3)
-    assert results.iloc[0]['Vrd,1'].magnitude  == pytest.approx(50, rel=1e-3)
-    assert results.iloc[0]['Vrd,2'].magnitude  == pytest.approx(50, rel=1e-3)
-    assert results.iloc[0]['Vcu'].magnitude  == pytest.approx(95.76, rel=1e-3)
-    assert results.iloc[0]['Vsu'].magnitude  == pytest.approx(0, rel=1e-3)
-    assert results.iloc[0]['Vu2'].magnitude  == pytest.approx(95.76, rel=1e-3)
-    assert results.iloc[0]['Vu1'].magnitude  == pytest.approx(558, rel=1e-3)
-    assert results.iloc[0]["DCR"].magnitude  == pytest.approx(0.522, rel=1e-3)
+    assert results.iloc[0]['Av,min'].magnitude  == pytest.approx(1.6, rel=1e-3)
+    assert results.iloc[0]['Av,req'].magnitude  == pytest.approx(7.533, rel=1e-3)
+    assert results.iloc[0]['Av'].magnitude  == pytest.approx(2.262, rel=1e-3)
+    assert results.iloc[0]['VEd,1'].magnitude  == pytest.approx(350, rel=1e-3)
+    assert results.iloc[0]['VEd,2'].magnitude  == pytest.approx(350, rel=1e-3)
+    assert results.iloc[0]['VRd,c'].magnitude  == pytest.approx(0, rel=1e-3)
+    assert results.iloc[0]['VRd,s'].magnitude  == pytest.approx(105.099, rel=1e-3)
+    assert results.iloc[0]['VRd'].magnitude  == pytest.approx(105.099, rel=1e-3)
+    assert results.iloc[0]['VRd,max'].magnitude  == pytest.approx(350, rel=1e-3)
+    assert results.iloc[0]["DCR"].magnitude  == pytest.approx(3.33, rel=1e-3)
 
     # Assert non-numeric values directly
-    assert results.iloc[0]['Vrd,1<Vu1'] is np.True_
-    assert results.iloc[0]['Vrd,2<Vu2'] is np.True_
+    assert results.iloc[0]['VEd,1<VRd,max'] is np.True_
+    assert results.iloc[0]['VEd,2<VRd'] is np.False_
 
-def test_shear_check_EN_1992_2004_no_rebar_2(beam_example_ehe: RectangularBeam) -> None:
-    f = Forces(V_z=50*kN, M_y=50*kNm)
+def test_shear_check_EN_1992_2004_rebar_3(beam_example_EN_1992_2004: RectangularBeam) -> None:
+    f = Forces(V_z=500*kN)
     A_s = 8.04*cm**2
-    results = beam_example_ehe.check_shear_EN_1992_2004(f, A_s)  
+    beam_example_EN_1992_2004.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=25*cm) 
+    results = beam_example_EN_1992_2004.check_shear_EN_1992_2004(f, A_s)  
 
     # Compare dictionaries with a tolerance for floating-point values, in m 
-    assert results.iloc[0]['Av,min'].magnitude  == pytest.approx(0, rel=1e-3)
-    assert results.iloc[0]['Av,req'].magnitude  == pytest.approx(0, rel=1e-3)
-    assert results.iloc[0]['Av'].magnitude  == pytest.approx(0, rel=1e-3)
-    assert results.iloc[0]['Vrd,1'].magnitude  == pytest.approx(50, rel=1e-3)
-    assert results.iloc[0]['Vrd,2'].magnitude  == pytest.approx(50, rel=1e-3)
-    assert results.iloc[0]['Vcu'].magnitude  == pytest.approx(56.40, rel=1e-3)
-    assert results.iloc[0]['Vsu'].magnitude  == pytest.approx(0, rel=1e-3)
-    assert results.iloc[0]['Vu2'].magnitude  == pytest.approx(56.40, rel=1e-3)
-    assert results.iloc[0]['Vu1'].magnitude  == pytest.approx(558, rel=1e-3)
-    assert results.iloc[0]["DCR"].magnitude  == pytest.approx(0.886, rel=1e-3)
+    assert results.iloc[0]['Av,min'].magnitude  == pytest.approx(1.6, rel=1e-3)
+    assert results.iloc[0]['Av,req'].magnitude  == pytest.approx(22.817, rel=1e-3)
+    assert results.iloc[0]['Av'].magnitude  == pytest.approx(2.26, rel=1e-3)
+    assert results.iloc[0]['VEd,1'].magnitude  == pytest.approx(500, rel=1e-3)
+    assert results.iloc[0]['VEd,2'].magnitude  == pytest.approx(500, rel=1e-3)
+    assert results.iloc[0]['VRd,c'].magnitude  == pytest.approx(0, rel=1e-3)
+    assert results.iloc[0]['VRd,s'].magnitude  == pytest.approx(49.566, rel=1e-3)
+    assert results.iloc[0]['VRd'].magnitude  == pytest.approx(49.566, rel=1e-3)
+    assert results.iloc[0]['VRd,max'].magnitude  == pytest.approx(453.6, rel=1e-3)
+    assert results.iloc[0]["DCR"].magnitude  == pytest.approx(10.088, rel=1e-3)
 
     # Assert non-numeric values directly
-    assert results.iloc[0]['Vrd,1<Vu1'] is np.True_
-    assert results.iloc[0]['Vrd,2<Vu2'] is np.True_
+    assert results.iloc[0]['VEd,1<VRd,max'] is np.False_
+    assert results.iloc[0]['VEd,2<VRd'] is np.False_
+
+def test_shear_check_EN_1992_2004_no_rebar_1(beam_example_EN_1992_2004: RectangularBeam) -> None:
+    f = Forces(V_z=30*kN)
+    A_s = 8.04*cm**2
+    results = beam_example_EN_1992_2004.check_shear_EN_1992_2004(f, A_s)  
+
+    # Compare dictionaries with a tolerance for floating-point values, in m 
+    assert results.iloc[0]['Av,min'].magnitude  == pytest.approx(1.6, rel=1e-3)
+    assert results.iloc[0]['Av,req'].magnitude  == pytest.approx(1.6, rel=1e-3)
+    assert results.iloc[0]['Av'].magnitude  == pytest.approx(0, rel=1e-3)
+    assert results.iloc[0]['VEd,1'].magnitude  == pytest.approx(30, rel=1e-3)
+    assert results.iloc[0]['VEd,2'].magnitude  == pytest.approx(30, rel=1e-3)
+    assert results.iloc[0]['VRd,c'].magnitude  == pytest.approx(56.12, rel=1e-3)
+    assert results.iloc[0]['VRd,s'].magnitude  == pytest.approx(0, rel=1e-3)
+    assert results.iloc[0]['VRd'].magnitude  == pytest.approx(56.12, rel=1e-3)
+    assert results.iloc[0]['VRd,max'].magnitude  == pytest.approx(56.12, rel=1e-3)
+    assert results.iloc[0]["DCR"].magnitude  == pytest.approx(0.5346, rel=1e-3)
+
+    # Assert non-numeric values directly
+    assert results.iloc[0]['VEd,1<VRd,max'] is np.True_
+    assert results.iloc[0]['VEd,2<VRd'] is np.True_
+
+def test_shear_check_EN_1992_2004_no_rebar_2(beam_example_EN_1992_2004: RectangularBeam) -> None:
+    f = Forces(V_z=30*kN)
+    A_s = 0*cm**2
+    results = beam_example_EN_1992_2004.check_shear_EN_1992_2004(f, A_s)  
+
+    # Compare dictionaries with a tolerance for floating-point values, in m 
+    assert results.iloc[0]['Av,min'].magnitude  == pytest.approx(1.6, rel=1e-3)
+    assert results.iloc[0]['Av,req'].magnitude  == pytest.approx(1.6, rel=1e-3)
+    assert results.iloc[0]['Av'].magnitude  == pytest.approx(0, rel=1e-3)
+    assert results.iloc[0]['VEd,1'].magnitude  == pytest.approx(30, rel=1e-3)
+    assert results.iloc[0]['VEd,2'].magnitude  == pytest.approx(30, rel=1e-3)
+    assert results.iloc[0]['VRd,c'].magnitude  == pytest.approx(39.477, rel=1e-3)
+    assert results.iloc[0]['VRd,s'].magnitude  == pytest.approx(0, rel=1e-3)
+    assert results.iloc[0]['VRd'].magnitude  == pytest.approx(39.477, rel=1e-3)
+    assert results.iloc[0]['VRd,max'].magnitude  == pytest.approx(39.477, rel=1e-3)
+    assert results.iloc[0]["DCR"].magnitude  == pytest.approx(0.7599, rel=1e-3)
+
+    # Assert non-numeric values directly
+    assert results.iloc[0]['VEd,1<VRd,max'] is np.True_
+    assert results.iloc[0]['VEd,2<VRd'] is np.True_
+
+def test_shear_check_EN_1992_2004_no_rebar_3(beam_example_EN_1992_2004: RectangularBeam) -> None:
+    f = Forces(N_x=50*kN, V_z=30*kN)
+    A_s = 8.04*cm**2
+    results = beam_example_EN_1992_2004.check_shear_EN_1992_2004(f, A_s)  
+
+    # Compare dictionaries with a tolerance for floating-point values, in m 
+    assert results.iloc[0]['Av,min'].magnitude  == pytest.approx(1.6, rel=1e-3)
+    assert results.iloc[0]['Av,req'].magnitude  == pytest.approx(1.6, rel=1e-3)
+    assert results.iloc[0]['Av'].magnitude  == pytest.approx(0, rel=1e-3)
+    assert results.iloc[0]['VEd,1'].magnitude  == pytest.approx(30, rel=1e-3)
+    assert results.iloc[0]['VEd,2'].magnitude  == pytest.approx(30, rel=1e-3)
+    assert results.iloc[0]['VRd,c'].magnitude  == pytest.approx(63.095, rel=1e-3)
+    assert results.iloc[0]['VRd,s'].magnitude  == pytest.approx(0, rel=1e-3)
+    assert results.iloc[0]['VRd'].magnitude  == pytest.approx(63.095, rel=1e-3)
+    assert results.iloc[0]['VRd,max'].magnitude  == pytest.approx(63.095, rel=1e-3)
+    assert results.iloc[0]["DCR"].magnitude  == pytest.approx(0.4755, rel=1e-3)
+
+    # Assert non-numeric values directly
+    assert results.iloc[0]['VEd,1<VRd,max'] is np.True_
+    assert results.iloc[0]['VEd,2<VRd'] is np.True_
 
 def test_shear_check_ACI_318_19_1(beam_example_imperial: RectangularBeam) -> None:
     f = Forces(V_z=37.727*kip, N_x = 0*kip)  

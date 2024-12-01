@@ -25,10 +25,6 @@ This repository provides a comprehensive package for the design and structural a
 - Ability to generate detailed calculation reports in Word.
 - Comprehensive testing for design code compliance, including ACI 318-19, EN 1992-2024, and CIRSOC 201-2024.
 
-#### Basic Usage
-![Basic Usage](docs/assets/basic_usage.gif)
-
-
 #### Roadmap
 The development is structured around key milestones, with ongoing tasks that aim to enhance functionality and compliance with design standards:
 - [x] Rectangular concrete beam section check and design for ACI 318-19.
