@@ -80,6 +80,15 @@ Each `Forces` object is automatically assigned a unique ID, which can be accesse
 
     print(forces.id)  # Output: Unique ID (e.g., 1, 2, etc.)
 
+7. Print Force complete properties
+**********
+
+Each `Forces` object con be printed in the terminal with `print(forces)` method. This allows to quickly assess a Forces object..
+
+.. code-block:: python
+
+    print(forces)  # Output: Force ID: 1, Label: Crane load, N_x: 3.00 kN, V_z: 0.00 kN, M_y: 7.00 kN·m
+
 Example Workflow
 ----------------
 
@@ -110,5 +119,8 @@ Here's a full example of how the `Forces` class could be used in a typical workf
 
     # Check the unique ID assigned to this object
     print(forces.id)
+
+    # Get a string print of the forces object with all it's roperties
+    print(forces)
 
 This flexible interface ensures that you can easily manage forces during the design and analysis of structural elements, while maintaining clear and consistent units.

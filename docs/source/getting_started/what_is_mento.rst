@@ -21,20 +21,20 @@ Some key features of Mento include:
 - **Results in Markdown and DataFrames**: Results are provided in markdown format and as Pandas DataFrames, facilitating the handling and presentation of multiple design checks.
 - **Report generation**: Mento can generate detailed reports in LaTeX format, making it easy to document the results of the analysis.
 
-Mento is thoroughly tested for compliance with major design codes such as **ACI 318-19**, **EN 1992**, **EHE-08**, and **CIRSOC 201-2005**, ensuring reliable results that meet industry standards. 
+Mento is thoroughly tested for compliance with major design codes such as **ACI 318-19**, **EN 1992**, and **CIRSOC 201-2005**, ensuring reliable results that meet industry standards. 
 
 Using Mento is easy and intuitive:
 
 .. code-block:: python
 
-    from mento import Concrete_ACI_318_19, SteelBar, RectangularConcreteBeam
+    from mento import Concrete_ACI_318_19, SteelBar, RectangularBeam
     from mento import cm, MPa
 
     # Define concrete and steel properties
     conc= Concrete_ACI_318_19(name="C25",f_c=25*MPa)
     steel= SteelBar(name="ADN 420", f_y=420*MPa)
     # Define beam section
-    section = RectangularConcreteBeam(
+    section = RectangularBeam(
             label="101",concrete=conc,steel_bar=steel,width=20*cm, height=40*cm)
     # Display data with LaTeX formatting in a Jupyter Notebook
     section.data
@@ -58,6 +58,6 @@ Mento was developed to meet the needs of structural engineers for a flexible, co
 
 - **Code-compliant checks**: Mento supports multiple design codes and is easily extensible to add more in the future.
 - **Modular design**: The package’s design ensures that engineers can mix and match different sections for custom analyses.
-- **Integration with Pandas and LaTeX**: Mento generates reports and tables that can be exported into different formats, supporting data analysis and documentation needs.
+- **Integration with Pandas and Word**: Mento generates reports and tables that can be exported into different formats, supporting data analysis and documentation needs.
 
 For more detailed help getting started, see the :ref:`User Guide <user_guide/index>` and explore :ref:`Examples <examples/index>`.

@@ -1,4 +1,4 @@
-.. _contributing:
+.. _dev/contributing:
 
 Contributing to Mento
 ====================

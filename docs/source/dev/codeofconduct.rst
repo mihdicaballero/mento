@@ -1,3 +1,5 @@
+.. _dev/codeofconduct:
+
 Code of Conduct
 ====================================
 
