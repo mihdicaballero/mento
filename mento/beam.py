@@ -397,7 +397,7 @@ class RectangularBeam(RectangularSection):
 
     def _determine_nominal_moment_simple_reinf_ACI_318_19(self, A_s: PlainQuantity, d: PlainQuantity, c_mec: PlainQuantity) -> PlainQuantity:
         '''
-            Se usa esta formula SOLO cuando el acero dispuesto es menor que A_s_max
+            Se usa esta formula SOLO cuando el acero dispuesto es menor o igual que A_s_max
         '''
         concrete_properties = self.concrete.get_properties()
         f_c = concrete_properties['f_c']
@@ -414,6 +414,58 @@ class RectangularBeam(RectangularSection):
         a = A_s *f_y /(0.85*f_c*b)
         M_n=A_s*f_y*(d-a/2)
         return M_n
+    
+    def _determine_nominal_moment_double_reinf_ACI_318_19(self, A_s: PlainQuantity, d: PlainQuantity, c_mec: PlainQuantity, d_prime: PlainQuantity, A_s_prime: PlainQuantity) -> PlainQuantity:
+        '''
+            Se usa solo cuando la viga tiene mas refuerzo que el maximo, y tiene armadura de compresion.
+        '''
+        concrete_properties = self.concrete.get_properties()
+        f_c = concrete_properties['f_c']
+        beta_1 = concrete_properties['beta_1']
+        rebar_properties = self.steel_bar.get_properties()
+        f_y = rebar_properties['f_y']
+        E_s = rebar_properties['E_s']
+        epsilon_y=rebar_properties['epsilon_y']
+        b = self._width
+        # Retrieve concrete crushing strain (ε_c)
+        epsilon_c = self.concrete.get_properties()["epsilon_c"]
+
+        '''
+        Equilibrium: C=T --> Cc+Cs = T
+        Sin embargo la forma de calcuar Cs depende de si el acero comprimido está en fluencia o no.
+        Se asume que si, y se chequea
+        0.85*f_c*a*b + A_s_prime * f_y = A_s * f_y
+        '''
+
+        # Assuming f_s_prime=f_y:
+        c_assumed = (A_s * f_y - A_s_prime * f_y) /(0.85*f_c*b*beta_1)
+        epsilon_s=(c_assumed-d_prime)/c_assumed*epsilon_c
+
+        
+        #Now we check our assumption
+        if(epsilon_s>=epsilon_y):
+            # Our assumption was right so:
+            a_assumed=c_assumed*beta_1
+            M_n= 0.85*f_c*a_assumed*b * (d-a_assumed/2) +  A_s_prime * f_y * (d-d_prime)
+            return M_n
+        else:
+            # Our assumption was wrong so we have to determine the real c value from quadratic equation:
+            # A_s * f_y = 0.85 * f_c *b * β1 * c + A_s_prime * (c-d_prime)/c * εc * E_s
+            A = 0.85*f_c*b*beta_1
+            B = A_s_prime * epsilon_c * E_s - A_s * f_y
+            C = -d_prime*A_s_prime*epsilon_c*E_s
+            
+            c=(-B+sqrt(B**2-4*A*C))/(2*A)
+            a=b*beta_1
+            epsilon_s_prime=(c-d_prime)/c*epsilon_c
+            f_s_prime=epsilon_s_prime*E_s
+            A_s_2=A_s_prime*f_s_prime/f_y
+            A_s_1=A_s-A_s_2
+            M_n_1=A_s_1*f_y*(d-a/2)
+            M_n_2=A_s_prime*f_s_prime*(d-d_prime)
+            M_n= M_n_1+M_n_2
+            return M_n
+
     
     #def _determine_nominal_moment_ACI_318_19(self) -> tuple[PlainQuantity, PlainQuantity]:
 
