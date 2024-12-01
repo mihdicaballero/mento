@@ -68,7 +68,6 @@ class RectangularBeam(RectangularSection):
             self._k_c_min: PlainQuantity = 0*MPa
             self._sigma_Nu: PlainQuantity = 0*MPa
 
-
     def _initialize_en_1992_attributes(self) -> None:
         if isinstance(self.concrete, Concrete_EN_1992_2004):
             self._f_yk = self.steel_bar.f_y
@@ -127,7 +126,6 @@ class RectangularBeam(RectangularSection):
         self._clear_spacing_t = clear_spacing
         self._top_rebar_centroid=self.__calculate_long_rebar_centroid(n1, d_b1, n2, d_b2, n3, d_b3, n4, d_b4)
 
-
     def __calculate_long_rebar_centroid(
         self, 
         n1: int, 
@@ -177,6 +175,42 @@ class RectangularBeam(RectangularSection):
         return centroid
 
 # ======== ACI 318-19 methods =========
+
+
+    def __calculate_phi_ACI_318_19(self, epsilon_most_strained: float) -> float:
+        """
+        Calculates the strength reduction factor (φ) for flexural design 
+        based on ACI 318-19.
+        It is used for columns; for beams, it is not required since beams 
+        are always designed to be tension-controlled, with φ=0.9.
+
+        Parameters:
+            epsilon_most_strained (float): Strain in the most strained steel fiber.
+
+        Returns:
+            float: The strength reduction factor (φ), ranging from 0.65 to 0.9.
+
+        Description:
+            - φ = 0.65 if ε_most_strained ≤ ε_y (yield strain).
+            - φ transitions linearly from 0.65 to 0.9 if ε_y < ε_most_strained ≤ ε_y + ε_c 
+            (concrete crushing strain).
+            - φ = 0.9 if ε_most_strained > ε_y + ε_c.
+        """
+        # Retrieve concrete crushing strain (ε_c)
+        epsilon_c = self.concrete.get_properties()["epsilon_c"]
+
+        # Calculate φ based on ε_most_strained
+        if epsilon_most_strained <= self.steel_bar.epsilon_y:
+            return 0.65
+        elif epsilon_most_strained <= self.steel_bar.epsilon_y + epsilon_c:
+            return (
+                (0.9 - 0.65) 
+                * (epsilon_most_strained - self.steel_bar.epsilon_y) / epsilon_c
+                + 0.65
+            )
+        else:
+            return 0.9
+
 
     def __maximum_flexural_reinforcement_ratio(self) -> float:
         """
@@ -231,40 +265,6 @@ class RectangularBeam(RectangularSection):
         minimum_ratio = max((3 * np.sqrt(f_c / psi) * psi / f_y), 
                     (200 * psi / f_y))
         return minimum_ratio
-    
-
-    def __calculate_phi_ACI_318_19(self, epsilon_most_strained: float) -> float:
-        """
-        Calculates the strength reduction factor (φ) for flexural design 
-        based on ACI 318-19.
-
-        Parameters:
-            epsilon_most_strained (float): Strain in the most strained steel fiber.
-
-        Returns:
-            float: The strength reduction factor (φ), ranging from 0.65 to 0.9.
-
-        Description:
-            - φ = 0.65 if ε_most_strained ≤ ε_y (yield strain).
-            - φ transitions linearly from 0.65 to 0.9 if ε_y < ε_most_strained ≤ ε_y + ε_c 
-            (concrete crushing strain).
-            - φ = 0.9 if ε_most_strained > ε_y + ε_c.
-        """
-        # Retrieve concrete crushing strain (ε_c)
-        epsilon_c = self.concrete.get_properties()["epsilon_c"]
-
-        # Calculate φ based on ε_most_strained
-        if epsilon_most_strained <= self.steel_bar.epsilon_y:
-            return 0.65
-        elif epsilon_most_strained <= self.steel_bar.epsilon_y + epsilon_c:
-            return (
-                (0.9 - 0.65) 
-                * (epsilon_most_strained - self.steel_bar.epsilon_y) / epsilon_c
-                + 0.65
-            )
-        else:
-            return 0.9
-
 
     def __calculate_flexural_reinforcement_ACI_318_19(self, M_u: float, d: float, d_prima: float)-> tuple[PlainQuantity, PlainQuantity, PlainQuantity, PlainQuantity]:
         """
@@ -348,17 +348,17 @@ class RectangularBeam(RectangularSection):
         return A_s_min, A_s_max, A_s_final, A_s_comp
 
 
-    def _compile_results_aci_flexure_metric(self, force: Forces, A_s_min_bot: PlainQuantity, A_s_req_bot: PlainQuantity, A_s_bot: PlainQuantity,
+    def _compile_results_aci_flexure_metric(self, force: Forces , A_s_bot: PlainQuantity,
                                         c_d_bot: float, M_u_bot: PlainQuantity, phi_M_n_bot: PlainQuantity,
-                                        A_s_min_top: PlainQuantity, A_s_req_top: PlainQuantity, A_s_top: PlainQuantity,
+                                        A_s_top: PlainQuantity,
                                         c_d_top: float, M_u_top: PlainQuantity, phi_M_n_top: PlainQuantity) -> List[Dict[str, Any]]:
         # Create dictionaries for bottom and top rows
         bottom_result = {
             'Section Label': self.label,
             'Load Combo': force.label,
             'Position': 'Bottom',
-            'As,min': A_s_min_bot.to('cm ** 2'),
-            'As,req': A_s_req_bot.to('cm ** 2'),
+            'As,min': self._A_s_min_bot.to('cm ** 2'),
+            'As,req': self._A_s_req_bot.to('cm ** 2'),
             'As': A_s_bot.to('cm ** 2'),
             'c/d': c_d_bot,
             'Mu': M_u_bot.to('kN*m'),
@@ -371,8 +371,8 @@ class RectangularBeam(RectangularSection):
             'Section Label': self.label,
             'Load Combo': force.label,
             'Position': 'Top',
-            'As,min': A_s_min_top.to('cm ** 2'),
-            'As,req': A_s_req_top.to('cm ** 2'),
+            'As,min': self._A_s_min_top.to('cm ** 2'),
+            'As,req': self._A_s_req_top.to('cm ** 2'),
             'As': A_s_top.to('cm ** 2'),
             'c/d': c_d_top,
             'Mu': M_u_top.to('kN*m'),
@@ -383,6 +383,32 @@ class RectangularBeam(RectangularSection):
     
         # Return both rows as a list of dictionaries
         return [bottom_result, top_result]
+
+    def _determine_nominal_moment_simple_reinf_ACI_318_19(self, A_s: PlainQuantity, d: PlainQuantity, c_mec: PlainQuantity) -> PlainQuantity:
+        '''
+            Se usa esta formula SOLO cuando el acero dispuesto es menor que A_s_max
+        '''
+        concrete_properties = self.concrete.get_properties()
+        f_c = concrete_properties['f_c']
+        beta_1 = concrete_properties['beta_1']
+        rebar_properties = self.steel_bar.get_properties()
+        f_y = rebar_properties['f_y']
+        E_s = rebar_properties['E_s']
+        b = self._width
+
+        '''
+        Equilibrium: C=T
+        0.85*f_c*a*b = A_s *f_y -> a = A_s *f_y / (0.85*f_c*b)
+        '''
+        a = A_s *f_y /(0.85*f_c*b)
+        M_n=A_s*f_y*(d-a/2)
+        return M_n
+    
+    #def _determine_nominal_moment_ACI_318_19(self) -> tuple[PlainQuantity, PlainQuantity]:
+
+    
+
+
 
 
     def check_flexure_ACI_318_19(self, Force: Forces) -> Dict[str, Any]:
@@ -400,15 +426,50 @@ class RectangularBeam(RectangularSection):
         d = self._height - rec_mec
 
 
+        A_s_required_bot=0
+        A_s_required_top=0
         for force in Force:
             # RECORREMOS TODAS LAS FUERZAS ASI SACAMOS LOS DCR RATIO PARA CADA UNA
             if force._M_y > 0:
-                (self._A_s_min_bot, self._A_s_max_bot, self._A_s_final_bot_Positive_M,
-                self._A_s_comp_top) = self.__calculate_flexural_reinforcement_ACI_318_19(force._M_y, d, d_prima)
+                (self._A_s_min_bot, self._A_s_max_bot, A_s_final_bot_Positive_M,
+                A_s_comp_top) = self.__calculate_flexural_reinforcement_ACI_318_19(force._M_y, d, d_prima)
+
+                if  A_s_final_bot_Positive_M>A_s_required_bot :
+                     A_s_required_bot=A_s_final_bot_Positive_M
+                if A_s_comp_top>A_s_required_top:
+                    A_s_required_top=A_s_comp_top
 
             else:
-                (self._A_s_min_top, self._A_s_max_top, self._A_s_final_top_Negative_M,
-                self._A_s_comp_bot) = self.__calculate_flexural_reinforcement_ACI_318_19(abs(force._M_y), d_prima, d)
+                (self._A_s_min_top, self._A_s_max_top, A_s_final_top_Negative_M,
+                A_s_comp_bot) = self.__calculate_flexural_reinforcement_ACI_318_19(abs(force._M_y), d_prima, d)
+
+                if  A_s_comp_bot>A_s_required_bot :
+                     A_s_required_bot=A_s_comp_bot
+                if A_s_final_top_Negative_M>A_s_required_top:
+                    A_s_required_top=A_s_final_top_Negative_M
+
+        self._A_s_req_bot=A_s_required_bot
+        self._A_s_req_top=A_s_required_top
+
+        # Create dictionaries for bottom and top rows
+        bottom_result = {
+            'As': A_s_bot.to('cm ** 2'),
+            'c/d': c_d_bot,
+            'Mu': M_u_bot.to('kN*m'),
+            'ØMn': phi_M_n_bot.to('kN*m'),
+            'Mu<ØMn': M_u_bot <= phi_M_n_bot,
+            'DCR': M_u_bot / phi_M_n_bot
+        }
+        
+        top_result = {
+            'As': A_s_top.to('cm ** 2'),
+            'c/d': c_d_top,
+            'Mu': M_u_top.to('kN*m'),
+            'ØMn': phi_M_n_top.to('kN*m'),
+            'Mu<ØMn': M_u_top <= phi_M_n_top,
+            'DCR': M_u_top / phi_M_n_top
+        }
+
 
         results=self._compile_results_aci_flexure_metric()
 
@@ -1776,6 +1837,25 @@ def flexure() -> None:
     results=beam.design_flexure() 
     print(results)
 
+def flexure_Mn() -> None:
+    #Example from https://www.google.com/search?q=ACI+318+19+nominal+moment+of+section&oq=ACI+318+19+nominal+moment+of+section&gs_lcrp=EgZjaHJvbWUyBggAEEUYOTIHCAEQIRigAdIBCTIyNzkzajBqN6gCALACAA&sourceid=chrome&ie=UTF-8#fpstate=ive&vld=cid:dab5f5e7,vid:m4H0QbGDYIg,st:0
+    concrete = Concrete_ACI_318_19(name="C6",f_c=6000*psi) 
+    steelBar = SteelBar(name="G80", f_y=80000*psi) 
+    beam = RectangularBeam(
+        label="B20x30",
+        concrete=concrete,
+        steel_bar=steelBar,
+        width=20 * inch,  
+        height=30 * inch,   
+    )
+    ''' VAMOS A PEDIR UN MOMENTO NOMINAL QUE CON LA FUNCION PRIVADA'''
+    A_s=10.92 * inch**2
+    d=27*inch
+    c_mec=3*inch
+    result=beam._determine_nominal_moment_simple_reinf_ACI_318_19(A_s,d,c_mec)
+    print(result.to(kip*ft))
+
+
 
 def shear_ACI_metric() -> None:
     concrete= Concrete_ACI_318_19(name="C25",f_c=25*MPa) 
@@ -1867,7 +1947,8 @@ def shear_EN_1992() -> None:
     # section.shear_results_detailed_doc
 
 if __name__ == "__main__":
-    flexure()
+    flexure_Mn()
+    #flexure()
     # shear_ACI_imperial()
     # shear_EHE_08()
     #shear_ACI_metric()

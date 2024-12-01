@@ -194,6 +194,33 @@ def test_shear_design_ACI_318_19(beam_example_imperial: RectangularBeam) -> None
     assert results.iloc[0]['Vu<ØVn'] is np.True_
 
 # ------- Flexural test --------------
+def test_flexural_beam_determine_nominal_moment_simple_reinf_ACI_318_19() -> None:
+    '''
+        Test para la funcion que determina el momento nominal de una seccion armada solo con refuerzo de traccion
+        ver el ejemplo en:
+        Example from https://www.google.com/search?q=ACI+318+19+nominal+moment+of+section&oq=ACI+318+19+nominal+moment+of+section&gs_lcrp=EgZjaHJvbWUyBggAEEUYOTIHCAEQIRigAdIBCTIyNzkzajBqN6gCALACAA&sourceid=chrome&ie=UTF-8#fpstate=ive&vld=cid:dab5f5e7,vid:m4H0QbGDYIg,st:0
+    '''
+    concrete = Concrete_ACI_318_19(name="C6",f_c=6000*psi) 
+    steelBar = SteelBar(name="G80", f_y=80000*psi) 
+    beam = RectangularBeam(
+        label="B20x30",
+        concrete=concrete,
+        steel_bar=steelBar,
+        width=20 * inch,  
+        height=30 * inch,   
+    )
+    ''' VAMOS A PEDIR UN MOMENTO NOMINAL QUE CON LA FUNCION PRIVADA'''
+    A_s=10.92 * inch**2
+    d=27*inch
+    c_mec=3*inch
+    result=beam._determine_nominal_moment_simple_reinf_ACI_318_19(A_s,d,c_mec)
+
+    # Compare dictionaries with a tolerance for floating-point values, in inch**2
+    # Result: 1653.84kip.ft
+    assert result.to(kip*ft).magnitude  == pytest.approx(1653.84, rel=1e-2)
+
+
+
 # LO QUE ME ESTÁ FALTANDO ES SETEAR EL MEC COVER.
 # Example 6.6 CRSI Design Guide
 concreteFlexureTest1 = Concrete_ACI_318_19(name="fc4000",f_c=4000*psi)
