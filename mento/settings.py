@@ -1,12 +1,13 @@
-from mento.units import mm
 from typing import Optional, Dict, Any
+
+from mento.units import mm
 
 class Settings:
     default_settings: Dict[str, Any] = {
             # Beam design settings
             'clear_cover': 25 * mm, 
-            'clear_spacing': 20 * mm, 
-            'stirrup_diameter_ini': 8 * mm,
+            'clear_spacing': 25 * mm, 
+            'stirrup_diameter_ini': 10 * mm,
             'longitudinal_diameter_ini': 16*mm,
             'vibrator_size': 30 * mm, 
             'layers_spacing': 25 * mm,
@@ -30,7 +31,7 @@ class Settings:
                 'phi_t': 0.90,  # Tension controlled strength reduction factor
                 'flexural_min_reduction': "True"  # True selects 4/3 of calculated steel if it's less than minimum
             }
-        self.en_1992_settings : Dict[str, Any] = {
+        self.en_1992_2004_settings : Dict[str, Any] = {
                 'gamma_c': 1.5,
                 'gamma_s': 1.15, 
                 'alpha_cc': 1.00, 
@@ -43,13 +44,13 @@ class Settings:
         # Update current settings with ACI 318-19 specific settings
         self.add_settings(self.aci_318_19_settings)
 
-    def load_en_1992_settings(self) -> None:
+    def load_en_1992_2004_settings(self) -> None:
         """
         Load settings specific to ACI 318-19.
         This will override only the settings that are different in ACI 318-19.
         """
         # Update current settings with ACI 318-19 specific settings
-        self.add_settings(self.en_1992_settings)
+        self.add_settings(self.en_1992_2004_settings)
     
     def get_setting(self, key: str) -> Any:
         if key in self.settings:
@@ -71,3 +72,20 @@ class Settings:
     def update(self, new_settings: Dict[str, Any]) -> None:
         """Updates the settings dictionary with new values."""
         self.add_settings(new_settings)
+
+    def __str__(self) -> str:
+        """Customize the string representation for user-friendly display."""
+        output = "Settings:\n"
+        for key, value in self.settings.items():
+            output += f"  {key}: {value}\n"
+        return output.strip()
+
+def settings() -> None:
+    settings_test = Settings()
+    custom_settings = {'clear_cover': 50*mm, 'longitudinal_diameter_ini': 25*mm}
+    settings_test.update(custom_settings)
+
+    print(settings_test)
+
+if __name__ == "__main__":
+    settings()

@@ -6,6 +6,9 @@ __pycache__/
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
 
+# LinkedIn video folders
+videos/
+
 # Virtual environment folders
 .venv/
 env/

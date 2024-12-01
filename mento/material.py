@@ -92,6 +92,19 @@ class Concrete_ACI_318_19(Concrete):
     @property
     def beta_1(self) -> float:
         return self._beta_1
+    
+    def __str__(self) -> str:
+        """Customize the string representation for user-friendly display."""
+        properties = self.get_properties()
+        return (
+            f"Concrete Properties ({self.name}):\n"
+            f"  f_c: {properties['f_c']}\n"
+            f"  Density: {properties['density']}\n"
+            f"  E_c: {properties['E_c']}\n"
+            f"  f_r: {properties['f_r']}\n"
+            f"  beta_1: {properties['beta_1']}\n"
+            f"  epsilon_c: {properties['epsilon_c'].magnitude:.3f}"
+        )
 
 @dataclass
 class Concrete_EN_1992_2004(Concrete):
@@ -99,12 +112,10 @@ class Concrete_EN_1992_2004(Concrete):
     _f_ck: PlainQuantity = field(init=False)  # Characteristic concrete strength
     _f_cm: PlainQuantity = field(init=False)  # Mean compressive strength
     _f_ctm: PlainQuantity = field(init=False)  # Mean tensile strength
-    _f_cd: PlainQuantity = field(init=False)  # Design strength of concrete
-
 
     def __init__(self, name: str, f_ck: PlainQuantity):
         super().__init__(name=name, f_c=f_ck)
-        self.design_code = "EN 1992"
+        self.design_code = "EN 1992-2004"
         self._f_ck = self.f_c
         self._f_cm = self._f_ck + 8 * MPa
         self._E_cm = 22000 * (self._f_cm / (10 * MPa)) ** 0.3 * MPa       
@@ -121,7 +132,6 @@ class Concrete_EN_1992_2004(Concrete):
             'f_ck': self._f_ck.to('MPa'),
             'f_cm': self._f_cm.to('MPa'),
             'f_ctm': self._f_ctm.to('MPa'),
-            'f_cd': self._f_cd.to('MPa'),
         })
         return properties
 
@@ -140,9 +150,6 @@ class Concrete_EN_1992_2004(Concrete):
     @property
     def f_ctm(self) -> PlainQuantity:
         return self._f_ctm
-    @property
-    def f_cd(self) -> PlainQuantity:
-        return self._f_cd
 
 @dataclass
 class Steel(Material):
@@ -186,6 +193,16 @@ class SteelBar(Steel):
             'epsilon_y': self._epsilon_y
             }
         return properties
+    def __str__(self) -> str:
+        """Customize the string representation for user-friendly display."""
+        properties = self.get_properties()
+        return (
+            f"SteelBar Properties ({self.name}):\n"
+            f"  f_y: {properties['f_y']}\n"
+            f"  E_s: {properties['E_s']}\n"
+            f"  epsilon_y: {properties['epsilon_y'].magnitude:.4f}\n"
+            f"  Density: {self.density}"
+        )
 
 @dataclass
 class SteelStrand(Steel):

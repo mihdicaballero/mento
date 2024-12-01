@@ -6,8 +6,8 @@ from mento.settings import Settings  # Replace 'your_module' with the actual mod
 def test_default_settings() -> None:
     settings = Settings()
     assert settings.get_setting('clear_cover') == 25 * mm
-    assert settings.get_setting('clear_spacing') == 20 * mm
-    assert settings.get_setting('stirrup_diameter_ini') == 8 * mm
+    assert settings.get_setting('clear_spacing') == 25 * mm
+    assert settings.get_setting('stirrup_diameter_ini') == 10 * mm
     assert settings.get_setting('longitudinal_diameter_ini') == 16 * mm
     assert settings.get_setting('vibrator_size') == 30 * mm
     assert settings.get_setting('layers_spacing') == 25 * mm
@@ -24,7 +24,7 @@ def test_custom_settings() -> None:
     settings = Settings(settings=custom_settings)
     assert settings.get_setting('clear_cover') == 30 * mm
     assert settings.get_setting('stirrup_diameter') == 8 * mm
-    assert settings.get_setting('clear_spacing') == 20 * mm 
+    assert settings.get_setting('clear_spacing') == 25 * mm 
     
 def test_get_setting_non_existent_key() -> None:
     settings = Settings()

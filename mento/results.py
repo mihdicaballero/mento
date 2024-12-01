@@ -133,7 +133,7 @@ class TablePrinter:
         
         Returns:
         --------
-        None
+        table:  Return the formatted table string
         """
         # if self.title:
         #     print(f"======= {self.title} ======= \n")
@@ -147,6 +147,7 @@ class TablePrinter:
             colalign=colalign
         )
         print(table, '\n')
+        return None  
         
     def print_table_min_max(self, data: dict[str, list[Any]], headers: str, tablefmt: str = "fancygrid",
                             numalign: str = "right") -> None:
