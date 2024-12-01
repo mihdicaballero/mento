@@ -404,11 +404,11 @@ class RectangularBeam(RectangularSection):
             # RECORREMOS TODAS LAS FUERZAS ASI SACAMOS LOS DCR RATIO PARA CADA UNA
             if force._M_y > 0:
                 (self._A_s_min_bot, self._A_s_max_bot, self._A_s_final_bot_Positive_M,
-                self._A_s_comp_top) = self.__calculate_flexural_reinforcement(force._M_y, d, d_prima)
+                self._A_s_comp_top) = self.__calculate_flexural_reinforcement_ACI_318_19(force._M_y, d, d_prima)
 
             else:
                 (self._A_s_min_top, self._A_s_max_top, self._A_s_final_top_Negative_M,
-                self._A_s_comp_bot) = self.__calculate_flexural_reinforcement(abs(force._M_y), d_prima, d)
+                self._A_s_comp_bot) = self.__calculate_flexural_reinforcement_ACI_318_19(abs(force._M_y), d_prima, d)
 
         results=self._compile_results_aci_flexure_metric()
 
