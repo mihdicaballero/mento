@@ -29,10 +29,11 @@ This repository provides a comprehensive package for the design and structural a
 #### Roadmap
 The development is structured around key milestones, with ongoing tasks that aim to enhance functionality and compliance with design standards:
 - [x] Rectangular concrete beam section check and design for ACI 318-19.
-- [ ] Rectangular concrete beam section check and design for EHE-08.
-- [ ] Rectangular concrete beam section check and design for EN 1992-2024.
-- [ ] Circular concrete column section check and design for ACI 318-19. 
+- [ ] Rectangular concrete beam section check and design for EN 1992-2004.
+- [ ] Circular concrete column section check and design for ACI 318-19.
+- [ ] Circular concrete column section check and design for EN 1992-2004. 
 - [ ] Rectangular concrete column section check and design for ACI 318-19.
+- [ ] Rectangular concrete column section check and design for EN 1992-2004.
 
 Each milestone incorporates rigorous testing and continuous integration to ensure code quality and reliability.
 
