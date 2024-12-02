@@ -256,7 +256,7 @@ class RectangularBeam(RectangularSection):
             # Calculate minimum steel strain for ductility
             epsilon_min_rebar_ACI_318_19 = (
                 self.steel_bar.epsilon_y + concrete_aci.epsilon_c
-            )  # TODO: REVISAR
+            )
             
             # Calculate maximum reinforcement ratio (ρ_max)
             rho_max = (
@@ -465,10 +465,59 @@ class RectangularBeam(RectangularSection):
             M_n= M_n_1+M_n_2
             return M_n
 
-    
-    #def _determine_nominal_moment_ACI_318_19(self) -> tuple[PlainQuantity, PlainQuantity]:
+    def _determine_nominal_moment_ACI_318_19(self) -> tuple[PlainQuantity, PlainQuantity]:
+        '''
+            Para una determinada seccion con sus dos armados, top y bottom, encuentra el momento nominal para 
+            momentos positivos y negativos
+        '''
 
-    
+        concrete_properties = self.concrete.get_properties()
+        f_c = concrete_properties['f_c']
+        beta_1 = concrete_properties['beta_1']
+        rebar_properties = self.steel_bar.get_properties()
+        f_y = rebar_properties['f_y']
+        E_s = rebar_properties['E_s']
+        epsilon_y=rebar_properties['epsilon_y']
+        b = self._width
+        h=self.height
+        # Retrieve concrete crushing strain (ε_c)
+        epsilon_c = self.concrete.get_properties()["epsilon_c"]
+
+        # Load design settings for ACI 318-19
+        self.settings.load_aci_318_19_settings()
+
+        # Informacion de la seccion:
+        A_s_bot=self._total_as_b 
+        A_s_top=self._total_ast
+        c_mec = self.c_c + self._stirrup_d_b + self._bot_rebar_centroid
+        d_prime = self.c_c + self._stirrup_d_b + self._top_rebar_centroid
+        d = self._height - c_mec
+        rho_min=self.__minimum_flexural_reinforcement_ratio()
+        rho_max = self.__maximum_flexural_reinforcement_ratio()
+
+        # DETERMINACION DE LA CAPACIDAD PARA MOMENTO POSITIVO (TRACCIONA ABAJO):
+        A_s_min_bot = rho_min * d * b
+        A_s_max_bot = rho_max * d * b
+        if (A_s_bot<=A_s_max_bot):
+            M_n_positive=self._determine_nominal_moment_simple_reinf_ACI_318_19(A_s_bot, d, c_mec)
+        elif (A_s_top==0):
+            M_n_positive=self._determine_nominal_moment_simple_reinf_ACI_318_19(A_s_max_bot, d, c_mec)
+        else:
+            M_n_positive=self._determine_nominal_moment_double_reinf_ACI_318_19(A_s_bot, d, c_mec, d_prime, A_s_top)
+
+        # DETERMINACION DE LA CAPACIDAD PARA MOMENTO NEGATIVO (TRACCIONA ARRIBA):
+        A_s_min_top = rho_min * (h-d_prime) * b
+        A_s_max_top = rho_max *  (h-d_prime) * b
+        if (A_s_top==0):
+            M_n_negative=0
+        elif (A_s_top<=A_s_max_top):
+            M_n_negative=self._determine_nominal_moment_simple_reinf_ACI_318_19(A_s_top, (h-d_prime), d_prime)
+        elif (A_s_bot==0):
+            M_n_negative=self._determine_nominal_moment_simple_reinf_ACI_318_19(A_s_max_top, (h-d_prime), d_prime)
+        else:
+            M_n_negative=self._determine_nominal_moment_double_reinf_ACI_318_19(A_s_top, (h-d_prime), d_prime, c_mec, A_s_bot)
+
+        return M_n_positive, M_n_negative
 
 
 
@@ -1938,7 +1987,6 @@ def flexure_Mn() -> None:
         width=20 * inch,  
         height=30 * inch,   
     )
-    ''' VAMOS A PEDIR UN MOMENTO NOMINAL QUE CON LA FUNCION PRIVADA'''
     A_s=10.92 * inch**2
     d=27*inch
     c_mec=3*inch
@@ -1956,7 +2004,6 @@ def flexure_Mn() -> None:
         width=14 * inch,  
         height=27 * inch,   
     )
-    ''' VAMOS A PEDIR UN MOMENTO NOMINAL QUE CON LA FUNCION PRIVADA'''
     A_s=6 * inch**2
     d=24*inch
     c_mec=3*inch
