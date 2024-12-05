@@ -511,11 +511,11 @@ class RectangularBeam(RectangularSection):
         if (A_s_top==0):
             M_n_negative=0
         elif (A_s_top<=A_s_max_top):
-            M_n_negative=self._determine_nominal_moment_simple_reinf_ACI_318_19(A_s_top, (h-d_prime), d_prime)
+            M_n_negative=-self._determine_nominal_moment_simple_reinf_ACI_318_19(A_s_top, (h-d_prime), d_prime)
         elif (A_s_bot==0):
-            M_n_negative=self._determine_nominal_moment_simple_reinf_ACI_318_19(A_s_max_top, (h-d_prime), d_prime)
+            M_n_negative=-self._determine_nominal_moment_simple_reinf_ACI_318_19(A_s_max_top, (h-d_prime), d_prime)
         else:
-            M_n_negative=self._determine_nominal_moment_double_reinf_ACI_318_19(A_s_top, (h-d_prime), d_prime, c_mec, A_s_bot)
+            M_n_negative=-self._determine_nominal_moment_double_reinf_ACI_318_19(A_s_top, (h-d_prime), d_prime, c_mec, A_s_bot)
 
         return M_n_positive, M_n_negative
 
@@ -529,62 +529,26 @@ class RectangularBeam(RectangularSection):
 
         # Load design settings for ACI 318-19
         self.settings.load_aci_318_19_settings()
-
+        phi = self.settings.get_setting('phi_t')
         # Initial assumptions for mechanical cover and compression depth
 
         rec_mec = self.c_c + self._stirrup_d_b + self._bot_rebar_centroid
         d_prima = self.c_c + self._stirrup_d_b + self._top_rebar_centroid
         d = self._height - rec_mec
 
+        self._M_n_positive, self._M_n_negative=self._determine_nominal_moment_ACI_318_19()
+        self._Phi_M_n_positive = phi * M_n_positive
+        self._Phi_M_n_negative = phi * M_n_negative
 
-        A_s_required_bot=0
-        A_s_required_top=0
+        DCR=[]
+
         for force in Force:
             # RECORREMOS TODAS LAS FUERZAS ASI SACAMOS LOS DCR RATIO PARA CADA UNA
-            if force._M_y > 0:
-                (self._A_s_min_bot, self._A_s_max_bot, A_s_final_bot_Positive_M,
-                A_s_comp_top) = self.__calculate_flexural_reinforcement_ACI_318_19(force._M_y, d, d_prima)
-
-                if  A_s_final_bot_Positive_M>A_s_required_bot :
-                     A_s_required_bot=A_s_final_bot_Positive_M
-                if A_s_comp_top>A_s_required_top:
-                    A_s_required_top=A_s_comp_top
-
+            if force._M_y >= 0:
+                DCR.append(force._M_y/self._Phi_M_n_positive)
             else:
-                (self._A_s_min_top, self._A_s_max_top, A_s_final_top_Negative_M,
-                A_s_comp_bot) = self.__calculate_flexural_reinforcement_ACI_318_19(abs(force._M_y), d_prima, d)
+                DCR.append(force._M_y/self._Phi_M_n_negative)
 
-                if  A_s_comp_bot>A_s_required_bot :
-                     A_s_required_bot=A_s_comp_bot
-                if A_s_final_top_Negative_M>A_s_required_top:
-                    A_s_required_top=A_s_final_top_Negative_M
-
-        self._A_s_req_bot=A_s_required_bot
-        self._A_s_req_top=A_s_required_top
-
-        # Create dictionaries for bottom and top rows
-        bottom_result = {
-            'As': A_s_bot.to('cm ** 2'),
-            'c/d': c_d_bot,
-            'Mu': M_u_bot.to('kN*m'),
-            'ØMn': phi_M_n_bot.to('kN*m'),
-            'Mu<ØMn': M_u_bot <= phi_M_n_bot,
-            'DCR': M_u_bot / phi_M_n_bot
-        }
-        
-        top_result = {
-            'As': A_s_top.to('cm ** 2'),
-            'c/d': c_d_top,
-            'Mu': M_u_top.to('kN*m'),
-            'ØMn': phi_M_n_top.to('kN*m'),
-            'Mu<ØMn': M_u_top <= phi_M_n_top,
-            'DCR': M_u_top / phi_M_n_top
-        }
-
-
-        results=self._compile_results_aci_flexure_metric()
-
-        return pd.DataFrame([results], index=[0])
 
 
 
