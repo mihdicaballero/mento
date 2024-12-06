@@ -6,12 +6,12 @@ import pandas as pd
 from mento.units import psi, mm, cm
 
 if TYPE_CHECKING:
-    from mento.concrete.beam import RectangularConcreteBeam
+    from mento.beam import RectangularBeam
     from pint.facets.plain import PlainQuantity
     from pandas import DataFrame
 
 class Rebar:
-    def __init__(self, beam: RectangularConcreteBeam):
+    def __init__(self, beam: RectangularBeam):
         """
         Initializes the Rebar object with the associated beam and settings.
         """
@@ -294,10 +294,7 @@ class Rebar:
         self._trans_combos_df = df_combinations
         return df_combinations
     
-    def transverse_rebar_EN_1992(self, A_v_req: PlainQuantity, V_s_req: PlainQuantity) -> None:
-        pass
-
-    def transverse_rebar_EHE_08(self, A_v_req: PlainQuantity, V_s_req: PlainQuantity) -> None:
+    def transverse_rebar_EN_1992_2004(self, A_v_req: PlainQuantity, V_s_req: PlainQuantity) -> None:
         pass
     
     # Factory method to select the transverse rebar method
