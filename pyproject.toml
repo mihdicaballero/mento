@@ -26,7 +26,7 @@ keywords = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/mihdicaballero/StructureLab"
+"Homepage" = "https://github.com/mihdicaballero/mento"
 
 [tool.setuptools.dynamic]
 dependencies = { file = "requirements.txt" }

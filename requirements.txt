@@ -1,4 +1,4 @@
-pint==0.24.3
+pint
 pandas==2.2.3
 IPython
 ipykernel
