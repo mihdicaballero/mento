@@ -87,7 +87,11 @@ class RectangularBeam(RectangularSection):
         self._stirrup_d_b = d_b
         self._stirrup_s_l = s_l
         # Update effective height d with new values
-        self._d = self._height -(self.c_c+self._stirrup_d_b+self._long_d_b/2) # Initial value 
+        self._d = self._height -(self.c_c+self._stirrup_d_b+self._long_d_b/2) # Initial value
+        n_legs = n_stirrups * 2
+        A_db = (d_b ** 2) * math.pi / 4  # Area of one stirrup leg
+        A_vs = n_legs * A_db  # Total area of stirrups
+        self._A_v = A_vs / s_l  # Stirrup area per unit length
 
     def set_longitudinal_rebar_bot(self, n1: int, d_b1: PlainQuantity, n2: int, d_b2: PlainQuantity, 
                                 n3: int, d_b3: PlainQuantity, n4: int, d_b4: PlainQuantity, 
@@ -707,6 +711,7 @@ class RectangularBeam(RectangularSection):
     def _set_initial_conditions_aci_shear(self, Force: Forces, A_s: PlainQuantity) -> None:
         self._N_u = Force.N_x
         self._V_u = Force.V_z
+        #TODO: Cambiar por bot o top según signo de momento de Force
         self._A_s = A_s
         self.settings.load_aci_318_19_settings()
         self.phi_v = self.settings.get_setting('phi_v')
@@ -714,12 +719,6 @@ class RectangularBeam(RectangularSection):
         self.f_yt = self._calculate_f_yt_aci()
 
     def _calculate_shear_reinforcement_aci(self) -> None:
-        d_bs = self._stirrup_d_b
-        s_l = self._stirrup_s_l
-        n_legs = self._stirrup_n * 2
-        A_db = (d_bs ** 2) * math.pi / 4  # Area of one stirrup leg
-        A_vs = n_legs * A_db  # Total area of stirrups
-        self._A_v = A_vs / s_l  # Stirrup area per unit length
         V_s = self._A_v * self.f_yt * self.d  # Shear contribution of reinforcement
         self._phi_V_s = self.phi_v * V_s  # Reduced shear contribution of reinforcement
 
@@ -1093,7 +1092,6 @@ class RectangularBeam(RectangularSection):
         else:
             raise ValueError("Concrete type is not compatible with EHE-08 shear check.")
   
-
     def design_shear_EN_1992_2004(self, Force:Forces, A_s:PlainQuantity = 0*cm**2) -> None:
         return None
 
