@@ -191,21 +191,45 @@ class Rebar:
                        effective_width: PlainQuantity) -> bool:
         """
         Checks the clear spacing between rebars in a layer.
+
+        Parameters:
+            n1 (int): Number of bars in the first group of the layer.
+            n2 (int): Number of bars in the second group of the layer.
+            d_b1 (PlainQuantity): Diameter of bars in the first group of the layer.
+            d_b2 (PlainQuantity): Diameter of bars in the second group of the layer.
+            effective_width (PlainQuantity): The effective width available for bar placement.
+
+        Returns:
+            bool: True if the clear spacing satisfies the design limits, False otherwise.
         """
-        # Total bar width including diameters
-        total_bar_width = n1 * d_b1 + n2 * d_b2
-        
-        if n1 + n2 - 1 > 0:
-            # Calculate available clear spacing
-            self._clear_spacing = (effective_width - total_bar_width) / (n1 + n2 - 1)
-            
-            max_clear_spacing = max(self.min_clear_spacing, self.vibrator_size, max(d_b1, d_b2))
-            # Check if spacing is within limits
-            if self._clear_spacing < max_clear_spacing:
-                return False
-            
-        return True
-    
+        def layer_clear_spacing(n_a: int, d_a: PlainQuantity, n_b: int, d_b: PlainQuantity) -> PlainQuantity:
+            """
+            Helper function to calculate clear spacing for a given layer.
+
+            Parameters:
+                n_a (int): Number of bars in the first group of the layer.
+                d_a (PlainQuantity): Diameter of bars in the first group of the layer.
+                n_b (int): Number of bars in the second group of the layer.
+                d_b (PlainQuantity): Diameter of bars in the second group of the layer.
+
+            Returns:
+                PlainQuantity: Clear spacing for the given layer.
+            """
+            total_bars = n_a + n_b
+            if total_bars <= 1:
+                return effective_width - max(d_a, d_b)  # Clear space for one bar
+            total_bar_width = n_a * d_a + n_b * d_b
+            return (effective_width - total_bar_width) / (total_bars - 1)
+
+        # Calculate the clear spacing for the layer
+        self._clear_spacing = layer_clear_spacing(n1, d_b1, n2, d_b2)
+
+        # Determine the maximum clear spacing limit
+        max_clear_spacing = max(self.min_clear_spacing, self.vibrator_size, max(d_b1, d_b2))
+
+        # Check if the clear spacing is within limits
+        return self._clear_spacing >= max_clear_spacing
+
     def _check_diameter_differences(self, diameters: list) -> bool:
         """
         Checks that all diameter differences between bars in the list

@@ -3,7 +3,35 @@ from typing import Optional, List, Any
 from tabulate import tabulate
 from docx import Document
 from docx.shared import Pt, Cm
+import seaborn as sns
+import matplotlib.pyplot as plt
 
+CUSTOM_COLORS = {
+        'blue': '#1f77b4',  # Default Matplotlib blue
+        'red': '#d62728',   # Default Matplotlib red
+    }
+
+# Default Matplotlib and Seaborn settings
+def configure_plot_settings() -> None:
+    """
+    Configures global settings for Matplotlib and Seaborn plots.
+    """
+    # Basic style for the plot
+    sns.set_theme(style="whitegrid")
+    sns.set_context("paper", rc={"lines.linewidth": 1.8})
+    sns.set_style(rc={'axes.facecolor': '#F8F8F8'})
+
+    # Matplotlib specific settings
+    plt.rcParams.update({
+        'text.usetex': True,
+        'font.family': 'serif',
+        'font.serif': ['Lato'],
+        'axes.titlesize': 12,
+        'axes.labelsize': 12,
+        'xtick.labelsize': 12,
+        'ytick.labelsize': 12,
+        'legend.fontsize': 12,
+    })
 
 class Formatter:
     """
