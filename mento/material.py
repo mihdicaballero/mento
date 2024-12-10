@@ -42,7 +42,7 @@ class Concrete(Material):
 class Concrete_ACI_318_19(Concrete):
     _E_c: PlainQuantity = field(init=False)
     _f_r: PlainQuantity = field(init=False)
-    epsilon_c: float = field(default=0.003, init=False)
+    _epsilon_c: float = field(default=0.003, init=False)
     _beta_1: float = field(init=False)
 
     def __post_init__(self) -> None:
@@ -65,7 +65,7 @@ class Concrete_ACI_318_19(Concrete):
         properties['E_c'] = self._E_c
         properties['f_r'] = self._f_r
         properties['beta_1'] = ureg.Quantity(self._beta_1, '')
-        properties['epsilon_c']=ureg.Quantity(self.epsilon_c, '')
+        properties['epsilon_c']=ureg.Quantity(self._epsilon_c, '')
         return properties
     
     def __beta_1(self) -> float:
