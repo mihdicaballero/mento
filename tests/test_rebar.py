@@ -66,9 +66,9 @@ def test_beam_longitudinal_rebar_ACI_318_19_fail(beam_example_imperial: Rectangu
 
 def test_beam_transverse_rebar_ACI_318_19(beam_example_imperial: RectangularBeam) -> None:
     f = Forces(V_z=37.727*kip)
-    A_s=0.847*inch**2
     Node(beam_example_imperial, forces=f)
-    results = beam_example_imperial.design_shear(A_s)
+    beam_example_imperial.set_longitudinal_rebar_bot(n1=2, d_b1=0.625*inch)
+    results = beam_example_imperial.design_shear()
     assert results is not None
     assert beam_example_imperial._stirrup_n == 1
     assert beam_example_imperial._stirrup_d_b == 10*mm 

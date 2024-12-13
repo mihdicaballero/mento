@@ -15,7 +15,6 @@ class RectangularSection(Section):
 
         self._width = width
         self._height = height
-        self._d = self._height -(self.c_c+self._stirrup_d_b+self._long_d_b/2) # Initial value
         self._A_x = self._width * self._height
         self._I_y = self._width*self._height**3/12
         self._I_z = self._height*self._width**3/12

@@ -28,7 +28,6 @@ class Section:
             self.settings.update(settings)  # Update with any provided settings
         self.c_c: PlainQuantity = self.settings.get_setting('clear_cover')
         self._stirrup_d_b: PlainQuantity = self.settings.get_setting('stirrup_diameter_ini')
-        self._long_d_b: PlainQuantity = self.settings.get_setting('longitudinal_diameter_ini')
         
 
     @property

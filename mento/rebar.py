@@ -259,7 +259,7 @@ class Rebar:
             A dictionary containing the transverse rebar design.
         """
 
-        A_cv = self.beam.width*self.beam.d
+        A_cv = self.beam.width*self.beam._d_shear
 
         s_max_l, s_max_w = self.calculate_max_spacing_ACI(V_s_req, A_cv)
 
@@ -377,12 +377,12 @@ class Rebar:
         # Determine maximum spacing based on V_s_req condition
         if V_s_req <= 4 * lambda_factor * math.sqrt(f_c / psi) * psi * A_cv:
             # Maximum spacing for lower shear demand
-            s_max_l = min(self.beam.d / 2, 60 * cm)
-            s_max_w = min(self.beam.d, 60 * cm)
+            s_max_l = min(self.beam._d_shear / 2, 60 * cm)
+            s_max_w = min(self.beam._d_shear, 60 * cm)
         else:
             # Maximum spacing for higher shear demand
-            s_max_l = min(self.beam.d / 4, 30 * cm)
-            s_max_w = min(self.beam.d / 2, 30 * cm)
+            s_max_l = min(self.beam._d_shear / 4, 30 * cm)
+            s_max_w = min(self.beam._d_shear / 2, 30 * cm)
         
         return s_max_l, s_max_w  
     
@@ -400,7 +400,7 @@ class Rebar:
         tuple
             (s_max_l, s_max_w): The maximum spacing along the length and width of the beam.
         """
-        s_max_l = 0.75*self.beam.d*(1+1 / math.tan(alpha))
-        s_max_w = min(0.75*self.beam.d, 60 * cm)
+        s_max_l = 0.75*self.beam._d_shear*(1+1 / math.tan(alpha))
+        s_max_w = min(0.75*self.beam._d_shear, 60 * cm)
            
         return s_max_l, s_max_w

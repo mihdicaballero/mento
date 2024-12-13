@@ -8,7 +8,7 @@ class Settings:
             'clear_cover': 25 * mm, 
             'clear_spacing': 25 * mm, 
             'stirrup_diameter_ini': 10 * mm,
-            'longitudinal_diameter_ini': 16*mm,
+            # 'longitudinal_diameter_ini': 16*mm, Esto ya no se usa, porque puse 2Ø8 interno
             'vibrator_size': 30 * mm, 
             'layers_spacing': 25 * mm,
             'max_diameter_diff': 5*mm,
@@ -82,7 +82,7 @@ class Settings:
 
 def settings() -> None:
     settings_test = Settings()
-    custom_settings = {'clear_cover': 50*mm, 'longitudinal_diameter_ini': 25*mm}
+    custom_settings = {'clear_cover': 50*mm}
     settings_test.update(custom_settings)
 
     print(settings_test)

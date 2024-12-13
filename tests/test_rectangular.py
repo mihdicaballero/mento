@@ -46,9 +46,3 @@ def test_moment_of_inertia_z(setup_section: RectangularSection) -> None:
     expected_I_z = ((16 * inch) * (10 * inch) ** 3) / 12
     assert section.I_z.magnitude == expected_I_z.to(cm**4).magnitude
     assert str(section.I_z.units) == str(expected_I_z.to(cm**4).units)
-
-def test_default_d_value(setup_section: RectangularSection) -> None:
-    section = setup_section
-    # Here we check the initial value calculation for `d`, assuming `c_c`, `_stirrup_d_b`, and `_long_d_b` are set.
-    expected_d = section._height - (section.c_c + section._stirrup_d_b + section._long_d_b / 2)
-    assert section._d == expected_d
