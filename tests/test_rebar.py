@@ -71,9 +71,9 @@ def test_beam_transverse_rebar_ACI_318_19(beam_example_imperial: RectangularBeam
     results = beam_example_imperial.design_shear()
     assert results is not None
     assert beam_example_imperial._stirrup_n == 1
-    assert beam_example_imperial._stirrup_d_b == 10*mm 
-    assert beam_example_imperial._stirrup_s_l ==  15*cm 
-    assert beam_example_imperial._A_v.magnitude == pytest.approx(10.47,rel=1e-3)
+    assert beam_example_imperial._stirrup_d_b == 3/8*inch
+    assert beam_example_imperial._stirrup_s_l ==  5*inch 
+    assert beam_example_imperial._A_v.to('cm**2/m').magnitude == pytest.approx(11.2214,rel=1e-3)
 
 # This is where pytest will collect the tests and run them
 if __name__ == "__main__":

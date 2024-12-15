@@ -75,16 +75,22 @@ class RectangularBeam(RectangularSection):
     def _initialize_longitudinal_rebar_attributes(self) -> None:
         """Initialize all rebar-related attributes with default values."""
         # Bottom rebar defaults
-        self._n1_b, self._d_b1_b = 2, 8 * mm
         self._n2_b, self._d_b2_b = 0, 0 * mm
         self._n3_b, self._d_b3_b = 0, 0 * mm
         self._n4_b, self._d_b4_b = 0, 0 * mm
 
         # Top rebar defaults
-        self._n1_t, self._d_b1_t = 2, 8 * mm
         self._n2_t, self._d_b2_t = 0, 0 * mm
         self._n3_t, self._d_b3_t = 0, 0 * mm
         self._n4_t, self._d_b4_t = 0, 0 * mm
+
+        # Unit system default minimum rebar
+        if self.concrete.unit_system == "metric":
+            self._n1_b, self._d_b1_b = 2, 8 * mm
+            self._n1_t, self._d_b1_t = 2, 8 * mm
+        else:
+            self._n1_b, self._d_b1_b = 2, 4/8 * inch
+            self._n1_t, self._d_b1_t = 2, 4/8 * inch
 
         # Update dependent attributes
         self._update_longitudinal_rebar_attributes()
@@ -1150,19 +1156,11 @@ class RectangularBeam(RectangularSection):
         self._s_max_l = best_design['s_max_l']
         self._s_max_w = best_design['s_max_w']
         self.set_transverse_rebar(best_design['n_stir'], best_design['d_b'], best_design['s_l'])
-        self._A_v = best_design['A_v']
-        self._A_v = best_design['A_v']
-        V_s = self._A_v * self.f_yt * self._d_shear  # Shear contribution of reinforcement
-        self._phi_V_s = self.phi_v * V_s  # Reduced shear contribution of reinforcement
+        
+        # Check section after defining transverse rebar designed 
+        results = self.check_shear_ACI_318_19(force)
 
-        # Total shear strength
-        self._calculate_total_shear_strength_aci()
-        self._FUv = (self._V_u.to('kN') / self._phi_V_n.to('kN'))
-
-        # Design results and return DataFrame
-        results = self._compile_results_aci_shear(force)
-        self._initialize_dicts_ACI_318_19_shear()
-        return pd.DataFrame([results], index=[0])
+        return results
 
     def _initialize_variables_ACI_318_19(self, force: Forces) -> None:
         self._N_u = force.N_x
@@ -1211,7 +1209,6 @@ class RectangularBeam(RectangularSection):
             self._A_p = 0*cm**2 # No prestressing for now
             if force.M_y >= 0*kNm:
                 self._rho_l_bot = min((self._A_s_tension + self._A_p) / (self.width * self._d_shear), 0.02)
-                print(self._d_shear, self._A_s_tension)
             else:
                 self._rho_l_top = min((self._A_s_tension + self._A_p) / (self.width * self._d_shear), 0.02)
             # Shear calculation for sections without rebar
@@ -1270,7 +1267,6 @@ class RectangularBeam(RectangularSection):
 
                 V_Rd_max_min_angle = (alpha_cw * self.width * z * v_1 * self._f_cd / (cot_theta_min +
                                                                                        math.tan(theta_min))).to('kN')
-                debug(V_Rd_max_min_angle, cot_theta_min, math.tan(theta_min))
 
                 if self._V_Ed_1 <= V_Rd_max_min_angle:
                     # If within the minimum angle
@@ -1294,7 +1290,6 @@ class RectangularBeam(RectangularSection):
                         self._max_shear_ok = True
                         # Determine the angle θ of the strut based on the shear force
                         self._theta = 0.5 * math.asin((self._V_Ed_1 / V_Rd_max_max_angle))
-                        debug(self._theta)
                         self._cot_theta = 1 / math.tan(self._theta)
                         self._V_Rd_max = (alpha_cw * self.width * z * v_1 * self._f_cd / (self._cot_theta +
                                                                                            math.tan(self._theta))).to('kN')
@@ -2237,15 +2232,18 @@ def shear_ACI_imperial() -> None:
 
     # f1 = Forces(label='D', V_z=37.727*kip, N_x=20*kip)
     f1 = Forces(label='D', V_z=37.727*kip)
+    # f1 = Forces(label='D', V_z=8*kip)
     # f2 = Forces(label='L', V_z=6*kip) # No shear reinforcing
     Node(section=beam, forces=[f1])
-    beam.set_transverse_rebar(n_stirrups=1, d_b=0.5*inch, s_l=6*inch)
+    # beam.set_transverse_rebar(n_stirrups=1, d_b=0.5*inch, s_l=6*inch)
     beam.set_longitudinal_rebar_bot(n1=2, d_b1=0.625*inch)
-    results = beam.check_shear()
+    print(beam._A_v)
+    results = beam.design_shear()
+    print(beam._stirrup_d_b, beam._A_v.to('cm**2/m'))
     print(results)
     # section.design_shear(f, A_s=0.847*inch**2)
-    # section.shear_results_detailed  
-    # section.shear_results_detailed_doc
+    # beam.shear_results_detailed()  
+    # section.shear_results_detailed_doc()
 
 def rebar() -> None:
     concrete= Concrete_ACI_318_19(name="H30",f_c=30*MPa) 

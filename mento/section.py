@@ -23,7 +23,7 @@ class Section:
         self.steel_bar = steel_bar
         
         # Initialize with default settings
-        self.settings = Settings() 
+        self.settings = Settings(concrete) 
         if settings:
             self.settings.update(settings)  # Update with any provided settings
         self.c_c: PlainQuantity = self.settings.get_setting('clear_cover')
