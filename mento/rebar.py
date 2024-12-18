@@ -33,7 +33,7 @@ class Rebar:
                                     10*inch/8, 11*inch/8, 14*inch/8]
             rebar_areas_list = [0.1104*inch**2, 0.1963*inch**2, 0.3068*inch**2, 0.4418*inch**2, 0.6013*inch**2,
                                 0.7854*inch**2, 0.9940*inch**2, 1.27*inch**2, 1.56*inch**2, 2.25*inch**2]
-            self.rebar_areas = {d: area for d, area in zip(self.rebar_diameters, rebar_areas_list)}
+            self.rebar_areas = dict(zip(self.rebar_diameters, rebar_areas_list))
 
     @property
     def longitudinal_rebar_design(self) -> DataFrame:
