@@ -3,7 +3,7 @@ from typing import Any, Dict, TYPE_CHECKING, Tuple
 import math
 import pandas as pd
 
-from mento.units import psi, mm, cm
+from mento.units import psi, mm, cm, inch, MPa
 
 if TYPE_CHECKING:
     from mento.beam import RectangularBeam
@@ -21,11 +21,19 @@ class Rebar:
         self.max_diameter_diff = self.beam.settings.get_setting('max_diameter_diff')
         self.max_bars_per_layer = self.beam.settings.get_setting('max_bars_per_layer')
         self.min_long_rebar = self.beam.settings.get_setting('minimum_longitudinal_diameter')
-        self.rebar_diameters = [6*mm, 8*mm, 10*mm, 12*mm, 16*mm, 20*mm, 25*mm, 32*mm]
-        self.rebar_areas = {d: (math.pi * d ** 2) / 4 for d in self.rebar_diameters}
         self._long_combos_df: DataFrame = None
         self._trans_combos_df: DataFrame = None
         self._clear_spacing: PlainQuantity = 0*mm
+        # Unit system default rebar
+        if self.beam.concrete.unit_system == "metric":
+            self.rebar_diameters = [6*mm, 8*mm, 10*mm, 12*mm, 16*mm, 20*mm, 25*mm, 32*mm]
+            self.rebar_areas = {d: (math.pi * d ** 2) / 4 for d in self.rebar_diameters}
+        else:
+            self.rebar_diameters = [3*inch/8, 4*inch/8, 5*inch/8, 6*inch/8, 7*inch/8, 8*inch/8, 9*inch/8,
+                                    10*inch/8, 11*inch/8, 14*inch/8]
+            rebar_areas_list = [0.1104*inch**2, 0.1963*inch**2, 0.3068*inch**2, 0.4418*inch**2, 0.6013*inch**2,
+                                0.7854*inch**2, 0.9940*inch**2, 1.27*inch**2, 1.56*inch**2, 2.25*inch**2]
+            self.rebar_areas = dict(zip(self.rebar_diameters, rebar_areas_list))
 
     @property
     def longitudinal_rebar_design(self) -> DataFrame:
@@ -187,25 +195,50 @@ class Rebar:
         return df.head(7)
         
         # return df
+    
     def _check_spacing(self, n1:int, n2:int, d_b1: PlainQuantity, d_b2:PlainQuantity,
                        effective_width: PlainQuantity) -> bool:
         """
         Checks the clear spacing between rebars in a layer.
+
+        Parameters:
+            n1 (int): Number of bars in the first group of the layer.
+            n2 (int): Number of bars in the second group of the layer.
+            d_b1 (PlainQuantity): Diameter of bars in the first group of the layer.
+            d_b2 (PlainQuantity): Diameter of bars in the second group of the layer.
+            effective_width (PlainQuantity): The effective width available for bar placement.
+
+        Returns:
+            bool: True if the clear spacing satisfies the design limits, False otherwise.
         """
-        # Total bar width including diameters
-        total_bar_width = n1 * d_b1 + n2 * d_b2
-        
-        if n1 + n2 - 1 > 0:
-            # Calculate available clear spacing
-            self._clear_spacing = (effective_width - total_bar_width) / (n1 + n2 - 1)
-            
-            max_clear_spacing = max(self.min_clear_spacing, self.vibrator_size, max(d_b1, d_b2))
-            # Check if spacing is within limits
-            if self._clear_spacing < max_clear_spacing:
-                return False
-            
-        return True
-    
+        def layer_clear_spacing(n_a: int, d_a: PlainQuantity, n_b: int, d_b: PlainQuantity) -> PlainQuantity:
+            """
+            Helper function to calculate clear spacing for a given layer.
+
+            Parameters:
+                n_a (int): Number of bars in the first group of the layer.
+                d_a (PlainQuantity): Diameter of bars in the first group of the layer.
+                n_b (int): Number of bars in the second group of the layer.
+                d_b (PlainQuantity): Diameter of bars in the second group of the layer.
+
+            Returns:
+                PlainQuantity: Clear spacing for the given layer.
+            """
+            total_bars = n_a + n_b
+            if total_bars <= 1:
+                return effective_width - max(d_a, d_b)  # Clear space for one bar
+            total_bar_width = n_a * d_a + n_b * d_b
+            return (effective_width - total_bar_width) / (total_bars - 1)
+
+        # Calculate the clear spacing for the layer
+        self._clear_spacing = layer_clear_spacing(n1, d_b1, n2, d_b2)
+
+        # Determine the maximum clear spacing limit
+        max_clear_spacing = max(self.min_clear_spacing, self.vibrator_size, max(d_b1, d_b2))
+
+        # Check if the clear spacing is within limits
+        return self._clear_spacing >= max_clear_spacing
+
     def _check_diameter_differences(self, diameters: list) -> bool:
         """
         Checks that all diameter differences between bars in the list
@@ -221,7 +254,6 @@ class Rebar:
     def longitudinal_rebar_EN_1992(self, A_s_req: PlainQuantity) -> None:
         pass
 
-
     def transverse_rebar_ACI_318_19(self, A_v_req: PlainQuantity, 
                                          V_s_req: PlainQuantity) -> DataFrame:
         """
@@ -235,7 +267,7 @@ class Rebar:
             A dictionary containing the transverse rebar design.
         """
 
-        A_cv = self.beam.width*self.beam.d
+        A_cv = self.beam.width*self.beam._d_shear
 
         s_max_l, s_max_w = self.calculate_max_spacing_ACI(V_s_req, A_cv)
 
@@ -243,12 +275,15 @@ class Rebar:
         valid_combinations = []     
 
         # Iterate through available diameters from 10 mm to 16 mm
-        for d_b in self.rebar_diameters[2:5]:
+        for d_b in self.rebar_diameters[0:5]:
             # Start with 2 legs = 1 stirrup
             n_legs = 2
 
             # Start with maximum allowed spacing s_max_l
-            s_l: PlainQuantity = math.floor(s_max_l.to('cm').magnitude)*cm
+            if self.beam.concrete.unit_system == "metric":
+                s_l: PlainQuantity = math.floor(s_max_l.to('cm').magnitude)*cm
+            else:
+                s_l = math.floor(s_max_l.to('inch').magnitude)*inch
 
             while True:
                 # Calculate spacing based on current legs
@@ -261,30 +296,55 @@ class Rebar:
                 A_vs = n_legs_actual * A_db  # Area of vertical stirrups
                 A_v: PlainQuantity = A_vs / s_l  # Area of vertical stirrups per unit length
 
-                # Check if the calculated A_v meets or exceeds the required A_v
-                if A_v >= A_v_req:
-                    # Store the valid combination if spacing is also valid
-                    valid_combinations.append({
-                        'n_stir': int(n_stirrups),
-                        'd_b': d_b,
-                        's_l': s_l.to('cm'),  # spacing along length
-                        's_w': s_w.to('cm'), # spacing along width
-                        'A_v': A_v.to('cm**2/m'),
-                        's_max_l': s_max_l.to('cm'),
-                        's_max_w': s_max_w.to('cm')
-                    })
-                    # Stop checking larger diameters
-                    break  
-                    
-                # If A_v is insufficient, reduce s_l by 1 cm
-                s_l -= 1 * cm
-                # If s_l becomes less than 5 cm, increase the number of legs by 2 and reset s_l to s_max_l
-                if s_l < 5 * cm:  # If spacing is less than 5 cm, increase 1 stirrup
-                    n_legs += 2
-                    s_l = math.floor(s_max_l.to('cm').magnitude)*cm # Reset s_l to the max allowed spacing
-                # Break the loop if legs exceed the limit of legs or max stirrup diameter
-                if n_legs > 6:
-                    break
+                # Store the valid combination if spacing is also valid
+                if self.beam.concrete.unit_system == "metric":
+                    # Check if the calculated A_v meets or exceeds the required A_v
+                    if A_v >= A_v_req:
+                        valid_combinations.append({
+                            'n_stir': int(n_stirrups),
+                            'd_b': d_b,
+                            's_l': s_l.to('cm'),  # spacing along length
+                            's_w': s_w.to('cm'), # spacing along width
+                            'A_v': A_v.to('cm**2/m'),
+                            's_max_l': s_max_l.to('cm'),
+                            's_max_w': s_max_w.to('cm')
+                        })
+                        # Stop checking larger diameters
+                        break  
+                        
+                    # If A_v is insufficient, reduce s_l by 1 cm
+                    s_l -= 1 * cm
+                    # If s_l becomes less than 5 cm, increase the number of legs by 2 and reset s_l to s_max_l
+                    if s_l < 5 * cm:  # If spacing is less than 5 cm, increase 1 stirrup
+                        n_legs += 2
+                        s_l = math.floor(s_max_l.to('cm').magnitude)*cm # Reset s_l to the max allowed spacing
+                    # Break the loop if legs exceed the limit of legs or max stirrup diameter
+                    if n_legs > 6:
+                        break
+                else:
+                    # Check if the calculated A_v meets or exceeds the required A_v
+                    if A_v >= A_v_req:
+                        valid_combinations.append({
+                            'n_stir': int(n_stirrups),
+                            'd_b': d_b,
+                            's_l': s_l.to('inch'),  # spacing along length
+                            's_w': s_w.to('inch'), # spacing along width
+                            'A_v': A_v.to('inch**2/ft'),
+                            's_max_l': s_max_l.to('inch'),
+                            's_max_w': s_max_w.to('inch')
+                        })
+                        # Stop checking larger diameters
+                        break  
+                        
+                    # If A_v is insufficient, reduce s_l by 1 inch
+                    s_l -= 1 * inch
+                    # If s_l becomes less than 2 inch, increase the number of legs by 2 and reset s_l to s_max_l
+                    if s_l < 2 * inch:  # If spacing is less than 2 inch, increase 1 stirrup
+                        n_legs += 2
+                        s_l = math.floor(s_max_l.to('inch').magnitude)*inch # Reset s_l to the max allowed spacing
+                    # Break the loop if legs exceed the limit of legs or max stirrup diameter
+                    if n_legs > 6:
+                        break
 
         # Create a DataFrame with all valid combinations
         df_combinations = pd.DataFrame(valid_combinations)
@@ -351,14 +411,22 @@ class Rebar:
         lambda_factor = self.beam.settings.get_setting('lambda')
         
         # Determine maximum spacing based on V_s_req condition
-        if V_s_req <= 4 * lambda_factor * math.sqrt(f_c / psi) * psi * A_cv:
-            # Maximum spacing for lower shear demand
-            s_max_l = min(self.beam.d / 2, 60 * cm)
-            s_max_w = min(self.beam.d, 60 * cm)
-        else:
+        # Maximum spacing for lower shear demand
+        if self.beam.concrete.unit_system == "metric":
+            if V_s_req <= 0.083 * lambda_factor * math.sqrt(f_c / MPa) * MPa * A_cv:
+                s_max_l = min(self.beam._d_shear / 2, 60 * cm)
+                s_max_w = min(self.beam._d_shear, 60 * cm)
+            else:
             # Maximum spacing for higher shear demand
-            s_max_l = min(self.beam.d / 4, 30 * cm)
-            s_max_w = min(self.beam.d / 2, 30 * cm)
+                s_max_l = min(self.beam._d_shear / 4, 30 * cm)
+                s_max_w = min(self.beam._d_shear / 2, 30 * cm)
+        else:
+            if V_s_req <= 4 * lambda_factor * math.sqrt(f_c / psi) * psi * A_cv:
+                s_max_l = min(self.beam._d_shear / 2, 24*inch)
+                s_max_w = min(self.beam._d_shear, 24*inch)
+            else:
+                s_max_l = min(self.beam._d_shear / 4, 12*inch)
+                s_max_w = min(self.beam._d_shear / 2, 12*inch)
         
         return s_max_l, s_max_w  
     
@@ -376,7 +444,7 @@ class Rebar:
         tuple
             (s_max_l, s_max_w): The maximum spacing along the length and width of the beam.
         """
-        s_max_l = 0.75*self.beam.d*(1+1 / math.tan(alpha))
-        s_max_w = min(0.75*self.beam.d, 60 * cm)
+        s_max_l = 0.75*self.beam._d_shear*(1+1 / math.tan(alpha))
+        s_max_w = min(0.75*self.beam._d_shear, 60 * cm)
            
         return s_max_l, s_max_w

@@ -1,24 +1,48 @@
 from typing import Optional, Dict, Any
 
-from mento.units import mm
+from mento.units import mm, inch, MPa, psi
+from mento.material import Concrete
 
 class Settings:
-    default_settings: Dict[str, Any] = {
+    default_settings_metric: Dict[str, Any] = {
             # Beam design settings
             'clear_cover': 25 * mm, 
             'clear_spacing': 25 * mm, 
-            'stirrup_diameter_ini': 10 * mm,
-            'longitudinal_diameter_ini': 16*mm,
+            'stirrup_diameter_ini': 8 * mm,
             'vibrator_size': 30 * mm, 
             'layers_spacing': 25 * mm,
             'max_diameter_diff': 5*mm,
             'max_bars_per_layer': 5,
-            'minimum_longitudinal_diameter': 12*mm,
+            'minimum_longitudinal_diameter': 10*mm,
+        }
+    default_settings_imperial: Dict[str, Any] = {
+            # Beam design settings
+            'clear_cover': 1 * inch, 
+            'clear_spacing': 1 * inch, 
+            'stirrup_diameter_ini': 3/8*inch,
+            'vibrator_size': 1.25*inch, 
+            'layers_spacing': 1*inch,
+            'max_diameter_diff': 2/8*inch,
+            'max_bars_per_layer': 5,
+            'minimum_longitudinal_diameter': 4/8*inch,
         }
     
-    def __init__(self, settings: Optional[Dict[str, Any]] = None):
-        # Initialize instance settings with default settings
-        self.settings: Dict[str, Any] = self.default_settings.copy()
+    def __init__(self, concrete: Optional[Concrete] = None, settings: Optional[Dict[str, Any]] = None):
+        """
+        Initialize the Settings class with defaults based on unit system.
+        
+        Parameters
+        ----------
+        concrete : Concrete, optional
+            A Concrete object to determine the unit system.
+        settings : dict, optional
+            Custom settings to override defaults.
+        """
+        # Select default settings based on the concrete's unit system
+        if concrete and concrete.unit_system == "imperial":
+            self.settings = self.default_settings_imperial.copy()
+        else:  # Default to metric
+            self.settings = self.default_settings_metric.copy()
         
         # Update defaults with provided settings if any
         if settings:
@@ -80,12 +104,20 @@ class Settings:
             output += f"  {key}: {value}\n"
         return output.strip()
 
+# Test the Settings class
 def settings() -> None:
-    settings_test = Settings()
-    custom_settings = {'clear_cover': 50*mm, 'longitudinal_diameter_ini': 25*mm}
-    settings_test.update(custom_settings)
+    from mento.material import Concrete_ACI_318_19
+    # Example with metric concrete
+    metric_concrete = Concrete_ACI_318_19(name='H30', f_c=30*MPa)
+    metric_settings = Settings(metric_concrete)
+    print("Metric settings:")
+    print(metric_settings)
 
-    print(settings_test)
+    # Example with imperial concrete
+    imperial_concrete = Concrete_ACI_318_19(name='C4', f_c=4000*psi)
+    imperial_settings = Settings(imperial_concrete)
+    print("\nImperial settings:")
+    print(imperial_settings)
 
 if __name__ == "__main__":
     settings()
