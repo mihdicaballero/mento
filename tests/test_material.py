@@ -2,10 +2,6 @@ import pytest
 from mento.material import Concrete_ACI_318_19, Concrete_EN_1992_2004, SteelBar, SteelStrand
 from mento.units import MPa, m, kg, GPa
 
-
-# Get only the value
-# debug(N.magnitude, N.to('kN').magnitude)
-
 def test_concrete_aci_318_19_properties() -> None:
     f_c = 25 * MPa
     concrete = Concrete_ACI_318_19(name="C25", f_c=f_c)
@@ -21,7 +17,7 @@ def test_concrete_EN_1992_2004_properties() -> None:
     concrete = Concrete_EN_1992_2004(name="C25/30", f_ck=f_ck)
 
     assert concrete.f_ck  == f_ck
-    assert concrete.design_code == "EN 1992"
+    assert concrete.design_code == "EN 1992-2004"
     assert concrete.density == 2500 * kg / m**3 
     assert concrete.E_cm.to('MPa').magnitude == pytest.approx(31475, rel=0.01)
     assert concrete.f_ctm.to('MPa').magnitude == pytest.approx(2.564, rel=0.01) 

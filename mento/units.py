@@ -17,6 +17,7 @@ GPa = ureg.gigapascal
 kg = ureg.kilogram
 sec = ureg.second
 deg = ureg.degree
+dimensionless = ureg.Quantity(1, "")
 
 # Imperial system units
 psi = ureg.psi
@@ -31,6 +32,8 @@ def main() -> None:
     print(45*deg)
     a= 45*ureg.degree
     print(a, math.cos(a))
+    b = 0.000545*dimensionless
+    print(b.magnitude)
 
 if __name__ == "__main__":
     main()

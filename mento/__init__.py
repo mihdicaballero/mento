@@ -1,5 +1,5 @@
 # Expose units and Quantity directly to the user
-from .units import ureg, m, cm, mm, kN, kNm, MPa, GPa, kg, sec, psi, lb, kip, ksi, inch, ft  # noqa: F401
+from .units import ureg, m, cm, mm, kN, kNm, MPa, GPa, kg, sec, psi, lb, kip, ksi, inch, ft, deg  # noqa: F401
 
 # Export Quantity for user convenience
 Quantity = ureg.Quantity
