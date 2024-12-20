@@ -397,7 +397,55 @@ class RectangularBeam(RectangularSection):
         return rho_max
 
     def __minimum_flexural_reinforcement_ratio_ACI_318_19(self, M_u:PlainQuantity) -> PlainQuantity:
-        minimum_ratio = 0*dimensionless if M_u == 0*kNm else max((3 * np.sqrt(self.concrete.f_c / psi) * psi / self.steel_bar.f_y), 
+        """
+        Calculates the minimum flexural reinforcement ratio according to ACI 318-19 
+        provisions based on the factored moment, M_u.
+
+        This method determines the minimum amount of tensile reinforcement 
+        (in terms of a reinforcement ratio) that should be provided in a 
+        reinforced concrete section according to ACI 318-19. If the factored 
+        moment M_u is zero, it means there is no flexural demand, and hence 
+        no minimum flexural reinforcement is required (the ratio is zero). 
+        If M_u is not zero, the method checks the unit system (metric or imperial) 
+        and computes the required minimum ratio accordingly. These calculations 
+        depend on the compressive strength of the concrete (f_c) and the yield 
+        strength of the reinforcing steel (f_y).
+
+        Parameters
+        ----------
+        M_u : PlainQuantity
+            The factored moment for the section where the minimum flexural 
+            reinforcement ratio is required. The unit should be consistent with 
+            the chosen system (e.g., kNm in metric).
+
+        Returns
+        -------
+        PlainQuantity
+            The minimum flexural reinforcement ratio (dimensionless).
+
+        Notes
+        -----
+        - If M_u = 0, it indicates no moment demand, thus no minimum flexural 
+        reinforcement is required (resulting in a zero ratio).
+        - For M_u > 0, the minimum ratio is determined using formulas involving 
+        the square root of f_c and the value of f_y, in accordance with 
+        ACI 318-19.
+        - The result is a dimensionless ratio representing the minimum area 
+        of steel to the area of the concrete section.
+
+        References
+        ----------
+        ACI Committee 318. "Building Code Requirements for Structural Concrete 
+        (ACI 318-19) and Commentary", American Concrete Institute, 2019.
+        """
+        if M_u==0*kNm:
+            minimum_ratio = 0*dimensionless
+        else:
+            if self.concrete.unit_system == "metric":
+                minimum_ratio = max((0.25 * np.sqrt(self.concrete.f_c / MPa) * MPa / self.steel_bar.f_y), 
+                    (1.4 * MPa / self.steel_bar.f_y))
+            else:
+                minimum_ratio = max((3 * np.sqrt(self.concrete.f_c / psi) * psi / self.steel_bar.f_y), 
                     (200 * psi / self.steel_bar.f_y))
         return minimum_ratio
 
