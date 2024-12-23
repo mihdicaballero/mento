@@ -769,11 +769,12 @@ class RectangularBeam(RectangularSection):
                 debug("HOLA 2")
                 debug(self._A_s_top)
                 ####
-                self.flexure_design_results_top = section_rebar_top.longitudinal_rebar_ACI_318_19(0.47*inch**2)
+                debug("PRUEBA!!!!!!!")
+                self.flexure_design_results_top = section_rebar_top.longitudinal_rebar_ACI_318_19(0.49*inch**2)
                 best_design_top = section_rebar_top.longitudinal_rebar_design
                 debug(best_design_top)
                 #####
-                self.flexure_design_results_top = section_rebar_top.longitudinal_rebar_ACI_318_19(self._A_s_top)
+                #self.flexure_design_results_top = section_rebar_top.longitudinal_rebar_ACI_318_19(self._A_s_top)
                 debug("HOLA 3")
                 best_design_top = section_rebar_top.longitudinal_rebar_design
                 debug(best_design_top)
@@ -807,10 +808,10 @@ class RectangularBeam(RectangularSection):
 
         # Return results as a DataFrame
         results = {
-            "Bottom_As_adopted": self._total_as_b.to("inch**2"),
-            "Bottom separation of bars": self._clear_spacing_b.to("inch"),
-            "As_compression_adopted": self._total_as_t.to("inch**2"),
-            "Top separation of bars": self._clear_spacing_t.to("inch"),
+            "Bottom_As_adopted": self._A_s_bot.to("inch**2"),
+            "Bottom separation of bars": self._available_s_bot.to("inch"),
+            "As_compression_adopted": self._A_s_top.to("inch**2"),
+            "Top separation of bars": self._available_s_top.to("inch"),
         }
         return pd.DataFrame([results], index=[0])
 
@@ -843,9 +844,12 @@ class RectangularBeam(RectangularSection):
             # For top reinforcement, consider the minimum (most negative) moment
             if force.M_y < max_M_y_top:
                 max_M_y_top = force.M_y
+                self._limiting_case_bot=force
+
             # For bottom reinforcement, consider the maximum positive moment
             if force.M_y > max_M_y_bot:
                 max_M_y_bot = force.M_y
+                self._limiting_case_top=force
 
         # Design flexural reinforcement for the limiting cases
         if self.concrete.design_code == "ACI 318-19":
@@ -855,8 +859,8 @@ class RectangularBeam(RectangularSection):
                             f"for concrete type: {type(self.concrete).__name__}")
 
         # Store the limiting case designs
-        self._limiting_case_top = top_result
-        self._limiting_case_bottom = bot_result
+        #self._limiting_case_top = top_result
+        #self._limiting_case_bottom = bot_result
 
         # Assign the designed reinforcement to the section (only if top reinforcement is required)
         self.set_flexure_rebar(top_result['As'] if top_result else None, bot_result['As'])

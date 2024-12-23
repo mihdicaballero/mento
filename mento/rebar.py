@@ -174,9 +174,6 @@ class Rebar:
                                                 'clear_spacing': self._clear_spacing.to('mm')
                                             })
 
-
-
-
         # If no valid combination is found, raise an error
         if not valid_combinations:
             raise ValueError("Cannot fit the required reinforcement within "
