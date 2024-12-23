@@ -498,7 +498,8 @@ class RectangularBeam(RectangularSection):
         A_s_max = rho_max * d * b
 
         # Calculate required reinforcement
-        R_n = M_u / (self.phi_t * b * d**2)
+        phi_b=0.9
+        R_n = M_u / (phi_b * b * d**2)
         A_s_calc: PlainQuantity = 0.85 * self.concrete.f_c * b * d / self.steel_bar.f_y * (1 - np.sqrt(1 - 2 * R_n / (0.85 * self.concrete.f_c)))
         c: PlainQuantity =A_s_calc*self.steel_bar.f_y/(0.85*self.concrete.f_c*b*beta_1) # C=T -> 0.85*f_c*c*beta_1*b = A_s *f_y -> a = A_s *f_y / (0.85*f_c*b)
         
@@ -666,7 +667,7 @@ class RectangularBeam(RectangularSection):
         self._initialize_dicts_ACI_318_19_flexure()
         return pd.DataFrame([results], index=[0])
 
-    def design_flexure_ACI_318_19(self, Force: Forces) -> Dict[str, Any]:
+    def design_flexure_ACI_318_19(self, M_y_positive: PlainQuantity, M_y_negative: PlainQuantity) -> Dict[str, Any]:
         """
         Designs the flexural reinforcement for a beam cross-section 
         according to ACI 318-19.
@@ -696,19 +697,6 @@ class RectangularBeam(RectangularSection):
             areas and their spacing.
         """
 
-        # Ensure Force is a list
-        if not isinstance(Force, list):
-            Force = [Force]
-
-        # Initialize the maximum and minimum moments
-        M_u_min = 0 * kNm  # Negative moment (tension at the top)
-        M_u_max = 0 * kNm  # Positive moment (tension at the bottom)
-        for item in Force:
-            if item._M_y > M_u_max:
-                M_u_max = item._M_y
-            if item._M_y < M_u_min:
-                M_u_min = item._M_y
-
         # Load design settings for ACI 318-19
         self.settings.load_aci_318_19_settings()
 
@@ -732,20 +720,20 @@ class RectangularBeam(RectangularSection):
                 self._A_s_max_bot,
                 self._A_s_final_bot_Positive_M,
                 self._A_s_comp_top,
-            ) = self.__calculate_flexural_reinforcement_ACI_318_19(M_u_max, d, d_prima)
+            ) = self.__calculate_flexural_reinforcement_ACI_318_19(M_y_positive, d, d_prima)
 
             # Initialize bottom and top reinforcement
             self._A_s_bottom = self._A_s_final_bot_Positive_M
             self._A_s_top = self._A_s_comp_top
 
             # If there is a negative moment, calculate the top reinforcement
-            if M_u_min < 0:
+            if M_y_negative < 0:
                 (
                     self._A_s_min_top,
                     self._A_s_max_top,
                     self._A_s_final_top_Negative_M,
                     self._A_s_comp_bot,
-                ) = self.__calculate_flexural_reinforcement_ACI_318_19(abs(M_u_min), d_prima, d)
+                ) = self.__calculate_flexural_reinforcement_ACI_318_19(abs(M_y_negative), d_prima, d)
 
                 # Adjust reinforcement areas based on positive and negative moments
                 self._A_s_bottom = max(self._A_s_final_bot_Positive_M, self._A_s_comp_bot)
@@ -753,8 +741,10 @@ class RectangularBeam(RectangularSection):
 
             # Design bottom reinforcement
             section_rebar_bot = Rebar(self)
+            debug(self._A_s_bottom)
             self.flexure_design_results_bot = section_rebar_bot.longitudinal_rebar_ACI_318_19(self._A_s_bottom)
             best_design = section_rebar_bot.longitudinal_rebar_design
+            debug(best_design)
 
             # Extract bar information
             d_b1_bot=best_design["d_b1"]
@@ -765,10 +755,6 @@ class RectangularBeam(RectangularSection):
             n_2_bot=best_design["n_2"]
             n_3_bot=best_design["n_3"]
             n_4_bot=best_design["n_4"]
-            total_as_adopted_bot = best_design["total_as"]
-            total_bars_bot=n_1_bot+n_2_bot+n_3_bot+n_4_bot
-            clearing_spacing_bot = best_design["clear_spacing"]
-
 
             # Set rebar information to section
             self.set_longitudinal_rebar_bot(n_1_bot, d_b1_bot, n_2_bot, d_b2_bot, 
@@ -778,9 +764,20 @@ class RectangularBeam(RectangularSection):
 
             # Design top reinforcement
             if self._A_s_top > 0:
+                debug("HOLA")
                 section_rebar_top = Rebar(self)
-                self.flexure_design_results_top = section_rebar_top.longitudinal_rebar_ACI_318_19(self._A_s_top)
+                debug("HOLA 2")
+                debug(self._A_s_top)
+                ####
+                self.flexure_design_results_top = section_rebar_top.longitudinal_rebar_ACI_318_19(0.47*inch**2)
                 best_design_top = section_rebar_top.longitudinal_rebar_design
+                debug(best_design_top)
+                #####
+                self.flexure_design_results_top = section_rebar_top.longitudinal_rebar_ACI_318_19(self._A_s_top)
+                debug("HOLA 3")
+                best_design_top = section_rebar_top.longitudinal_rebar_design
+                debug(best_design_top)
+                debug("HOLA 4")
 
                 # Extract bar information for top reinforcement
                 d_b1_top=best_design_top["d_b1"]
@@ -791,24 +788,17 @@ class RectangularBeam(RectangularSection):
                 n_2_top=best_design_top["n_2"]
                 n_3_top=best_design_top["n_3"]
                 n_4_top=best_design_top["n_4"]
-                total_as_adopted_top=n_1_top+n_2_top+n_3_top+n_4_top
-                total_bars_top = best_design_top["total_as"]
-                clearing_spacing_top = best_design_top["clear_spacing"]
 
                 # Set rebar information to section
                 self.set_longitudinal_rebar_top(n_1_top, d_b1_top, n_2_top, d_b2_top, 
-                                    n_3_top, d_b3_top, n_4_top, d_b4_top, 
-                                    total_as_adopted_top, total_bars_top, clearing_spacing_top)
+                                    n_3_top, d_b3_top, n_4_top, d_b4_top)
 
                 d_prima_calculo = self.c_c + self._stirrup_d_b + self._top_rebar_centroid
             else:
                 # If no top reinforcement is required
                 d_prima_calculo = d_prima
-                total_as_adopted_top = 0 * inch**2
-                clearing_spacing_top = self._width - 2 * self.c_c - 2 * self._stirrup_d_b
                 # Set rebar information to section
-                self.set_longitudinal_rebar_top(0, 0*mm, 0, 0*mm, 
-                                    0, 0*mm, 0, 0*mm,total_as_adopted_top, 0, clearing_spacing_top)
+                self.set_longitudinal_rebar_top(0, 0*mm, 0, 0*mm, 0, 0*mm, 0, 0*mm)
 
             # Update error for iteration
             Err = max(abs(c_mec_calc - rec_mec), abs(d_prima_calculo - d_prima))
@@ -859,12 +849,7 @@ class RectangularBeam(RectangularSection):
 
         # Design flexural reinforcement for the limiting cases
         if self.concrete.design_code == "ACI 318-19":
-            # Only design for top if there are negative moments
-            top_result = None
-            if max_M_y_top < 0 * kN * m:
-                top_result = self.design_flexure_ACI_318_19(max_M_y_top)
-
-            bot_result = self.design_flexure_ACI_318_19(max_M_y_bot)
+            self.design_flexure_ACI_318_19(max_M_y_bot, max_M_y_top)
         else:
             raise ValueError(f"Longitudinal design method not implemented "
                             f"for concrete type: {type(self.concrete).__name__}")
@@ -1135,7 +1120,7 @@ class RectangularBeam(RectangularSection):
     def _calculate_f_yt_aci(self) -> PlainQuantity:
         """Determine the yield strength of steel based on unit system."""
         if self.concrete.unit_system == "metric":
-            return min(self.steel_bar.f_y, 400 * MPa)
+            return min(self.steel_bar.f_y, 420 * MPa)
         else:
             return min(self.steel_bar.f_y, 60 * ksi)
 
@@ -2341,7 +2326,8 @@ def shear_EN_1992() -> None:
     # beam.shear_results_detailed_doc()
 
 if __name__ == "__main__":
-    flexure_check_test()
+    # flexure_check_test()
+    flexure_design_test()
     # flexure_Mn()
     # shear_ACI_imperial()
     # shear_EN_1992()
