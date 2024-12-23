@@ -115,7 +115,8 @@ class Rebar:
                                 A_s_max = max(1.25*A_s_req, n1 * self.rebar_areas[self.min_long_rebar])
                                 # Check if total area from layer 1 is enough for required A_s
                                 # And also less than 25% greater than A_s_req
-                                if A_s_layer_1 >= A_s_req and A_s_layer_1 <= A_s_max:
+                                #if A_s_layer_1 >= A_s_req and A_s_layer_1 <= A_s_max:
+                                if A_s_layer_1 >= A_s_req:    
                                     total_as = A_s_layer_1  # Only consider layer 1
                                     total_bars = n1 + n2    # Total bars only in layer 1
                                     valid_combinations.append({
@@ -158,7 +159,8 @@ class Rebar:
 
                                         # Check if total area is enough for required A_s
                                         total_as = A_s_layer_1 + A_s_layer_2
-                                        if total_as >= A_s_req and total_as <= A_s_max:
+                                        #if total_as >= A_s_req and total_as <= A_s_max:
+                                        if total_as >= A_s_req:    
                                             total_bars = n1 + n2 + n3 + n4  # Count the total number of bars
                                             valid_combinations.append({
                                                 'n_1': n1,
@@ -176,8 +178,7 @@ class Rebar:
 
         # If no valid combination is found, raise an error
         if not valid_combinations:
-            raise ValueError("Cannot fit the required reinforcement within "
-                             "the beam width considering clear cover and spacing.")
+            raise ValueError("Cannot fit the required reinforcement within the beam width considering clear cover and spacing.")
 
         # Convert valid combinations to DataFrame
         df = pd.DataFrame(valid_combinations)

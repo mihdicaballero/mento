@@ -741,10 +741,8 @@ class RectangularBeam(RectangularSection):
 
             # Design bottom reinforcement
             section_rebar_bot = Rebar(self)
-            debug(self._A_s_bottom)
             self.flexure_design_results_bot = section_rebar_bot.longitudinal_rebar_ACI_318_19(self._A_s_bottom)
             best_design = section_rebar_bot.longitudinal_rebar_design
-            debug(best_design)
 
             # Extract bar information
             d_b1_bot=best_design["d_b1"]
@@ -764,21 +762,9 @@ class RectangularBeam(RectangularSection):
 
             # Design top reinforcement
             if self._A_s_top > 0:
-                debug("HOLA")
                 section_rebar_top = Rebar(self)
-                debug("HOLA 2")
-                debug(self._A_s_top)
-                ####
-                debug("PRUEBA!!!!!!!")
-                self.flexure_design_results_top = section_rebar_top.longitudinal_rebar_ACI_318_19(0.49*inch**2)
+                self.flexure_design_results_top = section_rebar_top.longitudinal_rebar_ACI_318_19(self._A_s_top)
                 best_design_top = section_rebar_top.longitudinal_rebar_design
-                debug(best_design_top)
-                #####
-                #self.flexure_design_results_top = section_rebar_top.longitudinal_rebar_ACI_318_19(self._A_s_top)
-                debug("HOLA 3")
-                best_design_top = section_rebar_top.longitudinal_rebar_design
-                debug(best_design_top)
-                debug("HOLA 4")
 
                 # Extract bar information for top reinforcement
                 d_b1_top=best_design_top["d_b1"]
@@ -858,25 +844,20 @@ class RectangularBeam(RectangularSection):
             raise ValueError(f"Longitudinal design method not implemented "
                             f"for concrete type: {type(self.concrete).__name__}")
 
-        # Store the limiting case designs
-        #self._limiting_case_top = top_result
-        #self._limiting_case_bottom = bot_result
-
-        # Assign the designed reinforcement to the section (only if top reinforcement is required)
-        self.set_flexure_rebar(top_result['As'] if top_result else None, bot_result['As'])
-
         # Check flexural capacity for all forces with the assigned reinforcement
         for force in self.node.forces:
             result = self.check_flexure_ACI_318_19(force)  # Assuming ACI 318-19 for simplicity
             self._flexure_results_list.append(result)
 
+            #TODO NO SE QUE ES _data_min_max
             # Store detailed results for each force
             self._flexure_results_detailed_list[force.id] = {
                 'forces': self._forces_flexure.copy(),
-                'min_max': self._data_min_max.copy(),
+                'min_max': self._data_min_max.copy(), 
                 'flexure_capacity_top': self._flexure_capacity_top.copy(),
                 'flexure_capacity_bottom': self._flexure_capacity_bot.copy(),
             }
+
 
         # Compile all results into a single DataFrame
         all_results = pd.DataFrame(self._flexure_results_list)
