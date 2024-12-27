@@ -498,6 +498,10 @@ class RectangularBeam(RectangularSection):
         setting_flexural_min_reduction = self.settings.get_setting('flexural_min_reduction')
         beta_1 = self.concrete.get_properties()["beta_1"]
         b = self._width
+
+        self.settings.load_aci_318_19_settings()
+        self.phi_t = self.settings.get_setting('phi_t')
+
         # Determine minimum and maximum reinforcement
         rho_min=self.__minimum_flexural_reinforcement_ratio_ACI_318_19(M_u)
         A_s_min = rho_min * d * b
@@ -505,8 +509,8 @@ class RectangularBeam(RectangularSection):
         A_s_max = rho_max * d * b
 
         # Calculate required reinforcement
-        phi_b=0.9
-        R_n = M_u / (phi_b * b * d**2)
+
+        R_n = M_u / (self.phi_t * b * d**2)
         #TODO ACA HAY QUE VER QUE HACER CUANDO ESTA RAIZ ES NEGATIVA, hay que manejar el error.
         # Verificar si el valor dentro de la raíz cuadrada es negativo
         sqrt_value = 1 - 2 * R_n / (0.85 * self.concrete.f_c)
@@ -538,11 +542,18 @@ class RectangularBeam(RectangularSection):
         else:
             rho = 0.85 * beta_1 * self.concrete.f_c / self.steel_bar.f_y * (0.003 / (self.steel_bar.epsilon_y + 0.006))
             M_n_t = rho * self.steel_bar.f_y * (d - 0.59 * rho * self.steel_bar.f_y * d / self.concrete.f_c) * b * d
-            M_n_prima = M_u / phi_b - M_n_t
+            M_n_prima = M_u / self.phi_t - M_n_t
             c_t = 0.003 * d / (self.steel_bar.epsilon_y + 0.006)
             f_s_prima = min(0.003 * self.steel_bar.E_s * (1 - d_prima / c_t), self.steel_bar.f_y)
             A_s_comp = M_n_prima / (f_s_prima * (d - d_prima))
             A_s_final = rho * b * d + A_s_comp
+
+        # ARMO UN FORCE PARA PROBAR
+        debug(f"El momento ultimo es: {M_u}")
+        force1=Forces(M_y=M_u)
+        self._determine_nominal_moment_ACI_318_19(force1)
+        debug(f"EL MOMENTO QUE RESISTE ESTO ES BOT {self._phi_M_n_bot.to(kNm)} TOP {self._phi_M_n_top.to(kNm)}")
+        # LISTO PRUEBA
         
         return A_s_min, A_s_max, A_s_final, A_s_comp, c_d
 
@@ -614,6 +625,7 @@ class RectangularBeam(RectangularSection):
 
         # Load design settings for ACI 318-19
         self.settings.load_aci_318_19_settings()
+        self.phi_t = self.settings.get_setting('phi_t')
 
         # Minimum reinforcement ratio
         rho_min = self.__minimum_flexural_reinforcement_ratio_ACI_318_19(force._M_y)
@@ -665,20 +677,16 @@ class RectangularBeam(RectangularSection):
 
         # Inicializamos los momentos nominales a partir de las fuerzas:
         self._determine_nominal_moment_ACI_318_19(force)
-        debug(f"phi_M_n_bot {self._phi_M_n_bot.to(kNm)}, _phi_M_n_top {self._phi_M_n_top.to(kNm)}")
 
 
         if self._M_u>=0:
             A_s_min, A_s_max, self._A_s_req_bot, self._A_s_req_top, self._c_d_bot=self.__calculate_flexural_reinforcement_ACI_318_19(self._M_u_bot, self._d_bot, self._c_mec_top)
-            debug(f"ARMADO REQUERIDO TOP: {self._A_s_req_top.to(cm**2)}, para Mu: {self._M_u.to(kNm)}")
             self._c_d_top=0
             self._DCRb_bot = self._M_u_bot.to('kN*m') / self._phi_M_n_bot.to('kN*m')
             self._DCRb_top = 0
         else:
             A_s_min, A_s_max, self._A_s_req_top, self._A_s_req_bot, self._c_d_top=self.__calculate_flexural_reinforcement_ACI_318_19(abs(self._M_u_top), self._d_top, self._c_mec_bot)
-            debug(f"ARMADO REQUERIDO TOP: {self._A_s_req_top.to(cm**2)}, para Mu: {self._M_u.to(kNm)}")
             self._c_d_bot=0
-            debug(f"El _M_u_top: {-self._M_u_top.to('kN*m')}, el _phi_M_n_top {self._phi_M_n_top.to('kN*m')}")
             self._DCRb_top = -self._M_u_top.to('kN*m') / self._phi_M_n_top.to('kN*m')
             self._DCRb_bot = 0
 
@@ -723,7 +731,7 @@ class RectangularBeam(RectangularSection):
 
         # Load design settings for ACI 318-19
         self.settings.load_aci_318_19_settings()
-
+        self.phi_t = self.settings.get_setting('phi_t')
         # Initial assumptions for mechanical cover and compression depth
         rec_mec = self.c_c + self._stirrup_d_b + 1 * inch
         d_prima = self.c_c + self._stirrup_d_b + 1 * inch
@@ -869,7 +877,6 @@ class RectangularBeam(RectangularSection):
 
         # Design flexural reinforcement for the limiting cases
         if self.concrete.design_code == "ACI 318-19":
-            debug(f"ESTAMOS ENTRANDO A design_flexure_ACI_318_19 max_M_y_bot{max_M_y_bot}, max_M_y_top {max_M_y_top} ")
             self.design_flexure_ACI_318_19(max_M_y_bot, max_M_y_top)
         else:
             raise ValueError(f"Longitudinal design method not implemented "
@@ -879,10 +886,7 @@ class RectangularBeam(RectangularSection):
 
         # Check flexural capacity for all forces with the assigned reinforcement
         for force in self.node.forces:
-            debug(force._M_y.to(kNm))
             result = self.check_flexure_ACI_318_19(force)  # Assuming ACI 318-19 for simplicity
-            debug("RESULTADO")
-            debug(result)
             self._flexure_results_list.append(result)
             #TODO NO SE QUE ES _data_min_max
             # Store detailed results for each force
