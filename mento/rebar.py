@@ -115,7 +115,8 @@ class Rebar:
                                 A_s_max = max(1.25*A_s_req, n1 * self.rebar_areas[self.min_long_rebar])
                                 # Check if total area from layer 1 is enough for required A_s
                                 # And also less than 25% greater than A_s_req
-                                #if A_s_layer_1 >= A_s_req and A_s_layer_1 <= A_s_max:
+                                #if A_s_layer_1 >= A_s_req and A_s_layer_1 <= A_s_max: #CREO QUE ESTA MAL LIMITAR ESTO AL 25% PORQUE SI EL ARMADO REQUERIDO ES CHICO, pUEDE PASAR QUE NO CUMPLA NUNCA
+                                #TODO COMENTAR CAMBIO CON MIHDI
                                 if A_s_layer_1 >= A_s_req:    
                                     total_as = A_s_layer_1  # Only consider layer 1
                                     total_bars = n1 + n2    # Total bars only in layer 1
