@@ -1,3 +1,4 @@
+import os # Cleaning console
 from devtools import debug
 from dataclasses import dataclass
 from IPython.display import Markdown, display
@@ -547,13 +548,6 @@ class RectangularBeam(RectangularSection):
             f_s_prima = min(0.003 * self.steel_bar.E_s * (1 - d_prima / c_t), self.steel_bar.f_y)
             A_s_comp = M_n_prima / (f_s_prima * (d - d_prima))
             A_s_final = rho * b * d + A_s_comp
-
-        # ARMO UN FORCE PARA PROBAR
-        debug(f"El momento ultimo es: {M_u}")
-        force1=Forces(M_y=M_u)
-        self._determine_nominal_moment_ACI_318_19(force1)
-        debug(f"EL MOMENTO QUE RESISTE ESTO ES BOT {self._phi_M_n_bot.to(kNm)} TOP {self._phi_M_n_top.to(kNm)}")
-        # LISTO PRUEBA
         
         return A_s_min, A_s_max, A_s_final, A_s_comp, c_d
 
@@ -680,13 +674,13 @@ class RectangularBeam(RectangularSection):
 
 
         if self._M_u>=0:
-            A_s_min, A_s_max, self._A_s_req_bot, self._A_s_req_top, self._c_d_bot=self.__calculate_flexural_reinforcement_ACI_318_19(self._M_u_bot, self._d_bot, self._c_mec_top)
-            self._c_d_top=0
+            self._A_s_min_bot, self._A_s_max_bot, self._A_s_req_bot, self._A_s_req_top, self._c_d_bot = self.__calculate_flexural_reinforcement_ACI_318_19(self._M_u_bot, self._d_bot, self._c_mec_top)
+            self._c_d_top = 0
             self._DCRb_bot = self._M_u_bot.to('kN*m') / self._phi_M_n_bot.to('kN*m')
             self._DCRb_top = 0
         else:
-            A_s_min, A_s_max, self._A_s_req_top, self._A_s_req_bot, self._c_d_top=self.__calculate_flexural_reinforcement_ACI_318_19(abs(self._M_u_top), self._d_top, self._c_mec_bot)
-            self._c_d_bot=0
+            self._A_s_min_top, self._A_s_max_top, self._A_s_req_top, self._A_s_req_bot, self._c_d_top = self.__calculate_flexural_reinforcement_ACI_318_19(abs(self._M_u_top), self._d_top, self._c_mec_bot)
+            self._c_d_bot = 0
             self._DCRb_top = -self._M_u_top.to('kN*m') / self._phi_M_n_top.to('kN*m')
             self._DCRb_bot = 0
 
@@ -750,36 +744,32 @@ class RectangularBeam(RectangularSection):
             (
                 self._A_s_min_bot,
                 self._A_s_max_bot,
-                self._A_s_final_bot_Positive_M,
-                self._A_s_comp_top,
+                A_s_final_bot_Positive_M,
+                A_s_comp_top,
                 self._c_d_bot
             ) = self.__calculate_flexural_reinforcement_ACI_318_19(M_y_positive, d, d_prima)
 
             # Initialize bottom and top reinforcement
-            self._A_s_bottom = self._A_s_final_bot_Positive_M
-            self._A_s_top = self._A_s_comp_top
-
+            self._A_s_bot = A_s_final_bot_Positive_M
+            self._A_s_top = A_s_comp_top
             # If there is a negative moment, calculate the top reinforcement
             if M_y_negative < 0:
                 (
                     self._A_s_min_top,
                     self._A_s_max_top,
-                    self._A_s_final_top_Negative_M,
-                    self._A_s_comp_bot,
+                    A_s_final_top_Negative_M,
+                    A_s_comp_bot,
                     self._c_d_top
                 ) = self.__calculate_flexural_reinforcement_ACI_318_19(abs(M_y_negative), self.height-d_prima, rec_mec)
-                debug(f"Armado superior: {self._A_s_final_top_Negative_M.to(cm**2)}")
+
 
                 # Adjust reinforcement areas based on positive and negative moments
-                self._A_s_bottom = max(self._A_s_final_bot_Positive_M, self._A_s_comp_bot)
-                self._A_s_top = max(self._A_s_comp_top, self._A_s_final_top_Negative_M)
-                debug(f"Armado superior 2: {self._A_s_top.to(cm**2)}")
-
+                self._A_s_bot = max(A_s_final_bot_Positive_M, A_s_comp_bot)
+                self._A_s_top = max(A_s_comp_top, A_s_final_top_Negative_M)
             # Design bottom reinforcement
             section_rebar_bot = Rebar(self)
-            self.flexure_design_results_bot = section_rebar_bot.longitudinal_rebar_ACI_318_19(self._A_s_bottom)
+            self.flexure_design_results_bot = section_rebar_bot.longitudinal_rebar_ACI_318_19(self._A_s_bot)
             best_design = section_rebar_bot.longitudinal_rebar_design
-
             # Extract bar information
             d_b1_bot=best_design["d_b1"]
             d_b2_bot=best_design["d_b2"]
@@ -791,11 +781,8 @@ class RectangularBeam(RectangularSection):
             n_4_bot=best_design["n_4"]
 
             # Set rebar information to section
-            self.set_longitudinal_rebar_bot(n_1_bot, d_b1_bot, n_2_bot, d_b2_bot, 
-                                n_3_bot, d_b3_bot, n_4_bot, d_b4_bot)
-
             c_mec_calc = self.c_c + self._stirrup_d_b + self._bot_rebar_centroid
-
+            
             # Design top reinforcement
             if self._A_s_top > 0:
                 section_rebar_top = Rebar(self)
@@ -813,6 +800,8 @@ class RectangularBeam(RectangularSection):
                 n_4_top=best_design_top["n_4"]
 
                 # Set rebar information to section
+                self.set_longitudinal_rebar_bot(n_1_bot, d_b1_bot, n_2_bot, d_b2_bot, 
+                                n_3_bot, d_b3_bot, n_4_bot, d_b4_bot)
                 self.set_longitudinal_rebar_top(n_1_top, d_b1_top, n_2_top, d_b2_top, 
                                     n_3_top, d_b3_top, n_4_top, d_b4_top)
 
@@ -821,6 +810,8 @@ class RectangularBeam(RectangularSection):
                 # If no top reinforcement is required
                 d_prima_calculo = d_prima
                 # Set rebar information to section
+                self.set_longitudinal_rebar_bot(n_1_bot, d_b1_bot, n_2_bot, d_b2_bot, 
+                                n_3_bot, d_b3_bot, n_4_bot, d_b4_bot)
                 self.set_longitudinal_rebar_top(0, 0*mm, 0, 0*mm, 0, 0*mm, 0, 0*mm)
 
             # Update error for iteration
@@ -2180,7 +2171,22 @@ class RectangularBeam(RectangularSection):
         # Save the Word doc
         doc_builder.save(f"Concrete beam shear check {self.concrete.design_code}.docx")
 
+
+
+
+def clear_console():
+    """
+    Clears the console based on the operating system.
+    """
+    if os.name == 'nt':  # For Windows
+        os.system('cls')
+    else:  # For macOS and Linux
+        os.system('clear')
+
+
+
 def flexure_design_test() -> None:
+    clear_console()
     #Example 6.6 CRSI GUIDE
     concrete = Concrete_ACI_318_19(name="C4",f_c=4000*psi) 
     steelBar = SteelBar(name="G60", f_y=60000*psi) 
@@ -2197,12 +2203,15 @@ def flexure_design_test() -> None:
     f4 = Forces(label='C2', M_y=135*kNm)
     f5 = Forces(label='C3', M_y=-100*kNm)
     f6 = Forces(label='C4', M_y=25*kNm)
+    #TODO DEFINIR LA SUMA DE CARGAS, QUE ENTIENDA QUE SI UNO LE DICE f1+f2 ES SUMAR LOS VALORES DE LAS SOLICITACIONES
 
     Node(section=beam, forces=[f1, f2, f3, f4, f5, f6])
     results=beam.design_flexure() 
     print(results)
+    print(list(beam.__dict__.keys()))
 
 def flexure_check_test() -> None:
+    clear_console()
     concrete = Concrete_ACI_318_19(name="H-25",f_c=25*MPa) 
     steelBar = SteelBar(name="420", f_y=420*MPa) 
 
@@ -2228,6 +2237,7 @@ def flexure_check_test() -> None:
     # beam.flexure_results_detailed() 
 
 def flexure_Mn() -> None:
+    clear_console()
     # MOMENTO NOMINAL SIMPLEMENTE ARMADO
     #Example from https://www.google.com/search?q=ACI+318+19+nominal+moment+of+section&oq=ACI+318+19+nominal+moment+of+section&gs_lcrp=EgZjaHJvbWUyBggAEEUYOTIHCAEQIRigAdIBCTIyNzkzajBqN6gCALACAA&sourceid=chrome&ie=UTF-8#fpstate=ive&vld=cid:dab5f5e7,vid:m4H0QbGDYIg,st:0
     concrete = Concrete_ACI_318_19(name="C6",f_c=6000*psi) 
@@ -2364,7 +2374,7 @@ def shear_EN_1992() -> None:
 
 if __name__ == "__main__":
     # flexure_check_test()
-     flexure_design_test()
+    flexure_design_test()
     # flexure_Mn()
     # shear_ACI_imperial()
     # shear_EN_1992()
