@@ -2210,6 +2210,8 @@ def flexure_design_test() -> None:
     print(results)
     print(list(beam.__dict__.keys()))
 
+    print(beam.__maximum_flexural_reinforcement_ratio_ACI_318_19())
+
 def flexure_check_test() -> None:
     clear_console()
     concrete = Concrete_ACI_318_19(name="H-25",f_c=25*MPa) 
@@ -2247,11 +2249,15 @@ def flexure_Mn() -> None:
         concrete=concrete,
         steel_bar=steelBar,
         width=20 * inch,  
-        height=30 * inch,   
+        height=30 * inch,  
+
     )
     A_s=10.92 * inch**2
     d=27*inch
-    c_mec=3*inch
+    debug(beam._c_mec_bot)
+    #OJO ACA ESTO NO SE PUEDE HACER ASI:
+    #beam._c_mec_bot=3*inch
+    #####
     result=beam._determine_nominal_moment_simple_reinf_ACI_318_19(A_s,d)
     print(result.to(kip*ft))
 
@@ -2268,7 +2274,6 @@ def flexure_Mn() -> None:
     )
     A_s=6 * inch**2
     d=24*inch
-    c_mec=3*inch
     d_prime=2.5*inch
     A_s_prime=1.8*inch**2
     result=beam2._determine_nominal_moment_double_reinf_ACI_318_19(A_s, d, d_prime, A_s_prime)
@@ -2374,8 +2379,8 @@ def shear_EN_1992() -> None:
 
 if __name__ == "__main__":
     # flexure_check_test()
-    flexure_design_test()
-    # flexure_Mn()
+    # flexure_design_test()
+    flexure_Mn()
     # shear_ACI_imperial()
     # shear_EN_1992()
     # shear_ACI_metric()
