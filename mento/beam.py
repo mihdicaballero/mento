@@ -459,7 +459,7 @@ class RectangularBeam(RectangularSection):
                     (200 * psi / self.steel_bar.f_y))
         return minimum_ratio
 
-    def __calculate_flexural_reinforcement_ACI_318_19(self, M_u: PlainQuantity, d: float, d_prima: float)-> tuple[PlainQuantity, PlainQuantity, PlainQuantity, PlainQuantity, PlainQuantity]:
+    def __calculate_flexural_reinforcement_ACI_318_19(self, M_u: PlainQuantity, d: float, d_prima: float)-> tuple[PlainQuantity, PlainQuantity, PlainQuantity, PlainQuantity, float]:
         """
         Calculates the flexural reinforcement (bottom tensile and top compression, if required) 
         for a given factored moment.
@@ -2255,9 +2255,6 @@ def flexure_Mn() -> None:
     A_s=10.92 * inch**2
     d=27*inch
     debug(beam._c_mec_bot)
-    #OJO ACA ESTO NO SE PUEDE HACER ASI:
-    #beam._c_mec_bot=3*inch
-    #####
     result=beam._determine_nominal_moment_simple_reinf_ACI_318_19(A_s,d)
     print(result.to(kip*ft))
 
