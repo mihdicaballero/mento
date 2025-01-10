@@ -99,8 +99,8 @@ class RectangularBeam(RectangularSection):
             self._n1_b, self._d_b1_b = 2, 8 * mm
             self._n1_t, self._d_b1_t = 2, 8 * mm
         else:
-            self._n1_b, self._d_b1_b = 2, 4/8 * inch
-            self._n1_t, self._d_b1_t = 2, 4/8 * inch
+            self._n1_b, self._d_b1_b = 2, 3/8 * inch
+            self._n1_t, self._d_b1_t = 2, 3/8 * inch
 
         # Update dependent attributes
         self._update_longitudinal_rebar_attributes()
@@ -517,12 +517,11 @@ class RectangularBeam(RectangularSection):
         sqrt_value = 1 - 2 * R_n / (0.85 * self.concrete.f_c)
         if sqrt_value < 0:
             # Lanzar excepción si la raíz es negativa
-            raise ReinforcementCalculationError(
-                f"No es posible dimensionar la viga para el momento actuante M_u = {M_u}. "
-                f"El valor dentro de la raíz cuadrada es negativo: {sqrt_value}."
-            )
-        A_s_calc: PlainQuantity = 0.85 * self.concrete.f_c * b * d / self.steel_bar.f_y * (1 - np.sqrt(sqrt_value))
-        c: PlainQuantity =A_s_calc*self.steel_bar.f_y/(0.85*self.concrete.f_c*b*beta_1) # C=T -> 0.85*f_c*c*beta_1*b = A_s *f_y -> a = A_s *f_y / (0.85*f_c*b)
+            A_s_calc = A_s_max  # Esto es para que no se rompa, que de el maximo, y el DCR quede mayor a 1
+        else:
+            A_s_calc = 0.85 * self.concrete.f_c * b * d / self.steel_bar.f_y * (1 - np.sqrt(sqrt_value))
+        
+        c =A_s_calc*self.steel_bar.f_y/(0.85*self.concrete.f_c*b*beta_1) # C=T -> 0.85*f_c*c*beta_1*b = A_s *f_y -> a = A_s *f_y / (0.85*f_c*b)
         
         def clean_zero(value: float, tolerance: float = 1e-6) -> float:
             return 0.0 if abs(value) < tolerance else value
@@ -549,6 +548,10 @@ class RectangularBeam(RectangularSection):
             A_s_comp = M_n_prima / (f_s_prima * (d - d_prima))
             A_s_final = rho * b * d + A_s_comp
         
+        if sqrt_value < 0:
+            # Si estamos en el caso en el que fallo la cuadratica, entonces usamos el numero gordo para tener una idea
+            A_s_final = M_u / (self.phi_t * 0.9* d* self.steel_bar.f_y)
+
         return A_s_min, A_s_max, A_s_final, A_s_comp, c_d
 
     def _determine_nominal_moment_simple_reinf_ACI_318_19(self, A_s: PlainQuantity, d: PlainQuantity) -> PlainQuantity:
@@ -764,12 +767,13 @@ class RectangularBeam(RectangularSection):
 
 
                 # Adjust reinforcement areas based on positive and negative moments
-                self._A_s_bot = max(A_s_final_bot_Positive_M, A_s_comp_bot)
-                self._A_s_top = max(A_s_comp_top, A_s_final_top_Negative_M)
+                self._A_s_bot = max(min(A_s_final_bot_Positive_M,self._A_s_max_bot), A_s_comp_bot) # En caso de que falle la viga, diseñamos con el A_s_max 
+                self._A_s_top = max(A_s_comp_top, min(A_s_final_top_Negative_M,self._A_s_max_top)) # En caso de que falle la viga, diseñamos con el A_s_max
             # Design bottom reinforcement
             section_rebar_bot = Rebar(self)
             self.flexure_design_results_bot = section_rebar_bot.longitudinal_rebar_ACI_318_19(self._A_s_bot)
             best_design = section_rebar_bot.longitudinal_rebar_design
+            print(best_design)
             # Extract bar information
             d_b1_bot=best_design["d_b1"]
             d_b2_bot=best_design["d_b2"]
@@ -844,10 +848,6 @@ class RectangularBeam(RectangularSection):
         """
         if not self.node or not self.node.forces:
             raise ValueError("No Node or forces list associated with this beam.")
-        
-
-        self._flexure_results_list = []  # Store results for each force
-        self._flexure_results_detailed_list = {}  # Store detailed results by force ID
 
         # Initialize limiting cases
         max_M_y_top = 0 * kN * m  # For negative M_y (top reinforcement design)
@@ -873,29 +873,8 @@ class RectangularBeam(RectangularSection):
             raise ValueError(f"Longitudinal design method not implemented "
                             f"for concrete type: {type(self.concrete).__name__}")
         
-
-
         # Check flexural capacity for all forces with the assigned reinforcement
-        for force in self.node.forces:
-            result = self.check_flexure_ACI_318_19(force)  # Assuming ACI 318-19 for simplicity
-            self._flexure_results_list.append(result)
-            #TODO NO SE QUE ES _data_min_max
-            # Store detailed results for each force
-            self._flexure_results_detailed_list[force.id] = {
-                'forces': self._forces_flexure.copy(),
-                'flexure_capacity_top': self._flexure_capacity_top.copy(),
-                'flexure_capacity_bottom': self._flexure_capacity_bot.copy(),
-            }
-#                'min_max': self._data_min_max.copy(), # SAQUE ESTO VER BIEN QUE ES
-
-        # Compile all results into a single DataFrame
-        # Concatenar todos los DataFrame de self._flexure_results_list
-        all_results = pd.concat(self._flexure_results_list, ignore_index=True)
-        #all_results = pd.DataFrame(self._flexure_results_list)
-
-        # Mark flexure as checked
-        self._flexure_checked = True
-
+        all_results = self.check_flexure()
         return all_results
 
     def check_flexure(self) -> DataFrame:
@@ -2174,7 +2153,7 @@ class RectangularBeam(RectangularSection):
 
 
 
-def clear_console():
+def clear_console() -> None:
     """
     Clears the console based on the operating system.
     """
@@ -2187,30 +2166,57 @@ def clear_console():
 
 def flexure_design_test() -> None:
     clear_console()
-    #Example 6.6 CRSI GUIDE
-    concrete = Concrete_ACI_318_19(name="C4",f_c=4000*psi) 
-    steelBar = SteelBar(name="G60", f_y=60000*psi) 
-    beam = RectangularBeam(
-        label="101",
-        concrete=concrete,
-        steel_bar=steelBar,
-        width=12 * inch,  
-        height=24 * inch,   
-    )
-    f1 = Forces(label='D', M_y=250*kNm)
-    f2 = Forces(label='L', M_y=58.3*kNm)
-    f3 = Forces(label='C1', M_y=194*kNm)
-    f4 = Forces(label='C2', M_y=135*kNm)
-    f5 = Forces(label='C3', M_y=-100*kNm)
-    f6 = Forces(label='C4', M_y=25*kNm)
+    concrete= Concrete_ACI_318_19(name="C25",f_c=25*MPa) 
+    steelBar= SteelBar(name="ADN 420", f_y=420*MPa)
+    custom_settings = {'clear_cover': 2.5*cm}
+    beam = RectangularBeam(label="101",
+                                      concrete=concrete,steel_bar=steelBar,width=15*cm, height=15*cm,
+                                       settings=custom_settings)
+    f1 = Forces(label='D', M_y=0.0500*kNm)
+    f2 = Forces(label='L', M_y=0.40*kNm)
+    f3 = Forces(label='C1', M_y=0.94*kNm)
+    f4 = Forces(label='C2', M_y=1.35*kNm)
+    f5 = Forces(label='C3', M_y=-1.00*kNm)
+    Node(section=beam, forces=[f1, f2, f3, f4, f5])
     #TODO DEFINIR LA SUMA DE CARGAS, QUE ENTIENDA QUE SI UNO LE DICE f1+f2 ES SUMAR LOS VALORES DE LAS SOLICITACIONES
 
-    Node(section=beam, forces=[f1, f2, f3, f4, f5, f6])
-    results=beam.design_flexure() 
-    print(results)
-    print(list(beam.__dict__.keys()))
+    Node(section=beam, forces=[f1, f2, f3, f4, f5])
+    results=beam.design_flexure()
+    print(beam.flexure_design_results_bot,'\n', beam.flexure_design_results_top)
 
-    print(beam.__maximum_flexural_reinforcement_ratio_ACI_318_19())
+    print(results)
+
+    print(beam.check_flexure())
+
+
+
+
+
+# def flexure_design_test() -> None:
+#     clear_console()
+#     #Example 6.6 CRSI GUIDE
+#     concrete = Concrete_ACI_318_19(name="C4",f_c=4000*psi) 
+#     steelBar = SteelBar(name="G60", f_y=60000*psi) 
+#     beam = RectangularBeam(
+#         label="101",
+#         concrete=concrete,
+#         steel_bar=steelBar,
+#         width=12 * inch,  
+#         height=24 * inch,   
+#     )
+#     f1 = Forces(label='D', M_y=25000*kNm)
+#     f2 = Forces(label='L', M_y=58.3*kNm)
+#     f3 = Forces(label='C1', M_y=1.94*kNm)
+#     f4 = Forces(label='C2', M_y=1.35*kNm)
+#     f5 = Forces(label='C3', M_y=-100*kNm)
+#     f6 = Forces(label='C4', M_y=25*kNm)
+#     #TODO DEFINIR LA SUMA DE CARGAS, QUE ENTIENDA QUE SI UNO LE DICE f1+f2 ES SUMAR LOS VALORES DE LAS SOLICITACIONES
+
+#     Node(section=beam, forces=[f1, f2, f3, f4, f5, f6])
+#     results=beam.design_flexure() 
+#     print(results)
+
+#     print(beam.check_flexure())
 
 def flexure_check_test() -> None:
     clear_console()
@@ -2376,8 +2382,8 @@ def shear_EN_1992() -> None:
 
 if __name__ == "__main__":
     # flexure_check_test()
-    # flexure_design_test()
-    flexure_Mn()
+    flexure_design_test()
+    # flexure_Mn()
     # shear_ACI_imperial()
     # shear_EN_1992()
     # shear_ACI_metric()

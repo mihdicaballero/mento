@@ -15,7 +15,7 @@ from mento.material import Concrete
         'layers_spacing': 25 * mm,
         'max_diameter_diff': 5*mm,
         'max_bars_per_layer': 5,
-        'minimum_longitudinal_diameter': 10*mm,
+        'minimum_longitudinal_diameter': 8*mm,
     }),
     ("imperial", {
         'clear_cover': 1 * inch, 
@@ -25,7 +25,7 @@ from mento.material import Concrete
         'layers_spacing': 1*inch,
         'max_diameter_diff': 2/8*inch,
         'max_bars_per_layer': 5,
-        'minimum_longitudinal_diameter': 4/8*inch,
+        'minimum_longitudinal_diameter': 3/8*inch,
     })
 ])
 def test_default_settings(unit_system: str, expected_defaults: Dict[str, Any]) -> None:

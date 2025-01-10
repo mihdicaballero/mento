@@ -13,7 +13,7 @@ class Settings:
             'layers_spacing': 25 * mm,
             'max_diameter_diff': 5*mm,
             'max_bars_per_layer': 5,
-            'minimum_longitudinal_diameter': 10*mm,
+            'minimum_longitudinal_diameter': 8*mm,
         }
     default_settings_imperial: Dict[str, Any] = {
             # Beam design settings
@@ -24,7 +24,7 @@ class Settings:
             'layers_spacing': 1*inch,
             'max_diameter_diff': 2/8*inch,
             'max_bars_per_layer': 5,
-            'minimum_longitudinal_diameter': 4/8*inch,
+            'minimum_longitudinal_diameter': 3/8*inch,
         }
     
     def __init__(self, concrete: Optional[Concrete] = None, settings: Optional[Dict[str, Any]] = None):

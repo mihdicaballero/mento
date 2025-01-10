@@ -37,22 +37,10 @@ class Rebar:
 
     @property
     def longitudinal_rebar_design(self) -> DataFrame:
-        # If combinations_df has not been calculated yet, calculate it
-        if self._long_combos_df is None:
-            raise ValueError("First run a longitudinal rebar design method, like "
-                              "\"beam_longitudinal_rebar_ACI_318_19\".")
-        elif self._long_combos_df.empty:
-            raise ValueError("No valid combinations found.")
         return self._long_combos_df.iloc[0]
     
     @property
     def transverse_rebar_design(self) -> DataFrame:
-        # If combinations_df has not been calculated yet, calculate it
-        if self._trans_combos_df is None:
-            raise ValueError("First run a transverse rebar design method, like "
-                              "\"beam_transverse_rebar_ACI_318_19\".")
-        elif self._trans_combos_df.empty:
-            raise ValueError("No valid combinations found.")
         return self._trans_combos_df.iloc[0]
 
     
@@ -72,6 +60,7 @@ class Rebar:
         # Variables to track the combinations
         valid_combinations = []
         # Create a list of rebar diameters that are equal to or greater than the minimum diameter
+        self.min_long_rebar = 10*mm
         valid_rebar_diameters = [d for d in self.rebar_diameters if d >= self.min_long_rebar]
 
         for d_b1 in valid_rebar_diameters: # Without taking Ø6 as a possible solution
@@ -115,9 +104,7 @@ class Rebar:
                                 A_s_max = max(1.25*A_s_req, n1 * self.rebar_areas[self.min_long_rebar])
                                 # Check if total area from layer 1 is enough for required A_s
                                 # And also less than 25% greater than A_s_req
-                                #if A_s_layer_1 >= A_s_req and A_s_layer_1 <= A_s_max: #CREO QUE ESTA MAL LIMITAR ESTO AL 25% PORQUE SI EL ARMADO REQUERIDO ES CHICO, pUEDE PASAR QUE NO CUMPLA NUNCA
-                                #TODO COMENTAR CAMBIO CON MIHDI
-                                if A_s_layer_1 >= A_s_req:    
+                                if A_s_layer_1 >= A_s_req and A_s_layer_1 <= A_s_max:
                                     total_as = A_s_layer_1  # Only consider layer 1
                                     total_bars = n1 + n2    # Total bars only in layer 1
                                     valid_combinations.append({
@@ -160,8 +147,7 @@ class Rebar:
 
                                         # Check if total area is enough for required A_s
                                         total_as = A_s_layer_1 + A_s_layer_2
-                                        #if total_as >= A_s_req and total_as <= A_s_max:
-                                        if total_as >= A_s_req:    
+                                        if total_as >= A_s_req and total_as <= A_s_max: 
                                             total_bars = n1 + n2 + n3 + n4  # Count the total number of bars
                                             valid_combinations.append({
                                                 'n_1': n1,
@@ -177,14 +163,11 @@ class Rebar:
                                                 'clear_spacing': self._clear_spacing.to('mm')
                                             })
 
-        # If no valid combination is found, raise an error
-        if not valid_combinations:
-            raise ValueError("Cannot fit the required reinforcement within the beam width considering clear cover and spacing.")
-
         # Convert valid combinations to DataFrame
         df = pd.DataFrame(valid_combinations)
         # Drop duplicate rows based on the specified columns
         df = df.drop_duplicates(subset=['n_1', 'd_b1', 'n_2', 'd_b2', 'n_3', 'd_b3', 'n_4', 'd_b4'])
+        print(df)
 
         # Sort by 'total_as' first, then by 'total_bars' to prioritize fewer bars
         df.sort_values(by=['total_bars', 'total_as'], inplace=True)
@@ -192,8 +175,6 @@ class Rebar:
         self._long_combos_df = df
 
         return df.head(7)
-        
-        # return df
     
     def _check_spacing(self, n1:int, n2:int, d_b1: PlainQuantity, d_b2:PlainQuantity,
                        effective_width: PlainQuantity) -> bool:
