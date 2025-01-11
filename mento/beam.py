@@ -11,7 +11,7 @@ import math
 import warnings
 
 from mento.rectangular import RectangularSection
-from mento.material import Concrete, SteelBar, Concrete_ACI_318_19, Concrete_EN_1992_2004
+from mento.material import Concrete, SteelBar, Concrete_ACI_318_19, Concrete_EN_1992_2004, Concrete_CIRSOC_201_25
 from mento.rebar import Rebar
 from mento.units import MPa, ksi, psi, kip, mm, inch, kN, m, cm, kNm, ft, dimensionless
 from mento.results import Formatter, TablePrinter, DocumentBuilder
@@ -19,7 +19,7 @@ from mento.forces import Forces
 from mento.node import Node
 
 
-# MANEJO DE ERRORES
+# MANEJO DE ERRORES TODO: ¿Esto pa que es?
 class ReinforcementCalculationError(Exception):
     """Excepción personalizada para errores en el cálculo del refuerzo flexural."""
     pass
@@ -773,7 +773,6 @@ class RectangularBeam(RectangularSection):
             section_rebar_bot = Rebar(self)
             self.flexure_design_results_bot = section_rebar_bot.longitudinal_rebar_ACI_318_19(self._A_s_bot)
             best_design = section_rebar_bot.longitudinal_rebar_design
-            print(best_design)
             # Extract bar information
             d_b1_bot=best_design["d_b1"]
             d_b2_bot=best_design["d_b2"]
@@ -867,7 +866,7 @@ class RectangularBeam(RectangularSection):
 
 
         # Design flexural reinforcement for the limiting cases
-        if self.concrete.design_code == "ACI 318-19":
+        if self.concrete.design_code=="ACI 318-19" or self.concrete.design_code=="CIRSOC 201-25":
             self.design_flexure_ACI_318_19(max_M_y_bot, max_M_y_top)
         else:
             raise ValueError(f"Longitudinal design method not implemented "
@@ -895,7 +894,7 @@ class RectangularBeam(RectangularSection):
 
         for force in self.node.forces:
             # Select the method based on design code
-            if self.concrete.design_code=="ACI 318-19":
+            if self.concrete.design_code=="ACI 318-19" or self.concrete.design_code=="CIRSOC 201-25":
                 result = self.check_flexure_ACI_318_19(force)
             # elif self.concrete.design_code=="EN 1992-2004":
             #     result =  self.check_shear_EN_1992_2004(force)
@@ -1026,18 +1025,19 @@ class RectangularBeam(RectangularSection):
 
     def _calculate_V_s_req(self) -> None:
         self._V_s_req = self._V_u - self._phi_V_c
-        self._A_v_req = max(self._V_s_req / (self.phi_v * self.f_yt * self._d_shear), self._A_v_min)
+        self._A_v_req = max(self._V_s_req / (self.phi_v * self.f_yt * self._d_shear), self._A_v_min).to('cm ** 2 / m')
 
     def _calculate_total_shear_strength_aci(self) -> None:
         self._phi_V_n = self.phi_v * (self.V_c + self._A_v * self.f_yt * self._d_shear)
-        self._DCRv = abs((self._V_u.to('kN') / self._phi_V_n.to('kN')))
+        V_d_max = min(self._phi_V_n, self._phi_V_max)
+        self._DCRv = abs((self._V_u.to('kN') / V_d_max.to('kN')))
 
     def _calculate_rebar_spacing_aci(self) -> None:
         section_rebar = Rebar(self)
         n_legs_actual = self._stirrup_n * 2  # Ensure legs are even
         self._s_l = self._stirrup_s_l
         self._s_w = (self.width - 2 * self.c_c - self._stirrup_d_b) / (n_legs_actual - 1)
-        self._s_max_l, self._s_max_w = section_rebar.calculate_max_spacing_ACI(self._V_u - self._phi_V_c, self._A_cv)
+        self._s_max_l, self._s_max_w = section_rebar.calculate_max_spacing_ACI_318_19(self._V_u - self._phi_V_c, self._A_cv)
         self._s_l = max(self._s_l, 0 * inch)
         self._s_w = max(self._s_w, 0 * inch)
     
@@ -1155,44 +1155,25 @@ class RectangularBeam(RectangularSection):
         self._initialize_dicts_ACI_318_19_shear()
         return pd.DataFrame([results], index=[0])
 
-    def design_shear_ACI_318_19(self, force: Forces) -> pd.DataFrame:
+    def design_shear_ACI_318_19(self, force: Forces) -> None:
         # Set the initial variables
         self._initialize_variables_ACI_318_19(force)
-
         # Minimum shear reinforcement calculation
         self._calculate_A_v_min_ACI(self.concrete.f_c)
         # Consider that the beam has minimum reinforcement
         self._A_v = self._A_v_min
-
         # Effective shear area and longitudinal reinforcement ratio
         self._calculate_effective_shear_area_aci()
-
         # Concrete shear strength calculation
         self._calculate_concrete_shear_strength_aci()
-
         # Maximum total shear capacity
         self._calculate_max_shear_capacity_aci()
-
         # Check if minimum reinforcement is required
         self._check_minimum_reinforcement_requirement_aci()
-
         # Calculate required shear reinforcement
         self._calculate_V_s_req()
 
-        # Shear reinforcement calculations
-        section_rebar = Rebar(self)
-        section_rebar.transverse_rebar(self._A_v_req, self._V_s_req)
-        best_design = section_rebar.transverse_rebar_design
-        self._s_l = best_design['s_l']
-        self._s_w = best_design['s_w']
-        self._s_max_l = best_design['s_max_l']
-        self._s_max_w = best_design['s_max_w']
-        self.set_transverse_rebar(best_design['n_stir'], best_design['d_b'], best_design['s_l'])
-        
-        # Check section after defining transverse rebar designed 
-        results = self.check_shear_ACI_318_19(force)
-
-        return results
+        return None
 
     def _initialize_variables_ACI_318_19(self, force: Forces) -> None:
         self._N_u = force._N_x
@@ -1368,46 +1349,38 @@ class RectangularBeam(RectangularSection):
     def design_shear(self) -> DataFrame:
         if not self.node or not self.node.forces:
             raise ValueError("No Node or forces list associated with this beam.")
+        # Track the maximum A_v_req to identify the limiting case
+        max_A_v_req = 0*cm**2/m 
 
-
-        self._shear_results_list = []  # Store individual results for each force
-        self._shear_results_detailed_list = {}  # Store detailed results by force ID
-        max_A_v_req = 0*cm # Track the maximum A_v_req to identify the limiting case
-
+        # Step 1: Identify the worst-case force
         for force in self.node.forces:
-            if self.concrete.design_code=="ACI 318-19":
-                result =  self.design_shear_ACI_318_19(force,)
+            if self.concrete.design_code=="ACI 318-19" or self.concrete.design_code=="CIRSOC 201-25":
+                self.design_shear_ACI_318_19(force)
             # elif self.concrete.design_code=="EN 1992-2004":
-                # result =  self.design_shear_EN_1992_2004(force)
+                # self.design_shear_EN_1992_2004(force)
             else:
                 raise ValueError(f"Shear design method not implemented for concrete type:"\
                     f"{type(self.concrete).__name__}")
-            self._shear_results_list.append(result)
-            self._shear_results_detailed_list[force.id] = {
-                'forces': self._forces_shear.copy(),
-                'shear_reinforcement': self._shear_reinforcement.copy(),
-                'min_max': self._data_min_max_shear.copy(),
-                'shear_concrete': self._shear_concrete.copy(),
-            }
             # Check if this result is the limiting case
-            current_A_v_req = result['Av,req'][0]
-            if current_A_v_req > max_A_v_req:
+            current_A_v_req = self._A_v_req
+            if current_A_v_req >= max_A_v_req:
                 max_A_v_req = current_A_v_req
-                self._limiting_case_shear = result
-                self._limiting_case_shear_details = self._shear_results_detailed_list[force.id]
+                max_V_s_req = self._V_s_req
 
-                # Update shear design results for the worst case
-                section_rebar = Rebar(self)
-                self.shear_design_results = section_rebar.transverse_rebar(self._A_v_req, self._V_s_req)
-                self._best_rebar_design = section_rebar.transverse_rebar_design
+        # Step 2: Perform rebar design for the worst-case force
+        section_rebar = Rebar(self)
+        self.shear_design_results = section_rebar.transverse_rebar(max_A_v_req, max_V_s_req)
+        self._best_rebar_design = section_rebar.transverse_rebar_design
+        self._s_l = self._best_rebar_design['s_l']
+        self._s_w = self._best_rebar_design['s_w']
+        self._s_max_l = self._best_rebar_design['s_max_l']
+        self._s_max_w = self._best_rebar_design['s_max_w']
+        self.set_transverse_rebar(self._best_rebar_design['n_stir'],
+                                  self._best_rebar_design['d_b'],
+                                  self._best_rebar_design['s_l'])
 
-        # Compile all results into a single DataFrame
-        all_results = pd.concat(self._shear_results_list, ignore_index=True)
-
-        # Identify the most limiting case by Av,required
-        self.limiting_case_shear = all_results.loc[all_results['Av,req'].idxmax()]  # Select row with highest Av,req
-        # Mark shear as checked
-        self._shear_checked = True  
+        # Step 3: Check shear adequacy for all forces using the designed rebar
+        all_results = self.check_shear()  
         return all_results
     
     # Factory method to select the shear check method
@@ -1422,7 +1395,7 @@ class RectangularBeam(RectangularSection):
 
         for force in self.node.forces:
             # Select the method based on design code
-            if self.concrete.design_code=="ACI 318-19":
+            if self.concrete.design_code=="ACI 318-19" or self.concrete.design_code=="CIRSOC 201-25":
                 result = self.check_shear_ACI_318_19(force)
             elif self.concrete.design_code=="EN 1992-2004":
                 result =  self.check_shear_EN_1992_2004(force)
@@ -2188,10 +2161,6 @@ def flexure_design_test() -> None:
 
     print(beam.check_flexure())
 
-
-
-
-
 # def flexure_design_test() -> None:
 #     clear_console()
 #     #Example 6.6 CRSI GUIDE
@@ -2289,20 +2258,21 @@ def shear_ACI_metric() -> None:
     beam = RectangularBeam(label="101",
                                       concrete=concrete,steel_bar=steelBar,width=20*cm, height=50*cm,
                                        settings=custom_settings)
-    f1 = Forces(label='1.4D', V_z=50*kN)
-    f2 = Forces(label='1.2D+1.6L', V_z=155*kN)
-    f3 = Forces(label='W', V_z=220*kN)
-    f4 = Forces(label='S', V_z=80*kN)
-    f5 = Forces(label='E', V_z=10*kN)
+    f1 = Forces(label='1.4D', V_z=1.50*kN)
+    f2 = Forces(label='1.2D+1.6L', V_z=1.55*kN)
+    f3 = Forces(label='W', V_z=2.20*kN)
+    f4 = Forces(label='S', V_z=8.0*kN)
+    f5 = Forces(label='E', V_z=1.0*kN)
     Node(section=beam, forces=[f1, f2, f3, f4, f5])
-    beam.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=20*cm) 
-    results = beam.check_shear()
+    # beam.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=20*cm) 
+    # results = beam.check_shear()
+    results = beam.design_shear()
     # results = beam.design_shear(A_s=5*cm**2)
     print(results)
     # beam.shear_results_detailed()
-    # print(beam.shear_design_results)
+    print(beam.shear_design_results)
     # print(beam.results)
-    beam.shear_results_detailed_doc()
+    # beam.shear_results_detailed_doc()
 
 def shear_ACI_imperial() -> None:
     concrete = Concrete_ACI_318_19(name="C4", f_c=4000*psi)  
@@ -2373,18 +2343,33 @@ def shear_EN_1992() -> None:
     # beam.shear_results_detailed_doc()
 
 
-
-
-
-
-
-
+def shear_CIRSOC() -> None:
+    concrete= Concrete_CIRSOC_201_25(name="C25",f_c=25*MPa) 
+    steelBar= SteelBar(name="ADN 420", f_y=420*MPa)
+    custom_settings = {'clear_cover': 2.5*cm}
+    beam = RectangularBeam(label="101",
+                                      concrete=concrete,steel_bar=steelBar,width=20*cm, height=50*cm,
+                                       settings=custom_settings)
+    f1 = Forces(label='1.4D', V_z=1.50*kN)
+    f2 = Forces(label='1.2D+1.6L', V_z=1.55*kN)
+    f3 = Forces(label='W', V_z=2.20*kN)
+    f4 = Forces(label='S', V_z=8.0*kN)
+    f5 = Forces(label='E', V_z=1.0*kN)
+    Node(section=beam, forces=[f1, f2, f3, f4, f5])
+    # beam.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=20*cm) 
+    # results = beam.check_shear()
+    results = beam.design_shear()
+    # results = beam.design_shear(A_s=5*cm**2)
+    print(results)
+    # beam.shear_results_detailed()
+    print(beam.shear_design_results)
 
 if __name__ == "__main__":
     # flexure_check_test()
-    flexure_design_test()
+    # flexure_design_test()
     # flexure_Mn()
     # shear_ACI_imperial()
     # shear_EN_1992()
-    # shear_ACI_metric()
     # rebar()
+    # shear_ACI_metric()
+    shear_CIRSOC()

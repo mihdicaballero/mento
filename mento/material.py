@@ -49,7 +49,7 @@ class Concrete_ACI_318_19(Concrete):
         super().__post_init__()
         # Ensure name is properly set, either hardcode or pass during instantiation
         if not self.name:
-            self.name = "Concrete ACI"  # You can set a default name here
+            self.name = "Concrete ACI 318-19"  # You can set a default name here
         self.design_code = "ACI 318-19"
         # Adjust calculations based on unit system
         if self.unit_system == "metric":
@@ -107,6 +107,18 @@ class Concrete_ACI_318_19(Concrete):
         )
 
 @dataclass
+class Concrete_CIRSOC_201_25(Concrete_ACI_318_19):
+    """Concrete class for a CIRSOC 201 design code with metric units."""
+    def __post_init__(self) -> None:
+        # Call the parent class's __post_init__ to inherit initializations
+        super().__post_init__()
+        # Override the design code for this specific class
+        self.design_code = "CIRSOC 201-25"
+        # Ensure the name is specific to this design code
+        if not self.name:
+            self.name = "Concrete CIRSOC 201-25"
+
+@dataclass
 class Concrete_EN_1992_2004(Concrete):
     _E_cm: PlainQuantity = field(init=False)  # Secant modulus of elasticity
     _f_ck: PlainQuantity = field(init=False)  # Characteristic concrete strength
@@ -115,6 +127,8 @@ class Concrete_EN_1992_2004(Concrete):
 
     def __init__(self, name: str, f_ck: PlainQuantity):
         super().__init__(name=name, f_c=f_ck)
+        if not self.name:
+            self.name = "Concrete EN 1992-2004"
         self.design_code = "EN 1992-2004"
         self._f_ck = self.f_c
         self._f_cm = self._f_ck + 8 * MPa
