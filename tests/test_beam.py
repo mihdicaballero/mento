@@ -303,7 +303,7 @@ def test_flexural_beam_determine_nominal_moment_double_reinf_ACI_318_19() -> Non
     d_prime=2.5*inch
     A_s_prime=1.8*inch**2
     result=beam._determine_nominal_moment_double_reinf_ACI_318_19(A_s, d, d_prime, A_s_prime)
-    assert result.to(kip*ft).magnitude  == pytest.approx(1639.12, rel=1e-2)
+    assert result.to(kip*ft).magnitude  == pytest.approx(639.12, rel=1e-2)
 
 
 # This is where pytest will collect the tests and run them

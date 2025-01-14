@@ -1388,10 +1388,10 @@ class RectangularBeam(RectangularSection):
         if not self.node or not self.node.forces:
             raise ValueError("No Node or forces list associated with this beam.")
 
-
         self._shear_results_list = []  # Store individual results for each force
         self._shear_results_detailed_list = {}  # Store detailed results by force ID
         max_dcr = 0  # Track the maximum DCR to identify the limiting case
+        self._limiting_case_shear_details = None
 
         for force in self.node.forces:
             # Select the method based on design code
@@ -1600,7 +1600,11 @@ class RectangularBeam(RectangularSection):
             "Unit": ["kN", "kN"]
         }
         # Min max lists
-        db_min = 10 * mm if self.concrete.unit_system == "metric" else 3 / 8 * inch
+        if self._phi_V_s == 0*kN:
+            db_min = 0*mm if self.concrete.unit_system == "metric" else 0 * inch
+            self._stirrup_d_b = 0*mm if self.concrete.unit_system == "metric" else 0 * inch
+        else:
+            db_min = 10 * mm if self.concrete.unit_system == "metric" else 3 / 8 * inch
         min_values = [None, None, self._A_v_min, db_min]   # Use None for items without a minimum constraint
         max_values = [self._s_max_l, self._s_max_w, None, None]  # Use None for items without a maximum constraint
         current_values = [self._s_l, self._s_w, self._A_v, self._stirrup_d_b]  # Current values to check
@@ -1705,6 +1709,9 @@ class RectangularBeam(RectangularSection):
                 "Unit": ["kN", "kN"]
             }
             # Min max lists
+            if self._V_Rd_s == 0*kN:
+                self._stirrup_d_b = 0*mm if self.concrete.unit_system == "metric" else 0 * inch  
+            # Min max lists
             min_values = [None, None, self._A_v_min]   # Use None for items without a minimum constraint
             max_values = [self._s_max_l, self._s_max_w, None]  # Use None for items without a maximum constraint
             current_values = [self._s_l, self._s_w, self._A_v]  # Current values to check
@@ -1781,47 +1788,58 @@ class RectangularBeam(RectangularSection):
     @property
     def flexure_results(self) -> None:
         if not self._flexure_checked:
-            warnings.warn("Flexural design has not been performed yet. Call check_flexure or "
-                        "design_flexure first.", UserWarning)
+            warnings.warn("Flexural design has not been performed yet. Call check_flexure() or "
+                        "design_flexure() first.", UserWarning)
             self._md_flexure_results = "Flexural results are not available."
             return None
-
+        # Check if limiting case details exist
+        top_details = self._limiting_case_flexure_top_details or {}
+        bot_details = self._limiting_case_flexure_bot_details or {}
         # Use limiting case results
-        top_result_data = self._limiting_case_flexure_top_details['flexure_capacity_top']
-        bot_result_data = self._limiting_case_flexure_bot_details['flexure_capacity_bot']
+        top_result_data = top_details.get('flexure_capacity_top')
+        bot_result_data = bot_details.get('flexure_capacity_bot')
 
-
-         # Extract specific indices for required data
-        top_rebar_1 = top_result_data['Value'][0]  # First layer bars
-        top_rebar_2 = top_result_data['Value'][1]  # Second layer bars
-        area_top = top_result_data['Value'][6]     # Defined rebar reinforcing (As)
-        Mu_top = self._limiting_case_flexure_top_details['forces']['Value'][0]
-        Mn_top = top_result_data['Value'][8]   # Total flexural strength (ØMn)
-        DCR_top = top_result_data['Value'][9]      # DCR
-
-        bot_rebar_1 = bot_result_data['Value'][0]  # First layer bars
-        bot_rebar_2 = bot_result_data['Value'][1]  # Second layer bars
-        area_bot = bot_result_data['Value'][6]     # Defined rebar reinforcing (As)
-        Mu_bot = self._limiting_case_flexure_bot_details['forces']['Value'][1]
-        Mn_bot = bot_result_data['Value'][8]   # Total flexural strength (ØMn)
-        DCR_bot = bot_result_data['Value'][9]      # DCR
-
-        # Rebar formatting: Combine first and second layer if present
-        rebar_top = f"{top_rebar_1}" + (f" ++ {top_rebar_2}" if top_rebar_2 != '-' else "")
-        rebar_bot = f"{bot_rebar_1}" + (f" ++ {bot_rebar_2}" if bot_rebar_2 != '-' else "")
-
-        # Create FUFormatter instance and format FU value
+        markdown_content = ""
+        # Formatter instance for DCR formatting
         formatter = Formatter()
-        formatted_DCR_top = formatter.DCR(DCR_top)
-        formatted_DCR_bot = formatter.DCR(DCR_bot)
-        
-        # Construct markdown output
-        markdown_content = (
-            f"Top longitudinal rebar: {rebar_top}, $A_{{s,top}}$ = {area_top} cm², $M_u$={Mu_top} kNm, "
-            f"$\\phi M_n$={Mn_top} kNm → {formatted_DCR_top}\n\n"
-            f"Bottom longitudinal rebar: {rebar_bot}, $A_{{s,bot}}$={area_bot} cm², $M_u$={Mu_bot} kNm, "
-            f"$\\phi M_n$={Mn_bot} kNm → {formatted_DCR_bot}"
-        )
+
+        # Handle top result data
+        if top_result_data:
+            top_rebar_1 = top_result_data['Value'][0]
+            top_rebar_2 = top_result_data['Value'][1]
+            area_top = top_result_data['Value'][6]
+            Mu_top = self._limiting_case_flexure_top_details['forces']['Value'][0]
+            Mn_top = top_result_data['Value'][8]
+            DCR_top = top_result_data['Value'][9]
+
+            rebar_top = f"{top_rebar_1}" + (f" ++ {top_rebar_2}" if top_rebar_2 != '-' else "")
+            formatted_DCR_top = formatter.DCR(DCR_top)
+
+            markdown_content += (
+                f"Top longitudinal rebar: {rebar_top}, $A_{{s,top}}$ = {area_top} cm², $M_u$ = {Mu_top} kNm, "
+                f"$\\phi M_n$ = {Mn_top} kNm → {formatted_DCR_top}\n\n"
+            )
+        else:
+            markdown_content += "No top moment to check.\n\n"
+
+        # Handle bottom result data
+        if bot_result_data:
+            bot_rebar_1 = bot_result_data['Value'][0]
+            bot_rebar_2 = bot_result_data['Value'][1]
+            area_bot = bot_result_data['Value'][6]
+            Mu_bot = self._limiting_case_flexure_bot_details['forces']['Value'][1]
+            Mn_bot = bot_result_data['Value'][8]
+            DCR_bot = bot_result_data['Value'][9]
+
+            rebar_bot = f"{bot_rebar_1}" + (f" ++ {bot_rebar_2}" if bot_rebar_2 != '-' else "")
+            formatted_DCR_bot = formatter.DCR(DCR_bot)
+
+            markdown_content += (
+                f"Bottom longitudinal rebar: {rebar_bot}, $A_{{s,bot}}$ = {area_bot} cm², $M_u$ = {Mu_bot} kNm, "
+                f"$\\phi M_n$ = {Mn_bot} kNm → {formatted_DCR_bot}"
+            )
+        else:
+            markdown_content += "No bottom moment to check."
 
         self._md_flexure_results = markdown_content
         display(Markdown(markdown_content))
@@ -1829,29 +1847,35 @@ class RectangularBeam(RectangularSection):
     @property
     def shear_results(self) -> None:
         if not self._shear_checked:
-            warnings.warn("Shear design has not been performed yet. Call check_shear or "
-                          "design_shear first.", UserWarning)
+            warnings.warn("Shear design has not been performed yet. Call check_shear() or "
+                          "design_shear() first.", UserWarning)
             self._md_shear_results = "Shear results are not available."
             return None
+        
+
+        # Check if limiting case details exist
+        shear_details = self._limiting_case_shear_details or {}
         # Use limiting case results
-        result_data = self._limiting_case_shear_details
-        limiting_reinforcement = result_data['shear_reinforcement']
-        limiting_forces = result_data['forces']
-        limiting_shear_concrete = result_data['shear_concrete']
+        limiting_reinforcement = shear_details.get('shear_reinforcement')
+        limiting_forces = shear_details.get('forces')
+        limiting_shear_concrete = shear_details.get('shear_concrete')
 
-        # Create FUFormatter instance and format FU value
-        formatter = Formatter()
-        formatted_DCR = formatter.DCR(limiting_shear_concrete['Value'][-1])
-        if self._A_v == 0*cm:
-            rebar_v = "not assigned"
+        markdown_content = ""
+        if shear_details:
+            # Create FUFormatter instance and format FU value
+            formatter = Formatter()
+            formatted_DCR = formatter.DCR(limiting_shear_concrete['Value'][-1])
+            if self._A_v == 0*cm:
+                rebar_v = "not assigned"
+            else:
+                rebar_v = f"{int(limiting_reinforcement['Value'][0])}eØ{limiting_reinforcement['Value'][1]}/"\
+                        f"{limiting_reinforcement['Value'][2]} cm"
+            # Limitng cases checks 
+            warning = "⚠️ Some checks failed, see detailed results." if not self._all_shear_checks_passed else "" 
+            markdown_content = f"Shear reinforcing {rebar_v}, $A_v$={limiting_reinforcement['Value'][6]} cm²/m"\
+                            f", $V_u$={limiting_forces['Value'][1]} kN, $\\phi V_n$={limiting_shear_concrete['Value'][7]} kN → {formatted_DCR} {warning}"  # noqa: E501
         else:
-            rebar_v = f"{int(limiting_reinforcement['Value'][0])}eØ{limiting_reinforcement['Value'][1]}/"\
-                    f"{limiting_reinforcement['Value'][2]} cm"
-        # Limitng cases checks 
-        warning = "⚠️ Some checks failed, see detailed results." if not self._all_shear_checks_passed else "" 
-        markdown_content = f"Shear reinforcing {rebar_v}, $A_v$={limiting_reinforcement['Value'][6]} cm²/m"\
-                         f", $V_u$={limiting_forces['Value'][1]} kN, $\\phi V_n$={limiting_shear_concrete['Value'][7]} kN → {formatted_DCR} {warning}"  # noqa: E501
-
+            markdown_content += "No shear to check."
         self._md_shear_results = markdown_content
         display(Markdown(markdown_content))
 
@@ -1860,12 +1884,15 @@ class RectangularBeam(RectangularSection):
     # Beam results for Jupyter Notebook
     @property
     def results(self) -> None:
-        # Ensure that both properties and shear results are available and display them
+        """
+        Ensure that properties, flexure results, and shear results are available and display them.
+        Handles cases where flexure or shear results are not yet available.
+        """
         if not hasattr(self, '_md_properties'):
             self.data  # This will generate _md_properties
-        if not hasattr(self, '_md_flexure_results'):
+        if self._flexure_checked:
             self.flexure_results  # This will generate _md_flexure_results
-        if not hasattr(self, '_md_shear_results'):
+        if self._shear_checked:
             self.shear_results  # This will generate _md_shear_results
         return None
 
