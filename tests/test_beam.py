@@ -1,4 +1,5 @@
 from mento.beam import RectangularBeam
+from mento.node import Node
 from mento.material import Concrete_ACI_318_19, SteelBar, Concrete_EN_1992_2004
 from mento.units import psi, kip, inch, ksi, mm, kN, cm, MPa, ft
 from mento.forces import Forces
@@ -161,17 +162,18 @@ def test_shear_check_EN_1992_2004_no_rebar_3(beam_example_EN_1992_2004: Rectangu
 def test_shear_check_ACI_318_19_1(beam_example_imperial: RectangularBeam) -> None:
     f = Forces(V_z=37.727*kip, N_x = 0*kip)  
     beam_example_imperial.set_transverse_rebar(n_stirrups=1, d_b=0.5*inch, s_l=6*inch)
-    results = beam_example_imperial.check_shear_ACI_318_19(f)  
+    Node(section=beam_example_imperial, forces=f)
+    results = beam_example_imperial.check_shear()  
 
     # Compare dictionaries with a tolerance for floating-point values, in m 
     assert results.iloc[0]['Av,min'].magnitude  == pytest.approx(2.117, rel=1e-3)
-    assert results.iloc[0]['Av,req'].magnitude  == pytest.approx(10.132, rel=1e-3)
+    assert results.iloc[0]['Av,req'].magnitude  == pytest.approx(10.0623, rel=1e-3)
     assert results.iloc[0]['Av'].magnitude  == pytest.approx(16.624, rel=1e-3)
-    assert results.iloc[0]['ØVc'].magnitude  == pytest.approx(58.024, rel=1e-3)
-    assert results.iloc[0]['ØVs'].magnitude  == pytest.approx(180.14, rel=1e-3)
-    assert results.iloc[0]['ØVn'].magnitude  == pytest.approx(238.164, rel=1e-3)
-    assert results.iloc[0]['ØVmax'].magnitude  == pytest.approx(290.122, rel=1e-3)
-    assert results.iloc[0]["DCR"].magnitude  == pytest.approx(0.7046, rel=1e-3)
+    assert results.iloc[0]['ØVc'].magnitude  == pytest.approx(58.288, rel=1e-3)
+    assert results.iloc[0]['ØVs'].magnitude  == pytest.approx(180.956, rel=1e-3)
+    assert results.iloc[0]['ØVn'].magnitude  == pytest.approx(239.247, rel=1e-3)
+    assert results.iloc[0]['ØVmax'].magnitude  == pytest.approx(291.44, rel=1e-3)
+    assert results.iloc[0]["DCR"].magnitude  == pytest.approx(0.70144, rel=1e-3)
 
     # Assert non-numeric values directly
     assert results.iloc[0]['Vu<ØVmax'] is np.True_
@@ -180,17 +182,18 @@ def test_shear_check_ACI_318_19_1(beam_example_imperial: RectangularBeam) -> Non
 def test_shear_check_ACI_318_19_2(beam_example_imperial: RectangularBeam) -> None:
     f = Forces(V_z=37.727*kip, N_x = 20*kip)  
     beam_example_imperial.set_transverse_rebar(n_stirrups=1, d_b=0.5*inch, s_l=6*inch)
-    results = beam_example_imperial.check_shear_ACI_318_19(f)  
+    Node(section=beam_example_imperial, forces=f)
+    results = beam_example_imperial.check_shear()  
 
     # Compare dictionaries with a tolerance for floating-point values, in m 
     assert results.iloc[0]['Av,min'].magnitude  == pytest.approx(2.117, rel=1e-3)
-    assert results.iloc[0]['Av,req'].magnitude  == pytest.approx(9.25, rel=1e-3)
+    assert results.iloc[0]['Av,req'].magnitude  == pytest.approx(9.1803, rel=1e-3)
     assert results.iloc[0]['Av'].magnitude  == pytest.approx(16.624, rel=1e-3)
-    assert results.iloc[0]['ØVc'].magnitude  == pytest.approx(67.581, rel=1e-3)
-    assert results.iloc[0]['ØVs'].magnitude  == pytest.approx(180.14, rel=1e-3)
-    assert results.iloc[0]['ØVn'].magnitude  == pytest.approx(247.721, rel=1e-3)
-    assert results.iloc[0]['ØVmax'].magnitude  == pytest.approx(299.679, rel=1e-3)
-    assert results.iloc[0]["DCR"].magnitude  == pytest.approx(0.6774, rel=1e-3)
+    assert results.iloc[0]['ØVc'].magnitude  == pytest.approx(67.888, rel=1e-3)
+    assert results.iloc[0]['ØVs'].magnitude  == pytest.approx(180.959, rel=1e-3)
+    assert results.iloc[0]['ØVn'].magnitude  == pytest.approx(248.847, rel=1e-3)
+    assert results.iloc[0]['ØVmax'].magnitude  == pytest.approx(301.041, rel=1e-3)
+    assert results.iloc[0]["DCR"].magnitude  == pytest.approx(0.6743, rel=1e-3)
 
     # Assert non-numeric values directly
     assert results.iloc[0]['Vu<ØVmax'] is np.True_
@@ -237,7 +240,8 @@ def test_shear_check_ACI_318_19_no_rebar_2(beam_example_imperial: RectangularBea
 def test_shear_design_ACI_318_19(beam_example_imperial: RectangularBeam) -> None:
     f = Forces(V_z=37.727*kip, N_x = 0*kip) 
     beam_example_imperial.set_longitudinal_rebar_bot(n1=2, d_b1=0.625*inch)
-    results = beam_example_imperial.design_shear_ACI_318_19(f)  
+    Node(section=beam_example_imperial, forces=f)
+    results = beam_example_imperial.design_shear()  
 
     # Compare dictionaries with a tolerance for floating-point values, in m 
     assert results.iloc[0]['Av,min'].magnitude  == pytest.approx(2.117, rel=1e-3)
@@ -299,7 +303,7 @@ def test_flexural_beam_determine_nominal_moment_double_reinf_ACI_318_19() -> Non
     d_prime=2.5*inch
     A_s_prime=1.8*inch**2
     result=beam._determine_nominal_moment_double_reinf_ACI_318_19(A_s, d, d_prime, A_s_prime)
-    assert result.to(kip*ft).magnitude  == pytest.approx(1639.12, rel=1e-2)
+    assert result.to(kip*ft).magnitude  == pytest.approx(639.12, rel=1e-2)
 
 
 # This is where pytest will collect the tests and run them

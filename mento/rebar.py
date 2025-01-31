@@ -234,28 +234,53 @@ class Rebar:
     def longitudinal_rebar_EN_1992(self, A_s_req: PlainQuantity) -> None:
         pass
 
-    def transverse_rebar_ACI_318_19(self, A_v_req: PlainQuantity, 
-                                         V_s_req: PlainQuantity) -> DataFrame:
+    def transverse_rebar_ACI_318_19(self, V_s_req: PlainQuantity) -> Any:
+
+        if self.beam.concrete.unit_system == "metric":
+            valid_diameters = self.rebar_diameters[2:5] #Minimum 10 mm
+        else: 
+            valid_diameters = self.rebar_diameters[0:3]
+        
+        A_cv = self.beam.width*self.beam._d_shear
+        s_max_l, s_max_w = self.calculate_max_spacing_ACI_318_19(V_s_req, A_cv)
+
+        return valid_diameters, s_max_l, s_max_w
+    
+    def transverse_rebar_CIRSOC_201_25(self, V_s_req: PlainQuantity) -> Any:
+
+        valid_diameters = self.rebar_diameters[0:5] #Minimum 6 mm
+        
+        A_cv = self.beam.width*self.beam._d_shear
+        s_max_l, s_max_w = self.calculate_max_spacing_ACI_318_19(V_s_req, A_cv)
+
+        return valid_diameters, s_max_l, s_max_w
+    
+    
+    def transverse_rebar(self, A_v_req: PlainQuantity, V_s_req: PlainQuantity) -> DataFrame:
         """
         Computes the required transverse reinforcement based on ACI 318-19.
 
         Args:
             A_v_req: Required area for transverse reinforcement.
-            V_s_req: Shear demand.
 
         Returns:
             A dictionary containing the transverse rebar design.
         """
 
-        A_cv = self.beam.width*self.beam._d_shear
-
-        s_max_l, s_max_w = self.calculate_max_spacing_ACI(V_s_req, A_cv)
-
         # Prepare the list for valid combinations
-        valid_combinations = []     
+        valid_combinations = []
 
-        # Iterate through available diameters from 10 mm to 16 mm
-        for d_b in self.rebar_diameters[0:5]:
+        # Get code specific limitations
+        if self.beam.concrete.design_code=="ACI 318-19":
+            valid_diameters, s_max_l, s_max_w = self.transverse_rebar_ACI_318_19(V_s_req)
+        elif self.beam.concrete.design_code=="CIRSOC 201-25":
+            valid_diameters, s_max_l, s_max_w = self.transverse_rebar_CIRSOC_201_25(V_s_req)
+        else:
+            raise ValueError(f"Shear design method not implemented \
+                             for concrete type: {type(self.beam.concrete).__name__}")
+
+        # Iterate through available diameters
+        for d_b in valid_diameters:
             # Start with 2 legs = 1 stirrup
             n_legs = 2
 
@@ -330,7 +355,8 @@ class Rebar:
         df_combinations = pd.DataFrame(valid_combinations)
 
         # Sort combinations by the total rebar area required (ascending)
-        df_combinations.sort_values(by='A_v', inplace=True)
+        # Sort by 'A_v' first, then by 'n_stir' to prioritize fewer bars
+        df_combinations.sort_values(by=['n_stir','A_v'], inplace=True)
         df_combinations.reset_index(drop=True, inplace=True)
         self._trans_combos_df = df_combinations
         return df_combinations
@@ -354,21 +380,21 @@ class Rebar:
                              for concrete type: {type(self.beam.concrete).__name__}")
     
     # Factory method to select the longitudinal rebar method
-    def transverse_rebar(self, A_v_req: PlainQuantity, V_s_req: PlainQuantity) -> DataFrame:
-        """
-        Selects the appropriate transverse rebar method based on the design code.
-        """
-        if self.beam.concrete.design_code=="ACI 318-19":
-            return self.transverse_rebar_ACI_318_19(A_v_req, V_s_req)
-        # elif self.beam.concrete.design_code=="EN 1992":
-        #     return self.beam_transverse_rebar_EN_1992(A_v_req, V_s_req)
-        # elif self.beam.concrete.design_code=="EHE-08":
-        #     return self.beam_transverse_rebar_EHE_08(A_v_req, V_s_req)
-        else:
-            raise ValueError(f"Shear design method not implemented \
-                             for concrete type: {type(self.beam.concrete).__name__}")
+    # def transverse_rebar(self, A_v_req: PlainQuantity, V_s_req: PlainQuantity) -> DataFrame:
+    #     """
+    #     Selects the appropriate transverse rebar method based on the design code.
+    #     """
+    #     if self.beam.concrete.design_code=="ACI 318-19":
+    #         return self.transverse_rebar_ACI_318_19(A_v_req, V_s_req)
+    #     # elif self.beam.concrete.design_code=="EN 1992":
+    #     #     return self.beam_transverse_rebar_EN_1992(A_v_req, V_s_req)
+    #     # elif self.beam.concrete.design_code=="EHE-08":
+    #     #     return self.beam_transverse_rebar_EHE_08(A_v_req, V_s_req)
+    #     else:
+    #         raise ValueError(f"Shear design method not implemented \
+    #                          for concrete type: {type(self.beam.concrete).__name__}")
         
-    def calculate_max_spacing_ACI(self, V_s_req: PlainQuantity,
+    def calculate_max_spacing_ACI_318_19(self, V_s_req: PlainQuantity,
                                    A_cv: PlainQuantity) -> Tuple[PlainQuantity, PlainQuantity]:
         """
         Calculate the maximum allowable spacing across the length and width of the beam

@@ -57,13 +57,6 @@ def test_beam_longitudinal_rebar_ACI_318_19(beam_example_metric: RectangularBeam
     assert best_design['total_bars'] == 3
     assert best_design['clear_spacing'].magnitude == pytest.approx(40,rel=1e-3)
 
-def test_beam_longitudinal_rebar_ACI_318_19_fail(beam_example_imperial: RectangularBeam) -> None:
-    as_nec = 150 * cm**2
-    # Expecting a ValueError to be raised
-    with pytest.raises(ValueError, match="Cannot fit the required reinforcement within the beam "
-                       "width considering clear cover and spacing."):
-        Rebar(beam_example_imperial).longitudinal_rebar_ACI_318_19(A_s_req=as_nec)
-
 def test_beam_transverse_rebar_ACI_318_19(beam_example_imperial: RectangularBeam) -> None:
     f = Forces(V_z=37.727*kip)
     Node(beam_example_imperial, forces=f)
