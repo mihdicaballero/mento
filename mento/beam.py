@@ -899,7 +899,7 @@ class RectangularBeam(RectangularSection):
             # elif self.concrete.design_code=="EN 1992-2004":
             #     result =  self.check_shear_EN_1992_2004(force)
             else:
-                raise ValueError(f"Shear design method not implemented for concrete type: {type(self.concrete).__name__}")  # noqa: E501
+                raise ValueError(f"Flexure design method not implemented for concrete type: {type(self.concrete).__name__}")  # noqa: E501
             self._flexure_results_list.append(result)
 
             # Store detailed results for this force
@@ -908,6 +908,7 @@ class RectangularBeam(RectangularSection):
                 'min_max': self._data_min_max_flexure.copy(),
                 'flexure_capacity_top': self._flexure_capacity_top.copy(),
                 'flexure_capacity_bot': self._flexure_capacity_bot.copy(),
+                'checks_pass': self._all_flexure_checks_passed
             }
 
             # Extract the DCR values for top and bottom from the results
@@ -1407,7 +1408,7 @@ class RectangularBeam(RectangularSection):
                 'shear_reinforcement': self._shear_reinforcement.copy(),
                 'min_max': self._data_min_max_shear.copy(),
                 'checks_pass': self._all_shear_checks_passed,
-                'shear_concrete': self._shear_concrete.copy(),
+                'shear_concrete': self._shear_concrete.copy()
             }
 
             # Check if this result is the limiting case
@@ -1449,15 +1450,11 @@ class RectangularBeam(RectangularSection):
                 "Section Label",
                 "Concrete strength",
                 "Steel reinforcement yield strength",
-                "Concrete density",
-                "Normalweight concrete",
-                "Safety factor for bending"
             ],
-            "Variable": ["","fc", "fy", "γc", "λ", "Øt"],
+            "Variable": ["","fc", "fy"],
             "Value": [self.label, round(self.concrete.f_c.to('MPa').magnitude,2), 
-                      round(self.steel_bar.f_y.to('MPa').magnitude,2),round(self.concrete.density.to('kg/m**3').magnitude,1),
-                       self.settings.get_setting('lambda'), self.settings.get_setting('phi_t')],
-            "Unit": ["", "MPa", "MPa", "kg/m³", "", ""]
+                      round(self.steel_bar.f_y.to('MPa').magnitude,2)],
+            "Unit": ["", "MPa", "MPa"]
         }
         self._geometry_flexure = {
             "Geometry": [
@@ -1483,9 +1480,9 @@ class RectangularBeam(RectangularSection):
             "Unit": ["kNm", "kNm"]
         }
         # Min max lists
-        min_spacing_top = max(self.settings.get_setting('clear_spacing'), self.settings.get_setting('vibrator_size'),
+        min_spacing_top: PlainQuantity = max(self.settings.get_setting('clear_spacing'), self.settings.get_setting('vibrator_size'),
                               self._d_b_max_top)
-        min_spacing_bot = max(self.settings.get_setting('clear_spacing'), self._d_b_max_bot)
+        min_spacing_bot: PlainQuantity = max(self.settings.get_setting('clear_spacing'), self._d_b_max_bot)
         min_values = [self._A_s_min_top, min_spacing_top, self._A_s_min_bot,
                       min_spacing_bot]   # Use None for items without a minimum constraint
         max_values = [self._A_s_max_top, None, 
@@ -1498,6 +1495,7 @@ class RectangularBeam(RectangularSection):
             '✔️' if (min_val is None or curr >= min_val) and (max_val is None or curr <= max_val) else '❌'
             for curr, min_val, max_val in zip(current_values, min_values, max_values)
         ]
+        self._all_flexure_checks_passed = all(check == '✔️' for check in checks)
         self._data_min_max_flexure = {
             'Check': ['Min/Max As rebar top', 'Minimum spacing top','Min/Max As rebar bottom', 
                       'Minimum spacing bottom'],
@@ -1559,6 +1557,7 @@ class RectangularBeam(RectangularSection):
                     round(self._phi_M_n_bot.to('kN*m').magnitude,2), round(self._DCRb_bot,2)],
             "Unit": ["", "", "cm", "", "cm²","cm²", "cm²","","kNm", check_DCR_bot]
         }
+        self._flexure_all_checks = self._all_flexure_checks_passed and check_DCR_bot and check_DCR_top
 
     def _initialize_dicts_ACI_318_19_shear(self) -> None:
         """Initialize the dictionaries used in check and design methods."""
@@ -1667,6 +1666,7 @@ class RectangularBeam(RectangularSection):
                       round(self._phi_V_n.to('kN').magnitude,2), check_max, round(self._DCRv,2)],
             "Unit": ["cm²", "", "", "MPa", "MPa", "kN", "kN", "kN", "", check_FU]
         }
+        self._shear_all_checks = self._all_shear_checks_passed and check_max and check_FU
     
     def _initialize_dicts_EN_1992_2004_shear(self) -> None:
         if isinstance(self.concrete, Concrete_EN_1992_2004):
@@ -1799,10 +1799,20 @@ class RectangularBeam(RectangularSection):
         top_result_data = top_details.get('flexure_capacity_top')
         bot_result_data = bot_details.get('flexure_capacity_bot')
 
-        markdown_content = ""
-        # Formatter instance for DCR formatting
-        formatter = Formatter()
+        checks_pass_top = top_details.get('checks_pass')
+        checks_pass_bot = bot_details.get('checks_pass')
+        warning_top = "⚠️ Some checks failed, see detailed results." if not checks_pass_top else ""
+        warning_bot = "⚠️ Some checks failed, see detailed results." if not checks_pass_bot else ""
 
+        # Pending for approval
+        # all_checks_top = top_details.get('flexure_check')
+        # all_checks_bot = bot_details.get('flexure_check')
+        # all_checks = all_checks_top and all_checks_bot
+
+        # Formatter instance for DCR formatting
+        markdown_content = ""
+        formatter = Formatter()
+        
         # Handle top result data
         if top_result_data:
             top_rebar_1 = top_result_data['Value'][0]
@@ -1817,7 +1827,7 @@ class RectangularBeam(RectangularSection):
 
             markdown_content += (
                 f"Top longitudinal rebar: {rebar_top}, $A_{{s,top}}$ = {area_top} cm², $M_u$ = {Mu_top} kNm, "
-                f"$\\phi M_n$ = {Mn_top} kNm → {formatted_DCR_top}\n\n"
+                f"$\\phi M_n$ = {Mn_top} kNm → {formatted_DCR_top} {warning_top}\n\n"
             )
         else:
             markdown_content += "No top moment to check.\n\n"
@@ -1836,10 +1846,12 @@ class RectangularBeam(RectangularSection):
 
             markdown_content += (
                 f"Bottom longitudinal rebar: {rebar_bot}, $A_{{s,bot}}$ = {area_bot} cm², $M_u$ = {Mu_bot} kNm, "
-                f"$\\phi M_n$ = {Mn_bot} kNm → {formatted_DCR_bot}"
+                f"$\\phi M_n$ = {Mn_bot} kNm → {formatted_DCR_bot} {warning_bot}"
             )
         else:
             markdown_content += "No bottom moment to check."
+
+        # markdown_content += 'Beam flexure checks PASS ✔️' if all_checks else "Beam flexure checks FAIL ❌"
 
         self._md_flexure_results = markdown_content
         display(Markdown(markdown_content))
@@ -1859,7 +1871,7 @@ class RectangularBeam(RectangularSection):
         limiting_reinforcement = shear_details.get('shear_reinforcement')
         limiting_forces = shear_details.get('forces')
         limiting_shear_concrete = shear_details.get('shear_concrete')
-
+        checks_pass = shear_details.get('checks_pass')
         markdown_content = ""
         if shear_details:
             # Create FUFormatter instance and format FU value
@@ -1871,7 +1883,7 @@ class RectangularBeam(RectangularSection):
                 rebar_v = f"{int(limiting_reinforcement['Value'][0])}eØ{limiting_reinforcement['Value'][1]}/"\
                         f"{limiting_reinforcement['Value'][2]} cm"
             # Limitng cases checks 
-            warning = "⚠️ Some checks failed, see detailed results." if not self._all_shear_checks_passed else "" 
+            warning = "⚠️ Some checks failed, see detailed results." if not checks_pass else "" 
             markdown_content = f"Shear reinforcing {rebar_v}, $A_v$={limiting_reinforcement['Value'][6]} cm²/m"\
                             f", $V_u$={limiting_forces['Value'][1]} kN, $\\phi V_n$={limiting_shear_concrete['Value'][7]} kN → {formatted_DCR} {warning}"  # noqa: E501
         else:
@@ -1970,10 +1982,10 @@ class RectangularBeam(RectangularSection):
                 ""   # No max constraint for spacing
             ],
             'Ok?': [
-                '✔️' if self._limiting_case_flexure_top_details['min_max']['Ok?'][0] == '✔️' else '❌',  # Top As check
-                '✔️' if self._limiting_case_flexure_top_details['min_max']['Ok?'][1] == '✔️' else '❌',  # Top spacing check
-                '✔️' if self._limiting_case_flexure_bot_details['min_max']['Ok?'][2] == '✔️' else '❌',  # Bottom As check
-                '✔️' if self._limiting_case_flexure_bot_details['min_max']['Ok?'][3] == '✔️' else '❌'   # Bottom spacing check
+                self._limiting_case_flexure_top_details['min_max']['Ok?'][0],  # Top As check
+                self._limiting_case_flexure_top_details['min_max']['Ok?'][1],  # Top spacing check
+                self._limiting_case_flexure_bot_details['min_max']['Ok?'][2],  # Bottom As check
+                self._limiting_case_flexure_bot_details['min_max']['Ok?'][3]   # Bottom spacing check
             ]
             }
 
@@ -2005,7 +2017,6 @@ class RectangularBeam(RectangularSection):
         forces : Forces, optional
             The specific Forces object to display results for. If None, displays results for the limiting case.
         """
-        #TODO: Falta terminar esto
         if not self._flexure_checked:
             warnings.warn("Flexural check has not been performed yet. Call check_flexure or "
                         "design_flexure first.", UserWarning)
@@ -2014,21 +2025,74 @@ class RectangularBeam(RectangularSection):
 
         # Determine which results to display (limiting case by default)
         if force:
-            force_id = force.id
-            if force_id not in self._flexure_results_detailed_list:
-                raise ValueError(f"No results found for Forces object with ID {force_id}.")
-            result_data = self._flexure_results_detailed_list[force_id]
+            if force.id not in self._flexure_results_detailed_list:
+                raise ValueError(f"No results found for Forces object with ID {force.id}.")
+            result_data = self._flexure_results_detailed_list[force.id]
+            top_result_data = result_data['flexure_capacity_top']
+            bot_result_data = result_data['flexure_capacity_bot']
+            forces_result = result_data['forces']
+            min_max_result = result_data['min_max']
         else:
-            # Default to limiting case
-            result_data = self._limiting_case_flexure_details
+            if self._limiting_case_flexure_top_details is None:
+                raise ValueError("Top limiting case details are not available.")
+            if self._limiting_case_flexure_bot_details is None:
+                raise ValueError("Bottom limiting case details are not available.")
+            # Use the worst-case top and bottom scenarios
+            top_result_data = self._limiting_case_flexure_top_details['flexure_capacity_top']
+            bot_result_data = self._limiting_case_flexure_bot_details['flexure_capacity_bot']
+            forces_result = {
+                "Design forces": [
+                    "Top max moment",
+                    "Bottom max moment",
+                ],
+                "Variable": ["Mu,top", "Mu,bot"],
+                "Value": [
+                    round(self._limiting_case_flexure_top_details['forces']['Value'][0], 2),
+                    round(self._limiting_case_flexure_bot_details['forces']['Value'][1], 2),
+                ],
+                "Unit": ["kNm", "kNm"]
+            }
+            min_max_result = {
+            'Check': [
+                'Min/Max As rebar top',
+                'Minimum spacing top',
+                'Min/Max As rebar bottom',
+                'Minimum spacing bottom'
+            ],
+            'Unit': ['cm²', 'mm', 'cm²', 'mm'],
+            'Value': [
+                round(self._limiting_case_flexure_top_details['min_max']['Value'][0], 2),  # Top limiting case As
+                round(self._limiting_case_flexure_top_details['min_max']['Value'][1], 2),  # Top limiting case spacing
+                round(self._limiting_case_flexure_bot_details['min_max']['Value'][2], 2),  # Bottom limiting case As
+                round(self._limiting_case_flexure_bot_details['min_max']['Value'][3], 2)   # Bottom limiting case spacing
+            ],
+            'Min.': [
+                round(self._limiting_case_flexure_top_details['min_max']['Min.'][0], 2),  # Top limiting case As_min
+                self._limiting_case_flexure_top_details['min_max']['Min.'][1],           # Top limiting case spacing min
+                round(self._limiting_case_flexure_bot_details['min_max']['Min.'][2], 2),  # Bottom limiting case As_min
+                self._limiting_case_flexure_bot_details['min_max']['Min.'][3]            # Bottom limiting case spacing min
+            ],
+            'Max.': [
+                round(self._limiting_case_flexure_top_details['min_max']['Max.'][0], 2),  # Top limiting case As_max
+                "",  # No max constraint for spacing
+                round(self._limiting_case_flexure_bot_details['min_max']['Max.'][2], 2),  # Bottom limiting case As_max
+                ""   # No max constraint for spacing
+            ],
+            'Ok?': [
+                self._limiting_case_flexure_top_details['min_max']['Ok?'][0],  # Top As check
+                self._limiting_case_flexure_top_details['min_max']['Ok?'][1],  # Top spacing check
+                self._limiting_case_flexure_bot_details['min_max']['Ok?'][2],  # Bottom As check
+                self._limiting_case_flexure_bot_details['min_max']['Ok?'][3]   # Bottom spacing check
+            ]
+            }
 
         # Convert output Dicts into DataFrames
         df_materials = pd.DataFrame(self._materials_flexure)
         df_geometry = pd.DataFrame(self._geometry_flexure)
-        df_forces = pd.DataFrame(result_data['forces'])
-        df_data_min_max = pd.DataFrame(result_data['min_max'])
-        df_flexure_capacity_top = pd.DataFrame(result_data['flexure_capacity_top'])
-        df_flexure_capacity_bottom = pd.DataFrame(result_data['flexure_capacity_bottom'])
+        df_forces = pd.DataFrame(forces_result)
+        df_data_min_max = pd.DataFrame(min_max_result)
+        df_flexure_capacity_top = pd.DataFrame(top_result_data)
+        df_flexure_capacity_bottom = pd.DataFrame(bot_result_data)
         
         # Create a document builder instance
         doc_builder = DocumentBuilder(title='Concrete beam flexure check')
@@ -2047,9 +2111,9 @@ class RectangularBeam(RectangularSection):
 
         # Add second section for flexural checks
         doc_builder.add_heading('Flexural Capacity Top', level=2)
-        doc_builder.add_table_data(df_flexure_capacity_top)
+        doc_builder.add_table_dcr(df_flexure_capacity_top)
         doc_builder.add_heading('Flexural Capacity Bottom', level=2)
-        doc_builder.add_table_data(df_flexure_capacity_bottom)
+        doc_builder.add_table_dcr(df_flexure_capacity_bottom)
 
         # Save the Word doc
         doc_builder.save(f"Concrete beam flexure check {self.concrete.design_code}.docx")
@@ -2145,7 +2209,7 @@ class RectangularBeam(RectangularSection):
         doc_builder.add_table_min_max(df_data_min_max)
         doc_builder.add_heading('Design checks', level=2)
         doc_builder.add_table_data(df_shear_reinforcement)
-        doc_builder.add_table_data(df_shear_concrete)
+        doc_builder.add_table_dcr(df_shear_concrete)
 
         # Save the Word doc
         doc_builder.save(f"Concrete beam shear check {self.concrete.design_code}.docx")
@@ -2162,10 +2226,7 @@ def clear_console() -> None:
     else:  # For macOS and Linux
         os.system('clear')
 
-
-
 def flexure_design_test() -> None:
-    clear_console()
     concrete= Concrete_ACI_318_19(name="C25",f_c=25*MPa) 
     steelBar= SteelBar(name="ADN 420", f_y=420*MPa)
     custom_settings = {'clear_cover': 2.5*cm}
@@ -2188,34 +2249,8 @@ def flexure_design_test() -> None:
 
     print(beam.check_flexure())
 
-# def flexure_design_test() -> None:
-#     clear_console()
-#     #Example 6.6 CRSI GUIDE
-#     concrete = Concrete_ACI_318_19(name="C4",f_c=4000*psi) 
-#     steelBar = SteelBar(name="G60", f_y=60000*psi) 
-#     beam = RectangularBeam(
-#         label="101",
-#         concrete=concrete,
-#         steel_bar=steelBar,
-#         width=12 * inch,  
-#         height=24 * inch,   
-#     )
-#     f1 = Forces(label='D', M_y=25000*kNm)
-#     f2 = Forces(label='L', M_y=58.3*kNm)
-#     f3 = Forces(label='C1', M_y=1.94*kNm)
-#     f4 = Forces(label='C2', M_y=1.35*kNm)
-#     f5 = Forces(label='C3', M_y=-100*kNm)
-#     f6 = Forces(label='C4', M_y=25*kNm)
-#     #TODO DEFINIR LA SUMA DE CARGAS, QUE ENTIENDA QUE SI UNO LE DICE f1+f2 ES SUMAR LOS VALORES DE LAS SOLICITACIONES
-
-#     Node(section=beam, forces=[f1, f2, f3, f4, f5, f6])
-#     results=beam.design_flexure() 
-#     print(results)
-
-#     print(beam.check_flexure())
-
 def flexure_check_test() -> None:
-    clear_console()
+    # clear_console()
     concrete = Concrete_ACI_318_19(name="H-25",f_c=25*MPa) 
     steelBar = SteelBar(name="420", f_y=420*MPa) 
 
@@ -2228,17 +2263,18 @@ def flexure_check_test() -> None:
     )
 
     # beam.set_longitudinal_rebar_bot(n1=2,d_b1=20*mm)
-    beam.set_longitudinal_rebar_bot(n1=2,d_b1=32*mm, n2=1, d_b2=12*mm, n3=2,d_b3=12*mm, n4=1, d_b4=10*mm)
+    beam.set_longitudinal_rebar_bot(n1=2,d_b1=12*mm, n2=1, d_b2=12*mm, n3=2,d_b3=12*mm, n4=1, d_b4=10*mm)
     beam.set_longitudinal_rebar_top(n1=2,d_b1=16*mm)
-    f1 = Forces(label='D', M_y=0*kNm)
+    f1 = Forces(label='D', M_y=0*kNm, V_z=50*kN)
     f2 = Forces(label='L', M_y=-100*kNm)
     f3 = Forces(label='W', M_y=-50*kNm)
-    f4 = Forces(label='S', M_y=180*kNm)
+    f4 = Forces(label='S', M_y=110*kNm)
     Node(section=beam, forces=[f1,f2,f3,f4])
-    results=beam.check_flexure()
-    print(results)
-    beam.flexure_results
-    # beam.flexure_results_detailed() 
+    beam.check_flexure()
+    beam.check_shear()
+    beam.flexure_results_detailed()
+    beam.flexure_results_detailed_doc()
+    beam.shear_results_detailed_doc()
 
 def flexure_Mn() -> None:
     clear_console()
@@ -2392,11 +2428,11 @@ def shear_CIRSOC() -> None:
     print(beam.shear_design_results)
 
 if __name__ == "__main__":
-    # flexure_check_test()
+    flexure_check_test()
     # flexure_design_test()
     # flexure_Mn()
     # shear_ACI_imperial()
     # shear_EN_1992()
     # rebar()
     # shear_ACI_metric()
-    shear_CIRSOC()
+    # shear_CIRSOC()
