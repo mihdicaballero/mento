@@ -277,7 +277,6 @@ def test_flexural_beam_determine_nominal_moment_simple_reinf_ACI_318_19() -> Non
     ''' VAMOS A PEDIR UN MOMENTO NOMINAL QUE CON LA FUNCION PRIVADA'''
     A_s=10.92 * inch**2
     d=27*inch
-    c_mec=3*inch
     result=beam._determine_nominal_moment_simple_reinf_ACI_318_19(A_s,d)
 
     # Compare dictionaries with a tolerance for floating-point values, in inch**2

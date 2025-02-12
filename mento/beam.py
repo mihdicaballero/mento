@@ -19,13 +19,6 @@ from mento.forces import Forces
 from mento.node import Node
 
 
-# MANEJO DE ERRORES TODO: ¿Esto pa que es?
-class ReinforcementCalculationError(Exception):
-    """Excepción personalizada para errores en el cálculo del refuerzo flexural."""
-    pass
-
-
-
 @dataclass
 class RectangularBeam(RectangularSection):
     label: Optional[str] = None
@@ -316,17 +309,17 @@ class RectangularBeam(RectangularSection):
         y4 = max(d_b1, d_b2) + self.layers_spacing + d_b4 / 2
 
         # Calculate the total area of each layer
-        A1 = n1 * d_b1  # Area proportional to number of bars and their diameter
-        A2 = n2 * d_b2
-        A3 = n3 * d_b3
-        A4 = n4 * d_b4
+        area_1 = n1 * d_b1**2*np.pi/4  # Area proportional to number of bars and their diameter
+        area_2 = n2 * d_b2**2*np.pi/4
+        area_3 = n3 * d_b3**2*np.pi/4
+        area_4 = n4 * d_b4**2*np.pi/4
 
         # Calculate the centroid as a weighted average
-        total_area = A1 + A2 + A3 + A4
+        total_area = area_1 + area_2 + area_3 + area_4
         if total_area == 0:
             return 0*mm  # Avoid division by zero if no bars are present
 
-        centroid = (A1 * y1 + A2 * y2 + A3 * y3 + A4 * y4) / total_area
+        centroid = (area_1 * y1 + area_2 * y2 + area_3 * y3 + area_4 * y4) / total_area
         return centroid
 
     def __calculate_phi_ACI_318_19(self, epsilon_most_strained: float) -> float:
