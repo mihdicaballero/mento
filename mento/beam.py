@@ -672,12 +672,12 @@ class RectangularBeam(RectangularSection):
         if self._M_u>=0:
             self._A_s_min_bot, self._A_s_max_bot, self._A_s_req_bot, self._A_s_req_top, self._c_d_bot = self.__calculate_flexural_reinforcement_ACI_318_19(self._M_u_bot, self._d_bot, self._c_mec_top)
             self._c_d_top = 0
-            self._DCRb_bot = self._M_u_bot.to('kN*m') / self._phi_M_n_bot.to('kN*m')
+            self._DCRb_bot = self._M_u_bot.to('kN*m').magnitude / self._phi_M_n_bot.to('kN*m').magnitude
             self._DCRb_top = 0
         else:
             self._A_s_min_top, self._A_s_max_top, self._A_s_req_top, self._A_s_req_bot, self._c_d_top = self.__calculate_flexural_reinforcement_ACI_318_19(abs(self._M_u_top), self._d_top, self._c_mec_bot)
             self._c_d_bot = 0
-            self._DCRb_top = -self._M_u_top.to('kN*m') / self._phi_M_n_top.to('kN*m')
+            self._DCRb_top = -self._M_u_top.to('kN*m').magnitude / self._phi_M_n_top.to('kN*m').magnitude
             self._DCRb_bot = 0
 
         self._d_b_max_top = max(self._d_b1_t, self._d_b2_t, self._d_b3_t, self._d_b4_t)
@@ -1024,7 +1024,7 @@ class RectangularBeam(RectangularSection):
     def _calculate_total_shear_strength_aci(self) -> None:
         self._phi_V_n = self.phi_v * (self.V_c + self._A_v * self.f_yt * self._d_shear)
         V_d_max = min(self._phi_V_n, self._phi_V_max)
-        self._DCRv = abs((self._V_u.to('kN') / V_d_max.to('kN')))
+        self._DCRv = abs((self._V_u.to('kN').magnitude / V_d_max.to('kN').magnitude))
 
     def _calculate_rebar_spacing_aci(self) -> None:
         section_rebar = Rebar(self)
@@ -1314,7 +1314,7 @@ class RectangularBeam(RectangularSection):
                 self._s_max_l, self._s_max_w =\
                       section_rebar.calculate_max_spacing_EN_1992_2004(self._alpha)
 
-            self._DCRv = abs((self._V_Ed_2.to('kN') / self._V_Rd.to('kN')))
+            self._DCRv = abs((self._V_Ed_2.to('kN').magnitude / self._V_Rd.to('kN').magnitude))
             # Design results
             results = {
                 'Label': self.label, #Beam label
