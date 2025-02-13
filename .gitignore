@@ -68,7 +68,7 @@ dist/
 
 # Documentation files
 *.pdf
-# *.docx
+*.docx
 
 # Editor and OS swap/backup files
 *~
