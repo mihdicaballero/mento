@@ -137,35 +137,9 @@ class RectangularBeam(RectangularSection):
         self._d_shear = min(self._d_bot, self._d_top)
 
     def _update_longitudinal_rebar_attributes(self) -> None:
-        """Recalculate attributes dependent on rebar configuration."""
-        # Bottom rebar
-        self._A_s_bot = self._calculate_longitudinal_rebar_area(
-            self._n1_b, self._d_b1_b, self._n2_b, self._d_b2_b,
-            self._n3_b, self._d_b3_b, self._n4_b, self._d_b4_b
-        )
-        self._bot_rebar_centroid = self.__calculate_long_rebar_centroid(
-            self._n1_b, self._d_b1_b, self._n2_b, self._d_b2_b,
-            self._n3_b, self._d_b3_b, self._n4_b, self._d_b4_b
-        )
-        self._available_s_bot = self.__calculate_min_clear_spacing(
-            self._n1_b, self._d_b1_b, self._n2_b, self._d_b2_b,
-            self._n3_b, self._d_b3_b, self._n4_b, self._d_b4_b
-        )
-
-        # Top rebar
-        self._A_s_top = self._calculate_longitudinal_rebar_area(
-            self._n1_t, self._d_b1_t, self._n2_t, self._d_b2_t,
-            self._n3_t, self._d_b3_t, self._n4_t, self._d_b4_t
-        )
-        self._top_rebar_centroid = self.__calculate_long_rebar_centroid(
-            self._n1_t, self._d_b1_t, self._n2_t, self._d_b2_t,
-            self._n3_t, self._d_b3_t, self._n4_t, self._d_b4_t
-        )
-        self._available_s_top = self.__calculate_min_clear_spacing(
-            self._n1_t, self._d_b1_t, self._n2_t, self._d_b2_t,
-            self._n3_t, self._d_b3_t, self._n4_t, self._d_b4_t
-        )
-        # Update effective heights after rebar changes
+        """Recalculate attributes dependent on rebar configuration for both top and bottom reinforcing."""
+        self._calculate_longitudinal_rebar_area()
+        self._calculate_min_clear_spacing()
         self._update_effective_heights()
 
     def set_transverse_rebar(self, n_stirrups: int = 0, d_b:PlainQuantity = 0*mm, s_l:PlainQuantity = 0*cm) -> None:
@@ -209,44 +183,29 @@ class RectangularBeam(RectangularSection):
         self._d_b4_t = d_b4 or self._d_b4_t
         self._update_longitudinal_rebar_attributes()
     
-    def _calculate_longitudinal_rebar_area(self, n1: int, d_b1: PlainQuantity, n2: int, d_b2: PlainQuantity, 
-                                n3: int, d_b3: PlainQuantity, n4: int, d_b4: PlainQuantity 
-                                ) -> PlainQuantity:
+    def _calculate_longitudinal_rebar_area(self) -> None:
         """Calculate the total rebar area for a given configuration."""
-        return (n1 * d_b1**2 * np.pi / 4 +
-                n2 * d_b2**2 * np.pi / 4 +
-                n3 * d_b3**2 * np.pi / 4 +
-                n4 * d_b4**2 * np.pi / 4)
 
-    def __calculate_min_clear_spacing(
-            self,
-            n1: int,
-            d_b1: PlainQuantity,
-            n2: int,
-            d_b2: PlainQuantity,
-            n3: int,
-            d_b3: PlainQuantity,
-            n4: int,
-            d_b4: PlainQuantity,
-        ) -> PlainQuantity:
+        # AREA OF BOTTOM BARS
+        self._A_s_bot = (self._n1_b * self._d_b1_b**2 * np.pi / 4 +
+                self._n2_b * self._d_b2_b**2 * np.pi / 4 +
+                self._n3_b * self._d_b3_b**2 * np.pi / 4 +
+                self._n4_b * self._d_b4_b**2 * np.pi / 4)
+    
+        # AREA OF TOP BARS
+        self._A_s_top = (self._n1_t * self._d_b1_t**2 * np.pi / 4 +
+                self._n2_t * self._d_b2_t**2 * np.pi / 4 +
+                self._n3_t * self._d_b3_t**2 * np.pi / 4 +
+                self._n4_t * self._d_b4_t**2 * np.pi / 4)
+        
+    def _calculate_min_clear_spacing(self) -> None:
             """
             Calculates the maximum clear spacing between bars for the bottom rebar layers.
-
-            Parameters:
-                effective_width (PlainQuantity): The effective width available for bar placement.
-                layer_spacing (PlainQuantity): The vertical spacing between the two layers of bars.
-                n1 (int): Number of bars in the first group of the first layer.
-                d_b1 (PlainQuantity): Diameter of bars in the first group of the first layer.
-                n2 (int): Number of bars in the second group of the first layer.
-                d_b2 (PlainQuantity): Diameter of bars in the second group of the first layer.
-                n3 (int): Number of bars in the first group of the second layer.
-                d_b3 (PlainQuantity): Diameter of bars in the first group of the second layer.
-                n4 (int): Number of bars in the second group of the second layer.
-                d_b4 (PlainQuantity): Diameter of bars in the second group of the second layer.
 
             Returns:
                 PlainQuantity: The maximum clear spacing between bars in either the first or second layer.
             """
+
             def layer_clear_spacing(n_a: int, d_a: PlainQuantity, n_b: int, d_b: PlainQuantity) -> PlainQuantity:
                 """
                 Helper function to calculate clear spacing for a given layer.
@@ -267,23 +226,23 @@ class RectangularBeam(RectangularSection):
                 total_bar_width = n_a * d_a + n_b * d_b
                 return (effective_width - total_bar_width) / (total_bars - 1)
 
+            # AVAIABLE CLEAR SPACING FOR BOTTOM BARS
             # Calculate clear spacing for each layer
-            spacing_layer1 = layer_clear_spacing(n1, d_b1, n2, d_b2)
-            spacing_layer2 = layer_clear_spacing(n3, d_b3, n4, d_b4)
+            spacing_layer1_b = layer_clear_spacing(self._n1_b, self._d_b1_b, self._n2_b, self._d_b2_b)
+            spacing_layer2_b = layer_clear_spacing(self._n3_b, self._d_b3_b, self._n4_b, self._d_b4_b)
 
             # Return the maximum clear spacing between the two layers
-            return min(spacing_layer1, spacing_layer2)
+            self._available_s_bot=min(spacing_layer1_b, spacing_layer2_b)
 
-    def __calculate_long_rebar_centroid(
-        self, 
-        n1: int, 
-        d_b1: PlainQuantity, 
-        n2: int = 0, 
-        d_b2: PlainQuantity = 0 * mm, 
-        n3: int = 0, 
-        d_b3: PlainQuantity = 0 * mm, 
-        n4: int = 0, 
-        d_b4: PlainQuantity = 0 * mm) -> PlainQuantity:
+            # AVAIABLE CLEAR SPACING FOR TOP BARS
+            # Calculate clear spacing for each layer
+            spacing_layer1_t = layer_clear_spacing(self._n1_t, self._d_b1_t, self._n2_t, self._d_b2_t)
+            spacing_layer2_t = layer_clear_spacing(self._n3_t, self._d_b3_t, self._n4_t, self._d_b4_t)
+
+            # Return the maximum clear spacing between the two layers
+            self._available_s_top=min(spacing_layer1_t, spacing_layer2_t)
+
+    def _calculate_long_rebar_centroid(self) -> None:
         """
         Calculates the centroid (baricenter) of a group of rebars based on their diameters, quantities, 
         and layer spacing.
@@ -291,36 +250,51 @@ class RectangularBeam(RectangularSection):
         Returns:
             float: The calculated centroid height of the rebar group.
         """
-        # Default to 0 if any diameter or quantity is None
-        d_b1 = d_b1 if d_b1 is not None else 0*mm
-        d_b2 = d_b2 if d_b2 is not None else 0*mm
-        d_b3 = d_b3 if d_b3 is not None else 0*mm
-        d_b4 = d_b4 if d_b4 is not None else 0*mm
-
-        n1 = n1 if n1 is not None else 0
-        n2 = n2 if n2 is not None else 0
-        n3 = n3 if n3 is not None else 0
-        n4 = n4 if n4 is not None else 0
-
+        # BOTTOM BARS CENTROID
         # Calculate the vertical positions of the bar layers
-        y1 = d_b1 / 2
-        y2 = d_b2 / 2
-        y3 = max(d_b1, d_b2) + self.layers_spacing + d_b3 / 2
-        y4 = max(d_b1, d_b2) + self.layers_spacing + d_b4 / 2
+        y1_b = self._d_b1_b / 2
+        y2_b = self._d_b2_b / 2
+        y3_b = max(self._d_b1_b, self._d_b2_b) + self.layers_spacing + self._d_b3_b / 2
+        y4_b = max(self._d_b1_b, self._d_b2_b) + self.layers_spacing + self._d_b4_b / 2
 
         # Calculate the total area of each layer
-        area_1 = n1 * d_b1**2*np.pi/4  # Area proportional to number of bars and their diameter
-        area_2 = n2 * d_b2**2*np.pi/4
-        area_3 = n3 * d_b3**2*np.pi/4
-        area_4 = n4 * d_b4**2*np.pi/4
+        area_1_b = self._n1_b * self._d_b1_b**2*np.pi/4  # Area proportional to number of bars and their diameter
+        area_2_b = self._n2_b * self._d_b2_b**2*np.pi/4
+        area_3_b = self._n3_b * self._d_b3_b**2*np.pi/4
+        area_4_b = self._n4_b * self._d_b4_b**2*np.pi/4
 
         # Calculate the centroid as a weighted average
-        total_area = area_1 + area_2 + area_3 + area_4
-        if total_area == 0:
+        total_area_b = area_1_b + area_2_b + area_3_b + area_4_b
+        if total_area_b == 0:
             return 0*mm  # Avoid division by zero if no bars are present
 
-        centroid = (area_1 * y1 + area_2 * y2 + area_3 * y3 + area_4 * y4) / total_area
-        return centroid
+        self._bot_rebar_centroid = (area_1_b * y1_b + area_2_b * y2_b + area_3_b * y3_b + area_4_b * y4_b) / total_area_b
+        
+        #TOP BARS CENTROID
+        # Calculate the vertical positions of the bar layers
+        y1_t = self._d_b1_t / 2
+        y2_t = self._d_b2_t / 2
+        y3_t = max(self._d_b1_t, self._d_b2_t) + self.layers_spacing + self._d_b3_t / 2
+        y4_t = max(self._d_b1_t, self._d_b2_t) + self.layers_spacing + self._d_b4_t / 2
+
+        # Calculate the total area of each layer
+        area_1_t = self._n1_t * self._d_b1_t**2*np.pi/4  # Area proportional to number of bars and their diameter
+        area_2_t = self._n2_t * self._d_b2_t**2*np.pi/4
+        area_3_t = self._n3_t * self._d_b3_t**2*np.pi/4
+        area_4_t = self._n4_t * self._d_b4_t**2*np.pi/4
+
+        # Calculate the centroid as a weighted average
+        total_area_t = area_1_t + area_2_t + area_3_t + area_4_t
+        if total_area_t == 0:
+            return 0*mm  # Avoid division by zero if no bars are present
+
+        self._top_rebar_centroid = (area_1_t * y1_t + area_2_t * y2_t + area_3_t * y3_t + area_4_t * y4_t) / total_area_t
+        
+
+
+        
+
+
 
     def __calculate_phi_ACI_318_19(self, epsilon_most_strained: float) -> float:
         """
