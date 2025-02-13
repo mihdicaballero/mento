@@ -28,6 +28,9 @@ keywords = [
 [project.urls]
 "Homepage" = "https://github.com/mihdicaballero/mento"
 
+[tool.setuptools]
+packages = ["mento"]
+
 [tool.setuptools.dynamic]
 dependencies = { file = "requirements.txt" }
 

@@ -2,8 +2,38 @@ import pandas as pd
 from typing import Optional, List, Any
 from tabulate import tabulate
 from docx import Document
-from docx.shared import Pt, Cm
+from docx.shared import Pt, Cm, RGBColor
+import seaborn as sns
+import matplotlib.pyplot as plt
+from docx.oxml import parse_xml
+from docx.oxml.ns import nsdecls
 
+CUSTOM_COLORS = {
+        'blue': '#1f77b4',  # Default Matplotlib blue
+        'red': '#d62728',   # Default Matplotlib red
+    }
+
+# Default Matplotlib and Seaborn settings
+def configure_plot_settings() -> None:
+    """
+    Configures global settings for Matplotlib and Seaborn plots.
+    """
+    # Basic style for the plot
+    sns.set_theme(style="whitegrid")
+    sns.set_context("paper", rc={"lines.linewidth": 1.8})
+    sns.set_style(rc={'axes.facecolor': '#F8F8F8'})
+
+    # Matplotlib specific settings
+    plt.rcParams.update({
+        'text.usetex': True,
+        'font.family': 'serif',
+        'font.serif': ['Lato'],
+        'axes.titlesize': 12,
+        'axes.labelsize': 12,
+        'xtick.labelsize': 12,
+        'ytick.labelsize': 12,
+        'legend.fontsize': 12,
+    })
 
 class Formatter:
     """
@@ -312,7 +342,7 @@ class DocumentBuilder:
         
         Returns:
         --------
-        None
+        Table
         """
         # Initialize the table with the DataFrame dimensions
         table = self.doc.add_table(rows=df.shape[0] + 1, cols=df.shape[1])
@@ -337,9 +367,46 @@ class DocumentBuilder:
         spacer = self.doc.add_paragraph()
         spacer.paragraph_format.space_after = Pt(0)  # Remove space after the paragraph
 
+        return None
+
     def add_table_data(self, df: pd.DataFrame) -> None:
         column_widths = [Cm(12), Cm(2), Cm(2), Cm(2)]
         self.add_table(df, column_widths)
+
+    def add_table_dcr(self, df: pd.DataFrame) -> None:
+        """
+        Adds a table using `add_table` and modifies the last row's DCR cell color.
+
+        - Green if DCR < 1
+        - Red if DCR >= 1
+        """
+        column_widths = [Cm(12), Cm(2), Cm(2), Cm(2)]
+        self.add_table(df, column_widths)
+        # Get the last table added to the document
+        table = self.doc.tables[-1]  # Retrieve the most recent table
+
+        # Apply color to DCR cell (third column of the last row)
+        last_row_idx = df.shape[0]  # Last row index
+        dcr_column_idx = 2  # Third column index (zero-based)
+
+        dcr_value = float(df.iat[-1, dcr_column_idx])  # Extract DCR value
+        if dcr_value < 1:
+            shading_color = "C6EFCE"  # Green
+            font_color = "006100"  # Green font
+        else:
+            shading_color = "FFC7CE"  # Red
+            font_color = "9C0006"  # Red font
+
+        # Apply shading and font color to the entire last row
+        for cell in table.rows[last_row_idx].cells:
+            # Apply background color
+            cell._element.get_or_add_tcPr().append(
+                parse_xml(f'<w:shd {nsdecls("w")} w:fill="{shading_color}"/>')
+            )
+            # Apply font color
+            for paragraph in cell.paragraphs:
+                for run in paragraph.runs:
+                    run.font.color.rgb = RGBColor.from_string(font_color)
     
     def add_table_min_max(self, df: pd.DataFrame) -> None:
         column_widths = [Cm(10), Cm(2), Cm(2), Cm(2), Cm(2), Cm(1)]

@@ -42,14 +42,14 @@ class Concrete(Material):
 class Concrete_ACI_318_19(Concrete):
     _E_c: PlainQuantity = field(init=False)
     _f_r: PlainQuantity = field(init=False)
-    epsilon_c: float = field(default=0.003, init=False)
+    _epsilon_c: float = field(default=0.003, init=False)
     _beta_1: float = field(init=False)
 
     def __post_init__(self) -> None:
         super().__post_init__()
         # Ensure name is properly set, either hardcode or pass during instantiation
         if not self.name:
-            self.name = "Concrete ACI"  # You can set a default name here
+            self.name = "Concrete ACI 318-19"  # You can set a default name here
         self.design_code = "ACI 318-19"
         # Adjust calculations based on unit system
         if self.unit_system == "metric":
@@ -65,7 +65,7 @@ class Concrete_ACI_318_19(Concrete):
         properties['E_c'] = self._E_c
         properties['f_r'] = self._f_r
         properties['beta_1'] = ureg.Quantity(self._beta_1, '')
-        properties['epsilon_c']=ureg.Quantity(self.epsilon_c, '')
+        properties['epsilon_c']=ureg.Quantity(self._epsilon_c, '')
         return properties
     
     def __beta_1(self) -> float:
@@ -107,17 +107,29 @@ class Concrete_ACI_318_19(Concrete):
         )
 
 @dataclass
+class Concrete_CIRSOC_201_25(Concrete_ACI_318_19):
+    """Concrete class for a CIRSOC 201 design code with metric units."""
+    def __post_init__(self) -> None:
+        # Call the parent class's __post_init__ to inherit initializations
+        super().__post_init__()
+        # Override the design code for this specific class
+        self.design_code = "CIRSOC 201-25"
+        # Ensure the name is specific to this design code
+        if not self.name:
+            self.name = "Concrete CIRSOC 201-25"
+
+@dataclass
 class Concrete_EN_1992_2004(Concrete):
     _E_cm: PlainQuantity = field(init=False)  # Secant modulus of elasticity
     _f_ck: PlainQuantity = field(init=False)  # Characteristic concrete strength
     _f_cm: PlainQuantity = field(init=False)  # Mean compressive strength
     _f_ctm: PlainQuantity = field(init=False)  # Mean tensile strength
-    _f_cd: PlainQuantity = field(init=False)  # Design strength of concrete
-
 
     def __init__(self, name: str, f_ck: PlainQuantity):
         super().__init__(name=name, f_c=f_ck)
-        self.design_code = "EN 1992"
+        if not self.name:
+            self.name = "Concrete EN 1992-2004"
+        self.design_code = "EN 1992-2004"
         self._f_ck = self.f_c
         self._f_cm = self._f_ck + 8 * MPa
         self._E_cm = 22000 * (self._f_cm / (10 * MPa)) ** 0.3 * MPa       
@@ -134,7 +146,6 @@ class Concrete_EN_1992_2004(Concrete):
             'f_ck': self._f_ck.to('MPa'),
             'f_cm': self._f_cm.to('MPa'),
             'f_ctm': self._f_ctm.to('MPa'),
-            'f_cd': self._f_cd.to('MPa'),
         })
         return properties
 
@@ -153,9 +164,6 @@ class Concrete_EN_1992_2004(Concrete):
     @property
     def f_ctm(self) -> PlainQuantity:
         return self._f_ctm
-    @property
-    def f_cd(self) -> PlainQuantity:
-        return self._f_cd
 
 @dataclass
 class Steel(Material):

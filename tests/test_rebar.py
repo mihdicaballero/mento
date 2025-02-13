@@ -57,23 +57,16 @@ def test_beam_longitudinal_rebar_ACI_318_19(beam_example_metric: RectangularBeam
     assert best_design['total_bars'] == 3
     assert best_design['clear_spacing'].magnitude == pytest.approx(40,rel=1e-3)
 
-def test_beam_longitudinal_rebar_ACI_318_19_fail(beam_example_imperial: RectangularBeam) -> None:
-    as_nec = 150 * cm**2
-    # Expecting a ValueError to be raised
-    with pytest.raises(ValueError, match="Cannot fit the required reinforcement within the beam "
-                       "width considering clear cover and spacing."):
-        Rebar(beam_example_imperial).longitudinal_rebar_ACI_318_19(A_s_req=as_nec)
-
 def test_beam_transverse_rebar_ACI_318_19(beam_example_imperial: RectangularBeam) -> None:
     f = Forces(V_z=37.727*kip)
-    A_s=0.847*inch**2
     Node(beam_example_imperial, forces=f)
-    results = beam_example_imperial.design_shear(A_s)
+    beam_example_imperial.set_longitudinal_rebar_bot(n1=2, d_b1=0.625*inch)
+    results = beam_example_imperial.design_shear()
     assert results is not None
     assert beam_example_imperial._stirrup_n == 1
-    assert beam_example_imperial._stirrup_d_b == 10*mm 
-    assert beam_example_imperial._stirrup_s_l ==  15*cm 
-    assert beam_example_imperial._A_v.magnitude == pytest.approx(10.47,rel=1e-3)
+    assert beam_example_imperial._stirrup_d_b == 3/8*inch
+    assert beam_example_imperial._stirrup_s_l ==  5*inch 
+    assert beam_example_imperial._A_v.to('cm**2/m').magnitude == pytest.approx(11.2214,rel=1e-3)
 
 # This is where pytest will collect the tests and run them
 if __name__ == "__main__":

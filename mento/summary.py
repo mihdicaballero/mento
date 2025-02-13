@@ -83,9 +83,9 @@ class BeamSummary:
 
         for index, row in self.data.iterrows():
             # Extract forces for each row
-            M_y = row['My']  # Example: My in kNm
-            N_x = row['Nx']  # Example: Nx in kN
-            V_z = row['Vz']  # Example: Vz in kN
+            M_y = row['My']  
+            N_x = row['Nx']  # Positive for compression
+            V_z = row['Vz'] 
 
             # Ensure these are pint.Quantity objects with correct units
             forces = Forces(M_y=M_y, N_x=N_x, V_z=V_z)
@@ -107,8 +107,24 @@ class BeamSummary:
             d_b = row['dbs']  # Diameter of rebar (mm)
             s_l = row['sl']  # Spacing of stirrups (cm)
 
-            beam.set_transverse_rebar(n_stirrups=n_stirrups, d_b=d_b, s_l=s_l)
+            if n_stirrups != 0:
+                beam.set_transverse_rebar(n_stirrups=n_stirrups, d_b=d_b, s_l=s_l)
 
+            # Set longitudinal rebar at the bottom if n1 is not 0
+            n1 = row['n1']
+            d_b1 = row['db1']  # Diameter in mm
+            n2 = row['n2']
+            d_b2 = row['db2']  # Diameter in mm
+            n3 = row['n3']
+            d_b3 = row['db3']  # Diameter in mm
+            n4 = row['n4']
+            d_b4 = row['db4']  # Diameter in mm
+            if n1 != 0:
+                if M_y >= 0*kNm:
+                    beam.set_longitudinal_rebar_bot(n1, d_b1, n2, d_b2, n3, d_b3, n4, d_b4)
+                else:
+                    beam.set_longitudinal_rebar_top(n1, d_b1, n2, d_b2, n3, d_b3, n4, d_b4)
+            
             # Store the section and its corresponding forces
             self.beams.append(beam)
     
@@ -137,37 +153,59 @@ class BeamSummary:
             node = beam.node # get the node associated with the beam
             original_forces = node.get_forces_list()
 
+            rebar_v = '-' if beam._stirrup_n == 0 else f"{int(beam._stirrup_n)}eØ{int(beam._stirrup_d_b.to('mm').magnitude)}/{beam._stirrup_s_l.to('cm').magnitude}"  # noqa: E501
+            rebar_f_top = '-' if beam._n1_t == 0 else (
+                f"{beam._format_longitudinal_rebar_string(beam._n1_t, beam._d_b1_t, beam._n2_t, beam._d_b2_t)}" +
+                (f" ++ {beam._format_longitudinal_rebar_string(beam._n3_t, beam._d_b3_t, beam._n4_t, beam._d_b4_t)}"
+                if beam._n3_t != 0 else "")
+            )
+            rebar_f_bot = '-' if beam._n1_b == 0 else (
+                f"{beam._format_longitudinal_rebar_string(beam._n1_b, beam._d_b1_b, beam._n2_b, beam._d_b2_b)}" +
+                (f" ++ {beam._format_longitudinal_rebar_string(beam._n3_b, beam._d_b3_b, beam._n4_b, beam._d_b4_b)}"
+                if beam._n3_b != 0 else "")
+            )
+
             if capacity_check:
                 # Reset forces to zero for capacity check
                 node.reset_forces()
                 # Perform the shear check
                 shear_results = beam.check_shear()
-                
-                if beam._stirrup_n ==0:
-                    rebar_v = '-'
-                else:
-                    rebar_v = f"{int(beam._stirrup_n)}eØ{int(beam._stirrup_d_b.to('mm').magnitude)}/{beam._stirrup_s_l.to('cm').magnitude}"  # noqa: E501
+                flexure_results = beam.check_flexure()
                 # Design results
+                #TODO: Change output if its another Concrete Class
                 results_dict = {
-                    'Beam': beam.label,  # Minimum shear reinforcement area
-                    'b': beam.width.magnitude, # Required shear reinforcing area
-                    'h': beam.height.magnitude,  # Provided stirrup reinforcement per unit length
-                    'Av': rebar_v,  # Reinforcement contribution to shear capacity
-                    'Av,real': round(shear_results['Av'][0].magnitude,2),  #Reinforcement contribution to shear capacity
-                    'ØVn': round(shear_results['ØVn'][0].magnitude,2),  #Check if applied shear is within total capacity
+                    'Beam': beam.label,  
+                    'b': beam.width.magnitude,
+                    'h': beam.height.magnitude,
+                    'As,top': rebar_f_top,  
+                    'As,bot': rebar_f_bot,
+                    'Av': rebar_v, 
+                    'As,top,real': round(flexure_results['As,top'][0].magnitude,2), 
+                    'As,bot,real': round(flexure_results['As,bot'][0].magnitude,2),
+                    'Av,real': round(shear_results['Av'][0].magnitude,2), 
+                    'ØMn,top': round(beam._phi_M_n_top.to('kN*m').magnitude,2),
+                    'ØMn,bot': round(beam._phi_M_n_bot.to('kN*m').magnitude,2),
+                    'ØVn': round(shear_results['ØVn'][0].magnitude,2),  
                 }
                 # Create a units row as a DataFrame
                 units_row = pd.DataFrame([{
                     'Beam': '',
                     'b': 'cm',
                     'h': 'cm',
+                    'As,top': '',
+                    'As,bot': '',
                     'Av': '',
+                    'As,top,real': 'cm²',
+                    'As,bot,real': 'cm²',
                     'Av,real': 'cm²/m',
-                    'ØVn': 'kN',
+                    'ØMn,top': 'kNm',
+                    'ØMn,bot': 'kNm',
+                    'ØVn': 'kN'
                 }])
             else:
                 # Perform the shear check
                 shear_results = beam.check_shear()
+                flexure_results = beam.check_flexure()
                 # Design results
                 results_dict = {
                     'Beam': beam.label,  # Minimum shear reinforcement area
@@ -175,10 +213,20 @@ class BeamSummary:
                     'h': beam.height.magnitude,  # Provided stirrup reinforcement per unit length
                     'Vu': round(shear_results['Vu'][0].magnitude, 2),  # Max Vu for the design
                     'Nu': round(shear_results['Nu'][0].magnitude, 2),  # Max Nu for the design
+                    'Mu': round(flexure_results['Mu'][0].magnitude, 2),
+                    'As,top': rebar_f_top,  
+                    'As,bot': rebar_f_bot,
+                    'Av': rebar_v, 
+                    'As,req,top': round(beam._A_s_req_top.to('cm ** 2').magnitude,2), 
+                    'As,req,bot': round(beam._A_s_req_bot.to('cm ** 2').magnitude,2),
                     'Av,req': round(shear_results['Av,req'][0].magnitude, 2), # Reinforcement contribution to shear capacity  # noqa: E501
                     'Av,real': round(shear_results['Av'][0].magnitude, 2),  # Reinforcement contribution to shear capacity # noqa: E501
+                    'ØMn,top': round(beam._phi_M_n_top.to('kN*m').magnitude, 2),  # Check if applied shear is within total capacity # noqa: E501
+                    'ØMn,bot': round(beam._phi_M_n_bot.to('kN*m').magnitude, 2),  # Check if applied shear is within total capacity # noqa: E501
                     'ØVn': round(shear_results['ØVn'][0].magnitude, 2),  # Check if applied shear is within total capacity # noqa: E501
-                    'DCRv': round(shear_results['DCR'][0].magnitude,2),  # Check if applied shear is within total capacity # noqa: E501
+                    'DCRb,top': round(beam._DCRb_top,2),  # Check if applied shear is within total capacity # noqa: E501
+                    'DCRb,bot': round(beam._DCRb_bot,2),  # Check if applied shear is within total capacity # noqa: E501
+                    'DCRv': round(shear_results['DCR'][0],2),  # Check if applied shear is within total capacity # noqa: E501
                 }
                 # Create a units row as a DataFrame
                 units_row = pd.DataFrame([{
@@ -187,9 +235,19 @@ class BeamSummary:
                     'h': 'cm',
                     'Vu': 'kN',
                     'Nu': 'kN',
+                    'Mu': 'kNm',
+                    'As,top': '',
+                    'As,bot': '',
+                    'Av': '',
+                    'As,req,top': 'cm²/m',
+                    'As,req,bot': 'cm²/m',
                     'Av,req': 'cm²/m',
                     'Av,real': 'cm²/m',
+                    'ØMn,top': 'kNm',
+                    'ØMn,bot': 'kNm',
                     'ØVn': 'kN',
+                    'DCRb,top': '',
+                    'DCRb,bot': '',
                     'DCRv': '',
                 }])
             # Restore the original forces after capacity check
@@ -263,35 +321,37 @@ class BeamSummary:
 def main() -> None:
     conc = Concrete_ACI_318_19(name="C25", f_c=25*MPa)
     steel = SteelBar(name="ADN 420", f_y=420*MPa)
-    input_df = pd.read_excel(r'.\tests\examples\Mento-Input.xlsx', sheet_name='Beams', usecols='B:R', skiprows=4)
-    # # data = {'Label': ['', 'V101', 'V102', 'V103', 'V104'],
-    #         'b': ['cm', 20, 20, 20, 20],
-    #         'h': ['cm', 50, 50, 50, 50],
-    #         'Nx': ['kN', 0, 0, 0, 50],
-    #         'Vz': ['kN', 20, 50, 100, 100],
-    #         'My': ['kNm', 0, 35, 40, 45],
-    #         'ns': ['', 0, 1.0, 1.0, 1.0],
-    #         'dbs': ['mm', 0, 6, 6, 6],
-    #         'sl': ['cm', 0, 20, 20, 20],
-    #         'n1': ['', 2.0, 2.0, 2.0, 2.0],
-    #         'db1': ['mm', 12, 12, 12, 12],
-    #         'n2': ['', 1.0, 0.0, 1.0, 0.0],
-    #         'db2': ['mm', 10, 0, 10, 0],
-    #         'n3': ['', 2.0, 0.0, 2.0, 0.0],
-    #         'db3': ['mm', 12, 0, 0, 0],
-    #         'n4': ['', 1.0, 0.0, 1.0, 0.0],
-    #         'db4': ['mm', 10, 0, 0, 0]}
-    # input_df = pd.DataFrame(data)
+    # input_df = pd.read_excel(r'.\tests\examples\Mento-Input.xlsx', sheet_name='Beams', usecols='B:R', skiprows=4)
+    data = {'Label': ['', 'V101', 'V102', 'V103', 'V104'],
+            'b': ['cm', 20, 20, 20, 20],
+            'h': ['cm', 50, 50, 50, 50],
+            'Nx': ['kN', 0, 0, 0, 0],
+            'Vz': ['kN', 20, -50, 100, 100],
+            'My': ['kNm', 0, -35, 40, 45],
+            'ns': ['', 0, 1.0, 1.0, 1.0],
+            'dbs': ['mm', 0, 6, 6, 6],
+            'sl': ['cm', 0, 20, 20, 20],
+            'n1': ['', 2.0, 2, 2.0, 2.0],
+            'db1': ['mm', 12, 12, 12, 12],
+            'n2': ['', 1.0, 1, 1.0, 0.0],
+            'db2': ['mm', 10, 16, 10, 0],
+            'n3': ['', 2.0, 0.0, 2.0, 0.0],
+            'db3': ['mm', 12, 0, 16, 0],
+            'n4': ['', 0, 0.0, 0, 0.0],
+            'db4': ['mm', 0, 0, 0, 0]}
+    input_df = pd.DataFrame(data)
     # print(input_df)
     beam_summary = BeamSummary(concrete=conc, steel_bar=steel, beam_list=input_df)
     # print(beam_summary.data)
-    capacity = beam_summary.check(capacity_check=True)
-    print(capacity)
-    check = beam_summary.check()
+    # capacity = beam_summary.check(capacity_check=True)
+    # print(capacity)
+    check = beam_summary.check(capacity_check=False)
+    print(check)
+    check = beam_summary.check(capacity_check=True)
     print(check)
     # beam_summary.check().to_excel('hola.xlsx', index=False)
-    results = beam_summary.shear_results(capacity_check=False)
-    print(results)
+    # results = beam_summary.shear_results(capacity_check=False)
+    # print(results)
     # beam_summary.beams[0].shear_results_detailed()
 
 if __name__ == "__main__":
