@@ -47,7 +47,7 @@ def test_shear_check_EN_1992_2004_rebar_1(beam_example_EN_1992_2004: Rectangular
     assert results.iloc[0]['VRd,s'].magnitude  == pytest.approx(123.924, rel=1e-3)
     assert results.iloc[0]['VRd'].magnitude  == pytest.approx(123.924, rel=1e-3)
     assert results.iloc[0]['VRd,max'].magnitude  == pytest.approx(312.811, rel=1e-3)
-    assert results.iloc[0]["DCR"].magnitude  == pytest.approx(0.8069, rel=1e-3)
+    assert results.iloc[0]["DCR"]  == pytest.approx(0.8069, rel=1e-3)
 
     # Assert non-numeric values directly
     assert results.iloc[0]['VEd,1<VRd,max'] is np.True_
@@ -69,7 +69,7 @@ def test_shear_check_EN_1992_2004_rebar_2(beam_example_EN_1992_2004: Rectangular
     assert results.iloc[0]['VRd,s'].magnitude  == pytest.approx(105.099, rel=1e-3)
     assert results.iloc[0]['VRd'].magnitude  == pytest.approx(105.099, rel=1e-3)
     assert results.iloc[0]['VRd,max'].magnitude  == pytest.approx(350, rel=1e-3)
-    assert results.iloc[0]["DCR"].magnitude  == pytest.approx(3.33, rel=1e-3)
+    assert results.iloc[0]["DCR"]  == pytest.approx(3.33, rel=1e-3)
 
     # Assert non-numeric values directly
     assert results.iloc[0]['VEd,1<VRd,max'] is np.True_
@@ -91,7 +91,7 @@ def test_shear_check_EN_1992_2004_rebar_3(beam_example_EN_1992_2004: Rectangular
     assert results.iloc[0]['VRd,s'].magnitude  == pytest.approx(49.566, rel=1e-3)
     assert results.iloc[0]['VRd'].magnitude  == pytest.approx(49.566, rel=1e-3)
     assert results.iloc[0]['VRd,max'].magnitude  == pytest.approx(453.6, rel=1e-3)
-    assert results.iloc[0]["DCR"].magnitude  == pytest.approx(10.088, rel=1e-3)
+    assert results.iloc[0]["DCR"]  == pytest.approx(10.088, rel=1e-3)
 
     # Assert non-numeric values directly
     assert results.iloc[0]['VEd,1<VRd,max'] is np.False_
@@ -112,7 +112,7 @@ def test_shear_check_EN_1992_2004_no_rebar_1(beam_example_EN_1992_2004: Rectangu
     assert results.iloc[0]['VRd,s'].magnitude  == pytest.approx(0, rel=1e-3)
     assert results.iloc[0]['VRd'].magnitude  == pytest.approx(56.126, rel=1e-3)
     assert results.iloc[0]['VRd,max'].magnitude  == pytest.approx(56.126, rel=1e-3)
-    assert results.iloc[0]["DCR"].magnitude  == pytest.approx(0.5345, rel=1e-3)
+    assert results.iloc[0]["DCR"]  == pytest.approx(0.5345, rel=1e-3)
 
     # Assert non-numeric values directly
     assert results.iloc[0]['VEd,1<VRd,max'] is np.True_
@@ -132,7 +132,7 @@ def test_shear_check_EN_1992_2004_no_rebar_2(beam_example_EN_1992_2004: Rectangu
     assert results.iloc[0]['VRd,s'].magnitude  == pytest.approx(0, rel=1e-3)
     assert results.iloc[0]['VRd'].magnitude  == pytest.approx(39.681, rel=1e-3)
     assert results.iloc[0]['VRd,max'].magnitude  == pytest.approx(39.681, rel=1e-3)
-    assert results.iloc[0]["DCR"].magnitude  == pytest.approx(0.756, rel=1e-3)
+    assert results.iloc[0]["DCR"]  == pytest.approx(0.756, rel=1e-3)
 
     # Assert non-numeric values directly
     assert results.iloc[0]['VEd,1<VRd,max'] is np.True_
@@ -153,7 +153,7 @@ def test_shear_check_EN_1992_2004_no_rebar_3(beam_example_EN_1992_2004: Rectangu
     assert results.iloc[0]['VRd,s'].magnitude  == pytest.approx(0, rel=1e-3)
     assert results.iloc[0]['VRd'].magnitude  == pytest.approx(63.101, rel=1e-3)
     assert results.iloc[0]['VRd,max'].magnitude  == pytest.approx(63.101, rel=1e-3)
-    assert results.iloc[0]["DCR"].magnitude  == pytest.approx(0.4754, rel=1e-3)
+    assert results.iloc[0]["DCR"]  == pytest.approx(0.4754, rel=1e-3)
 
     # Assert non-numeric values directly
     assert results.iloc[0]['VEd,1<VRd,max'] is np.True_
@@ -173,7 +173,7 @@ def test_shear_check_ACI_318_19_1(beam_example_imperial: RectangularBeam) -> Non
     assert results.iloc[0]['ØVs'].magnitude  == pytest.approx(180.956, rel=1e-3)
     assert results.iloc[0]['ØVn'].magnitude  == pytest.approx(239.247, rel=1e-3)
     assert results.iloc[0]['ØVmax'].magnitude  == pytest.approx(291.44, rel=1e-3)
-    assert results.iloc[0]["DCR"].magnitude  == pytest.approx(0.70144, rel=1e-3)
+    assert results.iloc[0]["DCR"]  == pytest.approx(0.70144, rel=1e-3)
 
     # Assert non-numeric values directly
     assert results.iloc[0]['Vu<ØVmax'] is np.True_
@@ -193,7 +193,7 @@ def test_shear_check_ACI_318_19_2(beam_example_imperial: RectangularBeam) -> Non
     assert results.iloc[0]['ØVs'].magnitude  == pytest.approx(180.959, rel=1e-3)
     assert results.iloc[0]['ØVn'].magnitude  == pytest.approx(248.847, rel=1e-3)
     assert results.iloc[0]['ØVmax'].magnitude  == pytest.approx(301.041, rel=1e-3)
-    assert results.iloc[0]["DCR"].magnitude  == pytest.approx(0.6743, rel=1e-3)
+    assert results.iloc[0]["DCR"]  == pytest.approx(0.6743, rel=1e-3)
 
     # Assert non-numeric values directly
     assert results.iloc[0]['Vu<ØVmax'] is np.True_
@@ -212,7 +212,7 @@ def test_shear_check_ACI_318_19_no_rebar_1(beam_example_imperial: RectangularBea
     assert results.iloc[0]['ØVs'].magnitude  == pytest.approx(0, rel=1e-3)
     assert results.iloc[0]['ØVn'].magnitude  == pytest.approx(35.125, rel=1e-3)
     assert results.iloc[0]['ØVmax'].magnitude  == pytest.approx(268.278, rel=1e-3)
-    assert results.iloc[0]["DCR"].magnitude  == pytest.approx(1.013, rel=1e-3)
+    assert results.iloc[0]["DCR"]  == pytest.approx(1.013, rel=1e-3)
 
     # Assert non-numeric values directly
     assert results.iloc[0]['Vu<ØVmax'] is np.True_
@@ -231,7 +231,7 @@ def test_shear_check_ACI_318_19_no_rebar_2(beam_example_imperial: RectangularBea
     assert results.iloc[0]['ØVs'].magnitude  == pytest.approx(0, rel=1e-3)
     assert results.iloc[0]['ØVn'].magnitude  == pytest.approx(58.288, rel=1e-3)
     assert results.iloc[0]['ØVmax'].magnitude  == pytest.approx(291.441, rel=1e-3)
-    assert results.iloc[0]["DCR"].magnitude  == pytest.approx(0.4579, rel=1e-3)
+    assert results.iloc[0]["DCR"]  == pytest.approx(0.4579, rel=1e-3)
 
     # Assert non-numeric values directly
     assert results.iloc[0]['Vu<ØVmax'] is np.True_
@@ -251,7 +251,7 @@ def test_shear_design_ACI_318_19(beam_example_imperial: RectangularBeam) -> None
     assert results.iloc[0]['ØVs'].magnitude  == pytest.approx(122.15, rel=1e-3)
     assert results.iloc[0]['ØVn'].magnitude  == pytest.approx(180.44, rel=1e-3)
     assert results.iloc[0]['ØVmax'].magnitude  == pytest.approx(291.44, rel=1e-3)
-    assert results.iloc[0]["DCR"].magnitude  == pytest.approx(0.93, rel=1e-3)
+    assert results.iloc[0]["DCR"]  == pytest.approx(0.93, rel=1e-3)
 
     # Assert non-numeric values directly
     assert results.iloc[0]['Vu<ØVmax'] is np.True_
