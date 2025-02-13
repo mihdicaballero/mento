@@ -274,7 +274,6 @@ def test_flexural_beam_determine_nominal_moment_simple_reinf_ACI_318_19() -> Non
         width=20 * inch,  
         height=30 * inch,   
     )
-    ''' VAMOS A PEDIR UN MOMENTO NOMINAL QUE CON LA FUNCION PRIVADA'''
     A_s=10.92 * inch**2
     d=27*inch
     result=beam._determine_nominal_moment_simple_reinf_ACI_318_19(A_s,d)
@@ -303,6 +302,29 @@ def test_flexural_beam_determine_nominal_moment_double_reinf_ACI_318_19() -> Non
     A_s_prime=1.8*inch**2
     result=beam._determine_nominal_moment_double_reinf_ACI_318_19(A_s, d, d_prime, A_s_prime)
     assert result.to(kip*ft).magnitude  == pytest.approx(639.12, rel=1e-2)
+
+
+
+def test_design_flexure_ACI_318_19_1(beam_example_imperial: RectangularBeam) -> None:
+    f = Forces(M_y=10*kip*ft)
+    Node(section=beam_example_imperial, forces=f)
+    results = beam_example_imperial.design_flexure()  
+
+    # Compare dictionaries with a tolerance for floating-point values, in m 
+    assert results.iloc[0]['Av,min'].magnitude  == pytest.approx(2.117, rel=1e-3)
+    assert results.iloc[0]['Av,req'].magnitude  == pytest.approx(10.06, rel=1e-3)
+    assert results.iloc[0]['Av'].magnitude  == pytest.approx(11.22, rel=1e-3)
+    assert results.iloc[0]['ØVc'].magnitude  == pytest.approx(58.29, rel=1e-3)
+    assert results.iloc[0]['ØVs'].magnitude  == pytest.approx(122.15, rel=1e-3)
+    assert results.iloc[0]['ØVn'].magnitude  == pytest.approx(180.44, rel=1e-3)
+    assert results.iloc[0]['ØVmax'].magnitude  == pytest.approx(291.44, rel=1e-3)
+    assert results.iloc[0]["DCR"].magnitude  == pytest.approx(0.93, rel=1e-3)
+
+
+
+
+
+
 
 
 # This is where pytest will collect the tests and run them
