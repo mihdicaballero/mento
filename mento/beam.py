@@ -126,6 +126,13 @@ class RectangularBeam(RectangularSection):
             self._V_Rd_max: PlainQuantity = 0*kN
             self._k_value: float = 0
 
+    def _update_longitudinal_rebar_attributes(self) -> None:
+        """Recalculate attributes dependent on rebar configuration for both top and bottom reinforcing."""
+        self._calculate_longitudinal_rebar_area()
+        self._calculate_long_rebar_centroid()
+        self._calculate_min_clear_spacing()
+        self._update_effective_heights()
+
     def _update_effective_heights(self) -> None:
         """Update effective heights and depths for moment and shear calculations."""
         self._c_mec_bot = self.c_c + self._stirrup_d_b + self._bot_rebar_centroid
@@ -135,12 +142,6 @@ class RectangularBeam(RectangularSection):
         # Use bottom or top effective height
         self._d_shear = min(self._d_bot, self._d_top)
         print(self._d_shear)
-
-    def _update_longitudinal_rebar_attributes(self) -> None:
-        """Recalculate attributes dependent on rebar configuration for both top and bottom reinforcing."""
-        self._calculate_longitudinal_rebar_area()
-        self._calculate_min_clear_spacing()
-        self._update_effective_heights()
 
     def set_transverse_rebar(self, n_stirrups: int = 0, d_b:PlainQuantity = 0*mm, s_l:PlainQuantity = 0*cm) -> None:
         """Sets the transverse rebar in the beam section."""
@@ -290,7 +291,7 @@ class RectangularBeam(RectangularSection):
             return 0*mm  # Avoid division by zero if no bars are present
 
         self._top_rebar_centroid = (area_1_t * y1_t + area_2_t * y2_t + area_3_t * y3_t + area_4_t * y4_t) / total_area_t
-        
+
     def __calculate_phi_ACI_318_19(self, epsilon_most_strained: float) -> float:
         """
         Calculates the strength reduction factor (φ) for flexural design 
@@ -2318,6 +2319,7 @@ def shear_ACI_imperial() -> None:
     # f2 = Forces(label='L', V_z=6*kip) # No shear reinforcing
     Node(section=beam, forces=[f1])
     beam.set_transverse_rebar(n_stirrups=1, d_b=0.5*inch, s_l=6*inch)
+
     # beam.set_longitudinal_rebar_bot(n1=2, d_b1=0.625*inch)
     print(beam._A_v)
     results = beam.check_shear()

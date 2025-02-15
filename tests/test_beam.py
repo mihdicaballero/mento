@@ -35,7 +35,8 @@ def test_shear_check_EN_1992_2004_rebar_1(beam_example_EN_1992_2004: Rectangular
     f = Forces(V_z=100*kN)
     beam_example_EN_1992_2004.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=25*cm) 
     beam_example_EN_1992_2004.set_longitudinal_rebar_bot(n1=4, d_b1=16*mm)
-    results = beam_example_EN_1992_2004.check_shear_EN_1992_2004(f)  
+    Node(section=beam_example_EN_1992_2004, forces=f)
+    results = beam_example_EN_1992_2004.check_shear()  
 
     # Compare dictionaries with a tolerance for floating-point values, in m 
     assert results.iloc[0]['Av,min'].magnitude  == pytest.approx(1.6, rel=1e-3)
@@ -57,7 +58,8 @@ def test_shear_check_EN_1992_2004_rebar_2(beam_example_EN_1992_2004: Rectangular
     f = Forces(V_z=350*kN)
     beam_example_EN_1992_2004.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=25*cm)
     beam_example_EN_1992_2004.set_longitudinal_rebar_bot(n1=4, d_b1=16*mm)
-    results = beam_example_EN_1992_2004.check_shear_EN_1992_2004(f)  
+    Node(section=beam_example_EN_1992_2004, forces=f)
+    results = beam_example_EN_1992_2004.check_shear()  
 
     # Compare dictionaries with a tolerance for floating-point values, in m 
     assert results.iloc[0]['Av,min'].magnitude  == pytest.approx(1.6, rel=1e-3)
@@ -79,7 +81,8 @@ def test_shear_check_EN_1992_2004_rebar_3(beam_example_EN_1992_2004: Rectangular
     f = Forces(V_z=500*kN)
     beam_example_EN_1992_2004.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=25*cm)
     beam_example_EN_1992_2004.set_longitudinal_rebar_bot(n1=4, d_b1=16*mm)
-    results = beam_example_EN_1992_2004.check_shear_EN_1992_2004(f)  
+    Node(section=beam_example_EN_1992_2004, forces=f)
+    results = beam_example_EN_1992_2004.check_shear()  
 
     # Compare dictionaries with a tolerance for floating-point values, in m 
     assert results.iloc[0]['Av,min'].magnitude  == pytest.approx(1.6, rel=1e-3)
@@ -100,7 +103,8 @@ def test_shear_check_EN_1992_2004_rebar_3(beam_example_EN_1992_2004: Rectangular
 def test_shear_check_EN_1992_2004_no_rebar_1(beam_example_EN_1992_2004: RectangularBeam) -> None:
     f = Forces(V_z=30*kN)
     beam_example_EN_1992_2004.set_longitudinal_rebar_bot(n1=4, d_b1=16*mm)
-    results = beam_example_EN_1992_2004.check_shear_EN_1992_2004(f)  
+    Node(section=beam_example_EN_1992_2004, forces=f)
+    results = beam_example_EN_1992_2004.check_shear()  
 
     # Compare dictionaries with a tolerance for floating-point values, in m 
     assert results.iloc[0]['Av,min'].magnitude  == pytest.approx(1.6, rel=1e-3)
@@ -120,7 +124,8 @@ def test_shear_check_EN_1992_2004_no_rebar_1(beam_example_EN_1992_2004: Rectangu
 
 def test_shear_check_EN_1992_2004_no_rebar_2(beam_example_EN_1992_2004: RectangularBeam) -> None:
     f = Forces(V_z=30*kN)
-    results = beam_example_EN_1992_2004.check_shear_EN_1992_2004(f)  
+    Node(section=beam_example_EN_1992_2004, forces=f)
+    results = beam_example_EN_1992_2004.check_shear()  
 
     # Compare dictionaries with a tolerance for floating-point values, in m 
     assert results.iloc[0]['Av,min'].magnitude  == pytest.approx(1.6, rel=1e-3)
@@ -141,7 +146,8 @@ def test_shear_check_EN_1992_2004_no_rebar_2(beam_example_EN_1992_2004: Rectangu
 def test_shear_check_EN_1992_2004_no_rebar_3(beam_example_EN_1992_2004: RectangularBeam) -> None:
     f = Forces(N_x=50*kN, V_z=30*kN)
     beam_example_EN_1992_2004.set_longitudinal_rebar_bot(n1=4, d_b1=16*mm)
-    results = beam_example_EN_1992_2004.check_shear_EN_1992_2004(f)  
+    Node(section=beam_example_EN_1992_2004, forces=f)
+    results = beam_example_EN_1992_2004.check_shear()  
 
     # Compare dictionaries with a tolerance for floating-point values, in m 
     assert results.iloc[0]['Av,min'].magnitude  == pytest.approx(1.6, rel=1e-3)
@@ -202,7 +208,8 @@ def test_shear_check_ACI_318_19_2(beam_example_imperial: RectangularBeam) -> Non
 def test_shear_check_ACI_318_19_no_rebar_1(beam_example_imperial: RectangularBeam) -> None:
     f = Forces(V_z=8*kip, N_x = 0*kip)  
     beam_example_imperial.set_longitudinal_rebar_bot(n1=2, d_b1=0.625*inch)
-    results = beam_example_imperial.check_shear_ACI_318_19(f)  
+    Node(section=beam_example_imperial, forces=f)
+    results = beam_example_imperial.check_shear()  
 
     # Compare dictionaries with a tolerance for floating-point values, in m 
     assert results.iloc[0]['Av,min'].magnitude  == pytest.approx(2.117, rel=1e-3)
@@ -221,7 +228,8 @@ def test_shear_check_ACI_318_19_no_rebar_1(beam_example_imperial: RectangularBea
 def test_shear_check_ACI_318_19_no_rebar_2(beam_example_imperial: RectangularBeam) -> None:
     f = Forces(V_z=6*kip, N_x = 0*kip)  
     beam_example_imperial.set_longitudinal_rebar_bot(n1=2, d_b1=0.625*inch)
-    results = beam_example_imperial.check_shear_ACI_318_19(f)  
+    Node(section=beam_example_imperial, forces=f)
+    results = beam_example_imperial.check_shear()  
 
     # Compare dictionaries with a tolerance for floating-point values, in m 
     assert results.iloc[0]['Av,min'].magnitude  == pytest.approx(0, rel=1e-3)
