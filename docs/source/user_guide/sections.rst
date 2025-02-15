@@ -1,14 +1,17 @@
 Sections
 ==============================
 
-The `mento` package provides a structured way to model structural sections. This documentation focuses on the foundational `Section` class and its specialized subclass `RectangularSection`.
+The `mento` package provides a structured way to model structural sections. This documentation focuses on
+the foundational `Section` class and its specialized subclass `RectangularSection`.
 
-These classes represent the geometric and material properties of structural elements, forming the basis for specific implementations like beams and columns.
+These classes represent the geometric and material properties of structural elements, forming the basis
+for specific implementations like beams and columns.
 
 Section
 -------
 
-The `Section` class serves as the base class for all structural sections. It includes core attributes and methods for managing materials, settings, and unique identification for each section.
+The `Section` class serves as the base class for all structural sections. It includes core attributes
+and methods for managing materials, settings, and unique identification for each section.
 
 **Key Attributes:**
 
@@ -29,7 +32,8 @@ The `Section` class serves as the base class for all structural sections. It inc
 RectangularSection
 ------------------
 
-The `RectangularSection` class extends `Section` to represent rectangular-shaped structural elements, such as beams or columns. It adds specific geometric properties and methods relevant to rectangular sections.
+The `RectangularSection` class extends `Section` to represent rectangular-shaped structural elements, such
+as beams or columns. It adds specific geometric properties and methods relevant to rectangular sections.
 
 **Key Attributes:**
 
@@ -47,9 +51,11 @@ Usage Notes
 -----------
 
 - **Settings Initialization**: 
-  The `Section` class uses default settings unless explicitly updated. Ensure that any custom settings are provided as a dictionary during initialization or by calling `update_settings`.
-- **Section and RectangualrSection Usage**:
-  Since these are base classes, you won't be using them to create objects per se but to access its atrributes which other classes inherit, like RectangularBeam, RectangularColumn or CircularColumn.
+  The `Section` class uses default settings unless explicitly updated. Ensure that any custom settings are 
+  provided as a dictionary during initialization or by calling `update_settings`.
+- **Section and RectangularSection Usage**:
+  Since these are base classes, you won't be using them to create objects per se but to access its atrributes
+  which other classes inherit, like RectangularBeam, RectangularColumn or CircularColumn.
 
 
 Future Extensions

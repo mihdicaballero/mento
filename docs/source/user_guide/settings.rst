@@ -1,4 +1,4 @@
-Settings Class
+Settings
 ==============
 
 The `Settings` class is used to define and manage configuration options
@@ -34,14 +34,32 @@ Usage Scenarios
    These settings are suitable for common design cases and ensure
    calculations can proceed without requiring additional input from the user.
 
-   **Default settings include**:
+   Defaut settings change based on the metric system selected.
 
+   **Default settings for metric system include**:
    * Clear cover: 25 mm
    * Clear spacing: 20 mm
    * Stirrup diameter: 8 mm
-   * Longitudinal bar diameter: 16 mm
+   * Minimum longitudinal bar diameter: 8 mm
    * Vibrator size: 30 mm
    * Layers spacing: 25 mm
+   * Maximum diameter difference: 5 mm
+   * Maximum bars per layer: 5
+
+   **Default settings for imperial system include**:
+   * Clear cover: 1 inch
+   * Clear spacing: 1 inch
+   * Stirrup diameter: 3/8 inch
+   * Minimum longitudinal bar diameter: 3/8 inch
+   * Vibrator size: 1.25 inch
+   * Layers spacing: 1 inch
+   * Maximum diameter difference: 2/8 inch
+   * Maximum bars per layer: 5
+
+.. note::
+    The default values are used to calculate effective heights when designing a concrete section,
+    before knowing which diameters bars will be final. Also for designing user-tailored rebar layouts in beams.   
+
 
 2. **Customizing Settings**:
 
@@ -118,6 +136,7 @@ Attributes
   as clear cover, spacing, stirrup diameter, etc.
 - **aci_318_19_settings**: Contains ACI 318-19 specific settings
   (e.g., reduction factors, minimum reinforcement considerations).
+  **en_1992_2004_settings**: Contains EN 1992-1-1:2004 specific settings.
 - **settings**: Current instance settings, which can be a mix of
   defaults and user-defined values.
 
@@ -125,6 +144,7 @@ Methods
 -------
 
 - **load_aci_318_19_settings()**: Loads the ACI 318-19 design settings.
+- **load_en_1992_2004_settings()**: Loads the EN 1992-1-1:2004 design settings.
 - **get_setting(key)**: Retrieves the value of a specific setting.
 - **set_setting(key, value)**: Sets the value of a specific setting.
 - **add_settings(new_settings)**: Adds or updates multiple settings at once.

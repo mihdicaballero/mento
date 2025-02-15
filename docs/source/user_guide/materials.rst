@@ -1,4 +1,4 @@
-Materials in Mento
+Materials
 ===================
 
 The `mento` package offers a wide range of material models,
@@ -17,6 +17,7 @@ types, each compliant with different design codes:
 * **Concrete_ACI_318_19**: Complies with the American Concrete
   Institute (ACI) 318-19 design code.
 * **Concrete_EN_1992_2004**: Complies with the Eurocode 2 (EN 1992) design code.
+* **Concrete_CIRSOC_201_25**: Complies with the CIRSOC 201-25 design code.
 
 .. note::
    Create a material considering the design code that you want to use. The method for checking or designing elements won't change it's name. So just change the code and you are done.
@@ -25,7 +26,7 @@ types, each compliant with different design codes:
 Concrete properties depend in the design code selected. For example:
 
 * **Compressive strength (f_c)**: The characteristic strength of
-  concrete in compression for ACI.
+  concrete in compression for ACI, in MPa or psi units.
 * **Density**: Concrete density (typically around 2500 kg/m³) for
   every code.
 * **Elastic Modulus (E_c or E_cm)**: Secant modulus of elasticity
@@ -34,6 +35,9 @@ Concrete properties depend in the design code selected. For example:
   calculated as per the design code ACI or EC2.
 * **Beta_1**: A factor for the equivalent rectangular stress block,
   specific to ACI.
+
+.. note::
+   The metric system of units or imperial system of units will be automatically set based on the unit for the concrete strength. 
 
 Example: Creating ACI Concrete
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -72,7 +76,7 @@ To create reinforcing steel with a yield strength of 420 MPa:
 
     from mento import SteelBar, MPa
 
-    steel_bar = SteelBar(name="ADN 500", f_y=420 * MPa)
+    steel_bar = SteelBar(name="ADN 420", f_y=420 * MPa)
     print(steel_bar)
 
 Accessing Material Properties
@@ -97,5 +101,4 @@ To get started with the materials in `mento`, simply import
 the material class, create an instance, and access its properties.
 Make sure to select the correct design code for your project.
 
-For more details, consult the relevant structural design codes
-(ACI 318, Eurocode 2, EHE-08).
+For more details, consult the relevant structural design codes.

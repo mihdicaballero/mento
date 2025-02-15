@@ -263,7 +263,6 @@ class RectangularBeam(RectangularSection):
         area_2_b = self._n2_b * self._d_b2_b**2*np.pi/4
         area_3_b = self._n3_b * self._d_b3_b**2*np.pi/4
         area_4_b = self._n4_b * self._d_b4_b**2*np.pi/4
-        debug(self._n1_b)
 
         # Calculate the centroid as a weighted average
         total_area_b = area_1_b + area_2_b + area_3_b + area_4_b
@@ -2200,9 +2199,6 @@ def flexure_design_test() -> None:
     f3 = Forces(label='C1', M_y=0.94*kNm)
     f4 = Forces(label='C2', M_y=1.35*kNm)
     f5 = Forces(label='C3', M_y=-1.00*kNm)
-    Node(section=beam, forces=[f1, f2, f3, f4, f5])
-    #TODO DEFINIR LA SUMA DE CARGAS, QUE ENTIENDA QUE SI UNO LE DICE f1+f2 ES SUMAR LOS VALORES DE LAS SOLICITACIONES
-
     Node(section=beam, forces=[f1, f2, f3, f4, f5])
     results=beam.design_flexure()
     print(beam.flexure_design_results_bot,'\n', beam.flexure_design_results_top)
