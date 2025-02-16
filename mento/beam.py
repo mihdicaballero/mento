@@ -290,13 +290,7 @@ class RectangularBeam(RectangularSection):
 
         self._top_rebar_centroid = (area_1_t * y1_t + area_2_t * y2_t + area_3_t * y3_t + area_4_t * y4_t) / total_area_t
         
-
-
-        
-
-
-
-    def __calculate_phi_ACI_318_19(self, epsilon_most_strained: float) -> float:
+    def _calculate_phi_ACI_318_19(self, epsilon_most_strained: float) -> float:
         """
         Calculates the strength reduction factor (φ) for flexural design 
         based on ACI 318-19.
@@ -330,7 +324,7 @@ class RectangularBeam(RectangularSection):
         else:
             return 0.9
 
-    def __maximum_flexural_reinforcement_ratio_ACI_318_19(self) -> float:
+    def _maximum_flexural_reinforcement_ratio_ACI_318_19(self) -> float:
         """
         Calculates the maximum flexural reinforcement ratio (ρ_max) according to the 
         ACI 318-19 design code.
@@ -373,7 +367,7 @@ class RectangularBeam(RectangularSection):
 
         return rho_max
 
-    def __minimum_flexural_reinforcement_ratio_ACI_318_19(self, M_u:PlainQuantity) -> PlainQuantity:
+    def _minimum_flexural_reinforcement_ratio_ACI_318_19(self, M_u:PlainQuantity) -> PlainQuantity:
         """
         Calculates the minimum flexural reinforcement ratio according to ACI 318-19 
         provisions based on the factored moment, M_u.
@@ -426,7 +420,7 @@ class RectangularBeam(RectangularSection):
                     (200 * psi / self.steel_bar.f_y))
         return minimum_ratio
 
-    def __calculate_flexural_reinforcement_ACI_318_19(self, M_u: PlainQuantity, d: float, d_prima: float)-> tuple[PlainQuantity, PlainQuantity, PlainQuantity, PlainQuantity, float]:
+    def _calculate_flexural_reinforcement_ACI_318_19(self, M_u: PlainQuantity, d: float, d_prima: float)-> tuple[PlainQuantity, PlainQuantity, PlainQuantity, PlainQuantity, float]:
         """
         Calculates the flexural reinforcement (bottom tensile and top compression, if required) 
         for a given factored moment.
@@ -456,10 +450,10 @@ class RectangularBeam(RectangularSection):
 
         Example:
             # For a positive moment:
-            A_s_min, A_s_max, A_s_final, A_s_comp = self.__calculate_flexural_reinforcement(M_u_max, d, d_prima)
+            A_s_min, A_s_max, A_s_final, A_s_comp = self._calculate_flexural_reinforcement(M_u_max, d, d_prima)
                 
             # For a negative moment:
-            A_s_min, A_s_max, A_s_final, A_s_comp = self.__calculate_flexural_reinforcement(abs(M_u_min), d_prima, d)
+            A_s_min, A_s_max, A_s_final, A_s_comp = self._calculate_flexural_reinforcement(abs(M_u_min), d_prima, d)
 
         """
         # Extract relevant properties from self
@@ -471,9 +465,9 @@ class RectangularBeam(RectangularSection):
         self.phi_t = self.settings.get_setting('phi_t')
 
         # Determine minimum and maximum reinforcement
-        rho_min=self.__minimum_flexural_reinforcement_ratio_ACI_318_19(M_u)
+        rho_min=self._minimum_flexural_reinforcement_ratio_ACI_318_19(M_u)
         A_s_min = rho_min * d * b
-        rho_max = self.__maximum_flexural_reinforcement_ratio_ACI_318_19()
+        rho_max = self._maximum_flexural_reinforcement_ratio_ACI_318_19()
         A_s_max = rho_max * d * b
 
         # Calculate required reinforcement
@@ -592,8 +586,8 @@ class RectangularBeam(RectangularSection):
         self.phi_t = self.settings.get_setting('phi_t')
 
         # Minimum reinforcement ratio
-        rho_min = self.__minimum_flexural_reinforcement_ratio_ACI_318_19(force._M_y)
-        rho_max = self.__maximum_flexural_reinforcement_ratio_ACI_318_19()
+        rho_min = self._minimum_flexural_reinforcement_ratio_ACI_318_19(force._M_y)
+        rho_max = self._maximum_flexural_reinforcement_ratio_ACI_318_19()
         if force._M_y > 0*kNm:
             rho_min_top = 0*dimensionless
             rho_min_bot = rho_min
@@ -644,12 +638,12 @@ class RectangularBeam(RectangularSection):
 
 
         if self._M_u>=0:
-            self._A_s_min_bot, self._A_s_max_bot, self._A_s_req_bot, self._A_s_req_top, self._c_d_bot = self.__calculate_flexural_reinforcement_ACI_318_19(self._M_u_bot, self._d_bot, self._c_mec_top)
+            self._A_s_min_bot, self._A_s_max_bot, self._A_s_req_bot, self._A_s_req_top, self._c_d_bot = self._calculate_flexural_reinforcement_ACI_318_19(self._M_u_bot, self._d_bot, self._c_mec_top)
             self._c_d_top = 0
             self._DCRb_bot = self._M_u_bot.to('kN*m').magnitude / self._phi_M_n_bot.to('kN*m').magnitude
             self._DCRb_top = 0
         else:
-            self._A_s_min_top, self._A_s_max_top, self._A_s_req_top, self._A_s_req_bot, self._c_d_top = self.__calculate_flexural_reinforcement_ACI_318_19(abs(self._M_u_top), self._d_top, self._c_mec_bot)
+            self._A_s_min_top, self._A_s_max_top, self._A_s_req_top, self._A_s_req_bot, self._c_d_top = self._calculate_flexural_reinforcement_ACI_318_19(abs(self._M_u_top), self._d_top, self._c_mec_bot)
             self._c_d_bot = 0
             self._DCRb_top = -self._M_u_top.to('kN*m').magnitude / self._phi_M_n_top.to('kN*m').magnitude
             self._DCRb_bot = 0
@@ -717,7 +711,7 @@ class RectangularBeam(RectangularSection):
                 A_s_final_bot_Positive_M,
                 A_s_comp_top,
                 self._c_d_bot
-            ) = self.__calculate_flexural_reinforcement_ACI_318_19(M_y_positive, d, d_prima)
+            ) = self._calculate_flexural_reinforcement_ACI_318_19(M_y_positive, d, d_prima)
 
             # Initialize bottom and top reinforcement
             self._A_s_bot = A_s_final_bot_Positive_M
@@ -730,7 +724,7 @@ class RectangularBeam(RectangularSection):
                     A_s_final_top_Negative_M,
                     A_s_comp_bot,
                     self._c_d_top
-                ) = self.__calculate_flexural_reinforcement_ACI_318_19(abs(M_y_negative), self.height-d_prima, rec_mec)
+                ) = self._calculate_flexural_reinforcement_ACI_318_19(abs(M_y_negative), self.height-d_prima, rec_mec)
 
 
                 # Adjust reinforcement areas based on positive and negative moments
@@ -908,7 +902,7 @@ class RectangularBeam(RectangularSection):
         self._max_dcr_bot = max_dcr_bot
         
         # Mark shear as checked
-        self._flexure_checked = True  
+        self._flexure_checked = True
         return all_results
 
     def _calculate_shear_reinforcement_aci(self) -> None:
@@ -2217,7 +2211,7 @@ def flexure_design_test() -> None:
     print(beam.check_flexure())
 
 def flexure_check_test() -> None:
-    # clear_console()
+    clear_console()
     concrete = Concrete_ACI_318_19(name="H-25",f_c=25*MPa) 
     steelBar = SteelBar(name="420", f_y=420*MPa) 
 
