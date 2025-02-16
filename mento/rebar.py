@@ -53,14 +53,20 @@ class Rebar:
 
         Returns:
             A DataFrame containing the best combinations of rebar details.
+            If no combination satisfies A_s_req, returns the combination with the maximum possible area.
         """
         self.A_s_req = A_s_req
         effective_width = self.beam.width - 2 * (self.beam.c_c + self.beam._stirrup_d_b)
 
         # Variables to track the combinations
         valid_combinations = []
+        best_fallback_combination = None  # To store the best fallback design
+        max_fallback_area = 0 * cm**2  # To track the maximum area in fallback cases
         # Create a list of rebar diameters that are equal to or greater than the minimum diameter
-        self.min_long_rebar = 10*mm
+        if self.beam.concrete.unit_system == "metric":
+            self.min_long_rebar = 10*mm
+        else: 
+            self.min_long_rebar = 3*inch/8
         valid_rebar_diameters = [d for d in self.rebar_diameters if d >= self.min_long_rebar]
 
         for d_b1 in valid_rebar_diameters: # Without taking Ø6 as a possible solution
@@ -120,6 +126,23 @@ class Rebar:
                                         'total_bars': total_bars,
                                         'clear_spacing': self._clear_spacing.to('mm')
                                     })
+                                else:
+                                    # Track the combination with the maximum possible area (fallback)
+                                    if A_s_layer_1 > max_fallback_area:
+                                        max_fallback_area = A_s_layer_1
+                                        best_fallback_combination = {
+                                            'n_1': n1,
+                                            'd_b1': d_b1,
+                                            'n_2': n2,
+                                            'd_b2': d_b2 if n2 > 0 else None,
+                                            'n_3': 0,
+                                            'd_b3': None,
+                                            'n_4': 0,
+                                            'd_b4': None,
+                                            'total_as': A_s_layer_1.to('cm**2'),
+                                            'total_bars': n1 + n2,
+                                            'clear_spacing': self._clear_spacing.to('mm')
+                                        }
 
                                 # Now check combinations where bars are added in layer 2 (n3 and n4)
                                 for n3 in [0, 2]:  # n3 can be 0 or fixed at 2 if present
@@ -162,12 +185,31 @@ class Rebar:
                                                 'total_bars': total_bars,
                                                 'clear_spacing': self._clear_spacing.to('mm')
                                             })
+                                        else:
+                                            # Track the combination with the maximum possible area (fallback)
+                                            if total_as > max_fallback_area:
+                                                max_fallback_area = total_as
+                                                best_fallback_combination = {
+                                                    'n_1': n1,
+                                                    'd_b1': d_b1,
+                                                    'n_2': n2,
+                                                    'd_b2': d_b2 if n2 > 0 else None,
+                                                    'n_3': n3,
+                                                    'd_b3': d_b3 if n3 > 0 else None,
+                                                    'n_4': n4,
+                                                    'd_b4': d_b4 if n4 > 0 else None,
+                                                    'total_as': total_as.to('cm**2'),
+                                                    'total_bars': n1 + n2 + n3 + n4,
+                                                    'clear_spacing': self._clear_spacing.to('mm')
+                                                }
 
         # Convert valid combinations to DataFrame
         df = pd.DataFrame(valid_combinations)
         # Drop duplicate rows based on the specified columns
         df = df.drop_duplicates(subset=['n_1', 'd_b1', 'n_2', 'd_b2', 'n_3', 'd_b3', 'n_4', 'd_b4'])
-        print(df)
+        # If no valid combinations satisfy A_s_req, use the best fallback combination
+        if df.empty and best_fallback_combination is not None:
+            df = pd.DataFrame([best_fallback_combination])
 
         # Sort by 'total_as' first, then by 'total_bars' to prioritize fewer bars
         df.sort_values(by=['total_bars', 'total_as'], inplace=True)
@@ -368,7 +410,7 @@ class Rebar:
         """
         Selects the appropriate longitudinal rebar method based on the design code.
         """
-        if self.beam.concrete.design_code=="ACI 318-19":
+        if self.beam.concrete.design_code=="ACI 318-19" or self.beam.concrete.design_code=="CIRSOC 201-25":
             return self.longitudinal_rebar_ACI_318_19(A_s_req)
         # elif self.beam.concrete.design_code=="EN 1992":
         #     return self.beam_longitudinal_rebar_EN_1992(A_s_req)
