@@ -1,23 +1,23 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "StructureLab"
-version = "0.1.0"
+name = "mento"
+version = "0.0.1"
 description = "A package for structural engineering analysis"
 readme = "README.md"
 authors = [
     {name = "Mihdí Caballero", email = "mihdicaballero@gmail.com"},
     {name = "Juan Pablo Romaris", email="jpromaris@yahoo.com.ar"}
 ]
-license = {text = "GPL-3.0"}
+license = {text = "MIT"}
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
-dynamic = ["readme", "dependencies"]
+dynamic = ["dependencies"]
 requires-python = ">=3.10"
 keywords = [
     "concrete design",
@@ -29,13 +29,11 @@ keywords = [
 "Homepage" = "https://github.com/mihdicaballero/StructureLab"
 
 [tool.setuptools]
-packages = ["find_namespace:structurelab"]
-# Add any additional packages if necessary
+packages = ["mento"]
 
 [tool.setuptools.dynamic]
-version = { attr = "structurelab._version.__version__" }
-readme = { file = "README.md", content-type = "text/markdown" }
 dependencies = { file = "requirements.txt" }
+
 
 [tool.pylint]
 disable = [
@@ -45,8 +43,15 @@ disable = [
 ]
 max-line-length = 120
 
+[tool.ruff]
+extend-select = ["C4", "SIM", "TCH"]
+extend-exclude = ["build/", "dist/"]
+ignore = []
+show-fixes = true
+line-length = 120
+
 [tool.mypy]
-packages = ["structurelab"]
+packages = ["mento"]
 python_version = "3.10"
 strict = true
 allow_any_generics = true

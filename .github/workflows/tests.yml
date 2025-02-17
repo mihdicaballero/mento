@@ -1,0 +1,59 @@
+name: Tests
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  tests:
+    name: ${{ matrix.session }} ${{ matrix.python }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { python: "3.12", os: "ubuntu-latest", session: "tests" }
+          - { python: "3.11", os: "ubuntu-latest", session: "tests" }
+          - { python: "3.10", os: "ubuntu-latest", session: "tests" }
+          - { python: "3.12", os: "windows-latest", session: "tests" }
+          - { python: "3.11", os: "windows-latest", session: "tests" }
+          - { python: "3.10", os: "windows-latest", session: "tests" }
+          - { python: "3.12", os: "macos-latest", session: "tests" }
+          - { python: "3.11", os: "macos-latest", session: "tests" }
+          - { python: "3.10", os: "macos-latest", session: "tests" }
+          - { python: "3.12", os: "macos-13", session: "tests" }
+          - { python: "3.11", os: "macos-13", session: "tests" }
+          - { python: "3.10", os: "macos-13", session: "tests" }
+
+    env:
+      NOXSESSION: ${{ matrix.session }}
+      FORCE_COLOR: "1"
+      PRE_COMMIT_COLOR: "always"
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest pytest-cov
+          if [ -f requirements.txt ]; then pip install -r requirements_dev.txt; fi
+        shell: bash
+
+      - name: Run tests
+        if: matrix.session == 'tests'
+        run: pytest --cov --cov-report=xml
+        shell: bash
+      
+      - name: Upload results to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}

@@ -1,7 +1,10 @@
+devtools
+ruff
 pint
+pytest
 pandas
 IPython
-ipykernel
+mypy
 tabulate
 python-docx
 jinja2

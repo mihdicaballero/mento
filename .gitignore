@@ -1,3 +1,95 @@
+# Python bytecode files
 __pycache__/
 *.py[cod]
+*$py.class
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# LinkedIn video folders
+videos/
+
+# Virtual environment folders
+.venv/
+env/
+ENV/
+venv/
+.virtualenv/
+
+# Python egg metadata
+*.egg-info/
+*.egg
+.eggs/
+
+# macOS specific files
 .DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows specific files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# PyTest cache
+.pytest_cache/
+
+#mypy cache
+.mypy_cache
+
+#ruff cache
+.ruff_cache
+
+# Coverage reports
+htmlcov/
+.coverage
+.cache
+
+# Logs and databases
+*.log
+*.sqlite3
+*.db
+
+# IDE settings
+.vscode/
+.idea/
+
+# Package manager lock files
+Pipfile.lock
+poetry.lock
+
+# Build directories and distribution
+build/
+dist/
+*.deb
+*.rpm
+*.tar.gz
+*.whl
+
+# Documentation files
+*.pdf
+# *.docx
+
+# Editor and OS swap/backup files
+*~
+*.swp
+*.swo
+*.bak
+*.tmp
+*.orig
+
+# Ignore npm or yarn (in case you have front-end)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Ignore environment variable file (often used for secrets)
+.env
+
+# Ignore static files in case of web development
+static/
+
+# Ignore compiled C extensions
+*.so
+*.dylib
+*.dll
