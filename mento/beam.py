@@ -257,7 +257,6 @@ class RectangularBeam(RectangularSection):
         y2_b = self._d_b2_b / 2
         y3_b = max(self._d_b1_b, self._d_b2_b) + self.layers_spacing + self._d_b3_b / 2
         y4_b = max(self._d_b1_b, self._d_b2_b) + self.layers_spacing + self._d_b4_b / 2
-
         # Calculate the total area of each layer
         area_1_b = self._n1_b * self._d_b1_b**2*np.pi/4  # Area proportional to number of bars and their diameter
         area_2_b = self._n2_b * self._d_b2_b**2*np.pi/4
@@ -503,13 +502,22 @@ class RectangularBeam(RectangularSection):
         if A_s_final <= A_s_max:
             A_s_comp = 0 * cm**2
         else:
-            rho = 0.85 * beta_1 * self.concrete.f_c / self.steel_bar.f_y * (0.003 / (self.steel_bar.epsilon_y + 0.006))
+            rho = 0.85 * beta_1 * self.concrete.f_c.to(psi).magnitude / self.steel_bar.f_y.to(psi).magnitude * (0.003 / (self.steel_bar.epsilon_y + 0.006))
+            debug(rho)
+            debug(self.steel_bar.f_y.to(ksi))
+            debug(d.to(inch))
             M_n_t = rho * self.steel_bar.f_y * (d - 0.59 * rho * self.steel_bar.f_y * d / self.concrete.f_c) * b * d
+            debug(M_n_t.to(kip*ft))
             M_n_prima = M_u / self.phi_t - M_n_t
+            debug(M_n_prima.to(kip*ft))
             c_t = 0.003 * d / (self.steel_bar.epsilon_y + 0.006)
+            debug(c_t.to(inch))
             f_s_prima = min(0.003 * self.steel_bar.E_s * (1 - d_prima / c_t), self.steel_bar.f_y)
+            debug(f_s_prima.to(MPa))
             A_s_comp = M_n_prima / (f_s_prima * (d - d_prima))
+            debug(A_s_comp.to(cm**2))
             A_s_final = rho * b * d + A_s_comp
+            debug(A_s_final.to(cm**2))
         
         if sqrt_value < 0:
             # Si estamos en el caso en el que fallo la cuadratica, entonces usamos el numero gordo para tener una idea
@@ -2189,6 +2197,7 @@ def clear_console() -> None:
         os.system('clear')
 
 def flexure_design_test() -> None:
+    clear_console()
     concrete= Concrete_ACI_318_19(name="C25",f_c=25*MPa) 
     steelBar= SteelBar(name="ADN 420", f_y=420*MPa)
     custom_settings = {'clear_cover': 2.5*cm}
@@ -2210,6 +2219,32 @@ def flexure_design_test() -> None:
     print(results)
 
     print(beam.check_flexure())
+
+
+def flexure_design_test_calcpad_example() -> None:
+    clear_console()
+
+    concrete = Concrete_ACI_318_19(name="fc 4000", f_c=4000*psi)  
+    steelBar = SteelBar(name="fy 60000", f_y=60*ksi)  
+    custom_settings = {'clear_cover': 1.5*inch} 
+    section = RectangularBeam(
+        label="B-12x24",
+        concrete=concrete,
+        steel_bar=steelBar,
+        width=12*inch,  
+        height=24*inch,
+        settings=custom_settings  
+    )
+    
+    section.set_longitudinal_rebar_bot(n1=2,d_b1=1.375*inch, n2=0, d_b2=0*inch, n3=2,d_b3=1.25*inch, n4=0, d_b4=0*mm)
+    section.set_longitudinal_rebar_top(n1=2,d_b1=0.75*inch)
+
+    f = Forces(label='Test_01', M_y=400*kip*ft)
+    Node(section=section, forces=f)
+
+    print(section.check_flexure())
+
+
 
 def flexure_check_test() -> None:
     clear_console()
@@ -2393,8 +2428,9 @@ def shear_CIRSOC() -> None:
 if __name__ == "__main__":
     # flexure_check_test()
     # flexure_design_test()
+    flexure_design_test_calcpad_example() 
     # flexure_Mn()
-    shear_ACI_imperial()
+    # shear_ACI_imperial()
     # shear_EN_1992()
     # rebar()
     # shear_ACI_metric()

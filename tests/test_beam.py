@@ -329,22 +329,48 @@ def beam_example_flexure() -> RectangularBeam:
 
 
 def test_design_flexure_ACI_318_19_1(beam_example_flexure: RectangularBeam) -> None:
-    f = Forces(M_y=400*kip*ft)
+    f = Forces(label='Test_01', M_y=400*kip*ft)
     Node(section=beam_example_flexure, forces=f)
-    results = beam_example_flexure.design_flexure()  
-
-    # Compare dictionaries with a tolerance for floating-point values, in m 
-    assert results.iloc[0]['Section Label'] == "B-12x24"
-    # assert results.iloc[0]['Av,req'].magnitude  == pytest.approx(10.06, rel=1e-3)
-    # assert results.iloc[0]['Av'].magnitude  == pytest.approx(11.22, rel=1e-3)
-    # assert results.iloc[0]['ØVc'].magnitude  == pytest.approx(58.29, rel=1e-3)
-    # assert results.iloc[0]['ØVs'].magnitude  == pytest.approx(122.15, rel=1e-3)
-    # assert results.iloc[0]['ØVn'].magnitude  == pytest.approx(180.44, rel=1e-3)
-    # assert results.iloc[0]['ØVmax'].magnitude  == pytest.approx(291.44, rel=1e-3)
-    # assert results.iloc[0]["DCR"].magnitude  == pytest.approx(0.93, rel=1e-3)
+    results = beam_example_flexure.design_flexure()
 
 
+    assert beam_example_flexure._d_bot.to(inch).magnitude == pytest.approx(20.39, rel=1e-2)
+    assert beam_example_flexure._d_b1_b.to(inch).magnitude == pytest.approx(1.375, rel=1e-2)
+    assert beam_example_flexure._n1_b == 2
+    assert beam_example_flexure._d_b2_b.to(inch).magnitude == pytest.approx(0, rel=1e-2)
+    assert beam_example_flexure._n2_b == 0
+    assert beam_example_flexure._d_b3_b.to(inch).magnitude == pytest.approx(1.25, rel=1e-2)
+    assert beam_example_flexure._n3_b == 2
+    assert beam_example_flexure._d_b4_b.to(inch).magnitude == pytest.approx(0, rel=1e-2)
+    assert beam_example_flexure._n4_b == 0
+    assert beam_example_flexure._d_top.to(inch).magnitude == pytest.approx(21.77, rel=1e-2)
+    assert beam_example_flexure._d_b1_t.to(inch).magnitude == pytest.approx(0.75, rel=1e-2)
+    assert beam_example_flexure._d_b2_t.to(inch).magnitude == pytest.approx(0.375, rel=1e-2)
+    assert beam_example_flexure._d_b3_t.to(inch).magnitude == pytest.approx(0, rel=1e-2)
+    assert beam_example_flexure._d_b4_t.to(inch).magnitude == pytest.approx(0, rel=1e-2)
 
+    assert results.iloc[0]['Section Label'] == 'B-12x24'
+    assert results.iloc[0]['Load Combo']  == 'Test_01'
+    assert results.iloc[0]['Position'] == 'Bottom'
+    assert results.iloc[0]['As,min'].to(cm**2).magnitude == pytest.approx(5.2619, rel=1e-2)
+    assert results.iloc[0]['As,req'].to(cm**2).magnitude == pytest.approx(33.3538, rel=1e-2)
+    assert results.iloc[0]['As,top'].to(cm**2).magnitude == pytest.approx(4.86707, rel=1e-2)
+    # assert results.iloc[0]['c/d'] == 
+    # assert results.iloc[0]['Mu'] == 
+    # assert results.iloc[0]['ØMn'] == 
+    # assert results.iloc[0]['Mu<ØMn'] == 
+    # assert results.iloc[0]['DCR'] == 
+    # assert results.iloc[1]['Section Label'] == 'B-12x24'
+    # assert results.iloc[1]['Load Combo']  == 'Test_01'
+    # assert results.iloc[1]['Position'] == 'Top'
+    # assert results.iloc[1]['As,min'] == 
+    # assert results.iloc[1]['As,req'] == 
+    # assert results.iloc[1]['As,top'] == 
+    # assert results.iloc[1]['c/d'] == 
+    # assert results.iloc[1]['Mu'] == 
+    # assert results.iloc[1]['ØMn'] == 
+    # assert results.iloc[1]['Mu<ØMn'] == 
+    # assert results.iloc[1]['DCR'] == 
 
 
 
