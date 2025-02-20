@@ -353,8 +353,9 @@ def test_design_flexure_ACI_318_19_1(beam_example_flexure: RectangularBeam) -> N
     assert results.iloc[0]['Load Combo']  == 'Test_01'
     assert results.iloc[0]['Position'] == 'Bottom'
     assert results.iloc[0]['As,min'].to(cm**2).magnitude == pytest.approx(5.2619, rel=1e-2)
-    assert results.iloc[0]['As,req'].to(cm**2).magnitude == pytest.approx(33.3538, rel=1e-2)
-    assert results.iloc[0]['As,top'].to(cm**2).magnitude == pytest.approx(4.86707, rel=1e-2)
+    assert results.iloc[0]['As,req tension'].to(cm**2).magnitude == pytest.approx(33.3538, rel=1e-2)
+    assert results.iloc[0]['As,req compression'].to(cm**2).magnitude == pytest.approx(4.86707, rel=1e-2)
+    assert results.iloc[0]['As,top'].to(inch**2).magnitude == pytest.approx(0.99402, rel=1e-2)
     # assert results.iloc[0]['c/d'] == 
     # assert results.iloc[0]['Mu'] == 
     # assert results.iloc[0]['ØMn'] == 
