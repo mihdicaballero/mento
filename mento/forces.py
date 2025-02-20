@@ -1,10 +1,9 @@
 from dataclasses import dataclass, field
-from typing import Dict, Optional
+from typing import Dict, Optional 
 from pint import Quantity
 from pint.facets.plain import PlainQuantity
 
 from mento.units import kN, kNm
-
 
 @dataclass
 class Forces:
@@ -19,6 +18,8 @@ class Forces:
         Shear force along the z-axis (default is 0 kN).
     M_y : float
         Bending moment about the y-axis (default is 0 kN*m).
+    unit_system : str
+        The unit system to use for displaying forces ('metric' or 'imperial').
 
     Methods
     -------
@@ -35,15 +36,17 @@ class Forces:
     _N_x: Quantity = field(default=0 *kN)  # Ensure you use the correct unit type here
     _V_z: Quantity = field(default=0 * kN)
     _M_y: Quantity = field(default=0 * kNm)
+    unit_system: str = field(default="metric")  # Add unit_system as a field
 
     def __init__(self, label: Optional[str] = None, N_x: Quantity = 0 * kN,
-                 V_z: Quantity = 0 * kN, M_y: Quantity = 0 * kNm) -> None:
+                 V_z: Quantity = 0 * kN, M_y: Quantity = 0 * kNm, unit_system: str = "metric") -> None:
         # Increment the class variable for the next unique ID
         Forces._last_id += 1
         self._id = Forces._last_id  # Private ID assigned internally, unique per instance
 
         # Initialize the label
         self.label = label
+        self.unit_system = unit_system  # Set the unit system
         
         # Set the forces upon initialization
         self.set_forces(N_x, V_z, M_y)
@@ -56,25 +59,41 @@ class Forces:
     @property
     def N_x(self) -> PlainQuantity:
         """Axial force along the x-axis (default is 0 kN)."""
-        return self._N_x.to('kN')
+        if self.unit_system == "metric":
+            return self._N_x.to('kN')
+        else:
+            return self._N_x.to('kip')
 
     @property
     def V_z(self) -> PlainQuantity:
         """Shear force along the z-axis (default is 0 kN)."""
-        return self._V_z.to('kN')
-
+        if self.unit_system == "metric":
+            return self._V_z.to('kN')
+        else:
+            return self._V_z.to('kip')
     @property
     def M_y(self) -> PlainQuantity:
         """Bending moment about the y-axis (default is 0 kN*m)."""
-        return self._M_y.to('kN*m')
+        if self.unit_system == "metric":
+            return self._M_y.to('kN*m')
+        else:
+            return self._M_y.to('ft*kip')
+
 
     def get_forces(self) -> Dict[str, PlainQuantity]:
         """Returns the forces as a dictionary with keys 'N_x', 'V_z', and 'M_y'."""
-        return  {
-            'N_x': self._N_x.to('kN'),
-            'V_z': self._V_z.to('kN'),
-            'M_y': self._M_y.to('kN*m')
-        }
+        if self.unit_system == "metric":
+            return  {
+                'N_x': self._N_x.to('kN'),
+                'V_z': self._V_z.to('kN'),
+                'M_y': self._M_y.to('kN*m')
+            }
+        else:
+            return  {
+                'N_x': self._N_x.to('kip'),
+                'V_z': self._V_z.to('kip'),
+                'M_y': self._M_y.to('ft*kip')
+            }
 
     def set_forces(self, N_x: Quantity = 0*kN, V_z: Quantity = 0*kN,
                     M_y: Quantity = 0*kNm) -> None:

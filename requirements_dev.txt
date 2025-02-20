@@ -9,3 +9,8 @@ tabulate
 python-docx
 jinja2
 seaborn
+sphinx
+nbsphinx
+sphinx_book_theme
+sphinx_design
+sphinx-copybutton

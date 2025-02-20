@@ -1,4 +1,4 @@
-Materials in Mento
+Materials
 ===================
 
 The `mento` package offers a wide range of material models,
@@ -16,8 +16,8 @@ types, each compliant with different design codes:
 
 * **Concrete_ACI_318_19**: Complies with the American Concrete
   Institute (ACI) 318-19 design code.
-* **Concrete_EN_1992**: Complies with the Eurocode 2 (EN 1992) design code.
-* **Concrete_EHE_08**: Complies with the Spanish EHE-08 code.
+* **Concrete_EN_1992_2004**: Complies with the Eurocode 2 (EN 1992) design code.
+* **Concrete_CIRSOC_201_25**: Complies with the CIRSOC 201-25 design code.
 
 .. note::
    Create a material considering the design code that you want to use. The method for checking or designing elements won't change it's name. So just change the code and you are done.
@@ -26,7 +26,7 @@ types, each compliant with different design codes:
 Concrete properties depend in the design code selected. For example:
 
 * **Compressive strength (f_c)**: The characteristic strength of
-  concrete in compression for ACI.
+  concrete in compression for ACI, in MPa or psi units.
 * **Density**: Concrete density (typically around 2500 kg/m³) for
   every code.
 * **Elastic Modulus (E_c or E_cm)**: Secant modulus of elasticity
@@ -36,6 +36,9 @@ Concrete properties depend in the design code selected. For example:
 * **Beta_1**: A factor for the equivalent rectangular stress block,
   specific to ACI.
 
+.. note::
+   The metric system of units or imperial system of units will be automatically set based on the unit for the concrete strength. 
+
 Example: Creating ACI Concrete
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 To create concrete compliant with the ACI 318-19 standard with a
@@ -43,12 +46,10 @@ To create concrete compliant with the ACI 318-19 standard with a
 
 .. code-block:: python
 
-    from mento.material import Concrete_ACI_318_19
-    from mento import MPa
+    from mento import Concrete_ACI_318_19, MPa
 
-    concrete = Concrete_ACI_318_19(name="Concrete ACI H25", f_c=25 * MPa)
-    properties = concrete.get_properties()
-    print(properties)
+    concrete = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
+    print(concrete)
 
 Steel Models
 ------------
@@ -73,12 +74,10 @@ To create reinforcing steel with a yield strength of 420 MPa:
 
 .. code-block:: python
 
-    from mento.material import SteelBar
-    from mento import MPa
+    from mento import SteelBar, MPa
 
-    steel_bar = SteelBar(name="ADN 500", f_y=420 * MPa)
-    properties = steel_bar.get_properties()
-    print(properties)
+    steel_bar = SteelBar(name="ADN 420", f_y=420 * MPa)
+    print(steel_bar)
 
 Accessing Material Properties
 -----------------------------
@@ -89,7 +88,8 @@ returns a dictionary of key properties such as:
 - **Concrete**: Compressive strength, tensile strength, modulus of elasticity.
 - **Steel**: Yield strength, elastic modulus, and density.
 
-Simply call this method to inspect material characteristics.
+Simply call this method to access material attributes. If you `print()` 
+a material you will get a string output with all it's properties.
 
 .. note::
    All material properties in `mento` are automatically converted to appropriate units (MPa, kg/m³, etc.) based on the design code selected.
@@ -101,5 +101,4 @@ To get started with the materials in `mento`, simply import
 the material class, create an instance, and access its properties.
 Make sure to select the correct design code for your project.
 
-For more details, consult the relevant structural design codes
-(ACI 318, Eurocode 2, EHE-08).
+For more details, consult the relevant structural design codes.

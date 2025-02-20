@@ -1,3 +1,5 @@
+.. _api/modules:
+
 API reference
 ===================
 
