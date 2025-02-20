@@ -61,13 +61,8 @@ Usage Notes
 Future Extensions
 -----------------
 
-The `RectangularSection` class is a foundational building block in the `mento` package. It can serve as the base for specialized structural elements such as:
+The `Section` class is a foundational building block in the `mento` package. It can serve as the base for specialized structural elements such as:
 
 - **Rectangular Beams**: See the `RectangularBeam` documentation for its extended features like shear and flexural checks.
-- **Rectangular Columns**: Planned extension to handle axial and biaxial bending interactions.
-
-**Explore Further**:
-
-- `RectangularBeam` Documentation: Advanced beam-specific features.
-- `Concrete` and `SteelBar` Documentation: Material property definitions.
-- `Settings` Documentation: Customizing design parameters and defaults.
+- **Rectangular Columns**: Planned extension to handle axial and biaxial bending interactions for rectangular sections.
+- **Circular Columns**: Planned extension to handle axial and biaxial bending interactions for circular sections.

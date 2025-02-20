@@ -1,8 +1,8 @@
-sphinx>=6
+sphinx==7.2.0
+nbsphinx==0.9.1
 ipython==8.27.0
 matplotlib
 mip>=1.13
-nbsphinx
 numpy
 pytest
 jupyter_client
