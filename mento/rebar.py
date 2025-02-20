@@ -272,7 +272,6 @@ class Rebar:
                     return False
         return True
 
-
     def longitudinal_rebar_EN_1992(self, A_s_req: PlainQuantity) -> None:
         pass
 
