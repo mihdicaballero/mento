@@ -2366,13 +2366,14 @@ def shear_EN_1992() -> None:
     # beam.shear_results_detailed_doc()
 
 def shear_CIRSOC() -> None:
-    concrete= Concrete_CIRSOC_201_25(name="C25",f_c=25*MPa) 
+    concrete= Concrete_CIRSOC_201_25(name="C25",f_c=30*MPa) 
     steelBar= SteelBar(name="ADN 420", f_y=420*MPa)
-    custom_settings = {'clear_cover': 2.5*cm}
+    custom_settings = {'clear_cover': 3*cm}
     beam = RectangularBeam(label="101",
                                       concrete=concrete,steel_bar=steelBar,width=20*cm, height=50*cm,
                                        settings=custom_settings)
-    f1 = Forces(label='1.4D', V_z=1.50*kN)
+    beam.set_longitudinal_rebar_bot(n1=2, d_b1=16 * mm)
+    f1 = Forces(label='1.4D', V_z=100*kN)
     f2 = Forces(label='1.2D+1.6L', V_z=1.55*kN)
     f3 = Forces(label='W', V_z=2.20*kN)
     f4 = Forces(label='S', V_z=8.0*kN)
@@ -2390,8 +2391,8 @@ if __name__ == "__main__":
     # flexure_check_test()
     # flexure_design_test()
     # flexure_Mn()
-    shear_ACI_imperial()
+    # shear_ACI_imperial()
     # shear_EN_1992()
     # rebar()
     # shear_ACI_metric()
-    # shear_CIRSOC()
+    shear_CIRSOC()

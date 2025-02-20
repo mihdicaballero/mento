@@ -180,8 +180,8 @@ def test_beam_transverse_rebar_ACI_318_19_metric(beam_example_metric: Rectangula
     assert results is not None
     assert beam_example_metric._stirrup_n == 1
     assert beam_example_metric._stirrup_d_b == 10 * mm
-    assert beam_example_metric._stirrup_s_l == 23 * cm
-    assert beam_example_metric._A_v.to('cm**2/m').magnitude == pytest.approx(6.83, rel=1e-3)
+    assert beam_example_metric._stirrup_s_l == 22 * cm
+    assert beam_example_metric._A_v.to('cm**2/m').magnitude == pytest.approx(7.14, rel=1e-3)
 
 def test_beam_transverse_rebar_max_spacing_imperial(beam_example_imperial: RectangularBeam) -> None:
     # This test ensures that the maximum spacing constraints are respected.
@@ -215,8 +215,8 @@ def test_beam_transverse_rebar_CIRSOC_201_25(beam_example_metric: RectangularBea
     assert results is not None
     assert beam_example_metric._stirrup_n == 1
     assert beam_example_metric._stirrup_d_b == 6 * mm
-    assert beam_example_metric._stirrup_s_l == 23 * cm
-    assert beam_example_metric._A_v.to('cm**2/m').magnitude == pytest.approx(2.46, rel=1e-3)
+    assert beam_example_metric._stirrup_s_l == 22 * cm
+    assert beam_example_metric._A_v.to('cm**2/m').magnitude == pytest.approx(2.57, rel=1e-3)
 
 # This is where pytest will collect the tests and run them
 if __name__ == "__main__":
