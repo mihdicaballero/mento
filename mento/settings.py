@@ -53,7 +53,7 @@ class Settings:
                 'phi_v': 0.75, # Shear strength reduction factor
                 'phi_c': 0.65, # Compression controlled strength reduction factor
                 'phi_t': 0.90,  # Tension controlled strength reduction factor
-                'flexural_min_reduction': "True"  # True selects 4/3 of calculated steel if it's less than minimum
+                'flexural_min_reduction': "False"  # True selects 4/3 of calculated steel if it's less than minimum
             }
         self.en_1992_2004_settings : Dict[str, Any] = {
                 'gamma_c': 1.5,
