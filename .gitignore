@@ -9,6 +9,9 @@ __pycache__/
 # LinkedIn video folders
 videos/
 
+# Examples folder
+tests/examples/
+
 # Virtual environment folders
 .venv/
 env/
