@@ -1,7 +1,9 @@
 Forces
 ============
 
-The `Forces` class in the `mento` package allows users to define and manipulate the primary forces acting on a structural element, such as axial force, shear force, and bending moment. This class is designed for flexibility in defining forces, with the ability to adjust and retrieve them in different stages of a structural analysis or design workflow.
+The `Forces` class in the `mento` package allows users to define and manipulate the primary forces acting on a structural element, such as axial force, 
+shear force, and bending moment. This class is designed for flexibility in defining forces, with the ability to adjust and retrieve 
+them in different stages of a structural analysis or design workflow.
 
 Key Concepts
 ------------
@@ -10,6 +12,9 @@ Key Concepts
 - **Shear Force (`V_z`)**: Force acting perpendicular to the axis of the element, along the z-z local axis.
 - **Bending Moment (`M_y`)**: The moment caused by forces that induce bending about the y-y axis.
 - **Unit System**: You can define the unit system to display the forces for a Force object, *metric* or *imperial*.
+
+These are the main forces considered to  analyze a beam along it's main axis. 
+For Columns analysis in future releases, the Forces object will have to have shear and bending moment in both axis.
 
 These forces are defined using compatible units from the `Pint` library, like `kN` or `kip` for forces and `kN*m` or `ft*kip` for moments.
 

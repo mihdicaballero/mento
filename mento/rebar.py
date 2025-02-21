@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Any, Dict, TYPE_CHECKING, Tuple
 import math
 import pandas as pd
+from devtools import debug
 
 from mento.units import psi, mm, cm, inch, MPa
 
@@ -29,8 +30,8 @@ class Rebar:
             self.rebar_diameters = [6*mm, 8*mm, 10*mm, 12*mm, 16*mm, 20*mm, 25*mm, 32*mm]
             self.rebar_areas = {d: (math.pi * d ** 2) / 4 for d in self.rebar_diameters}
         else:
-            self.rebar_diameters = [3*inch/8, 4*inch/8, 5*inch/8, 6*inch/8, 7*inch/8, 8*inch/8, 9*inch/8,
-                                    10*inch/8, 11*inch/8, 14*inch/8]
+            self.rebar_diameters = [3*inch/8, 4*inch/8, 5*inch/8, 6*inch/8, 7*inch/8, 8*inch/8, 1.128*inch,
+                                    1.27*inch, 1.41*inch, 1.693*inch]
             rebar_areas_list = [0.1104*inch**2, 0.1963*inch**2, 0.3068*inch**2, 0.4418*inch**2, 0.6013*inch**2,
                                 0.7854*inch**2, 0.9940*inch**2, 1.27*inch**2, 1.56*inch**2, 2.25*inch**2]
             self.rebar_areas = dict(zip(self.rebar_diameters, rebar_areas_list))
@@ -107,10 +108,11 @@ class Rebar:
                                 if n2 > 0 and not self._check_spacing(n1, n2, d_b1, d_b2, effective_width):
                                     continue
 
-                                A_s_max = max(1.25*A_s_req, n1 * self.rebar_areas[self.min_long_rebar])
+                                A_s_max = max(10*A_s_req, n1 * self.rebar_areas[self.min_long_rebar])
                                 # Check if total area from layer 1 is enough for required A_s
-                                # And also less than 25% greater than A_s_req
+                                # And also less than A_s_max
                                 if A_s_layer_1 >= A_s_req and A_s_layer_1 <= A_s_max:
+                                # if A_s_layer_1 >= A_s_req:
                                     total_as = A_s_layer_1  # Only consider layer 1
                                     total_bars = n1 + n2    # Total bars only in layer 1
                                     valid_combinations.append({
@@ -170,7 +172,8 @@ class Rebar:
 
                                         # Check if total area is enough for required A_s
                                         total_as = A_s_layer_1 + A_s_layer_2
-                                        if total_as >= A_s_req and total_as <= A_s_max: 
+                                        if total_as >= A_s_req and total_as <= A_s_max:
+                                        # if total_as >= A_s_req: 
                                             total_bars = n1 + n2 + n3 + n4  # Count the total number of bars
                                             valid_combinations.append({
                                                 'n_1': n1,
@@ -212,7 +215,7 @@ class Rebar:
             df = pd.DataFrame([best_fallback_combination])
 
         # Sort by 'total_as' first, then by 'total_bars' to prioritize fewer bars
-        df.sort_values(by=['total_bars', 'total_as'], inplace=True)
+        df.sort_values(by=['total_as','total_bars'], inplace=True)
         df.reset_index(drop=True, inplace=True)
         self._long_combos_df = df
 
