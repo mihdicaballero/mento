@@ -8,6 +8,7 @@ User Guide
    :maxdepth: 2
 
    units
+   local_axes
    materials
    forces
    settings

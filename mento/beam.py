@@ -988,7 +988,7 @@ class RectangularBeam(RectangularSection):
     def _calculate_total_shear_strength_aci(self) -> None:
         self._phi_V_n = self.phi_v * (self.V_c + self._A_v * self.f_yt * self._d_shear)
         V_d_max = min(self._phi_V_n, self._phi_V_max)
-        self._DCRv = abs((self._V_u.to('kN').magnitude / V_d_max.to('kN').magnitude))
+        self._DCRv = round(abs((self._V_u.to('kN').magnitude / V_d_max.to('kN').magnitude)),3)
 
     def _calculate_rebar_spacing_aci(self) -> None:
         section_rebar = Rebar(self)
@@ -1277,7 +1277,7 @@ class RectangularBeam(RectangularSection):
                 self._stirrup_s_max_l, self._stirrup_s_max_w =\
                       section_rebar.calculate_max_spacing_EN_1992_2004(self._alpha)
 
-            self._DCRv = abs((self._V_Ed_2.to('kN').magnitude / self._V_Rd.to('kN').magnitude))
+            self._DCRv = round(abs((self._V_Ed_2.to('kN').magnitude / self._V_Rd.to('kN').magnitude)),3)
             # Design results
             results = {
                 'Label': self.label, #Beam label
@@ -2206,7 +2206,7 @@ def flexure_design_test_calcpad_example() -> None:
     concrete = Concrete_ACI_318_19(name="fc 4000", f_c=4000*psi)  
     steelBar = SteelBar(name="fy 60000", f_y=60*ksi)  
     custom_settings = {'clear_cover': 1.5*inch} 
-    section = RectangularBeam(
+    beam = RectangularBeam(
         label="B-12x24",
         concrete=concrete,
         steel_bar=steelBar,
@@ -2218,13 +2218,16 @@ def flexure_design_test_calcpad_example() -> None:
     # section.set_longitudinal_rebar_bot(n1=2,d_b1=1.375*inch, n3=2,d_b3=1.25*inch)
     # section.set_longitudinal_rebar_top(n1=2,d_b1=0.75*inch)
 
-    f = Forces(label='Test_01', M_y=400*kip*ft)
-    # f2 = Forces(label='Test_01', M_y=0*kip*ft)
-    Node(section=section, forces=[f])
+    f = Forces(label='Test_01', V_z = 40*kip, M_y=400*kip*ft)
+    f2 = Forces(label='Test_01', V_z = 100*kip, M_y=-50*kip*ft)
+    Node(section=beam, forces=[f,f2])
 
     # print(section.check_flexure())
-    print(section.design_flexure())
-    print(section.flexure_design_results_bot)
+    shear_results = beam.design_shear()
+    print(shear_results)
+    flexure_results = beam.design_flexure()
+    print(flexure_results)
+    # print(section.flexure_design_results_bot)
     # section.flexure_results_detailed()
 
 
