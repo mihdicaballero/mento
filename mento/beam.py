@@ -2360,7 +2360,7 @@ def rebar() -> None:
         height=50*cm,
         settings=custom_settings  
     )
-    as_req = 5 * cm**2
+    as_req = 8 * cm**2
 
     beam_rebar = Rebar(section)
     long_rebar_df = beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=as_req)
@@ -2413,10 +2413,10 @@ def shear_CIRSOC() -> None:
 if __name__ == "__main__":
     # flexure_check_test()
     # flexure_design_test()
-    flexure_design_test_calcpad_example() 
+    # flexure_design_test_calcpad_example() 
     # flexure_Mn()
     # shear_ACI_imperial()
     # shear_EN_1992()
-    # rebar()
+    rebar()
     # shear_ACI_metric()
     # shear_CIRSOC()
