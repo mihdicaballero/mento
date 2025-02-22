@@ -1,4 +1,4 @@
-Units in `mento` Package
+Units
 =========================
 
 The `mento` package is designed to work with both Metric (SI) and
