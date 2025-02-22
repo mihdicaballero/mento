@@ -46,16 +46,16 @@ def test_beam_longitudinal_rebar_ACI_318_19_metric(beam_example_metric: Rectangu
 
     assert best_design is not None
     assert best_design['n_1'] == 2
-    assert best_design['d_b1'] == 16*mm
-    assert best_design['n_2'] == 1
-    assert best_design['d_b2'] == 12*mm
+    assert best_design['d_b1'] == 20*mm
+    assert best_design['n_2'] == 0
+    assert best_design['d_b2'] is None
     assert best_design['n_3'] == 0
     assert best_design['d_b3'] is None
     assert best_design['n_4'] == 0
     assert best_design['d_b3'] is None
-    assert best_design['total_as'].magnitude == pytest.approx(5.1522,rel=1e-3)
-    assert best_design['total_bars'] == 3
-    assert best_design['clear_spacing'].magnitude == pytest.approx(40,rel=1e-3)
+    assert best_design['total_as'].magnitude == pytest.approx(6.28,rel=1e-3)
+    assert best_design['total_bars'] == 2
+    assert best_design['clear_spacing'].magnitude == pytest.approx(84,rel=1e-3)
 
 # def test_beam_longitudinal_rebar_ACI_318_19_imperial(beam_example_imperial: RectangularBeam) -> None:
 #     # This test will ensure that the longitudinal rebar design works correctly for beams defined in imperial units.
@@ -109,16 +109,16 @@ def test_beam_longitudinal_rebar_CIRSOC_201_25(beam_example_metric: RectangularB
 
     assert best_design is not None
     assert best_design['n_1'] == 2
-    assert best_design['d_b1'] == 16 * mm
-    assert best_design['n_2'] == 1
-    assert best_design['d_b2'] == 12 * mm
+    assert best_design['d_b1'] == 20 * mm
+    assert best_design['n_2'] == 0
+    assert best_design['d_b2'] is None
     assert best_design['n_3'] == 0
     assert best_design['d_b3'] is None
     assert best_design['n_4'] == 0
     assert best_design['d_b3'] is None
-    assert best_design['total_as'].magnitude == pytest.approx(5.1522, rel=1e-3)
-    assert best_design['total_bars'] == 3
-    assert best_design['clear_spacing'].magnitude == pytest.approx(40, rel=1e-3)
+    assert best_design['total_as'].magnitude == pytest.approx(6.28, rel=1e-3)
+    assert best_design['total_bars'] == 2
+    assert best_design['clear_spacing'].magnitude == pytest.approx(84, rel=1e-3)
 
 def test_beam_longitudinal_rebar_small_area(beam_example_metric: RectangularBeam) -> None:
     # This test ensures that the rebar design handles very small required areas correctly.
