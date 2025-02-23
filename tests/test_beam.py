@@ -400,7 +400,8 @@ def test_check_flexure_ACI_318_19_2(beam_example_flexure: RectangularBeam) -> No
     assert results.iloc[0]['As,req top'].to(cm**2).magnitude == pytest.approx(33.1712108, rel=1e-3)
     assert results.iloc[0]['As'].to(inch**2).magnitude == pytest.approx(5.66, rel=1e-2)
     assert results.iloc[0]['c/d'] == pytest.approx(0.37181968, rel=1e-3)
-    assert results.iloc[0]['Mu'].to(kip*ft).magnitude == pytest.approx(-400, rel=1e-5)    # assert results.iloc[0]['ØMn'] == 
+    assert results.iloc[0]['Mu'].to(kip*ft).magnitude == pytest.approx(-400, rel=1e-5)    
+    # assert results.iloc[0]['ØMn'] == 
     # assert results.iloc[0]['Mu<ØMn'] == 
     # assert results.iloc[0]['DCR'] == 
 
