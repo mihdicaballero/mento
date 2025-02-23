@@ -18,7 +18,14 @@ These materials are required for all beam designs.
 Loading Input Data from Excel
 -----------------------------
 
-The beam dimensions, forces, and reinforcement details are typically loaded from an Excel input file. The file should have a specific format, as shown below:
+The beam dimensions, forces, and reinforcement details are typically loaded from an Excel input file. The file should have a specific format and units, as shown below:
+
+.. figure:: ../_static/summary/beam_summary.png
+   :alt: Beam summary input.
+   :align: center
+   :width: 100%
+
+The recommended way to read the excel file is with Pandas.
 
 .. code-block:: python
 
@@ -38,6 +45,7 @@ The Excel file should contain the following columns:
 - **n1, n2, n3, n4**: Number of longitudinal reinforcement bars in each layer.
 - **db1, db2, db3, db4**: Diameter of longitudinal reinforcement bars in mm.
 
+Consider that bottom reinforcement will be checked against positive bending moments and top reinforcement against negative bending moments.
 
 Creating the BeamSummary Object
 -------------------------------
@@ -61,15 +69,15 @@ The `BeamSummary` class allows you to check the capacity of the beam sections. T
 
 1. **Capacity Check Without Forces**: This checks the capacity of the sections based on the provided reinforcement details only.
 
-    .. code-block:: python
+.. code-block:: python
 
-        beam_summary.check(capacity_check=True)
+    beam_summary.check(capacity_check=True)
 
 2. **Capacity Check With Forces**: This checks the capacity of the sections for the forces specified in the input data.
 
-    .. code-block:: python
+.. code-block:: python
 
-        beam_summary.check()
+    beam_summary.check()
 
 Exporting Results
 -----------------
@@ -87,14 +95,14 @@ For a detailed breakdown of the results, you can use the `shear_results` method.
 
 - **Without Capacity Check**:
 
-    .. code-block:: python
+.. code-block:: python
 
-        beam_summary.shear_results(capacity_check=False)
+    beam_summary.shear_results(capacity_check=False)
 
 - **With Capacity Check**:
 
-    .. code-block:: python
+.. code-block:: python
 
-        beam_summary.shear_results(capacity_check=True)
+    beam_summary.shear_results(capacity_check=True)
 
 
