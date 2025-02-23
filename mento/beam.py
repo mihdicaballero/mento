@@ -486,7 +486,7 @@ class RectangularBeam(RectangularSection):
         def clean_zero(value: float, tolerance: float = 1e-6) -> float:
             return 0.0 if abs(value) < tolerance else value
         
-        c_d=clean_zero(c/self._d_bot)
+        c_d=clean_zero(c/d)
 
         # Adjust required reinforcement to limits
         if A_s_calc > A_s_min:
@@ -504,6 +504,7 @@ class RectangularBeam(RectangularSection):
             M_n_t = rho * self.steel_bar.f_y * (d - 0.59 * rho * self.steel_bar.f_y * d / self.concrete.f_c) * b * d
             M_n_prima = M_u / self.phi_t - M_n_t
             c_t = 0.003 * d / (self.steel_bar.epsilon_y + 0.006)
+            c_d=clean_zero(c_t/d)
             f_s_prima = min(0.003 * self.steel_bar.E_s * (1 - d_prima / c_t), self.steel_bar.f_y)
             A_s_comp = M_n_prima / (f_s_prima * (d - d_prima))
             A_s_final = rho * b * d + A_s_comp
@@ -634,7 +635,6 @@ class RectangularBeam(RectangularSection):
 
         # Inicializamos los momentos nominales a partir de las fuerzas:
         self._determine_nominal_moment_ACI_318_19(force)
-
 
         if self._M_u>=0:
             self._A_s_min_bot, self._A_s_max_bot, self._A_s_req_bot, self._A_s_req_top, self._c_d_bot = self._calculate_flexural_reinforcement_ACI_318_19(self._M_u_bot, self._d_bot, self._c_mec_top)
@@ -2215,20 +2215,20 @@ def flexure_design_test_calcpad_example() -> None:
         settings=custom_settings  
     )
     
-    # section.set_longitudinal_rebar_bot(n1=2,d_b1=1.375*inch, n3=2,d_b3=1.25*inch)
-    # section.set_longitudinal_rebar_top(n1=2,d_b1=0.75*inch)
+    #beam.set_longitudinal_rebar_bot(n1=2,d_b1=1.375*inch, n3=2,d_b3=1.27*inch)
+    #beam.set_longitudinal_rebar_top(n1=2,d_b1=1.375*inch, n3=2,d_b3=1.27*inch)
 
     f = Forces(label='Test_01', V_z = 40*kip, M_y=400*kip*ft)
-    f2 = Forces(label='Test_01', V_z = 100*kip, M_y=-50*kip*ft)
+    f2 = Forces(label='Test_01', V_z = 100*kip, M_y=-400*kip*ft)
     Node(section=beam, forces=[f,f2])
 
-    # print(section.check_flexure())
+    #print(beam.check_flexure())
     shear_results = beam.design_shear()
     print(shear_results)
     flexure_results = beam.design_flexure()
     print(flexure_results)
-    # print(section.flexure_design_results_bot)
-    # section.flexure_results_detailed()
+    #print(beam.flexure_design_results_bot)
+    #beam.flexure_results_detailed()
 
 
 

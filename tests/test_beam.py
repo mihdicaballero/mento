@@ -311,7 +311,7 @@ def test_flexural_beam_determine_nominal_moment_double_reinf_ACI_318_19() -> Non
     result=beam._determine_nominal_moment_double_reinf_ACI_318_19(A_s, d, d_prime, A_s_prime)
     assert result.to(kip*ft).magnitude  == pytest.approx(639.12, rel=1e-2)
 
-#VIGA DEL CALPCAD DE JPR
+#VIGA DEL CALPCAD "ACI 318-19 Beam Flexure 02-TEST_1"
 @pytest.fixture()
 def beam_example_flexure() -> RectangularBeam:
     concrete = Concrete_ACI_318_19(name="fc 4000", f_c=4000*psi)  
@@ -329,6 +329,8 @@ def beam_example_flexure() -> RectangularBeam:
 
 
 def test_check_flexure_ACI_318_19_1(beam_example_flexure: RectangularBeam) -> None:
+    # Testeo el checkeo de la viga armada con un momento grande que requiere armadura de compresión, siendo el momento positivo
+    # Ver calcpad: ACI 318-19 Beam Flexure 02-TEST_1.cpd
     f = Forces(label='Test_01', M_y=400*kip*ft)
     beam_example_flexure.set_longitudinal_rebar_bot(n1=2,d_b1=1.41*inch, n3=2,d_b3=1.27*inch)
     beam_example_flexure.set_longitudinal_rebar_top(n1=2,d_b1=0.75*inch)
@@ -355,25 +357,52 @@ def test_check_flexure_ACI_318_19_1(beam_example_flexure: RectangularBeam) -> No
     assert results.iloc[0]['Load Combo']  == 'Test_01'
     assert results.iloc[0]['Position'] == 'Bottom'
     assert results.iloc[0]['As,min'].to(cm**2).magnitude == pytest.approx(5.26, rel=1e-2)
-    assert results.iloc[0]['As,req bot'].to(cm**2).magnitude == pytest.approx(33.17, rel=1e-3)
-    assert results.iloc[0]['As,req top'].to(cm**2).magnitude == pytest.approx(4.9, rel=1e-2)
+    assert results.iloc[0]['As,req bot'].to(cm**2).magnitude == pytest.approx(33.1712108, rel=1e-3)
+    assert results.iloc[0]['As,req top'].to(cm**2).magnitude == pytest.approx(4.9250577, rel=1e-3)
     assert results.iloc[0]['As'].to(inch**2).magnitude == pytest.approx(5.66, rel=1e-2)
     assert results.iloc[0]['c/d'] == pytest.approx(0.37181968, rel=1e-3)
-    # assert results.iloc[0]['Mu'] == 
+    assert results.iloc[0]['Mu'].to(kip*ft).magnitude == pytest.approx(400, rel=1e-5)
     # assert results.iloc[0]['ØMn'] == 
     # assert results.iloc[0]['Mu<ØMn'] == 
     # assert results.iloc[0]['DCR'] == 
-    # assert results.iloc[1]['Section Label'] == 'B-12x24'
-    # assert results.iloc[1]['Load Combo']  == 'Test_01'
-    # assert results.iloc[1]['Position'] == 'Top'
-    # assert results.iloc[1]['As,min'] == 
-    # assert results.iloc[1]['As,req'] == 
-    # assert results.iloc[1]['As,top'].to(inch**2).magnitude == pytest.approx(0.99402, rel=1e-2)
-    # assert results.iloc[1]['c/d'] == 
-    # assert results.iloc[1]['Mu'] == 
-    # assert results.iloc[1]['ØMn'] == 
-    # assert results.iloc[1]['Mu<ØMn'] == 
-    # assert results.iloc[1]['DCR'] == 
+
+def test_check_flexure_ACI_318_19_2(beam_example_flexure: RectangularBeam) -> None:
+    # Testeo el checkeo de la viga armada con un momento grande que requiere armadura de compresión, siendo el momento NEGATIVO.
+    # Ver calcpad: ACI 318-19 Beam Flexure 02-TEST_1.cpd
+    # Invierto el armado respecto al test anterior para poder usar el mismo calcpad
+    f = Forces(label='Test_02', M_y=-400*kip*ft)
+    beam_example_flexure.set_longitudinal_rebar_bot(n1=2,d_b1=0.75*inch)
+    beam_example_flexure.set_longitudinal_rebar_top(n1=2,d_b1=1.41*inch, n3=2,d_b3=1.27*inch)
+
+    Node(section=beam_example_flexure, forces=f)
+    results = beam_example_flexure.check_flexure()
+
+    assert beam_example_flexure._d_top.to(inch).magnitude == pytest.approx(20.37, rel=1e-2)
+    assert beam_example_flexure._d_b1_t.to(inch).magnitude == pytest.approx(1.41, rel=1e-2)
+    assert beam_example_flexure._n1_t == 2
+    assert beam_example_flexure._d_b2_t.to(inch).magnitude == pytest.approx(0, rel=1e-2)
+    assert beam_example_flexure._n2_t == 0
+    assert beam_example_flexure._d_b3_t.to(inch).magnitude == pytest.approx(1.27, rel=1e-2)
+    assert beam_example_flexure._n3_t == 2
+    assert beam_example_flexure._d_b4_t.to(inch).magnitude == pytest.approx(0, rel=1e-2)
+    assert beam_example_flexure._n4_t == 0
+    assert beam_example_flexure._d_bot.to(inch).magnitude == pytest.approx(21.75, rel=1e-2)
+    assert beam_example_flexure._d_b1_b.to(inch).magnitude == pytest.approx(0.75, rel=1e-2)
+    assert beam_example_flexure._n1_b == 2
+    assert beam_example_flexure._d_b2_b.to(inch).magnitude == pytest.approx(0, rel=1e-2)
+    assert beam_example_flexure._d_b3_b.to(inch).magnitude == pytest.approx(0, rel=1e-2)
+    assert beam_example_flexure._d_b4_b.to(inch).magnitude == pytest.approx(0, rel=1e-2)
+    assert results.iloc[0]['Section Label'] == 'B-12x24'
+    assert results.iloc[0]['Load Combo']  == 'Test_02'
+    assert results.iloc[0]['Position'] == 'Top'
+    assert results.iloc[0]['As,min'].to(cm**2).magnitude == pytest.approx(5.26, rel=1e-2)
+    assert results.iloc[0]['As,req bot'].to(cm**2).magnitude == pytest.approx(4.9250577, rel=1e-3)
+    assert results.iloc[0]['As,req top'].to(cm**2).magnitude == pytest.approx(33.1712108, rel=1e-3)
+    assert results.iloc[0]['As'].to(inch**2).magnitude == pytest.approx(5.66, rel=1e-2)
+    assert results.iloc[0]['c/d'] == pytest.approx(0.37181968, rel=1e-3)
+    assert results.iloc[0]['Mu'].to(kip*ft).magnitude == pytest.approx(-400, rel=1e-5)    # assert results.iloc[0]['ØMn'] == 
+    # assert results.iloc[0]['Mu<ØMn'] == 
+    # assert results.iloc[0]['DCR'] == 
 
 
 def test_design_flexure_ACI_318_19_1(beam_example_flexure: RectangularBeam) -> None:
@@ -420,6 +449,9 @@ def test_design_flexure_ACI_318_19_1(beam_example_flexure: RectangularBeam) -> N
     # assert results.iloc[1]['ØMn'] == 
     # assert results.iloc[1]['Mu<ØMn'] == 
     # assert results.iloc[1]['DCR'] == 
+
+
+
 
 
 
