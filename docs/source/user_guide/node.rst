@@ -84,7 +84,7 @@ Resets all forces applied to this node to zero.
 Example: Working with Nodes
 ---------------------------
 
-Here’s a complete example that demonstrates how to use the `Node` class:
+Here’s a complete example that demostrates how to use the `Node` class:
 
 .. code-block:: python
 
