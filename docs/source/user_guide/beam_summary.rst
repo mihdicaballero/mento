@@ -91,18 +91,21 @@ To export the results of the capacity check to an Excel file, use the following 
 Viewing Detailed Results
 ------------------------
 
-For a detailed breakdown of the results, you can use the `shear_results` method. This method provides a DataFrame with detailed results for each beam:
+For a detailed breakdown of the results, you can use the `shear_results` or `flexure_results` method. 
+Thess methods provide a DataFrame with detailed results for each beam:
 
 - **Without Capacity Check**:
 
 .. code-block:: python
 
     beam_summary.shear_results(capacity_check=False)
+    beam_summary.flexure_results(capacity_check=False)
 
 - **With Capacity Check**:
 
 .. code-block:: python
 
     beam_summary.shear_results(capacity_check=True)
+    beam_summary.flexure_results(capacity_check=True)
 
 
