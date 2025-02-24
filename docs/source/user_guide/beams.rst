@@ -107,48 +107,14 @@ For example, if a positive moment is so large that the section must be reinforce
 4. Performing Checks
 ********************
 
-Once the beam is defined and forces are assigned, you can perform checks for shear and flexure.
-*Mento* will apply corresponding design code formulas depending on the type of `Concrete` object 
-created for all the forces assigned and store the limiting case for shear and top and bottom bending moment. 
-
-- **Shear Check**: Use `check_shear`.
-- **Flexure Check**: Use `check_flexure`.
-
-.. code-block:: python
-
-    # Perform shear and flexure checks
-    beam.check_shear()
-    beam.check_flexure()
+Once the beam is defined and forces are assigned in a `Node` object, you can perform checks for shear and flexure.
+See the `Node` section for more information on how to create a Node and check the section. 
 
 5. Design the section
 ********************
 
 If you don't assign transverse or longitudinal rebar, you can as *Mento* to design for shear and flexure.
-*Mento* will apply corresponding design code formulas depending on the type of `Concrete` object 
-created for all the forces assigned and store the limiting case for shear and top and bottom bending moment. 
-
-After performing the numerical design, *Mento* will assign the optimal rebar combination of stirrups and longitudinal reinforcement,
-considering all the longitudinal positions in the beam.
-
-- **Shear Design**: Use `design_shear`.
-- **Flexure Design**: Use `design_flexure`.
-
-.. code-block:: python
-
-    # Perform shear and flexure checks
-    beam.design_shear()
-    beam.design_flexure()
-
-*Mento* will also create a Pandas DataFrame with all the check results for each Load Case in the Force object assigned to the Node, both for shear and flexure analysis.
-You can print those results from the previous method.
-
-.. code-block:: python
-
-    # Perform shear and flexure checks
-    shear_results = beam.design_shear()
-    print(shear_results)
-    flexure_results = beam.design_flexure()
-    print(flexure_results)
+See the `Node` section for more information on how to create a Node and design the section. 
 
 6. Jupyter Notebook Results
 ******************
@@ -240,16 +206,4 @@ The `beam.data` command provides the beam's geometry and material properties. He
 7. Detailed Results
 *******************
 
-For more detailed results, you can use the following methods:
-
-- **Shear Results**: Use `shear_results_detailed()`.
-- **Flexure Results**: Use `flexure_results_detailed()`.
-
-These methods provide a comprehensive breakdown of the calculations, which can be useful for reporting or further analysis.
-
-.. code-block:: python
-
-    # View detailed shear results
-    beam.shear_results_detailed()
-    # View detailed flexure results
-    beam.flexure_results_detailed()
+See the `Node` section for more information on how to display and save detailed results of the analysis. 
