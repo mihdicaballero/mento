@@ -1,7 +1,9 @@
 Beam
 ==========
 
-The `Beam` class in the `mento` package is designed to model and analyze rectangular reinforced concrete beams. It allows users to define the geometry, material properties, reinforcement, and applied forces, and then perform checks for shear and flexure. The results are presented in a user-friendly format, with color-coded Demand-Capacity Ratios (DCR) for quick assessment.
+The `Beam` class in the `mento` package is designed to model and analyze rectangular reinforced concrete beams.
+It allows users to define the geometry, material properties, reinforcement, and applied forces, and then perform checks for shear and flexure.
+The results are presented in a user-friendly format, with color-coded Demand-Capacity Ratios (DCR) for quick assessment.
 
 Key Concepts
 ------------
@@ -11,7 +13,7 @@ Key Concepts
 - **Reinforcement**: Longitudinal and transverse reinforcement can be defined using `set_longitudinal_rebar_bot`, `set_longitudinal_rebar_top`, and `set_transverse_rebar`.
 - **Forces**: Applied forces are assigned to the beam through a `Node` object.
 - **Checks**: The beam can be checked for shear and flexure using `check_shear()` and `check_flexure()`.
-- **Design**: The beam transverse and longitudinal rebar can be designed usign `design_shear()` and `design_flexure()`.
+- **Design**: The beam transverse and longitudinal rebar can be designed using `design_shear()` and `design_flexure()`.
 - **Results**: Results are displayed with color-coded DCR values for easy interpretation in a Jupyter Notebook. Also can be exported to Word.
 
 Usage
@@ -27,7 +29,7 @@ The `RectangularBeam` class is used for this purpose. If no custom settings are 
 
 .. image:: ../_static/beam/beam.png
    :alt: Beam cross section.
-   :width: 300px
+   :width: 250px
    :align: center
 
 .. code-block:: python
@@ -44,9 +46,9 @@ The `RectangularBeam` class is used for this purpose. If no custom settings are 
 2. Assigning Forces to the Beam
 *******************************
 
-Forces are applied to the beam through a `Node` object, wich joins the `Beam` and `Forces` object togehter.
+Forces are applied to the beam through a `Node` object, which joins the `Beam` and `Forces` object together.
 A `Node` can hold multiple forces, which are passed as a list. 
-Once created, the `Beam` object can retrieve the information from the list of `Forces` objects and perfom checks and design.
+Once created, the `Beam` object can retrieve the information from the list of `Forces` objects and perform checks and design.
 
 .. code-block:: python
 
@@ -70,18 +72,21 @@ You can define the longitudinal and transverse reinforcement for the beam using 
 
 .. note::
     Consider that:
+
     - If no transverse reinforcement is defined, it is assumed that plain concrete will resist shear forces. 
-    - If no longitudinal reinforcement is defined, a minimum of 2Ø8 will be considered
-    for metric system or 2#3 for imperial system of units. Mento won't check a beam without longitudinal rebar.
+    - If no longitudinal reinforcement is defined, a minimum of 2Ø8 will be considered for metric system or 2#3 for imperial system of units. Mento won't check a beam without longitudinal rebar.
     - Skin rebar is not considered for the check or design of the beam.
 
 **Transverse reinforcement**
-This is set indicating amount of stirrups, the diameter of the sitrrups and the spacing of the legs along the beamm.
+This is set indicating amount of stirrups, the diameter of the stirrups and the spacing of the legs along the beam.
 
 **Longitudinal reinforcement**
 This is set indicating rebar for two layers, differentiating between border bars and inner bars. 
 Each group of bars, for each layer has a unique number id. Bars can be defined both for top and bottom of the beam,
 which will be considered for negative and positive bending moments respectively.
+
+In case a flexure analysis requires compression reinforcement additional to the tension reinforcement, the opposite reinforcement will be considered.
+For example, if a positive moment is so large that the section must be reinforced at top&bottom, the top rebar will also be considered in the beam capacity for flexure.
 
 .. image:: ../_static/beam/beam_long_rebar.png
    :alt: Beam longitudinal rebar layout.
@@ -102,20 +107,16 @@ which will be considered for negative and positive bending moments respectively.
 4. Performing Checks
 ********************
 
-Once the beam is defined and forces are assigned, you can perform checks for shear and flexure.
-*Mento* will apply correpsonding design code formulas depending on the type of `Concrete` object 
-created for all the forces assigned and store the limiting case for shear and top and bottom bending moment. 
+Once the beam is defined and forces are assigned in a `Node` object, you can perform checks for shear and flexure.
+See the `Node` section for more information on how to create a Node and check the section. 
 
-- **Shear Check**: Use `check_shear`.
-- **Flexure Check**: Use `check_flexure`.
+5. Design the section
+********************
 
-.. code-block:: python
+If you don't assign transverse or longitudinal rebar, you can as *Mento* to design for shear and flexure.
+See the `Node` section for more information on how to create a Node and design the section. 
 
-    # Perform shear and flexure checks
-    beam.check_shear()
-    beam.check_flexure()
-
-5. Jupyter Notebook Results
+6. Jupyter Notebook Results
 ******************
 
 After performing the checks, you can view the results in a formatted way in a Notebook.
@@ -202,19 +203,7 @@ The `beam.data` command provides the beam's geometry and material properties. He
 - **Check DCR Values**: A DCR less than 1.0 indicates that the beam is safe under the applied loads.
 - **Review Warnings**: If the output includes warnings, review the design to ensure compliance with code requirements. You can check detailed results for more information.
 
-6. Detailed Results
+7. Detailed Results
 *******************
 
-For more detailed results, you can use the following methods:
-
-- **Shear Results**: Use `shear_results_detailed()`.
-- **Flexure Results**: Use `flexure_results_detailed()`.
-
-These methods provide a comprehensive breakdown of the calculations, which can be useful for reporting or further analysis.
-
-.. code-block:: python
-
-    # View detailed shear results
-    beam.shear_results_detailed()
-    # View detailed flexure results
-    beam.flexure_results_detailed()
+See the `Node` section for more information on how to display and save detailed results of the analysis. 

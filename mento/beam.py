@@ -486,7 +486,7 @@ class RectangularBeam(RectangularSection):
         def clean_zero(value: float, tolerance: float = 1e-6) -> float:
             return 0.0 if abs(value) < tolerance else value
         
-        c_d=clean_zero(c/self._d_bot)
+        c_d=clean_zero(c/d)
 
         # Adjust required reinforcement to limits
         if A_s_calc > A_s_min:
@@ -504,6 +504,7 @@ class RectangularBeam(RectangularSection):
             M_n_t = rho * self.steel_bar.f_y * (d - 0.59 * rho * self.steel_bar.f_y * d / self.concrete.f_c) * b * d
             M_n_prima = M_u / self.phi_t - M_n_t
             c_t = 0.003 * d / (self.steel_bar.epsilon_y + 0.006)
+            c_d=clean_zero(c_t/d)
             f_s_prima = min(0.003 * self.steel_bar.E_s * (1 - d_prima / c_t), self.steel_bar.f_y)
             A_s_comp = M_n_prima / (f_s_prima * (d - d_prima))
             A_s_final = rho * b * d + A_s_comp
@@ -634,7 +635,6 @@ class RectangularBeam(RectangularSection):
 
         # Inicializamos los momentos nominales a partir de las fuerzas:
         self._determine_nominal_moment_ACI_318_19(force)
-
 
         if self._M_u>=0:
             self._A_s_min_bot, self._A_s_max_bot, self._A_s_req_bot, self._A_s_req_top, self._c_d_bot = self._calculate_flexural_reinforcement_ACI_318_19(self._M_u_bot, self._d_bot, self._c_mec_top)
@@ -988,7 +988,7 @@ class RectangularBeam(RectangularSection):
     def _calculate_total_shear_strength_aci(self) -> None:
         self._phi_V_n = self.phi_v * (self.V_c + self._A_v * self.f_yt * self._d_shear)
         V_d_max = min(self._phi_V_n, self._phi_V_max)
-        self._DCRv = abs((self._V_u.to('kN').magnitude / V_d_max.to('kN').magnitude))
+        self._DCRv = round(abs((self._V_u.to('kN').magnitude / V_d_max.to('kN').magnitude)),3)
 
     def _calculate_rebar_spacing_aci(self) -> None:
         section_rebar = Rebar(self)
@@ -1277,7 +1277,7 @@ class RectangularBeam(RectangularSection):
                 self._stirrup_s_max_l, self._stirrup_s_max_w =\
                       section_rebar.calculate_max_spacing_EN_1992_2004(self._alpha)
 
-            self._DCRv = abs((self._V_Ed_2.to('kN').magnitude / self._V_Rd.to('kN').magnitude))
+            self._DCRv = round(abs((self._V_Ed_2.to('kN').magnitude / self._V_Rd.to('kN').magnitude)),3)
             # Design results
             results = {
                 'Label': self.label, #Beam label
@@ -2206,7 +2206,7 @@ def flexure_design_test_calcpad_example() -> None:
     concrete = Concrete_ACI_318_19(name="fc 4000", f_c=4000*psi)  
     steelBar = SteelBar(name="fy 60000", f_y=60*ksi)  
     custom_settings = {'clear_cover': 1.5*inch} 
-    section = RectangularBeam(
+    beam = RectangularBeam(
         label="B-12x24",
         concrete=concrete,
         steel_bar=steelBar,
@@ -2215,17 +2215,20 @@ def flexure_design_test_calcpad_example() -> None:
         settings=custom_settings  
     )
     
-    # section.set_longitudinal_rebar_bot(n1=2,d_b1=1.375*inch, n3=2,d_b3=1.25*inch)
-    # section.set_longitudinal_rebar_top(n1=2,d_b1=0.75*inch)
+    #beam.set_longitudinal_rebar_bot(n1=2,d_b1=1.375*inch, n3=2,d_b3=1.27*inch)
+    #beam.set_longitudinal_rebar_top(n1=2,d_b1=1.375*inch, n3=2,d_b3=1.27*inch)
 
-    f = Forces(label='Test_01', M_y=400*kip*ft)
-    # f2 = Forces(label='Test_01', M_y=0*kip*ft)
-    Node(section=section, forces=[f])
+    f = Forces(label='Test_01', V_z = 40*kip, M_y=400*kip*ft)
+    f2 = Forces(label='Test_01', V_z = 100*kip, M_y=-400*kip*ft)
+    Node(section=beam, forces=[f,f2])
 
-    # print(section.check_flexure())
-    print(section.design_flexure())
-    print(section.flexure_design_results_bot)
-    # section.flexure_results_detailed()
+    #print(beam.check_flexure())
+    shear_results = beam.design_shear()
+    print(shear_results)
+    flexure_results = beam.design_flexure()
+    print(flexure_results)
+    #print(beam.flexure_design_results_bot)
+    #beam.flexure_results_detailed()
 
 
 
@@ -2444,6 +2447,7 @@ if __name__ == "__main__":
     # flexure_check_test()
     # flexure_design_test()
     # flexure_design_test_calcpad_example() 
+
     # flexure_Mn()
     # shear_ACI_imperial()
     # shear_EN_1992()
@@ -2451,3 +2455,37 @@ if __name__ == "__main__":
     rebar_df()
     # shear_ACI_metric()
     # shear_CIRSOC()
+    from mento import Concrete_ACI_318_19, SteelBar, RectangularConcreteBeam
+    from mento import psi, inch, ksi
+    from mento.section import Section
+    from mento.forces import Forces
+    from mento.node import Node
+
+    # Define concrete and steel materials
+    concrete = Concrete_ACI_318_19(name="C4", f_c=4000 * psi)
+    steel = SteelBar(name="fy=6000", f_y=60 * ksi)
+
+    # Initialize section using default settings
+    section = RectangularConcreteBeam(
+        label="B-12x24",
+        concrete=concrete,
+        steel_bar=steel,
+        width=12 * inch,
+        height=24 * inch
+    )
+
+    # Initialize the flexural solicitations of the section
+    f1 = Forces(label='Combo_01', M_y=400*kip*ft)
+    f2 = Forces(label='Combo_02', M_y=-400*kip*ft)
+    f3 = Forces(label='Combo_03', M_y=37*kip*ft)
+    f4 = Forces(label='Combo_04', M_y=150*kip*ft)
+    f5 = Forces(label='Combo_05', M_y=-1*kip*ft)
+    
+    # Create the node that associates the section with the forces
+    Node(section=beam, forces=[f1,f2,f2,f4,f5])
+
+    # Dimensionate the steel rebar required for the beam:
+    # As the concrete was defined using Concrete_ACI_318_19, the code for design will be ACI 318 19
+    flexure_results = beam.design_flexure()
+    print(flexure_results)
+

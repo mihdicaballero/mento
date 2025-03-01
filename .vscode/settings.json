@@ -8,4 +8,7 @@
     "makefile.makefilePath": "",
     "makefile.makePath": "",
     "python.REPL.enableREPLSmartSend": false,
+    "cSpell.words": [
+        "textsf"
+    ],
 }
