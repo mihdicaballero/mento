@@ -103,21 +103,3 @@ class Settings:
         for key, value in self.settings.items():
             output += f"  {key}: {value}\n"
         return output.strip()
-
-# Test the Settings class
-def settings() -> None:
-    from mento.material import Concrete_ACI_318_19
-    # Example with metric concrete
-    metric_concrete = Concrete_ACI_318_19(name='H30', f_c=30*MPa)
-    metric_settings = Settings(metric_concrete)
-    print("Metric settings:")
-    print(metric_settings)
-
-    # Example with imperial concrete
-    imperial_concrete = Concrete_ACI_318_19(name='C4', f_c=4000*psi)
-    imperial_settings = Settings(imperial_concrete)
-    print("\nImperial settings:")
-    print(imperial_settings)
-
-if __name__ == "__main__":
-    settings()
