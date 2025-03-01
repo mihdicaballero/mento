@@ -2363,17 +2363,47 @@ def rebar() -> None:
         height=50*cm,
         settings=custom_settings  
     )
-    as_req = 5 * cm**2
+    as_req = 7*cm**2
 
     beam_rebar = Rebar(section)
     long_rebar_df = beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=as_req)
-    print(long_rebar_df)
     best_design = beam_rebar.longitudinal_rebar_design
-    # print(long_rebar_df.iloc[0]['total_as'])
-    # A_v_req = 8.045*cm**2/m
-    # V_s_req = 108.602*kN
-    # trans_rebar = beam_rebar.beam_transverse_rebar_ACI_318_19(A_v_req=A_v_req, V_s_req=V_s_req)
-    # print(trans_rebar)
+    print(long_rebar_df)
+
+def rebar_df() -> None:
+    concrete= Concrete_ACI_318_19(name="H30",f_c=30*MPa) 
+    steelBar= SteelBar(name="ADN 420", f_y=420*MPa)
+    custom_settings = {'clear_cover': 30*mm, 'stirrup_diameter_ini':8*mm}
+    section = RectangularBeam(
+        label="V 20x50",
+        concrete=concrete,
+        steel_bar=steelBar,
+        width=20*cm,  
+        height=50*cm,
+        settings=custom_settings  
+    )
+    beam_rebar = Rebar(section)
+    # Create a list of required steel areas from 0.5 to 10 with a step of 0.5 cm²
+    as_req_list = np.arange(0.5, 10.5, 0.5)*cm**2
+    # Initialize an empty DataFrame to store the results
+    results_df = pd.DataFrame()
+
+    # Loop through each required steel area
+    for as_req in as_req_list:
+        # Run the longitudinal_rebar_ACI_19 method
+        long_rebar_df = beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=as_req)
+        
+        # Extract the first row of the resulting DataFrame
+        first_row = long_rebar_df.iloc[0:1].copy()
+        
+        # Add a column to store the required steel area
+        first_row['as_req'] = as_req.magnitude  # Store the magnitude (value without units)
+        
+        # Append the first row to the results DataFrame
+        results_df = pd.concat([results_df, first_row], ignore_index=True)
+
+    # Display the results DataFrame
+    print(results_df)
 
 def shear_EN_1992() -> None:
     concrete= Concrete_EN_1992_2004(name="C25",f_ck=25*MPa) 
@@ -2416,11 +2446,13 @@ def shear_CIRSOC() -> None:
 if __name__ == "__main__":
     # flexure_check_test()
     # flexure_design_test()
-    #flexure_design_test_calcpad_example() 
+    # flexure_design_test_calcpad_example() 
+
     # flexure_Mn()
     # shear_ACI_imperial()
     # shear_EN_1992()
-    # rebar()
+    rebar()
+    rebar_df()
     # shear_ACI_metric()
     # shear_CIRSOC()
     from mento import Concrete_ACI_318_19, SteelBar, RectangularConcreteBeam
