@@ -1,7 +1,8 @@
 import math
+from typing import Union
 
 # Helper function to convert degrees to radians
-def degrees_to_radians(degrees):
+def degrees_to_radians(degrees: Union[int, float]) -> float:
     return degrees * (math.pi / 180.0)
 
 # *** (A) ***
