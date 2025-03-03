@@ -16,7 +16,7 @@ from mento.rebar import Rebar
 from mento.units import MPa, ksi, psi, kip, mm, inch, kN, m, cm, kNm, ft, dimensionless
 from mento.results import Formatter, TablePrinter, DocumentBuilder
 from mento.forces import Forces  
-from mento.node import Node
+
 
 
 @dataclass
@@ -622,7 +622,7 @@ class RectangularBeam(RectangularSection):
 
         return None
 
-    def check_flexure_ACI_318_19(self, force: Forces) -> pd.DataFrame:
+    def _check_flexure_ACI_318_19(self, force: Forces) -> pd.DataFrame:
         '''
             flexure_design_results_top: es el diccionario de armado de rebar que tiene las 4 posiciones
         '''
@@ -656,7 +656,7 @@ class RectangularBeam(RectangularSection):
         self._initialize_dicts_ACI_318_19_flexure()
         return pd.DataFrame([results], index=[0])
 
-    def design_flexure_ACI_318_19(self, max_M_y_bot: PlainQuantity, max_M_y_top: PlainQuantity) -> Dict[str, Any]:
+    def _design_flexure_ACI_318_19(self, max_M_y_bot: PlainQuantity, max_M_y_top: PlainQuantity) -> Dict[str, Any]:
         """
         Designs the flexural reinforcement for a beam cross-section 
         according to ACI 318-19.
@@ -790,10 +790,10 @@ class RectangularBeam(RectangularSection):
         }
         return pd.DataFrame([results], index=[0])
 
-    def design_flexure_EN_1992(self, force: Forces) -> None:
+    def _design_flexure_EN_1992(self, force: Forces) -> None:
         pass
 
-    def design_flexure(self) -> pd.DataFrame:
+    def _design_flexure(self, forces: list[Forces]) -> pd.DataFrame:
         """
         Designs flexural reinforcement for the beam using the provided forces and design code.
         Identifies the limiting cases for top and bottom reinforcement, designs for those cases, 
@@ -804,15 +804,13 @@ class RectangularBeam(RectangularSection):
         DataFrame
             A DataFrame summarizing the flexural design results for all forces.
         """
-        if not self.node or not self.node.forces:
-            raise ValueError("No Node or forces list associated with this beam.")
 
         # Initialize limiting cases
         max_M_y_top = 0 * kN * m  # For negative M_y (top reinforcement design)
         max_M_y_bot = 0 * kN * m  # For positive M_y (bottom reinforcement design)
 
         # Identify the limiting cases
-        for force in self.node.forces:
+        for force in forces:
             # For top reinforcement, consider the minimum (most negative) moment
             if force._M_y <= max_M_y_top:
                 max_M_y_top = force._M_y
@@ -824,18 +822,16 @@ class RectangularBeam(RectangularSection):
                 self._limiting_case_top=force
         # Design flexural reinforcement for the limiting cases
         if self.concrete.design_code=="ACI 318-19" or self.concrete.design_code=="CIRSOC 201-25":
-            self.design_flexure_ACI_318_19(max_M_y_bot, max_M_y_top)
+            self._design_flexure_ACI_318_19(max_M_y_bot, max_M_y_top)
         else:
             raise ValueError(f"Longitudinal design method not implemented "
                             f"for concrete type: {type(self.concrete).__name__}")
         
         # Check flexural capacity for all forces with the assigned reinforcement
-        all_results = self.check_flexure()
+        all_results = self._check_flexure(forces)
         return all_results
 
-    def check_flexure(self) -> DataFrame:
-        if not self.node or not self.node.forces:
-            raise ValueError("No Node or forces list associated with this beam.")
+    def _check_flexure(self, forces: list[Forces]) -> DataFrame:
         
         # Initialize variables to track limiting cases
         max_dcr_top: float = 0
@@ -849,12 +845,12 @@ class RectangularBeam(RectangularSection):
         self._flexure_results_list = []  # Store individual results for each force
         self._flexure_results_detailed_list = {}  # Store detailed results by force ID
 
-        for force in self.node.forces:
+        for force in forces:
             # Select the method based on design code
             if self.concrete.design_code=="ACI 318-19" or self.concrete.design_code=="CIRSOC 201-25":
-                result = self.check_flexure_ACI_318_19(force)
+                result = self._check_flexure_ACI_318_19(force)
             # elif self.concrete.design_code=="EN 1992-2004":
-            #     result =  self.check_shear_EN_1992_2004(force)
+            #     result =  self._check_shear_EN_1992_2004(force)
             else:
                 raise ValueError(f"Flexure design method not implemented for concrete type: {type(self.concrete).__name__}")  # noqa: E501
             self._flexure_results_list.append(result)
@@ -1076,7 +1072,7 @@ class RectangularBeam(RectangularSection):
         else:
             return min(self.steel_bar.f_y, 60 * ksi)
 
-    def check_shear_ACI_318_19(self, force: Forces) -> pd.DataFrame:
+    def _check_shear_ACI_318_19(self, force: Forces) -> pd.DataFrame:
         # Set the initial variables
         self._initialize_variables_ACI_318_19(force)
 
@@ -1112,7 +1108,7 @@ class RectangularBeam(RectangularSection):
         self._initialize_dicts_ACI_318_19_shear()
         return pd.DataFrame([results], index=[0])
 
-    def design_shear_ACI_318_19(self, force: Forces) -> None:
+    def _design_shear_ACI_318_19(self, force: Forces) -> None:
         # Set the initial variables
         self._initialize_variables_ACI_318_19(force)
         # Minimum shear reinforcement calculation
@@ -1199,7 +1195,7 @@ class RectangularBeam(RectangularSection):
                   +k_1*self._sigma_cp.to('MPa'))* self.width * self._d_shear).to('kN')        
         return max(V_Rd_c_min, V_Rd_c)
         
-    def check_shear_EN_1992_2004(self, Force:Forces) -> DataFrame:
+    def _check_shear_EN_1992_2004(self, Force:Forces) -> DataFrame:
         if isinstance(self.concrete, Concrete_EN_1992_2004):
             # Initialize all the code related variables
             self._initialize_variables_EN_1992_2004(Force)            
@@ -1299,22 +1295,20 @@ class RectangularBeam(RectangularSection):
         else:
             raise ValueError("Concrete type is not compatible with EHE-08 shear check.")
   
-    def design_shear_EN_1992_2004(self, Force:Forces) -> None:
+    def _design_shear_EN_1992_2004(self, Force:Forces) -> None:
         return None
 
     # Factory method to select the shear design method
-    def design_shear(self) -> DataFrame:
-        if not self.node or not self.node.forces:
-            raise ValueError("No Node or forces list associated with this beam.")
+    def _design_shear(self, forces: list[Forces]) -> DataFrame:
         # Track the maximum A_v_req to identify the limiting case
         max_A_v_req = 0*cm**2/m 
 
         # Step 1: Identify the worst-case force
-        for force in self.node.forces:
+        for force in forces:
             if self.concrete.design_code=="ACI 318-19" or self.concrete.design_code=="CIRSOC 201-25":
-                self.design_shear_ACI_318_19(force)
+                self._design_shear_ACI_318_19(force)
             # elif self.concrete.design_code=="EN 1992-2004":
-                # self.design_shear_EN_1992_2004(force)
+                # self._design_shear_EN_1992_2004(force)
             else:
                 raise ValueError(f"Shear design method not implemented for concrete type:"\
                     f"{type(self.concrete).__name__}")
@@ -1337,25 +1331,23 @@ class RectangularBeam(RectangularSection):
                                   self._best_rebar_design['s_l'])
 
         # Step 3: Check shear adequacy for all forces using the designed rebar
-        all_results = self.check_shear()  
+        all_results = self._check_shear(forces)  
         return all_results
     
     # Factory method to select the shear check method
-    def check_shear(self) -> DataFrame:
-        if not self.node or not self.node.forces:
-            raise ValueError("No Node or forces list associated with this beam.")
+    def _check_shear(self, forces: list[Forces]) -> DataFrame:
 
         self._shear_results_list = []  # Store individual results for each force
         self._shear_results_detailed_list = {}  # Store detailed results by force ID
         max_dcr = 0  # Track the maximum DCR to identify the limiting case
         self._limiting_case_shear_details = None
 
-        for force in self.node.forces:
+        for force in forces:
             # Select the method based on design code
             if self.concrete.design_code=="ACI 318-19" or self.concrete.design_code=="CIRSOC 201-25":
-                result = self.check_shear_ACI_318_19(force)
+                result = self._check_shear_ACI_318_19(force)
             elif self.concrete.design_code=="EN 1992-2004":
-                result =  self.check_shear_EN_1992_2004(force)
+                result =  self._check_shear_EN_1992_2004(force)
             else:
                 raise ValueError(f"Shear design method not implemented for concrete type: {type(self.concrete).__name__}")  # noqa: E501
             self._shear_results_list.append(result)
@@ -1398,6 +1390,15 @@ class RectangularBeam(RectangularSection):
             if n2 > 0 and d_b2.magnitude > 0:  # Check if n2 and d_b2 are defined
                 rebar_string += f"+{n2}Ø{int(d_b2.magnitude)}"
         return rebar_string
+
+
+
+
+
+##########################################################
+# RESULTS
+##########################################################
+
 
     def _initialize_dicts_ACI_318_19_flexure(self) -> None:
         """Initialize the dictionaries used in check and design methods."""
@@ -1748,7 +1749,7 @@ class RectangularBeam(RectangularSection):
     @property
     def flexure_results(self) -> None:
         if not self._flexure_checked:
-            warnings.warn("Flexural design has not been performed yet. Call check_flexure() or "
+            warnings.warn("Flexural design has not been performed yet. Call _check_flexure() or "
                         "design_flexure() first.", UserWarning)
             self._md_flexure_results = "Flexural results are not available."
             return None
@@ -1881,7 +1882,7 @@ class RectangularBeam(RectangularSection):
         None
         """
         if not self._flexure_checked:
-            warnings.warn("Flexural check has not been performed yet. Call check_flexure or "
+            warnings.warn("Flexural check has not been performed yet. Call _check_flexure or "
                         "design_flexure first.", UserWarning)
             self._md_flexure_results = "Flexure results are not available."
             return None
@@ -1978,7 +1979,7 @@ class RectangularBeam(RectangularSection):
             The specific Forces object to display results for. If None, displays results for the limiting case.
         """
         if not self._flexure_checked:
-            warnings.warn("Flexural check has not been performed yet. Call check_flexure or "
+            warnings.warn("Flexural check has not been performed yet. Call _check_flexure or "
                         "design_flexure first.", UserWarning)
             self._md_flexure_results = "Flexural results are not available."
             return None
@@ -2177,6 +2178,9 @@ class RectangularBeam(RectangularSection):
 
 
 
+##########################################################################################################
+
+
 def clear_console() -> None:
     """
     Clears the console based on the operating system.
@@ -2196,8 +2200,8 @@ def flexure_design_test() -> None:
                                        settings=custom_settings)
     f1 = Forces(label='C1', M_y=20*kNm)
     f2 = Forces(label='C2', M_y=-20*kNm)
-    Node(section=beam, forces=[f1, f2])
-    results=beam.design_flexure()
+    forces=[f1, f2]
+    results=beam._design_flexure(forces)
     # print(beam.flexure_design_results_bot,'\n', beam.flexure_design_results_top)
     print(results)
     # beam.flexure_results_detailed()
@@ -2220,16 +2224,11 @@ def flexure_design_test_calcpad_example() -> None:
 
     f = Forces(label='Test_01', V_z = 40*kip, M_y=400*kip*ft)
     f2 = Forces(label='Test_01', V_z = 100*kip, M_y=-400*kip*ft)
-    Node(section=beam, forces=[f,f2])
+    forces=[f,f2]
 
-    #print(beam.check_flexure())
-    shear_results = beam.design_shear()
-    print(shear_results)
-    flexure_results = beam.design_flexure()
+    flexure_results = beam._design_flexure(forces)
     print(flexure_results)
-    #print(beam.flexure_design_results_bot)
-    #beam.flexure_results_detailed()
-
+ 
 
 
 def flexure_check_test() -> None:
@@ -2252,8 +2251,8 @@ def flexure_check_test() -> None:
     f2 = Forces(label='L', M_y=-100*kNm)
     f3 = Forces(label='W', M_y=-50*kNm)
     f4 = Forces(label='S', M_y=110*kNm)
-    Node(section=beam, forces=[f1,f2,f3,f4])
-    print(beam.check_flexure())
+    forces=[f1,f2,f3,f4]
+    print(beam._check_flexure(forces))
     
     # beam.check_shear()
     beam.flexure_results_detailed()
@@ -2310,11 +2309,11 @@ def shear_ACI_metric() -> None:
     f3 = Forces(label='W', V_z=2.20*kN)
     f4 = Forces(label='S', V_z=8.0*kN)
     f5 = Forces(label='E', V_z=1.0*kN)
-    Node(section=beam, forces=[f1, f2, f3, f4, f5])
+    forces=[f1, f2, f3, f4, f5]
     beam.set_longitudinal_rebar_bot(n1=2, d_b1=16 * mm)
     # beam.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=20*cm) 
     # results = beam.check_shear()
-    results = beam.design_shear()
+    results = beam._design_shear(forces)
     print(results)
     print(beam.shear_design_results)
     # beam.shear_results_detailed()
@@ -2339,12 +2338,12 @@ def shear_ACI_imperial() -> None:
     f1 = Forces(label='D', V_z=37.727*kip)
     # f1 = Forces(label='D', V_z=8*kip)
     # f2 = Forces(label='L', V_z=6*kip) # No shear reinforcing
-    Node(section=beam, forces=[f1])
+    forces=[f1]
     beam.set_transverse_rebar(n_stirrups=1, d_b=0.5*inch, s_l=6*inch)
 
     # beam.set_longitudinal_rebar_bot(n1=2, d_b1=0.625*inch)
     print(beam._A_v)
-    results = beam.check_shear()
+    results = beam._check_shear(forces)
     # results = beam.design_shear()
     print(results)
     # section.design_shear(f, A_s=0.847*inch**2)
@@ -2384,10 +2383,10 @@ def shear_EN_1992() -> None:
                                        settings=custom_settings)
     # f = Forces(V_z=100*kN, M_y=100*kNm)
     f = Forces(V_z=30*kN, N_x=0*kN)
+    forces=[f]
     # beam.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=25*cm)
     beam.set_longitudinal_rebar_bot(n1=4,d_b1=16*mm)
-    Node(beam, f)
-    beam.check_shear()
+    beam._check_shear(forces)
     beam.shear_results_detailed()
     # beam.shear_results_detailed_doc()
 
@@ -2404,10 +2403,10 @@ def shear_CIRSOC() -> None:
     f3 = Forces(label='W', V_z=2.20*kN)
     f4 = Forces(label='S', V_z=8.0*kN)
     f5 = Forces(label='E', V_z=1.0*kN)
-    Node(section=beam, forces=[f1, f2, f3, f4, f5])
+    forces=[f1, f2, f3, f4, f5]
     # beam.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=20*cm) 
     # results = beam.check_shear()
-    results = beam.design_shear()
+    results = beam._design_shear(forces)
     # results = beam.design_shear(A_s=5*cm**2)
     print(results)
     # beam.shear_results_detailed()
@@ -2416,10 +2415,10 @@ def shear_CIRSOC() -> None:
 if __name__ == "__main__":
     # flexure_check_test()
     # flexure_design_test()
-    flexure_design_test_calcpad_example() 
+    # flexure_design_test_calcpad_example() 
     # flexure_Mn()
-    # shear_ACI_imperial()
-    # shear_EN_1992()
-    # rebar()
-    # shear_ACI_metric()
-    # shear_CIRSOC()
+    shear_ACI_imperial()
+    shear_EN_1992()
+    rebar()
+    shear_ACI_metric()
+    shear_CIRSOC()

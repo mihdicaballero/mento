@@ -1,5 +1,4 @@
 from mento.beam import RectangularBeam
-from mento.node import Node
 from mento.material import Concrete_ACI_318_19, SteelBar, Concrete_EN_1992_2004
 from mento.units import psi, kip, inch, ksi, mm, kN, cm, MPa, ft
 from mento.forces import Forces
@@ -35,8 +34,8 @@ def test_shear_check_EN_1992_2004_rebar_1(beam_example_EN_1992_2004: Rectangular
     f = Forces(V_z=100*kN)
     beam_example_EN_1992_2004.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=25*cm) 
     beam_example_EN_1992_2004.set_longitudinal_rebar_bot(n1=4, d_b1=16*mm)
-    Node(section=beam_example_EN_1992_2004, forces=f)
-    results = beam_example_EN_1992_2004.check_shear()  
+    forces=[f]
+    results = beam_example_EN_1992_2004._check_shear(forces)
 
     # Compare dictionaries with a tolerance for floating-point values, in m 
     assert results.iloc[0]['Av,min'].magnitude  == pytest.approx(1.6, rel=1e-3)
@@ -58,8 +57,8 @@ def test_shear_check_EN_1992_2004_rebar_2(beam_example_EN_1992_2004: Rectangular
     f = Forces(V_z=350*kN)
     beam_example_EN_1992_2004.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=25*cm)
     beam_example_EN_1992_2004.set_longitudinal_rebar_bot(n1=4, d_b1=16*mm)
-    Node(section=beam_example_EN_1992_2004, forces=f)
-    results = beam_example_EN_1992_2004.check_shear()  
+    forces=[f]
+    results = beam_example_EN_1992_2004._check_shear(forces)  
 
     # Compare dictionaries with a tolerance for floating-point values, in m 
     assert results.iloc[0]['Av,min'].magnitude  == pytest.approx(1.6, rel=1e-3)
