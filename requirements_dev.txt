@@ -2,6 +2,7 @@ devtools
 ruff
 pint
 pytest
+numpy
 pandas
 IPython
 mypy
