@@ -161,9 +161,9 @@ def test_beam_longitudinal_rebar_zero_area_metric_ACI(beam_example_metric: Recta
 
 def test_beam_transverse_rebar_ACI_318_19_imperial(beam_example_imperial: RectangularBeam) -> None:
     f = Forces(V_z=37.727*kip)
-    Node(beam_example_imperial, forces=f)
     beam_example_imperial.set_longitudinal_rebar_bot(n1=2, d_b1=0.625*inch)
-    results = beam_example_imperial.design_shear()
+    N1=Node(beam_example_imperial, forces=f)
+    results = N1.design_shear()
     assert results is not None
     assert beam_example_imperial._stirrup_n == 1
     assert beam_example_imperial._stirrup_d_b == 3/8*inch
@@ -173,9 +173,9 @@ def test_beam_transverse_rebar_ACI_318_19_imperial(beam_example_imperial: Rectan
 def test_beam_transverse_rebar_ACI_318_19_metric(beam_example_metric: RectangularBeam) -> None:
     # This test ensures that the transverse rebar design works correctly for beams defined in metric units.
     f = Forces(V_z=100 * kN)
-    Node(beam_example_metric, forces=f)
     beam_example_metric.set_longitudinal_rebar_bot(n1=2, d_b1=16 * mm)
-    results = beam_example_metric.design_shear()
+    N1=Node(beam_example_metric, forces=f)
+    results = N1.design_shear()
     
     assert results is not None
     assert beam_example_metric._stirrup_n == 1
@@ -186,9 +186,9 @@ def test_beam_transverse_rebar_ACI_318_19_metric(beam_example_metric: Rectangula
 def test_beam_transverse_rebar_max_spacing_imperial(beam_example_imperial: RectangularBeam) -> None:
     # This test ensures that the maximum spacing constraints are respected.
     f = Forces(V_z=50 * kip)
-    Node(beam_example_imperial, forces=f)
     beam_example_imperial.set_longitudinal_rebar_bot(n1=2, d_b1=0.625 * inch)
-    results = beam_example_imperial.design_shear()
+    N1=Node(beam_example_imperial, forces=f)
+    results = N1.design_shear()
     
     assert results is not None
     assert beam_example_imperial._stirrup_s_l <= 24 * inch
@@ -197,9 +197,9 @@ def test_beam_transverse_rebar_max_spacing_imperial(beam_example_imperial: Recta
 def test_beam_transverse_rebar_min_diameter(beam_example_metric: RectangularBeam) -> None:
     # This test ensures that the minimum rebar diameter constraint is respected for transverse reinforcement.
     f = Forces(V_z=50 * kN)
-    Node(beam_example_metric, forces=f)
     beam_example_metric.set_longitudinal_rebar_bot(n1=2, d_b1=16 * mm)
-    results = beam_example_metric.design_shear()
+    N1=Node(beam_example_metric, forces=f)
+    results = N1.design_shear()
     
     assert results is not None
     assert beam_example_metric._stirrup_d_b >= 8 * mm
@@ -208,9 +208,9 @@ def test_beam_transverse_rebar_CIRSOC_201_25(beam_example_metric: RectangularBea
     # This test ensures that the transverse rebar design works correctly for different design codes.
     beam_example_metric.concrete.design_code = "CIRSOC 201-25"
     f = Forces(V_z=100 * kN)
-    Node(beam_example_metric, forces=f)
     beam_example_metric.set_longitudinal_rebar_bot(n1=2, d_b1=16 * mm)
-    results = beam_example_metric.design_shear()
+    N1=Node(beam_example_metric, forces=f)
+    results = N1.design_shear()
     
     assert results is not None
     assert beam_example_metric._stirrup_n == 1

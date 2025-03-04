@@ -6,3 +6,12 @@ tabulate
 python-docx
 jinja2
 seaborn
+devtools
+ruff
+pytest
+mypy
+sphinx
+nbsphinx
+sphinx_book_theme
+sphinx_design
+sphinx-copybutton

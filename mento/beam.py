@@ -1,5 +1,4 @@
 import os # Cleaning console
-from devtools import debug
 from dataclasses import dataclass
 from IPython.display import Markdown, display
 from typing import Optional, Dict, Any, cast, Union
@@ -9,6 +8,7 @@ import pandas as pd
 from pandas import DataFrame
 import math
 import warnings
+from devtools import debug 
 
 from mento.rectangular import RectangularSection
 from mento.material import Concrete, SteelBar, Concrete_ACI_318_19, Concrete_EN_1992_2004, Concrete_CIRSOC_201_25
@@ -16,7 +16,7 @@ from mento.rebar import Rebar
 from mento.units import MPa, ksi, psi, kip, mm, inch, kN, m, cm, kNm, ft, dimensionless
 from mento.results import Formatter, TablePrinter, DocumentBuilder
 from mento.forces import Forces  
-from mento.node import Node
+
 
 
 @dataclass
@@ -341,18 +341,15 @@ class RectangularBeam(RectangularSection):
             Note:
             - The parameter `epsilon_min_rebar_ACI_318_19` is calculated as the 
             sum of the steel's yield strain (ε_y) and the concrete's strain 
-            at crushing (ε_c).
+            at crushing (ε_c). 
             - This function only works if the `design_code` of the concrete is 
             set to "ACI 318-19". For other codes, it returns 0.
 
-            TODO:
-            - Verify the calculation of `epsilon_min_rebar_ACI_318_19` to ensure 
-            it complies with the ACI 318-19 provisions.
         """
         # Cast the concrete object to the specific ACI subclass
         concrete_aci = cast(Concrete_ACI_318_19, self.concrete)
         
-        # Calculate minimum steel strain for ductility
+        # Calculate minimum steel strain for ductility (tension controled according 9.3.3.1 and 21.2.2)
         epsilon_min_rebar_ACI_318_19 = (
             self.steel_bar.epsilon_y + concrete_aci._epsilon_c
         )
@@ -419,43 +416,31 @@ class RectangularBeam(RectangularSection):
                     (200 * psi / self.steel_bar.f_y))
         return minimum_ratio
 
-    def _calculate_flexural_reinforcement_ACI_318_19(self, M_u: PlainQuantity, d: float, d_prima: float)-> tuple[PlainQuantity, PlainQuantity, PlainQuantity, PlainQuantity, float]:
+    def _calculate_flexural_reinforcement_ACI_318_19(self, M_u: PlainQuantity, d: float, d_prima: float) -> tuple[PlainQuantity, PlainQuantity, PlainQuantity, PlainQuantity, float]:
         """
-        Calculates the flexural reinforcement (bottom tensile and top compression, if required) 
-        for a given factored moment.
+        Calculates the flexural reinforcement for a given factored moment according to ACI 318-19.
+
+        This function computes the required reinforcement areas (minimum, maximum, and final) and
+        the compression reinforcement (if required) for a given factored moment. The moment M_u must 
+        always be provided as a positive value. For a positive moment, pass 'd' as the effective depth 
+        of the tensile reinforcement and 'd_prima' as the effective depth of the compression reinforcement.
+        For a negative moment, reverse the roles of 'd' and 'd_prima'.
 
         Parameters:
-            M_u (float): Factored moment (must always be passed as a positive value).
+            M_u (PlainQuantity): The factored moment (always a positive value).
             d (float): Effective depth of the tensile reinforcement.
             d_prima (float): Effective depth of the compression reinforcement.
 
         Returns:
-            Tuple:
-                - A_s_min (float): Minimum reinforcement area required by the code.
-                - A_s_max (float): Maximum reinforcement area allowed by the code.
-                - A_s_final (float): Final reinforcement area adopted for the tensile zone.
-                - A_s_comp (float): Compression reinforcement area (if required).
-
-        Description:
-            This is a private function that calculates the reinforcement for a given factored moment.
-            The moment \\( M_u \\) must always be passed as a **positive value**, regardless of whether 
-            it corresponds to a positive or negative moment. To study a positive moment, invoke this 
-            function with \\( d \\) as the tensile reinforcement depth and \\( d_prima \\) as the 
-            compression reinforcement depth. To study a negative moment, pass \\( d_prima \\) as the 
-            tensile depth and \\( d \\) as the compression depth.
-
-            This function is meant to be used internally by higher-level methods and is not intended 
-            for direct use by the user.
-
-        Example:
-            # For a positive moment:
-            A_s_min, A_s_max, A_s_final, A_s_comp = self._calculate_flexural_reinforcement(M_u_max, d, d_prima)
-                
-            # For a negative moment:
-            A_s_min, A_s_max, A_s_final, A_s_comp = self._calculate_flexural_reinforcement(abs(M_u_min), d_prima, d)
-
+            tuple: A tuple containing:
+                - A_s_min (PlainQuantity): Minimum reinforcement area required by the code.
+                - A_s_max (PlainQuantity): Maximum reinforcement area allowed by the code.
+                - A_s_final (PlainQuantity): Final reinforcement area adopted for the tensile zone.
+                - A_s_comp (PlainQuantity): Compression reinforcement area (if required).
+                - c_d (float): Ratio of the calculated neutral axis depth to the effective depth (c/d).
         """
-        # Extract relevant properties from self
+
+        # Extract relevant properties and settings
         setting_flexural_min_reduction = self.settings.get_setting('flexural_min_reduction')
         beta_1 = self.concrete.get_properties()["beta_1"]
         b = self._width
@@ -463,40 +448,43 @@ class RectangularBeam(RectangularSection):
         self.settings.load_aci_318_19_settings()
         self.phi_t = self.settings.get_setting('phi_t')
 
-        # Determine minimum and maximum reinforcement
-        rho_min=self._minimum_flexural_reinforcement_ratio_ACI_318_19(M_u)
+        # Determine minimum and maximum reinforcement areas
+        rho_min = self._minimum_flexural_reinforcement_ratio_ACI_318_19(M_u)
         A_s_min = rho_min * d * b
         rho_max = self._maximum_flexural_reinforcement_ratio_ACI_318_19()
         A_s_max = rho_max * d * b
 
-        # Calculate required reinforcement
-
+        # Calculate required reinforcement based on the nominal moment capacity
         R_n = M_u / (self.phi_t * b * d**2)
-        #TODO ACA HAY QUE VER QUE HACER CUANDO ESTA RAIZ ES NEGATIVA, hay que manejar el error.
-        # Verificar si el valor dentro de la raíz cuadrada es negativo
+        # TODO: REVIEW WHAT TO DO WHEN THE VALUE INSIDE THE SQUARE ROOT IS NEGATIVE.
+        # Verify if the value under the square root is negative
         sqrt_value = 1 - 2 * R_n / (0.85 * self.concrete.f_c)
         if sqrt_value < 0:
-            # Lanzar excepción si la raíz es negativa
-            A_s_calc = A_s_max  # Esto es para que no se rompa, que de el maximo, y el DCR quede mayor a 1
+            # Raise exception if the square root is negative;
+            # Here we assign A_s_max so that the calculation does not break,
+            # resulting in a DCR greater than 1.
+            A_s_calc = A_s_max
         else:
             A_s_calc = 0.85 * self.concrete.f_c * b * d / self.steel_bar.f_y * (1 - np.sqrt(sqrt_value))
         
-        c =A_s_calc*self.steel_bar.f_y/(0.85*self.concrete.f_c*b*beta_1) # C=T -> 0.85*f_c*c*beta_1*b = A_s *f_y -> a = A_s *f_y / (0.85*f_c*b)
-        
+        # Calculate the neutral axis depth based on equilibrium: 0.85 * f_c * c * beta_1 * b = A_s * f_y
+        c = A_s_calc * self.steel_bar.f_y / (0.85 * self.concrete.f_c * b * beta_1)
+
+        # Helper function to clean near-zero values
         def clean_zero(value: float, tolerance: float = 1e-6) -> float:
             return 0.0 if abs(value) < tolerance else value
-        
-        c_d=clean_zero(c/d)
 
-        # Adjust required reinforcement to limits
+        c_d = clean_zero(c / d)
+
+        # Adjust the required reinforcement to meet the limits
         if A_s_calc > A_s_min:
             A_s_final = A_s_calc
         elif 4 * A_s_calc / 3 > A_s_min:
             A_s_final = A_s_min
         else:
-            A_s_final = clean_zero(4 * A_s_calc.to('cm**2').magnitude / 3)*cm**2 if setting_flexural_min_reduction == 'True' else A_s_min
+            A_s_final = clean_zero(4 * A_s_calc.to('cm**2').magnitude / 3) * cm**2 if setting_flexural_min_reduction == 'True' else A_s_min
 
-        # Check if compression reinforcement is required
+        # Determine if compression reinforcement is required
         if A_s_final <= A_s_max:
             A_s_comp = 0 * cm**2
         else:
@@ -504,159 +492,252 @@ class RectangularBeam(RectangularSection):
             M_n_t = rho * self.steel_bar.f_y * (d - 0.59 * rho * self.steel_bar.f_y * d / self.concrete.f_c) * b * d
             M_n_prima = M_u / self.phi_t - M_n_t
             c_t = 0.003 * d / (self.steel_bar.epsilon_y + 0.006)
-            c_d=clean_zero(c_t/d)
+            c_d = clean_zero(c_t / d)
             f_s_prima = min(0.003 * self.steel_bar.E_s * (1 - d_prima / c_t), self.steel_bar.f_y)
             A_s_comp = M_n_prima / (f_s_prima * (d - d_prima))
             A_s_final = rho * b * d + A_s_comp
-        
+
         if sqrt_value < 0:
-            # Si estamos en el caso en el que fallo la cuadratica, entonces usamos el numero gordo para tener una idea
-            A_s_final = M_u / (self.phi_t * 0.9* d* self.steel_bar.f_y)
+            # In the case where the quadratic equation fails (negative square root),
+            # use an approximate value to provide an estimate.
+            A_s_final = M_u / (self.phi_t * 0.9 * d * self.steel_bar.f_y)
 
         return A_s_min, A_s_max, A_s_final, A_s_comp, c_d
 
+
     def _determine_nominal_moment_simple_reinf_ACI_318_19(self, A_s: PlainQuantity, d: PlainQuantity) -> PlainQuantity:
-        #TODO REDACTAR BIEN ESTO
-        '''
-            Se usa esta formula SOLO cuando el acero dispuesto es menor o igual que A_s_max
-            
-        Equilibrium: C=T
-        0.85*f_c*a*b = A_s *f_y -> a = A_s *f_y / (0.85*f_c*b)
-        '''
-        a = A_s * self.steel_bar.f_y /(0.85*self.concrete.f_c*self._width)
-        M_n=A_s* self.steel_bar.f_y *(d-a/2)
+        """
+        Determines the nominal moment for a simply reinforced section according to ACI 318-19.
+
+        This formula is used ONLY when the provided reinforcement area (A_s) is less than or equal to A_s_max.
+
+        The equilibrium of forces is assumed (compression equals tension):
+            0.85 * f_c * a * b = A_s * f_y
+        which implies:
+            a = (A_s * f_y) / (0.85 * f_c * b)
+
+        Parameters:
+            A_s (PlainQuantity): The area of reinforcement.
+            d (PlainQuantity): The effective depth of the section.
+
+        Returns:
+            PlainQuantity: The nominal moment (M_n) calculated as A_s * f_y * (d - a/2).
+        """
+        # Calculate the depth of the equivalent rectangular stress block (a)
+        a = A_s * self.steel_bar.f_y / (0.85 * self.concrete.f_c * self._width)
+        # Calculate the nominal moment (M_n)
+        M_n = A_s * self.steel_bar.f_y * (d - a / 2)
         return M_n
     
     def _determine_nominal_moment_double_reinf_ACI_318_19(self, A_s: PlainQuantity, d: PlainQuantity, d_prime: PlainQuantity, A_s_prime: PlainQuantity) -> PlainQuantity:
-        '''
-            Se usa solo cuando la viga tiene mas refuerzo que el maximo, y tiene armadura de compresion.
-        '''
+        """
+        Determines the nominal moment for a doubly reinforced beam section according to ACI 318-19.
+
+        This method is used only when the beam has reinforcement exceeding the maximum limit 
+        and includes compression reinforcement.
+
+        Equilibrium is assumed (Compression = Tension):
+            C_total = Concrete compression (Cc) + Compression reinforcement (Cs)
+            Tension (T) = A_s * f_y
+
+        Initially, it is assumed that the compression reinforcement yields (i.e., f_s_prime = f_y),
+        so the equilibrium equation becomes:
+            0.85 * f_c * a * b + A_s_prime * f_y = A_s * f_y
+
+        Parameters:
+            A_s (PlainQuantity): Area of the tensile reinforcement.
+            d (PlainQuantity): Effective depth of the beam section.
+            d_prime (PlainQuantity): Effective depth (cover) to the compression reinforcement.
+            A_s_prime (PlainQuantity): Area of the compression reinforcement.
+
+        Returns:
+            PlainQuantity: The nominal moment (M_n) of the doubly reinforced section.
+        """
         f_c = self.concrete.f_c
         if isinstance(self.concrete, Concrete_ACI_318_19):
             beta_1 = self.concrete._beta_1
             epsilon_c = self.concrete._epsilon_c
 
-        f_y= self.steel_bar.f_y
+        f_y = self.steel_bar.f_y
         E_s = self.steel_bar._E_s
-        epsilon_y=self.steel_bar._epsilon_y
+        epsilon_y = self.steel_bar._epsilon_y
         b = self._width
 
-        '''
-        Equilibrium: C=T --> Cc + Cs = T
-        Sin embargo la forma de calcuar Cs depende de si el acero comprimido está en fluencia o no.
-        Se asume que si, y se chequea
-        0.85*f_c*a*b + A_s_prime * f_y = A_s * f_y
-        '''
+        # -------------------------------------------------------------------------
+        # Step 1: Assume that the compression steel is yielding (f_s_prime = f_y)
+        # Based on equilibrium:
+        #   0.85 * f_c * a * b + A_s_prime * f_y = A_s * f_y
+        # Solving for the neutral axis depth 'c_assumed':
+        c_assumed = (A_s * f_y - A_s_prime * f_y) / (0.85 * f_c * b * beta_1)
+        
+        # Compute the strain in the compression reinforcement with the assumed c value:
+        epsilon_s = (c_assumed - d_prime) / c_assumed * epsilon_c
 
-        # Assuming f_s_prime=f_y:
-        c_assumed = (A_s * f_y - A_s_prime * f_y) /(0.85*f_c*b*beta_1)
-        epsilon_s=(c_assumed-d_prime)/c_assumed*epsilon_c
-
-        #Now we check our assumption
-        if(epsilon_s>=epsilon_y):
-            # Our assumption was right so:
-            a_assumed=c_assumed*beta_1
-            M_n= 0.85*f_c*a_assumed*b * (d-a_assumed/2) +  A_s_prime * f_y * (d-d_prime)
+        # -------------------------------------------------------------------------
+        # Step 2: Check if the assumed compression steel strain exceeds the yield strain.
+        if epsilon_s >= epsilon_y:
+            # The assumption is valid (compression reinforcement yields).
+            a_assumed = c_assumed * beta_1
+            M_n = 0.85 * f_c * a_assumed * b * (d - a_assumed / 2) + A_s_prime * f_y * (d - d_prime)
             return M_n
         else:
-            # Our assumption was wrong so we have to determine the real c value from quadratic equation:
-            # A_s * f_y = 0.85 * f_c *b * β1 * c + A_s_prime * (c-d_prime)/c * εc * E_s
-            A = 0.85*f_c*b*beta_1
+            # The assumption is invalid, so determine the actual neutral axis depth 'c' using the quadratic equation:
+            # Based on equilibrium:
+            #   A_s * f_y = 0.85 * f_c * b * beta_1 * c + A_s_prime * ( (c - d_prime) / c * epsilon_c * E_s )
+            # Rearranging into a quadratic form: A*c^2 + B*c + C = 0, where:
+            A = 0.85 * f_c * b * beta_1
             B = A_s_prime * epsilon_c * E_s - A_s * f_y
-            C = -d_prime*A_s_prime*epsilon_c*E_s
-            c=(-B+np.sqrt(B**2-4*A*C))/(2*A)
-            a=c*beta_1
-            epsilon_s_prime=(c-d_prime)/c*epsilon_c
-            f_s_prime=epsilon_s_prime*E_s
-            A_s_2=A_s_prime*f_s_prime/f_y
-            A_s_1=A_s-A_s_2
-            M_n_1=A_s_1*f_y*(d-a/2)
-            M_n_2=A_s_prime*f_s_prime*(d-d_prime)
-            M_n= M_n_1+M_n_2
+            C = -d_prime * A_s_prime * epsilon_c * E_s
+            
+            # Solve for c using the quadratic formula:
+            c = (-B + np.sqrt(B**2 - 4 * A * C)) / (2 * A)
+            
+            # Compute the corresponding depth of the equivalent rectangular stress block:
+            a = c * beta_1
+            
+            # Recompute the strain and stress in the compression reinforcement:
+            epsilon_s_prime = (c - d_prime) / c * epsilon_c
+            f_s_prime = epsilon_s_prime * E_s
+            
+            # Determine the adjusted areas for tension reinforcement:
+            # A portion of the tensile reinforcement is balanced by the compression reinforcement.
+            A_s_2 = A_s_prime * f_s_prime / f_y
+            A_s_1 = A_s - A_s_2
+            
+            # Calculate the nominal moment contributions:
+            M_n_1 = A_s_1 * f_y * (d - a / 2)
+            M_n_2 = A_s_prime * f_s_prime * (d - d_prime)
+            M_n = M_n_1 + M_n_2
+            
             return M_n
 
     def _determine_nominal_moment_ACI_318_19(self, force: Forces) -> None:
-        '''
-            Para una determinada seccion con sus dos armados, top y bottom, encuentra el momento nominal para 
-            momentos positivos y negativos
-        '''
+        """
+        Determines the nominal moment for a given section with both top and bottom reinforcement,
+        calculating the nominal moment for both positive and negative moment scenarios.
+
+        For positive moments, the tension is in the bottom reinforcement.
+        For negative moments, the tension is in the top reinforcement.
+
+        Parameters:
+            force (Forces): An object containing the forces acting on the section, including the moment M_y.
+
+        Returns:
+            None
+        """
 
         # Load design settings for ACI 318-19
         self.settings.load_aci_318_19_settings()
         self.phi_t = self.settings.get_setting('phi_t')
 
-        # Minimum reinforcement ratio
+        # Calculate minimum and maximum reinforcement ratios
         rho_min = self._minimum_flexural_reinforcement_ratio_ACI_318_19(force._M_y)
         rho_max = self._maximum_flexural_reinforcement_ratio_ACI_318_19()
-        if force._M_y > 0*kNm:
-            rho_min_top = 0*dimensionless
+        
+        # For positive moments (tension in the bottom), set minimum reinforcement accordingly.
+        if force._M_y > 0 * kNm:
+            rho_min_top = 0 * dimensionless
             rho_min_bot = rho_min
         else:
             rho_min_top = rho_min
-            rho_min_bot = 0*dimensionless
+            rho_min_bot = 0 * dimensionless
 
+        # Calculate minimum and maximum bottom reinforcement areas
         self._A_s_min_bot = rho_min_bot * self._d_bot * self._width
         self._A_s_max_bot = rho_max * self._d_bot * self._width
-        
-        if (self._A_s_bot<=self._A_s_max_bot):
+
+        # Determine the nominal moment for positive moments
+        if (self._A_s_bot <= self._A_s_max_bot):
             M_n_positive = self._determine_nominal_moment_simple_reinf_ACI_318_19(self._A_s_bot, self._d_bot)
-        elif (self._A_s_top==0*cm**2):
+        elif (self._A_s_top == 0 * cm**2):
             M_n_positive = self._determine_nominal_moment_simple_reinf_ACI_318_19(self._A_s_max_bot, self._d_bot)
         else:
-            M_n_positive=self._determine_nominal_moment_double_reinf_ACI_318_19(self._A_s_bot, self._d_bot, self._c_mec_top, self._A_s_top)
+            M_n_positive = self._determine_nominal_moment_double_reinf_ACI_318_19(
+                self._A_s_bot, self._d_bot, self._c_mec_top, self._A_s_top
+            )
 
-        # DETERMINACION DE LA CAPACIDAD PARA MOMENTO NEGATIVO (TRACCIONA ARRIBA):
+        # Determine capacity for negative moment (tension at the top)
         self._A_s_min_top = rho_min_top * self._d_top * self._width
-        self._A_s_max_top = rho_max *  self._d_top * self._width
-        if (self._A_s_top==0*cm**2):
-            M_n_negative=0*kNm
-        elif (self._A_s_top<=self._A_s_max_top):
-            M_n_negative=self._determine_nominal_moment_simple_reinf_ACI_318_19(self._A_s_top, self._d_top)
-        elif (self._A_s_bot==0*cm**2):
-            M_n_negative=self._determine_nominal_moment_simple_reinf_ACI_318_19(self._A_s_max_top, self._d_top)
+        self._A_s_max_top = rho_max * self._d_top * self._width
+        
+        if (self._A_s_top == 0 * cm**2):
+            M_n_negative = 0 * kNm
+        elif (self._A_s_top <= self._A_s_max_top):
+            M_n_negative = self._determine_nominal_moment_simple_reinf_ACI_318_19(self._A_s_top, self._d_top)
+        elif (self._A_s_bot == 0 * cm**2):
+            M_n_negative = self._determine_nominal_moment_simple_reinf_ACI_318_19(self._A_s_max_top, self._d_top)
         else:
-            M_n_negative=self._determine_nominal_moment_double_reinf_ACI_318_19(self._A_s_top, self._d_top, self._c_mec_bot, self._A_s_bot)
+            M_n_negative = self._determine_nominal_moment_double_reinf_ACI_318_19(
+                self._A_s_top, self._d_top, self._c_mec_bot, self._A_s_bot
+            )
 
+        # Calculate the design moment capacities for both bottom and top reinforcement
         self._phi_M_n_bot: PlainQuantity = self.phi_t * M_n_positive
         self._phi_M_n_top: PlainQuantity = self.phi_t * M_n_negative
 
         return None
 
-    def check_flexure_ACI_318_19(self, force: Forces) -> pd.DataFrame:
-        '''
-            flexure_design_results_top: es el diccionario de armado de rebar que tiene las 4 posiciones
-        '''
+    def _check_flexure_ACI_318_19(self, force: Forces) -> pd.DataFrame:
+        """
+        Checks the flexural capacity of the section according to ACI 318-19 guidelines.
 
-        # Set the initial variables
+        This function accepts a single force and performs the flexural check of the section 
+        following the ACI 318-19 requirements. It initializes the design variables, computes the 
+        nominal moments for both top and bottom reinforcement, determines the required reinforcement 
+        areas, and calculates the design capacity ratios. Finally, the results are compiled into a 
+        Pandas DataFrame.
+
+        Parameters:
+            force (Forces): The force acting on the section, which must include a single moment value.
+
+        Returns:
+            pd.DataFrame: A DataFrame containing the flexural design metrics and results.
+        """
+
+        # Initialize the design variables according to ACI 318-19 requirements using the provided force.
         self._initialize_variables_ACI_318_19(force)
 
-        # Nominal moments top & bottom
+        # Calculate the nominal moments for both top and bottom reinforcement.
         self._determine_nominal_moment_ACI_318_19(force)
 
-        # Inicializamos los momentos nominales a partir de las fuerzas:
+        # Initialize nominal moments from the applied force.
         self._determine_nominal_moment_ACI_318_19(force)
 
-        if self._M_u>=0:
-            self._A_s_min_bot, self._A_s_max_bot, self._A_s_req_bot, self._A_s_req_top, self._c_d_bot = self._calculate_flexural_reinforcement_ACI_318_19(self._M_u_bot, self._d_bot, self._c_mec_top)
+        if self._M_u >= 0:
+            # For positive moments, calculate the reinforcement requirements for the bottom tension side.
+            (self._A_s_min_bot, self._A_s_max_bot, self._A_s_req_bot, self._A_s_req_top, 
+            self._c_d_bot) = self._calculate_flexural_reinforcement_ACI_318_19(self._M_u_bot, self._d_bot, self._c_mec_top)
             self._c_d_top = 0
-            self._DCRb_bot = round(self._M_u_bot.to('kN*m').magnitude / self._phi_M_n_bot.to('kN*m').magnitude,3)
+            # Calculate the design capacity ratio for the bottom side.
+            self._DCRb_bot = round(self._M_u_bot.to('kN*m').magnitude / self._phi_M_n_bot.to('kN*m').magnitude, 3)
             self._DCRb_top = 0
         else:
-            self._A_s_min_top, self._A_s_max_top, self._A_s_req_top, self._A_s_req_bot, self._c_d_top = self._calculate_flexural_reinforcement_ACI_318_19(abs(self._M_u_top), self._d_top, self._c_mec_bot)
+            # For negative moments, calculate the reinforcement requirements for the top tension side.
+            (self._A_s_min_top, self._A_s_max_top, self._A_s_req_top, self._A_s_req_bot, 
+            self._c_d_top) = self._calculate_flexural_reinforcement_ACI_318_19(abs(self._M_u_top), self._d_top, self._c_mec_bot)
             self._c_d_bot = 0
-            self._DCRb_top = round(-self._M_u_top.to('kN*m').magnitude / self._phi_M_n_top.to('kN*m').magnitude,3)
+            # Calculate the design capacity ratio for the top side.
+            self._DCRb_top = round(-self._M_u_top.to('kN*m').magnitude / self._phi_M_n_top.to('kN*m').magnitude, 3)
             self._DCRb_bot = 0
 
+        # Determine the maximum detailing cover dimensions for top and bottom.
         self._d_b_max_top = max(self._d_b1_t, self._d_b2_t, self._d_b3_t, self._d_b4_t)
         self._d_b_max_bot = max(self._d_b1_b, self._d_b2_b, self._d_b3_b, self._d_b4_b)
-        self._rho_l_bot = self._A_s_bot/(self._d_bot * self._width)
-        self._rho_l_top = self._A_s_bot/(self._d_top * self._width)
         
-        results=self._compile_results_aci_flexure_metric(force)
+        # Calculate the longitudinal reinforcement ratios for both sides.
+        self._rho_l_bot = self._A_s_bot / (self._d_bot * self._width)
+        self._rho_l_top = self._A_s_bot / (self._d_top * self._width)
+        
+        # Compile the design results into a dictionary.
+        results = self._compile_results_ACI_flexure_metric(force)
+        
+        # Initialize any additional dictionaries required for ACI 318-19 flexural checks.
         self._initialize_dicts_ACI_318_19_flexure()
+        
+        # Return the results as a Pandas DataFrame.
         return pd.DataFrame([results], index=[0])
 
-    def design_flexure_ACI_318_19(self, max_M_y_bot: PlainQuantity, max_M_y_top: PlainQuantity) -> Dict[str, Any]:
+    def _design_flexure_ACI_318_19(self, max_M_y_bot: PlainQuantity, max_M_y_top: PlainQuantity) -> Dict[str, Any]:
         """
         Designs the flexural reinforcement for a beam cross-section 
         according to ACI 318-19.
@@ -692,7 +773,6 @@ class RectangularBeam(RectangularSection):
         # Initial assumptions for mechanical cover and compression depth
         rec_mec = self.c_c + self._stirrup_d_b + 1*cm
         d_prima = self.c_c + self._stirrup_d_b + 1*cm
-
         # Start the iterative process
         tol = 0.01 * cm  # Tolerance for convergence
         Err = 2 * tol
@@ -711,7 +791,6 @@ class RectangularBeam(RectangularSection):
                 A_s_comp_top,
                 self._c_d_bot
             ) = self._calculate_flexural_reinforcement_ACI_318_19(max_M_y_bot, d, d_prima)
-
             # Initialize bottom and top reinforcement
             self._A_s_bot = A_s_final_bot_Positive_M
             self._A_s_top = A_s_comp_top
@@ -724,10 +803,11 @@ class RectangularBeam(RectangularSection):
                     A_s_comp_bot,
                     self._c_d_top
                 ) = self._calculate_flexural_reinforcement_ACI_318_19(abs(max_M_y_top), self.height-d_prima, rec_mec)
-
+                
                 # Adjust reinforcement areas based on positive and negative moments
-                self._A_s_bot = max(min(A_s_final_bot_Positive_M,self._A_s_max_bot), A_s_comp_bot) # En caso de que falle la viga, diseñamos con el A_s_max 
-                self._A_s_top = max(A_s_comp_top, min(A_s_final_top_Negative_M,self._A_s_max_top)) # En caso de que falle la viga, diseñamos con el A_s_max
+                self._A_s_bot = max(A_s_final_bot_Positive_M, A_s_comp_bot)                 
+                self._A_s_top = max(A_s_comp_top,A_s_final_top_Negative_M)
+                
             # Design bottom reinforcement
             section_rebar_bot = Rebar(self)
             self.flexure_design_results_bot = section_rebar_bot.longitudinal_rebar_ACI_318_19(self._A_s_bot)
@@ -790,10 +870,10 @@ class RectangularBeam(RectangularSection):
         }
         return pd.DataFrame([results], index=[0])
 
-    def design_flexure_EN_1992(self, force: Forces) -> None:
+    def _design_flexure_EN_1992(self, force: Forces) -> None:
         pass
 
-    def design_flexure(self) -> pd.DataFrame:
+    def _design_flexure(self, forces: list[Forces]) -> pd.DataFrame:
         """
         Designs flexural reinforcement for the beam using the provided forces and design code.
         Identifies the limiting cases for top and bottom reinforcement, designs for those cases, 
@@ -804,15 +884,13 @@ class RectangularBeam(RectangularSection):
         DataFrame
             A DataFrame summarizing the flexural design results for all forces.
         """
-        if not self.node or not self.node.forces:
-            raise ValueError("No Node or forces list associated with this beam.")
 
         # Initialize limiting cases
         max_M_y_top = 0 * kN * m  # For negative M_y (top reinforcement design)
         max_M_y_bot = 0 * kN * m  # For positive M_y (bottom reinforcement design)
 
         # Identify the limiting cases
-        for force in self.node.forces:
+        for force in forces:
             # For top reinforcement, consider the minimum (most negative) moment
             if force._M_y <= max_M_y_top:
                 max_M_y_top = force._M_y
@@ -824,18 +902,16 @@ class RectangularBeam(RectangularSection):
                 self._limiting_case_top=force
         # Design flexural reinforcement for the limiting cases
         if self.concrete.design_code=="ACI 318-19" or self.concrete.design_code=="CIRSOC 201-25":
-            self.design_flexure_ACI_318_19(max_M_y_bot, max_M_y_top)
+            self._design_flexure_ACI_318_19(max_M_y_bot, max_M_y_top)
         else:
             raise ValueError(f"Longitudinal design method not implemented "
                             f"for concrete type: {type(self.concrete).__name__}")
         
         # Check flexural capacity for all forces with the assigned reinforcement
-        all_results = self.check_flexure()
+        all_results = self._check_flexure(forces)
         return all_results
 
-    def check_flexure(self) -> DataFrame:
-        if not self.node or not self.node.forces:
-            raise ValueError("No Node or forces list associated with this beam.")
+    def _check_flexure(self, forces: list[Forces]) -> DataFrame:
         
         # Initialize variables to track limiting cases
         max_dcr_top: float = 0
@@ -849,12 +925,12 @@ class RectangularBeam(RectangularSection):
         self._flexure_results_list = []  # Store individual results for each force
         self._flexure_results_detailed_list = {}  # Store detailed results by force ID
 
-        for force in self.node.forces:
+        for force in forces:
             # Select the method based on design code
             if self.concrete.design_code=="ACI 318-19" or self.concrete.design_code=="CIRSOC 201-25":
-                result = self.check_flexure_ACI_318_19(force)
+                result = self._check_flexure_ACI_318_19(force)
             # elif self.concrete.design_code=="EN 1992-2004":
-            #     result =  self.check_shear_EN_1992_2004(force)
+            #     result =  self._check_shear_EN_1992_2004(force)
             else:
                 raise ValueError(f"Flexure design method not implemented for concrete type: {type(self.concrete).__name__}")  # noqa: E501
             self._flexure_results_list.append(result)
@@ -998,7 +1074,7 @@ class RectangularBeam(RectangularSection):
         self._stirrup_s_l = max(self._stirrup_s_l, 0 * inch)
         self._stirrup_s_w = max(self._stirrup_s_w, 0 * inch)
     
-    def _compile_results_aci_flexure_metric(self, force: Forces) -> Dict[str, Any]:
+    def _compile_results_ACI_flexure_metric(self, force: Forces) -> Dict[str, Any]:
         # Create dictionaries for bottom and top rows
         if self._M_u>=0:
             result = {
@@ -1032,7 +1108,7 @@ class RectangularBeam(RectangularSection):
             }
         return result
     
-    def _compile_results_aci_shear(self, force: Forces) -> Dict[str, Any]:
+    def _compile_results_ACI_shear(self, force: Forces) -> Dict[str, Any]:
         return {
             'Section Label': self.label,
             'Load Combo': force.label,
@@ -1076,7 +1152,7 @@ class RectangularBeam(RectangularSection):
         else:
             return min(self.steel_bar.f_y, 60 * ksi)
 
-    def check_shear_ACI_318_19(self, force: Forces) -> pd.DataFrame:
+    def _check_shear_ACI_318_19(self, force: Forces) -> pd.DataFrame:
         # Set the initial variables
         self._initialize_variables_ACI_318_19(force)
 
@@ -1112,7 +1188,7 @@ class RectangularBeam(RectangularSection):
         self._initialize_dicts_ACI_318_19_shear()
         return pd.DataFrame([results], index=[0])
 
-    def design_shear_ACI_318_19(self, force: Forces) -> None:
+    def _design_shear_ACI_318_19(self, force: Forces) -> None:
         # Set the initial variables
         self._initialize_variables_ACI_318_19(force)
         # Minimum shear reinforcement calculation
@@ -1178,9 +1254,9 @@ class RectangularBeam(RectangularSection):
             # Compression stress, positive
             self._A_p = 0*cm**2 # No prestressing for now
             if force._M_y >= 0*kNm:
-                self._rho_l_bot = min((self._A_s_tension + self._A_p) / (self.width * self._d_shear), 0.02)
+                self._rho_l_bot = min((self._A_s_tension + self._A_p) / (self.width * self._d_shear), 0.02*dimensionless)
             else:
-                self._rho_l_top = min((self._A_s_tension + self._A_p) / (self.width * self._d_shear), 0.02)
+                self._rho_l_top = min((self._A_s_tension + self._A_p) / (self.width * self._d_shear), 0.02*dimensionless)
             # Shear calculation for sections without rebar
             self._k_value = min(1 + math.sqrt(200 * mm / self._d_shear), 2)
             # Positive of compression
@@ -1188,7 +1264,7 @@ class RectangularBeam(RectangularSection):
 
     def _shear_without_rebar_EN_1992_2004(self) -> PlainQuantity:
         self._stirrup_d_b = 0*mm
-        self._theta = 0
+        self._theta: float = 0
         # Total shear capacity without rebar
         C_rdc = 0.18/self._gamma_c
         v_min = 0.035*self._k_value**(3/2)*math.sqrt(self._f_ck.to('MPa').magnitude)
@@ -1199,7 +1275,7 @@ class RectangularBeam(RectangularSection):
                   +k_1*self._sigma_cp.to('MPa'))* self.width * self._d_shear).to('kN')        
         return max(V_Rd_c_min, V_Rd_c)
         
-    def check_shear_EN_1992_2004(self, Force:Forces) -> DataFrame:
+    def _check_shear_EN_1992_2004(self, Force:Forces) -> DataFrame:
         if isinstance(self.concrete, Concrete_EN_1992_2004):
             # Initialize all the code related variables
             self._initialize_variables_EN_1992_2004(Force)            
@@ -1232,8 +1308,8 @@ class RectangularBeam(RectangularSection):
 
                 # The θ angle is lmited between 21,8° ≤ θ ≤ 45°(1 ≤ cot(θ) ≤ 2.5)
                 # Check the minimum strut angle θ = 21.8° (cot(θ) = 2.5)
-                theta_min = math.radians(21.8)
-                cot_theta_min = 1 / math.tan(theta_min)
+                theta_min: float = math.radians(21.8)
+                cot_theta_min: float = 1 / math.tan(theta_min)
 
                 V_Rd_max_min_angle = (alpha_cw * self.width * z * v_1 * self._f_cd / (cot_theta_min +
                                                                                        math.tan(theta_min))).to('kN')
@@ -1246,7 +1322,7 @@ class RectangularBeam(RectangularSection):
                     self._max_shear_ok = True
                 else:
                     # Check the maximum strut angle θ = 45° (cot(θ) = 1.0)
-                    theta_max = math.radians(45)
+                    theta_max: float = math.radians(45)
                     cot_theta_max = 1 / math.tan(theta_max)
                     V_Rd_max_max_angle: PlainQuantity = (alpha_cw * self.width * z * v_1 * self._f_cd / (cot_theta_max +
                                                                                            math.tan(theta_max))).to('kN')
@@ -1259,7 +1335,7 @@ class RectangularBeam(RectangularSection):
                     else:
                         self._max_shear_ok = True
                         # Determine the angle θ of the strut based on the shear force
-                        self._theta: float = 0.5 * math.asin((self._V_Ed_1 / V_Rd_max_max_angle))
+                        self._theta = 0.5 * math.asin((self._V_Ed_1 / V_Rd_max_max_angle))
                         self._cot_theta = 1 / math.tan(self._theta)
                         self._V_Rd_max = (alpha_cw * self.width * z * v_1 * self._f_cd / (self._cot_theta +
                                                                                            math.tan(self._theta))).to('kN')
@@ -1299,22 +1375,20 @@ class RectangularBeam(RectangularSection):
         else:
             raise ValueError("Concrete type is not compatible with EHE-08 shear check.")
   
-    def design_shear_EN_1992_2004(self, Force:Forces) -> None:
+    def _design_shear_EN_1992_2004(self, Force:Forces) -> None:
         return None
 
     # Factory method to select the shear design method
-    def design_shear(self) -> DataFrame:
-        if not self.node or not self.node.forces:
-            raise ValueError("No Node or forces list associated with this beam.")
+    def _design_shear(self, forces: list[Forces]) -> DataFrame:
         # Track the maximum A_v_req to identify the limiting case
         max_A_v_req = 0*cm**2/m 
 
         # Step 1: Identify the worst-case force
-        for force in self.node.forces:
+        for force in forces:
             if self.concrete.design_code=="ACI 318-19" or self.concrete.design_code=="CIRSOC 201-25":
-                self.design_shear_ACI_318_19(force)
+                self._design_shear_ACI_318_19(force)
             # elif self.concrete.design_code=="EN 1992-2004":
-                # self.design_shear_EN_1992_2004(force)
+                # self._design_shear_EN_1992_2004(force)
             else:
                 raise ValueError(f"Shear design method not implemented for concrete type:"\
                     f"{type(self.concrete).__name__}")
@@ -1337,25 +1411,23 @@ class RectangularBeam(RectangularSection):
                                   self._best_rebar_design['s_l'])
 
         # Step 3: Check shear adequacy for all forces using the designed rebar
-        all_results = self.check_shear()  
+        all_results = self._check_shear(forces)  
         return all_results
     
     # Factory method to select the shear check method
-    def check_shear(self) -> DataFrame:
-        if not self.node or not self.node.forces:
-            raise ValueError("No Node or forces list associated with this beam.")
+    def _check_shear(self, forces: list[Forces]) -> DataFrame:
 
         self._shear_results_list = []  # Store individual results for each force
         self._shear_results_detailed_list = {}  # Store detailed results by force ID
         max_dcr = 0  # Track the maximum DCR to identify the limiting case
         self._limiting_case_shear_details = None
 
-        for force in self.node.forces:
+        for force in forces:
             # Select the method based on design code
             if self.concrete.design_code=="ACI 318-19" or self.concrete.design_code=="CIRSOC 201-25":
-                result = self.check_shear_ACI_318_19(force)
+                result = self._check_shear_ACI_318_19(force)
             elif self.concrete.design_code=="EN 1992-2004":
-                result =  self.check_shear_EN_1992_2004(force)
+                result =  self._check_shear_EN_1992_2004(force)
             else:
                 raise ValueError(f"Shear design method not implemented for concrete type: {type(self.concrete).__name__}")  # noqa: E501
             self._shear_results_list.append(result)
@@ -1398,6 +1470,15 @@ class RectangularBeam(RectangularSection):
             if n2 > 0 and d_b2.magnitude > 0:  # Check if n2 and d_b2 are defined
                 rebar_string += f"+{n2}Ø{int(d_b2.magnitude)}"
         return rebar_string
+
+
+
+
+
+##########################################################
+# RESULTS
+##########################################################
+
 
     def _initialize_dicts_ACI_318_19_flexure(self) -> None:
         """Initialize the dictionaries used in check and design methods."""
@@ -1457,10 +1538,10 @@ class RectangularBeam(RectangularSection):
                       'Minimum spacing bottom'],
             'Unit': ['cm²', 'mm', 'cm²', 'mm'],
             'Value': [round(self._A_s_top.to('cm**2').magnitude,2), 
-            self._available_s_top.to('mm').magnitude, round(self._A_s_bot.to('cm**2').magnitude,2), 
-            self._available_s_bot.to('mm').magnitude,],
-            'Min.': [round(self._A_s_min_top.to('cm**2').magnitude,2), min_spacing_top.to('mm').magnitude,
-                     round(self._A_s_min_bot.to('cm**2').magnitude,2),  min_spacing_bot.to('mm').magnitude],
+            round(self._available_s_top.to('mm').magnitude,2), round(self._A_s_bot.to('cm**2').magnitude,2), 
+            round(self._available_s_bot.to('mm').magnitude,2),],
+            'Min.': [round(self._A_s_min_top.to('cm**2').magnitude,2), round(min_spacing_top.to('mm').magnitude,2),
+                     round(self._A_s_min_bot.to('cm**2').magnitude,2),  round(min_spacing_bot.to('mm').magnitude,2)],
             'Max.': [round(self._A_s_max_top.to('cm**2').magnitude,2), "", 
                      round(self._A_s_max_bot.to('cm**2').magnitude,2), ""],
             'Ok?': checks
@@ -1490,7 +1571,7 @@ class RectangularBeam(RectangularSection):
                     round(self._A_s_req_bot.to('cm**2').magnitude,2),
                     round(self._A_s_top.to('cm**2').magnitude,2), round(self._rho_l_top.magnitude,5),
                     round(self._phi_M_n_top.to('kN*m').magnitude,2), round(self._DCRb_top,2)],
-            "Unit": ["", "", "cm", "", "cm²","cm²", "cm²","","kNm", check_DCR_top]
+            "Unit": ["", "", "cm", "", "cm²","cm²", "cm²","cm²","","kNm", check_DCR_top]
         }
         self._flexure_capacity_bot = {
             "Bottom reinforcement check": [
@@ -1515,7 +1596,7 @@ class RectangularBeam(RectangularSection):
                     round(self._A_s_req_bot.to('cm**2').magnitude,2),
                     round(self._A_s_bot.to('cm**2').magnitude,2), round(self._rho_l_bot.magnitude,5),
                     round(self._phi_M_n_bot.to('kN*m').magnitude,2), round(self._DCRb_bot,2)],
-            "Unit": ["", "", "cm", "", "cm²","cm²", "cm²","","kNm", check_DCR_bot]
+            "Unit": ["", "", "cm", "", "cm²","cm²", "cm²","cm²","","kNm", check_DCR_bot]
         }
         self._flexure_all_checks = self._all_flexure_checks_passed and check_DCR_bot and check_DCR_top
 
@@ -1748,7 +1829,7 @@ class RectangularBeam(RectangularSection):
     @property
     def flexure_results(self) -> None:
         if not self._flexure_checked:
-            warnings.warn("Flexural design has not been performed yet. Call check_flexure() or "
+            warnings.warn("Flexural design has not been performed yet. Call _check_flexure() or "
                         "design_flexure() first.", UserWarning)
             self._md_flexure_results = "Flexural results are not available."
             return None
@@ -1868,7 +1949,7 @@ class RectangularBeam(RectangularSection):
             self.shear_results  # This will generate _md_shear_results
         return None
 
-    def flexure_results_detailed(self, force: Optional[Forces] = None) -> None:
+    def _flexure_results_detailed(self, force: Optional[Forces] = None) -> None:
         """
         Displays detailed flexure results.
 
@@ -1881,7 +1962,7 @@ class RectangularBeam(RectangularSection):
         None
         """
         if not self._flexure_checked:
-            warnings.warn("Flexural check has not been performed yet. Call check_flexure or "
+            warnings.warn("Flexural check has not been performed yet. Call _check_flexure or "
                         "design_flexure first.", UserWarning)
             self._md_flexure_results = "Flexure results are not available."
             return None
@@ -1968,7 +2049,7 @@ class RectangularBeam(RectangularSection):
         capacity_printer = TablePrinter("FLEXURAL CAPACITY - BOTTOM")
         capacity_printer.print_table_data(bot_result_data, headers='keys')
 
-    def flexure_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
+    def _flexure_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
         """
         Prints detailed flexure results in Word.
 
@@ -1978,7 +2059,7 @@ class RectangularBeam(RectangularSection):
             The specific Forces object to display results for. If None, displays results for the limiting case.
         """
         if not self._flexure_checked:
-            warnings.warn("Flexural check has not been performed yet. Call check_flexure or "
+            warnings.warn("Flexural check has not been performed yet. Call _check_flexure or "
                         "design_flexure first.", UserWarning)
             self._md_flexure_results = "Flexural results are not available."
             return None
@@ -2078,7 +2159,7 @@ class RectangularBeam(RectangularSection):
         # Save the Word doc
         doc_builder.save(f"Concrete beam flexure check {self.concrete.design_code}.docx")
  
-    def shear_results_detailed(self, force: Optional[Forces] = None) -> None:
+    def _shear_results_detailed(self, force: Optional[Forces] = None) -> None:
         """
         Displays detailed shear results.
 
@@ -2120,7 +2201,7 @@ class RectangularBeam(RectangularSection):
         concrete_printer = TablePrinter("CONCRETE STRENGTH")
         concrete_printer.print_table_data(result_data['shear_concrete'], headers='keys')
 
-    def shear_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
+    def _shear_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
         """
         Prints detailed shear results in Word.
 
@@ -2177,6 +2258,9 @@ class RectangularBeam(RectangularSection):
 
 
 
+##########################################################################################################
+
+
 def clear_console() -> None:
     """
     Clears the console based on the operating system.
@@ -2196,8 +2280,8 @@ def flexure_design_test() -> None:
                                        settings=custom_settings)
     f1 = Forces(label='C1', M_y=20*kNm)
     f2 = Forces(label='C2', M_y=-20*kNm)
-    Node(section=beam, forces=[f1, f2])
-    results=beam.design_flexure()
+    forces=[f1, f2]
+    results=beam._design_flexure(forces)
     # print(beam.flexure_design_results_bot,'\n', beam.flexure_design_results_top)
     print(results)
     # beam.flexure_results_detailed()
@@ -2220,16 +2304,11 @@ def flexure_design_test_calcpad_example() -> None:
 
     f = Forces(label='Test_01', V_z = 40*kip, M_y=400*kip*ft)
     f2 = Forces(label='Test_01', V_z = 100*kip, M_y=-400*kip*ft)
-    Node(section=beam, forces=[f,f2])
+    forces=[f,f2]
 
-    #print(beam.check_flexure())
-    shear_results = beam.design_shear()
-    print(shear_results)
-    flexure_results = beam.design_flexure()
+    flexure_results = beam._design_flexure(forces)
     print(flexure_results)
-    #print(beam.flexure_design_results_bot)
-    #beam.flexure_results_detailed()
-
+ 
 
 
 def flexure_check_test() -> None:
@@ -2252,8 +2331,8 @@ def flexure_check_test() -> None:
     f2 = Forces(label='L', M_y=-100*kNm)
     f3 = Forces(label='W', M_y=-50*kNm)
     f4 = Forces(label='S', M_y=110*kNm)
-    Node(section=beam, forces=[f1,f2,f3,f4])
-    print(beam.check_flexure())
+    forces=[f1,f2,f3,f4]
+    print(beam._check_flexure(forces))
     
     # beam.check_shear()
     beam.flexure_results_detailed()
@@ -2276,7 +2355,6 @@ def flexure_Mn() -> None:
     )
     A_s=10.92 * inch**2
     d=27*inch
-    debug(beam._c_mec_bot)
     result=beam._determine_nominal_moment_simple_reinf_ACI_318_19(A_s,d)
     print(result.to(kip*ft))
 
@@ -2310,11 +2388,11 @@ def shear_ACI_metric() -> None:
     f3 = Forces(label='W', V_z=2.20*kN)
     f4 = Forces(label='S', V_z=8.0*kN)
     f5 = Forces(label='E', V_z=1.0*kN)
-    Node(section=beam, forces=[f1, f2, f3, f4, f5])
+    forces=[f1, f2, f3, f4, f5]
     beam.set_longitudinal_rebar_bot(n1=2, d_b1=16 * mm)
     # beam.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=20*cm) 
     # results = beam.check_shear()
-    results = beam.design_shear()
+    results = beam._design_shear(forces)
     print(results)
     print(beam.shear_design_results)
     # beam.shear_results_detailed()
@@ -2339,12 +2417,12 @@ def shear_ACI_imperial() -> None:
     f1 = Forces(label='D', V_z=37.727*kip)
     # f1 = Forces(label='D', V_z=8*kip)
     # f2 = Forces(label='L', V_z=6*kip) # No shear reinforcing
-    Node(section=beam, forces=[f1])
+    forces=[f1]
     beam.set_transverse_rebar(n_stirrups=1, d_b=0.5*inch, s_l=6*inch)
 
     # beam.set_longitudinal_rebar_bot(n1=2, d_b1=0.625*inch)
     print(beam._A_v)
-    results = beam.check_shear()
+    results = beam._check_shear(forces)
     # results = beam.design_shear()
     print(results)
     # section.design_shear(f, A_s=0.847*inch**2)
@@ -2414,10 +2492,10 @@ def shear_EN_1992() -> None:
                                        settings=custom_settings)
     # f = Forces(V_z=100*kN, M_y=100*kNm)
     f = Forces(V_z=30*kN, N_x=0*kN)
+    forces=[f]
     # beam.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=25*cm)
     beam.set_longitudinal_rebar_bot(n1=4,d_b1=16*mm)
-    Node(beam, f)
-    beam.check_shear()
+    beam._check_shear(forces)
     beam.shear_results_detailed()
     # beam.shear_results_detailed_doc()
 
@@ -2434,10 +2512,10 @@ def shear_CIRSOC() -> None:
     f3 = Forces(label='W', V_z=2.20*kN)
     f4 = Forces(label='S', V_z=8.0*kN)
     f5 = Forces(label='E', V_z=1.0*kN)
-    Node(section=beam, forces=[f1, f2, f3, f4, f5])
+    forces=[f1, f2, f3, f4, f5]
     # beam.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=20*cm) 
     # results = beam.check_shear()
-    results = beam.design_shear()
+    results = beam._design_shear(forces)
     # results = beam.design_shear(A_s=5*cm**2)
     print(results)
     # beam.shear_results_detailed()
@@ -2446,7 +2524,7 @@ def shear_CIRSOC() -> None:
 if __name__ == "__main__":
     # flexure_check_test()
     # flexure_design_test()
-    # flexure_design_test_calcpad_example() 
+    flexure_design_test_calcpad_example() 
 
     # flexure_Mn()
     # shear_ACI_imperial()
@@ -2455,37 +2533,3 @@ if __name__ == "__main__":
     rebar_df()
     # shear_ACI_metric()
     # shear_CIRSOC()
-    from mento import Concrete_ACI_318_19, SteelBar, RectangularConcreteBeam
-    from mento import psi, inch, ksi
-    from mento.section import Section
-    from mento.forces import Forces
-    from mento.node import Node
-
-    # Define concrete and steel materials
-    concrete = Concrete_ACI_318_19(name="C4", f_c=4000 * psi)
-    steel = SteelBar(name="fy=6000", f_y=60 * ksi)
-
-    # Initialize section using default settings
-    section = RectangularConcreteBeam(
-        label="B-12x24",
-        concrete=concrete,
-        steel_bar=steel,
-        width=12 * inch,
-        height=24 * inch
-    )
-
-    # Initialize the flexural solicitations of the section
-    f1 = Forces(label='Combo_01', M_y=400*kip*ft)
-    f2 = Forces(label='Combo_02', M_y=-400*kip*ft)
-    f3 = Forces(label='Combo_03', M_y=37*kip*ft)
-    f4 = Forces(label='Combo_04', M_y=150*kip*ft)
-    f5 = Forces(label='Combo_05', M_y=-1*kip*ft)
-    
-    # Create the node that associates the section with the forces
-    Node(section=beam, forces=[f1,f2,f2,f4,f5])
-
-    # Dimensionate the steel rebar required for the beam:
-    # As the concrete was defined using Concrete_ACI_318_19, the code for design will be ACI 318 19
-    flexure_results = beam.design_flexure()
-    print(flexure_results)
-

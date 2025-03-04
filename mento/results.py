@@ -271,6 +271,7 @@ class DocumentBuilder:
         self.font_name = font_name
         self.font_size = font_size
         self.set_document_style()
+        self.set_page_size()
 
     def set_document_style(self) -> None:
         """
@@ -284,6 +285,18 @@ class DocumentBuilder:
         font = style.font
         font.name = self.font_name
         font.size = Pt(self.font_size)
+
+    def set_page_size(self) -> None:
+        """
+        Sets the page size to A4 by default.
+        
+        Returns:
+        --------
+        None
+        """
+        section = self.doc.sections[0]
+        section.page_height = Cm(29.7)
+        section.page_width = Cm(21.0)
 
     def add_heading(self, text: str, level: int) -> None:
         """
