@@ -32,8 +32,7 @@ class Rebar:
         else:
             self.rebar_diameters = [3*inch/8, 4*inch/8, 5*inch/8, 6*inch/8, 7*inch/8, 8*inch/8, 1.128*inch,
                                     1.27*inch, 1.41*inch, 1.693*inch]
-            rebar_areas_list = [0.1104*inch**2, 0.1963*inch**2, 0.3068*inch**2, 0.4418*inch**2, 0.6013*inch**2,
-                                0.7854*inch**2, 0.9940*inch**2, 1.27*inch**2, 1.56*inch**2, 2.25*inch**2]
+            rebar_areas_list = [(d**2 * np.pi / 4) for d in self.rebar_diameters]
             self.rebar_areas = dict(zip(self.rebar_diameters, rebar_areas_list))
 
     @property

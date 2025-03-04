@@ -94,8 +94,16 @@ def flexure_design_test() -> None:
 
     flexure_results = node_1.design_flexure()
     node_1.flexure_results_detailed()
-    node_1.flexure_results_detailed_doc()
-    print(flexure_results)
+    print(node_1.section._n1_b, node_1.section._d_b1_b)
+    print(node_1.section._n2_b, node_1.section._d_b2_b)
+    print(node_1.section._n3_b, node_1.section._d_b3_b)
+    print(node_1.section._n4_b, node_1.section._d_b4_b)
+    print(node_1.section._n1_t, node_1.section._d_b1_t)
+    print(node_1.section._n2_t, node_1.section._d_b2_t)
+    print(node_1.section._n3_t, node_1.section._d_b3_t)
+    print(node_1.section._n4_t, node_1.section._d_b4_t)
+    # node_1.flexure_results_detailed_doc()
+    # print(flexure_results)
 
 def shear_ACI_imperial() -> None:
     concrete = Concrete_ACI_318_19(name="C4", f_c=4000*psi)  

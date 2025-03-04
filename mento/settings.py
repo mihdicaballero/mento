@@ -1,6 +1,6 @@
 from typing import Optional, Dict, Any
 
-from mento.units import mm, inch, MPa, psi
+from mento.units import mm, inch
 from mento.material import Concrete
 
 class Settings:
@@ -60,7 +60,7 @@ class Settings:
                 'gamma_s': 1.15, 
                 'alpha_cc': 1.00, 
             }
-    def load_aci_318_19_settings(self) -> None:
+    def load_ACI_318_19_settings(self) -> None:
         """
         Load settings specific to ACI 318-19.
         This will override only the settings that are different in ACI 318-19.
@@ -68,7 +68,7 @@ class Settings:
         # Update current settings with ACI 318-19 specific settings
         self.add_settings(self.aci_318_19_settings)
 
-    def load_en_1992_2004_settings(self) -> None:
+    def load_EN_1992_2004_settings(self) -> None:
         """
         Load settings specific to ACI 318-19.
         This will override only the settings that are different in ACI 318-19.

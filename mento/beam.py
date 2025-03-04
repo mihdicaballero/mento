@@ -70,7 +70,7 @@ class RectangularBeam(RectangularSection):
 
     def _initialize_code_attributes(self) -> None:
         if isinstance(self.concrete, Concrete_ACI_318_19):
-            self._initialize_aci_318_attributes()
+            self._initialize_ACI_318_attributes()
         elif isinstance(self.concrete, Concrete_EN_1992_2004):
             self._initialize_en_1992_2004_attributes()
 
@@ -97,7 +97,7 @@ class RectangularBeam(RectangularSection):
         # Update dependent attributes
         self._update_longitudinal_rebar_attributes()
 
-    def _initialize_aci_318_attributes(self) -> None:
+    def _initialize_ACI_318_attributes(self) -> None:
         if isinstance(self.concrete, Concrete_ACI_318_19):
             self._phi_V_n: PlainQuantity = 0*kN
             self._phi_V_s: PlainQuantity = 0*kN
@@ -445,7 +445,7 @@ class RectangularBeam(RectangularSection):
         beta_1 = self.concrete.get_properties()["beta_1"]
         b = self._width
 
-        self.settings.load_aci_318_19_settings()
+        self.settings.load_ACI_318_19_settings()
         self.phi_t = self.settings.get_setting('phi_t')
 
         # Determine minimum and maximum reinforcement areas
@@ -571,7 +571,9 @@ class RectangularBeam(RectangularSection):
         c_assumed = (A_s * f_y - A_s_prime * f_y) / (0.85 * f_c * b * beta_1)
         
         # Compute the strain in the compression reinforcement with the assumed c value:
-        epsilon_s = (c_assumed - d_prime) / c_assumed * epsilon_c
+        epsilon_s = (c_assumed - d_prime) / c_assumed * epsilon_c if c_assumed > 0 else 0
+        # 0 is an arbitrary value, for example, when As top and Bottom are equal, c_assumed is 0, 
+        # and compression steel is not yielding, so epsilon_s must be calculated.
 
         # -------------------------------------------------------------------------
         # Step 2: Check if the assumed compression steel strain exceeds the yield strain.
@@ -585,6 +587,7 @@ class RectangularBeam(RectangularSection):
             # Based on equilibrium:
             #   A_s * f_y = 0.85 * f_c * b * beta_1 * c + A_s_prime * ( (c - d_prime) / c * epsilon_c * E_s )
             # Rearranging into a quadratic form: A*c^2 + B*c + C = 0, where:
+
             A = 0.85 * f_c * b * beta_1
             B = A_s_prime * epsilon_c * E_s - A_s * f_y
             C = -d_prime * A_s_prime * epsilon_c * E_s
@@ -598,6 +601,7 @@ class RectangularBeam(RectangularSection):
             # Recompute the strain and stress in the compression reinforcement:
             epsilon_s_prime = (c - d_prime) / c * epsilon_c
             f_s_prime = epsilon_s_prime * E_s
+
             
             # Determine the adjusted areas for tension reinforcement:
             # A portion of the tensile reinforcement is balanced by the compression reinforcement.
@@ -627,7 +631,7 @@ class RectangularBeam(RectangularSection):
         """
 
         # Load design settings for ACI 318-19
-        self.settings.load_aci_318_19_settings()
+        self.settings.load_ACI_318_19_settings()
         self.phi_t = self.settings.get_setting('phi_t')
 
         # Calculate minimum and maximum reinforcement ratios
@@ -700,9 +704,6 @@ class RectangularBeam(RectangularSection):
         # Calculate the nominal moments for both top and bottom reinforcement.
         self._determine_nominal_moment_ACI_318_19(force)
 
-        # Initialize nominal moments from the applied force.
-        self._determine_nominal_moment_ACI_318_19(force)
-
         if self._M_u >= 0:
             # For positive moments, calculate the reinforcement requirements for the bottom tension side.
             (self._A_s_min_bot, self._A_s_max_bot, self._A_s_req_bot, self._A_s_req_top, 
@@ -768,7 +769,7 @@ class RectangularBeam(RectangularSection):
         """
 
         # Load design settings for ACI 318-19
-        self.settings.load_aci_318_19_settings()
+        self.settings.load_ACI_318_19_settings()
         self.phi_t = self.settings.get_setting('phi_t')
         # Initial assumptions for mechanical cover and compression depth
         rec_mec = self.c_c + self._stirrup_d_b + 1*cm
@@ -1085,7 +1086,7 @@ class RectangularBeam(RectangularSection):
                 'As,req top': self._A_s_req_top.to('cm ** 2'),
                 'As,req bot': self._A_s_req_bot.to('cm ** 2'),
                 'As': self._A_s_bot.to('cm ** 2'),
-                'c/d': self._c_d_bot,
+                # 'c/d': self._c_d_bot,
                 'Mu': self._M_u_bot.to('kN*m'),
                 'ØMn': self._phi_M_n_bot.to('kN*m'),
                 'Mu<ØMn': self._M_u_bot <= self._phi_M_n_bot,
@@ -1100,7 +1101,7 @@ class RectangularBeam(RectangularSection):
                 'As,req top': self._A_s_req_top.to('cm ** 2'),
                 'As,req bot': self._A_s_req_bot.to('cm ** 2'),
                 'As': self._A_s_top.to('cm ** 2'),
-                'c/d': self._c_d_top,
+                # 'c/d': self._c_d_top,
                 'Mu': self._M_u_top.to('kN*m'),
                 'ØMn': self._phi_M_n_top.to('kN*m'),
                 'Mu<ØMn': -self._M_u_top <= self._phi_M_n_top,
@@ -1184,7 +1185,7 @@ class RectangularBeam(RectangularSection):
         self._calculate_rebar_spacing_aci()
 
         # Check results and return DataFrame
-        results = self._compile_results_aci_shear(force)
+        results = self._compile_results_ACI_shear(force)
         self._initialize_dicts_ACI_318_19_shear()
         return pd.DataFrame([results], index=[0])
 
@@ -1218,7 +1219,7 @@ class RectangularBeam(RectangularSection):
         else:
             self._M_u_bot = 0*kNm
             self._M_u_top = self._M_u
-        self.settings.load_aci_318_19_settings()
+        self.settings.load_ACI_318_19_settings()
         self.phi_v = self.settings.get_setting('phi_v')
         self.phi_t = self.settings.get_setting('phi_t')
         self.lambda_factor = self.settings.get_setting('lambda')
@@ -1234,7 +1235,7 @@ class RectangularBeam(RectangularSection):
             self._V_Ed_2 = force.V_z  # Consider the same shear at the edge of support and in d
 
             # Load settings for gamma factors
-            self.settings.load_en_1992_2004_settings()
+            self.settings.load_EN_1992_2004_settings()
             self._alpha_cc = self.settings.get_setting('alpha_cc')
             self._gamma_c = self.settings.get_setting('gamma_c')
             self._gamma_s = self.settings.get_setting('gamma_s')
@@ -2270,6 +2271,33 @@ def clear_console() -> None:
     else:  # For macOS and Linux
         os.system('clear')
 
+
+
+def test_on_determine_nominal_moment_ACI_318_19()->None:
+    concrete = Concrete_ACI_318_19(name="fc 4000", f_c=4000*psi)  
+    steelBar = SteelBar(name="fy 60000", f_y=60*ksi)  
+    custom_settings = {'clear_cover': 1.5*inch} 
+    beam = RectangularBeam(
+        label="B-12x24",
+        concrete=concrete,
+        steel_bar=steelBar,
+        width=12*inch,  
+        height=24*inch,
+        settings=custom_settings  
+    )
+    
+    beam.set_longitudinal_rebar_bot(n1=2,d_b1=1.128*inch, n2=1, d_b2=1.128*inch,  n3=2,d_b3=1*inch, n4=1, d_b4=1*inch)
+    beam.set_longitudinal_rebar_top(n1=2,d_b1=1.128*inch, n2=1, d_b2=1.128*inch,  n3=2,d_b3=1*inch, n4=1, d_b4=1*inch)
+
+    f = Forces(label='Test_01', M_y=400*kip*ft)
+    beam._determine_nominal_moment_ACI_318_19(f)
+    debug(beam._phi_M_n_bot.to(kNm))
+    debug(beam._phi_M_n_top.to(kNm))
+
+
+
+
+
 def flexure_design_test() -> None:
     # clear_console()
     concrete= Concrete_ACI_318_19(name="C25",f_c=25*MPa) 
@@ -2375,6 +2403,9 @@ def flexure_Mn() -> None:
     A_s_prime=1.8*inch**2
     result=beam2._determine_nominal_moment_double_reinf_ACI_318_19(A_s, d, d_prime, A_s_prime)
     print(result.to(kip*ft))
+
+
+
 
 def shear_ACI_metric() -> None:
     concrete= Concrete_ACI_318_19(name="C30",f_c=30*MPa) 
@@ -2525,11 +2556,11 @@ if __name__ == "__main__":
     # flexure_check_test()
     # flexure_design_test()
     flexure_design_test_calcpad_example() 
-
+    # test_on_determine_nominal_moment_ACI_318_19()
     # flexure_Mn()
     # shear_ACI_imperial()
     # shear_EN_1992()
-    rebar()
-    rebar_df()
+    # rebar()
+    # rebar_df()
     # shear_ACI_metric()
     # shear_CIRSOC()
