@@ -214,16 +214,16 @@ class Rebar:
         if df.empty and best_fallback_combination is not None:
             df = pd.DataFrame([best_fallback_combination])
 
-        # Add the functional to find the best design
         modified_df: pd.DataFrame = self._calculate_penalties_long_rebar(df)
         # Sort by 'Functional' to sort by the best options
         modified_df.sort_values(by=['functional'], inplace=True)
-        modified_df.drop(columns=['bars_penalty', 'diameter_penalty',
-                                  'layer_penalty', 'combined_penalty', 'functional'], inplace=True)
+        # modified_df.drop(columns=['area_penalty','bars_penalty', 'diameter_penalty',
+        #                           'layer_penalty', 'combined_penalty', 'functional'], inplace=True)
         modified_df.reset_index(drop=True, inplace=True)
         self._long_combos_df = modified_df
 
-        return df.head(7)
+        return modified_df.head(10)
+
 
     def longitudinal_rebar_EN_1992(self, A_s_req: PlainQuantity) -> None:
         pass
@@ -281,10 +281,12 @@ class Rebar:
                 if abs(d1 - d2) > self.max_diameter_diff:
                     return False
         return True
-
-    def _calculate_penalties_long_rebar(self, df: pd.DataFrame, alpha: float = 1.5,
-                                        beta: float = 0.4, gamma: float = 1.5,
-                                        epsilon: float = 0.5) -> pd.DataFrame:
+    
+    def _calculate_penalties_long_rebar(self, df: pd.DataFrame,
+                                        alpha: float =  3.5,
+                                        beta: float =   0.3,
+                                        gamma: float =  0.25,
+                                        delta: float =  1) -> pd.DataFrame:
         """
         Calculate penalties for rebar configurations and add them as columns to the DataFrame.
 
@@ -340,34 +342,20 @@ class Rebar:
                 return 1  # Penalize if additional layers are used
             return 0  # No penalty if only the first layer is used
 
-        def combined_bars_layers_penalty(row: pd.Series) -> float:
-            """
-            Calculate a combined penalty for the number of bars and layers.
-            
-            Args:
-                row (pd.Series): A row of the DataFrame.
-                
-            Returns:
-                float: The combined penalty.
-            """
-            # Penalize more if there are more bars AND more layers
-            return (row['total_bars'] - min_bars) * row['layer_penalty']
-
         
         # Calculate penalties and add them as columns
-        df['bars_penalty'] = alpha * (df['total_bars'] - min_bars)/min_bars
-        df['diameter_penalty'] = beta * df.apply(diameter_difference_penalty, axis=1)
-        df['layer_penalty'] = gamma * df.apply(layer_penalty, axis=1)
-        df['combined_penalty'] = epsilon * df.apply(combined_bars_layers_penalty, axis=1)
+        df['area_penalty'] = df.apply(lambda row: (alpha*row['total_as']/min_as), axis=1)
+        df['bars_penalty'] = beta * (df['total_bars'] - min_bars)/min_bars
+        df['diameter_penalty'] = gamma * df.apply(diameter_difference_penalty, axis=1)
+        df['layer_penalty'] = delta * df.apply(layer_penalty, axis=1)
 
         # Calculate the final functional
         df['functional'] = df.apply(
             lambda row: (
-                2 * row['total_as']/min_as + # Fixed penalty for total_as
+                row['area_penalty'] +
                 row['bars_penalty'] +
                 row['diameter_penalty'] +
-                row['layer_penalty'] +
-                row['combined_penalty'] 
+                row['layer_penalty']
             ),
             axis=1
         )
@@ -594,3 +582,5 @@ class Rebar:
         s_max_w = min(0.75*self.beam._d_shear, 60 * cm)
            
         return s_max_l, s_max_w
+
+

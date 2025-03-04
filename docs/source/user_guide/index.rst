@@ -15,7 +15,7 @@ User Guide
    sections
    beams
    node
-   summary
+   beam_summary
 
 In this user guide, you will find detailed descriptions and
 examples that describe many common tasks that you can accomplish with mento.
