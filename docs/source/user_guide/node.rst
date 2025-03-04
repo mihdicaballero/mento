@@ -22,21 +22,28 @@ The `Node` class has the following attributes:
 - **section**: The `Section` object associated with this node. For now, a `RectangularConcreteBeam` is available.
 - **forces**: A list of `Forces` objects applied to this node.
 
-To create a `Node` you must define the concrete and steel materiales, the concrete section based on those materials and the forces object.
+To create a `Node` you must define the concrete and steel materials, the concrete section based on those materials and the forces object.
 
 .. code-block:: python
 
     from mento import Concrete_ACI_318_19, SteelBar, Forces, RectangularBeam, Node
     from mento import mm, cm, kN, MPa, kNm
+
     # Defines materials and beam section
-    conc  = Concrete_ACI_318_19(name="C25",f_c=25*MPa) 
-    steel = SteelBar(name="ADN 420", f_y=420*MPa) 
-    section  = RectangularBeam(label="101",concrete=conc,steel_bar=steel,width=20*cm, height=60*cm)
+    conc  = Concrete_ACI_318_19(name="C25",f_c=25*MPa)
+    steel = SteelBar(name="ADN 420", f_y=420*MPa)
+    beam  = RectangularBeam(label="101",concrete=conc,steel_bar=steel,width=20*cm, height=60*cm)
+
     # Define forces
     f1 = Forces(label='1.4D', V_z=50*kN, M_y=90*kNm)
     f2 = Forces(label='1.2D+1.6L', V_z=55*kN, M_y=-80*kNm)
+    # Assign transverse and longitudinal reinforcement
+    beam.set_transverse_rebar(n_stirrups=1, d_b=10*mm, s_l=20*cm)
+    beam.set_longitudinal_rebar_bot(n1=3,d_b1=16*mm)
+    beam.set_longitudinal_rebar_top(n1=3,d_b1=12*mm)
+
     # Create node and assign beam section and list of forces
-    beam = Node(section=section, forces=[f1, f2])
+    node_1 = Node(section=beam, forces=[f1, f2])
 
 2. Performing Checks
 ********************
@@ -53,8 +60,8 @@ created for all the forces assigned and store the limiting case for shear and to
 .. code-block:: python
 
     # Perform shear and flexure checks in the Node section
-    beam.check_shear()
-    beam.check_flexure()
+    node_1.check_shear()
+    node_1.check_flexure()
 
 3. Design the section
 ********************
@@ -64,10 +71,12 @@ If you don't assign transverse or longitudinal rebar, you can ask *Mento* to des
 created for all the forces assigned and store the limiting case for shear and top and bottom bending moment. 
 
 After performing the numerical design, *Mento* will assign the optimal rebar combination of stirrups and longitudinal reinforcement,
-considering all the longitudinal positions in the beam.
+considering all the longitudinal positions in the beam. This optimizations takes into account the default settings 
+for longitudinal rebar limitation (vibrator size, maximum rebar diameter difference) and engineering criteria to suggest
+the best rebar configuration balancing the amount of rebars, layers and different diamaters.
 
-- **Shear Design**: Use `design_shear`.
-- **Flexure Design**: Use `design_flexure`.
+- **Shear Design**: Use `design_shear()`.
+- **Flexure Design**: Use `design_flexure()`.
 
 .. code-block:: python
 
@@ -91,7 +100,7 @@ You can print those results from the previous method.
 
 After performing the checks, you can view the results in a formatted way in a Notebook.
 
-When you run `beam.results`, the output includes for a `Beam` object:
+When you run `node.results`, the output includes for a `Beam` object:
 
 - **Top and bottom longitudinal reinforcement**.
 - **Shear reinforcement**.
@@ -100,7 +109,8 @@ When you run `beam.results`, the output includes for a `Beam` object:
 - **Warnings** (if any).
 
 The output is formatted using LaTeX math notation for clarity and precision.
-See the `Beam` or `Column` section for more information on how to display results. 
+See the `Beam` or `Column` section for more information on how to display results.
+The results are presented in a user-friendly format, with color-coded Demand-Capacity Ratios (DCR) for quick assessment.
 
 5. Detailed Results
 *******************
@@ -116,18 +126,26 @@ This reuslts will print in the Terminal or in a Jupyter Notebook the same way.
 .. code-block:: python
 
     # View detailed shear results
-    beam.shear_results_detailed()
+    node_1.shear_results_detailed()
     # View detailed flexure results
-    beam.flexure_results_detailed()
+    node_1.flexure_results_detailed()
+
+You can also print the detailed results for the analysis of a specific corce if you pass it as an input:
+.. code-block:: python
+
+    # Print detailed results for shear, for specific force
+    node_1.shear_results_detailed(f1)
+    # Print detailed results for flexure, for specific force
+    node_1.flexure_results_detailed(f1)
 
 If you want to save the detailed results as a report in Microsoft Word, just run the following methods instead:
 
 .. code-block:: python
 
     # View detailed shear results
-    beam.shear_results_detailed_doc()
+    node_1.shear_results_detailed_doc()
     # View detailed flexure results
-    beam.flexure_results_detailed_doc()
+    node_1.flexure_results_detailed_doc()
 
 6. Force methods
 ********************
@@ -138,16 +156,14 @@ The `Node` class provides the following methods for changing the Forces assigned
 - **Get list of forces**: Use `get_forces_list()`.
 - **Reset forces to zero**: Use `reset_forces()`.
 
-  .. code-block:: python
+.. code-block:: python
 
-      # Add a single force
-      node.add_forces(force1) 
-      # Add multiple forces
-      node.add_forces([force2, force3])  
-      # Get forces list.
-      forces_list = node.get_forces_list()
-      print(forces_list)
-      # Reset forces
-      node.reset_forces()
-
-
+    # Add a single force
+    node_1.add_forces(force1) 
+    # Add multiple forces
+    node_1.add_forces([force2, force3])  
+    # Get forces list.
+    forces_list = node_1.get_forces_list()
+    print(forces_list)
+    # Reset forces
+    node_1.reset_forces()

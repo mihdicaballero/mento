@@ -37,7 +37,7 @@ Using Mento is easy and intuitive:
     section = RectangularBeam(
             label="101",concrete=conc,steel_bar=steel,width=20*cm, height=40*cm)
     # Display data with LaTeX formatting in a Jupyter Notebook
-    section.data
+    section.results
 
 Expected Output
 ---------------
@@ -49,7 +49,8 @@ Below is the expected output:
 
    \textsf{Beam 101}, \, b = 20.00 \, \textsf{cm}, \, h = 40.00 \, \textsf{cm}, \, c_{\text{c}} = 2.50 \, \textsf{cm}, \, \textsf{Concrete C25}, \, \textsf{Rebar ADN 420}.
 
-This is an ideal way to present structural data, making the results clear and easy to read. The use of Jupyter Notebooks and LaTeX ensures that all units and parameters are well-formatted for structural engineering reports.
+This is an ideal way to present structural data, making the results clear and easy to read.
+The use of Jupyter Notebooks and LaTeX ensures that all units and parameters are well-formatted for structural engineering reports.
 
 Design Principles
 -----------------

@@ -1,6 +1,6 @@
 from typing import Optional, Dict, Any
 
-from mento.units import mm, inch, MPa, psi
+from mento.units import mm, inch
 from mento.material import Concrete
 
 class Settings:
@@ -48,14 +48,14 @@ class Settings:
         if settings:
             self.update(settings)
 
-        self.aci_318_19_settings : Dict[str, Any] = {
+        self.ACI_318_19_settings : Dict[str, Any] = {
                 'lambda': 1, # Normalweight concrete
                 'phi_v': 0.75, # Shear strength reduction factor
                 'phi_c': 0.65, # Compression controlled strength reduction factor
                 'phi_t': 0.90,  # Tension controlled strength reduction factor
                 'flexural_min_reduction': "False"  # True selects 4/3 of calculated steel if it's less than minimum
             }
-        self.en_1992_2004_settings : Dict[str, Any] = {
+        self.EN_1992_2004_settings : Dict[str, Any] = {
                 'gamma_c': 1.5,
                 'gamma_s': 1.15, 
                 'alpha_cc': 1.00, 
@@ -66,7 +66,7 @@ class Settings:
         This will override only the settings that are different in ACI 318-19.
         """
         # Update current settings with ACI 318-19 specific settings
-        self.add_settings(self.aci_318_19_settings)
+        self.add_settings(self.ACI_318_19_settings)
 
     def load_en_1992_2004_settings(self) -> None:
         """
@@ -74,7 +74,7 @@ class Settings:
         This will override only the settings that are different in ACI 318-19.
         """
         # Update current settings with ACI 318-19 specific settings
-        self.add_settings(self.en_1992_2004_settings)
+        self.add_settings(self.EN_1992_2004_settings)
     
     def get_setting(self, key: str) -> Any:
         if key in self.settings:
