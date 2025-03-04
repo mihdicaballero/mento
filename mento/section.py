@@ -68,5 +68,9 @@ class Section:
 
     def _flexure_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
         pass
-        
+    
+    # Beam results for Jupyter Notebook
+    @property
+    def results(self) -> None:
+        return self.results
 
