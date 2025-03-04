@@ -1,12 +1,11 @@
-from devtools import debug
-from typing import List
+from typing import Union, Optional, List
+import pandas as pd
+
 from mento.beam import RectangularBeam
-from mento.material import Concrete, SteelBar, Concrete_ACI_318_19, Concrete_EN_1992_2004, Concrete_CIRSOC_201_25
+from mento.material import SteelBar, Concrete_ACI_318_19
 from mento.section import Section
 from mento.forces import Forces
-from typing import Union
-import pandas as pd
-from mento.units import MPa, ksi, psi, kip, mm, inch, kN, m, cm, kNm, ft, dimensionless
+from mento.units import ksi, psi, kip, inch, ft
 
 class Node:
     def __init__(self, section: Section, forces: Union[Forces, List[Forces]]) -> None:
@@ -46,43 +45,29 @@ class Node:
             # Replace each force in the list with a zero-initialized Forces object
             self.forces = [Forces() for _ in self.forces]
 
-
     def check_flexure(self) -> pd.DataFrame:
-        """
-        """        
-        try:
-            return self.section._check_flexure(self.forces)
-        except AttributeError:
-            print("La sección actual no tiene el método 'check_flexure' definido")
-
+        return self.section._check_flexure(self.forces)
 
     def design_flexure(self) -> pd.DataFrame:
-        """
-        """        
-        try:
-            return self.section._design_flexure(self.forces)
-        except AttributeError:
-            print("La sección actual no tiene el método 'design_flexure' definido")
-
-
+        return self.section._design_flexure(self.forces)
 
     def check_shear(self) -> pd.DataFrame:
-        """
-        """        
-        try:
-            return self.section._check_shear(self.forces)
-        except AttributeError:
-            print("La sección actual no tiene el método 'design_flexure' definido")
-
+        return self.section._check_shear(self.forces)
 
     def design_shear(self) -> pd.DataFrame:
-        """
-        """        
-        try:
-            return self.section._design_shear(self.forces)
-        except AttributeError:
-            print("La sección actual no tiene el método 'design_flexure' definido")
+        return self.section._design_shear(self.forces)
+    
+    def shear_results_detailed(self, force: Optional[Forces] = None) -> None:
+        return self.section._shear_results_detailed(force)
+    
+    def shear_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
+        return self.section._shear_results_detailed_doc(force)
 
+    def flexure_results_detailed(self, force: Optional[Forces] = None) -> None:
+        return self.section._flexure_results_detailed(force)
+
+    def flexure_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
+        return self.section._flexure_results_detailed_doc(force)
 
 
 
@@ -105,9 +90,11 @@ def flexure_design_test() -> None:
     
     f = Forces(label='Test_01', V_z = 40*kip, M_y=400*kip*ft)
     f2 = Forces(label='Test_01', V_z = 100*kip, M_y=-400*kip*ft)
-    N1=Node(section=beam, forces=[f,f2])
+    node_1=Node(section=beam, forces=[f,f2])
 
-    flexure_results = N1.design_flexure()
+    flexure_results = node_1.design_flexure()
+    node_1.flexure_results_detailed()
+    node_1.flexure_results_detailed_doc()
     print(flexure_results)
 
 def shear_ACI_imperial() -> None:
@@ -129,16 +116,16 @@ def shear_ACI_imperial() -> None:
     # f2 = Forces(label='L', V_z=6*kip) # No shear reinforcing
     forces=[f1]
     beam.set_transverse_rebar(n_stirrups=1, d_b=0.5*inch, s_l=6*inch)
-    N1=Node(beam,forces)
+    node_1=Node(beam,forces)
     # beam.set_longitudinal_rebar_bot(n1=2, d_b1=0.625*inch)
     print(beam._A_v)
-    results = N1.check_shear()
+    results = node_1.check_shear()
     # results = beam.design_shear()
     print(results)
     # section.design_shear(f, A_s=0.847*inch**2)
-    N1.section.shear_results_detailed()  
-    # section.shear_results_detailed_doc()
+    node_1.shear_results_detailed()  
+    node_1.shear_results_detailed_doc()
 
 if __name__ == "__main__":
     flexure_design_test()
-    shear_ACI_imperial()
+    # shear_ACI_imperial()

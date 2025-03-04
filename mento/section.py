@@ -1,13 +1,14 @@
-from mento.settings import Settings
 from dataclasses import dataclass, field
-from typing import Optional, TYPE_CHECKING, Dict, Any
+from typing import Optional, TYPE_CHECKING, Dict, Any, List
 
+from mento.settings import Settings
 from mento.material import Concrete, SteelBar
+from mento.forces import Forces
 
 if TYPE_CHECKING:
     from pint.facets.plain import PlainQuantity
     from mento.node import Node
-
+    
 @dataclass
 class Section:
     _id: int
@@ -43,5 +44,29 @@ class Section:
     def update_settings(self, new_settings: Dict[str, Any]) -> None:
         """Updates settings with new values."""
         self.settings.update(new_settings)
+
+    def _check_shear(self, forces: List[Forces]) -> None:
+        pass
+
+    def _design_shear(self, forces: List[Forces]) -> None:
+        pass
+
+    def _check_flexure(self, forces: List[Forces]) -> None:
+        pass
+
+    def _design_flexure(self, forces: List[Forces]) -> None:
+        pass
+
+    def _shear_results_detailed(self, force: Optional[Forces] = None) -> None:
+        pass
+
+    def _shear_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
+        pass
+
+    def _flexure_results_detailed(self, force: Optional[Forces] = None) -> None:
+        pass
+
+    def _flexure_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
+        pass
         
 

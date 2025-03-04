@@ -1,5 +1,4 @@
 import os # Cleaning console
-from devtools import debug
 from dataclasses import dataclass
 from IPython.display import Markdown, display
 from typing import Optional, Dict, Any, cast, Union
@@ -9,6 +8,7 @@ import pandas as pd
 from pandas import DataFrame
 import math
 import warnings
+from devtools import debug 
 
 from mento.rectangular import RectangularSection
 from mento.material import Concrete, SteelBar, Concrete_ACI_318_19, Concrete_EN_1992_2004, Concrete_CIRSOC_201_25
@@ -729,7 +729,7 @@ class RectangularBeam(RectangularSection):
         self._rho_l_top = self._A_s_bot / (self._d_top * self._width)
         
         # Compile the design results into a dictionary.
-        results = self._compile_results_aci_flexure_metric(force)
+        results = self._compile_results_ACI_flexure_metric(force)
         
         # Initialize any additional dictionaries required for ACI 318-19 flexural checks.
         self._initialize_dicts_ACI_318_19_flexure()
@@ -1074,7 +1074,7 @@ class RectangularBeam(RectangularSection):
         self._stirrup_s_l = max(self._stirrup_s_l, 0 * inch)
         self._stirrup_s_w = max(self._stirrup_s_w, 0 * inch)
     
-    def _compile_results_aci_flexure_metric(self, force: Forces) -> Dict[str, Any]:
+    def _compile_results_ACI_flexure_metric(self, force: Forces) -> Dict[str, Any]:
         # Create dictionaries for bottom and top rows
         if self._M_u>=0:
             result = {
@@ -1108,7 +1108,7 @@ class RectangularBeam(RectangularSection):
             }
         return result
     
-    def _compile_results_aci_shear(self, force: Forces) -> Dict[str, Any]:
+    def _compile_results_ACI_shear(self, force: Forces) -> Dict[str, Any]:
         return {
             'Section Label': self.label,
             'Load Combo': force.label,
@@ -1254,9 +1254,9 @@ class RectangularBeam(RectangularSection):
             # Compression stress, positive
             self._A_p = 0*cm**2 # No prestressing for now
             if force._M_y >= 0*kNm:
-                self._rho_l_bot = min((self._A_s_tension + self._A_p) / (self.width * self._d_shear), 0.02)
+                self._rho_l_bot = min((self._A_s_tension + self._A_p) / (self.width * self._d_shear), 0.02*dimensionless)
             else:
-                self._rho_l_top = min((self._A_s_tension + self._A_p) / (self.width * self._d_shear), 0.02)
+                self._rho_l_top = min((self._A_s_tension + self._A_p) / (self.width * self._d_shear), 0.02*dimensionless)
             # Shear calculation for sections without rebar
             self._k_value = min(1 + math.sqrt(200 * mm / self._d_shear), 2)
             # Positive of compression
@@ -1264,7 +1264,7 @@ class RectangularBeam(RectangularSection):
 
     def _shear_without_rebar_EN_1992_2004(self) -> PlainQuantity:
         self._stirrup_d_b = 0*mm
-        self._theta = 0
+        self._theta: float = 0
         # Total shear capacity without rebar
         C_rdc = 0.18/self._gamma_c
         v_min = 0.035*self._k_value**(3/2)*math.sqrt(self._f_ck.to('MPa').magnitude)
@@ -1308,8 +1308,8 @@ class RectangularBeam(RectangularSection):
 
                 # The θ angle is lmited between 21,8° ≤ θ ≤ 45°(1 ≤ cot(θ) ≤ 2.5)
                 # Check the minimum strut angle θ = 21.8° (cot(θ) = 2.5)
-                theta_min = math.radians(21.8)
-                cot_theta_min = 1 / math.tan(theta_min)
+                theta_min: float = math.radians(21.8)
+                cot_theta_min: float = 1 / math.tan(theta_min)
 
                 V_Rd_max_min_angle = (alpha_cw * self.width * z * v_1 * self._f_cd / (cot_theta_min +
                                                                                        math.tan(theta_min))).to('kN')
@@ -1322,7 +1322,7 @@ class RectangularBeam(RectangularSection):
                     self._max_shear_ok = True
                 else:
                     # Check the maximum strut angle θ = 45° (cot(θ) = 1.0)
-                    theta_max = math.radians(45)
+                    theta_max: float = math.radians(45)
                     cot_theta_max = 1 / math.tan(theta_max)
                     V_Rd_max_max_angle: PlainQuantity = (alpha_cw * self.width * z * v_1 * self._f_cd / (cot_theta_max +
                                                                                            math.tan(theta_max))).to('kN')
@@ -1335,7 +1335,7 @@ class RectangularBeam(RectangularSection):
                     else:
                         self._max_shear_ok = True
                         # Determine the angle θ of the strut based on the shear force
-                        self._theta: float = 0.5 * math.asin((self._V_Ed_1 / V_Rd_max_max_angle))
+                        self._theta = 0.5 * math.asin((self._V_Ed_1 / V_Rd_max_max_angle))
                         self._cot_theta = 1 / math.tan(self._theta)
                         self._V_Rd_max = (alpha_cw * self.width * z * v_1 * self._f_cd / (self._cot_theta +
                                                                                            math.tan(self._theta))).to('kN')
@@ -1538,10 +1538,10 @@ class RectangularBeam(RectangularSection):
                       'Minimum spacing bottom'],
             'Unit': ['cm²', 'mm', 'cm²', 'mm'],
             'Value': [round(self._A_s_top.to('cm**2').magnitude,2), 
-            self._available_s_top.to('mm').magnitude, round(self._A_s_bot.to('cm**2').magnitude,2), 
-            self._available_s_bot.to('mm').magnitude,],
-            'Min.': [round(self._A_s_min_top.to('cm**2').magnitude,2), min_spacing_top.to('mm').magnitude,
-                     round(self._A_s_min_bot.to('cm**2').magnitude,2),  min_spacing_bot.to('mm').magnitude],
+            round(self._available_s_top.to('mm').magnitude,2), round(self._A_s_bot.to('cm**2').magnitude,2), 
+            round(self._available_s_bot.to('mm').magnitude,2),],
+            'Min.': [round(self._A_s_min_top.to('cm**2').magnitude,2), round(min_spacing_top.to('mm').magnitude,2),
+                     round(self._A_s_min_bot.to('cm**2').magnitude,2),  round(min_spacing_bot.to('mm').magnitude,2)],
             'Max.': [round(self._A_s_max_top.to('cm**2').magnitude,2), "", 
                      round(self._A_s_max_bot.to('cm**2').magnitude,2), ""],
             'Ok?': checks
@@ -1571,7 +1571,7 @@ class RectangularBeam(RectangularSection):
                     round(self._A_s_req_bot.to('cm**2').magnitude,2),
                     round(self._A_s_top.to('cm**2').magnitude,2), round(self._rho_l_top.magnitude,5),
                     round(self._phi_M_n_top.to('kN*m').magnitude,2), round(self._DCRb_top,2)],
-            "Unit": ["", "", "cm", "", "cm²","cm²", "cm²","","kNm", check_DCR_top]
+            "Unit": ["", "", "cm", "", "cm²","cm²", "cm²","cm²","","kNm", check_DCR_top]
         }
         self._flexure_capacity_bot = {
             "Bottom reinforcement check": [
@@ -1596,7 +1596,7 @@ class RectangularBeam(RectangularSection):
                     round(self._A_s_req_bot.to('cm**2').magnitude,2),
                     round(self._A_s_bot.to('cm**2').magnitude,2), round(self._rho_l_bot.magnitude,5),
                     round(self._phi_M_n_bot.to('kN*m').magnitude,2), round(self._DCRb_bot,2)],
-            "Unit": ["", "", "cm", "", "cm²","cm²", "cm²","","kNm", check_DCR_bot]
+            "Unit": ["", "", "cm", "", "cm²","cm²", "cm²","cm²","","kNm", check_DCR_bot]
         }
         self._flexure_all_checks = self._all_flexure_checks_passed and check_DCR_bot and check_DCR_top
 
@@ -1949,7 +1949,7 @@ class RectangularBeam(RectangularSection):
             self.shear_results  # This will generate _md_shear_results
         return None
 
-    def flexure_results_detailed(self, force: Optional[Forces] = None) -> None:
+    def _flexure_results_detailed(self, force: Optional[Forces] = None) -> None:
         """
         Displays detailed flexure results.
 
@@ -2049,7 +2049,7 @@ class RectangularBeam(RectangularSection):
         capacity_printer = TablePrinter("FLEXURAL CAPACITY - BOTTOM")
         capacity_printer.print_table_data(bot_result_data, headers='keys')
 
-    def flexure_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
+    def _flexure_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
         """
         Prints detailed flexure results in Word.
 
@@ -2159,7 +2159,7 @@ class RectangularBeam(RectangularSection):
         # Save the Word doc
         doc_builder.save(f"Concrete beam flexure check {self.concrete.design_code}.docx")
  
-    def shear_results_detailed(self, force: Optional[Forces] = None) -> None:
+    def _shear_results_detailed(self, force: Optional[Forces] = None) -> None:
         """
         Displays detailed shear results.
 
@@ -2201,7 +2201,7 @@ class RectangularBeam(RectangularSection):
         concrete_printer = TablePrinter("CONCRETE STRENGTH")
         concrete_printer.print_table_data(result_data['shear_concrete'], headers='keys')
 
-    def shear_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
+    def _shear_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
         """
         Prints detailed shear results in Word.
 
