@@ -37,6 +37,7 @@ Usage Scenarios
    Defaut settings change based on the metric system selected.
 
    **Default settings for metric system include**:
+
    * Clear cover: 25 mm
    * Clear spacing: 20 mm
    * Stirrup diameter: 8 mm
@@ -47,6 +48,7 @@ Usage Scenarios
    * Maximum bars per layer: 5
 
    **Default settings for imperial system include**:
+
    * Clear cover: 1 inch
    * Clear spacing: 1 inch
    * Stirrup diameter: 3/8 inch
@@ -82,61 +84,66 @@ In this example, we create a section using the default settings:
 
 .. code-block:: python
 
-    from mento import Concrete_ACI_318_19, SteelBar, RectangularConcreteBeam
-    from mento import psi, inch, ksi, mm
+  from mento import Concrete_ACI_318_19, SteelBar, RectangularBeam
+  from mento import psi, inch, ksi
 
-    # Define concrete and steel materials
-    concrete = Concrete_ACI_318_19(name="C4", f_c=4000 * psi)
-    steel = SteelBar(name="ADN 420", f_y=60 * ksi)
+  # Define concrete and steel materials
+  concrete = Concrete_ACI_318_19(name="C4", f_c=4000 * psi)
+  steel = SteelBar(name="ADN 420", f_y=60 * ksi)
 
-    # Initialize section using default settings
-    section = RectangularConcreteBeam(
-        label="V-10x16",
-        concrete=concrete,
-        steel_bar=steel,
-        width=10 * inch,
-        height=16 * inch
-    )
+  # Initialize section using default settings
+  section = RectangularBeam(
+      label="101",
+      concrete=concrete,
+      steel_bar=steel,
+      width=10 * inch,
+      height=16 * inch
+  )
 
-    # Check default settings
-    print(section.settings.default_settings)
+  # Check default settings
+  print(section.settings.default_settings_imperial)
+  print(section.settings.default_settings_metric)
 
 This section will automatically use the default settings for clear cover,
-spacing, stirrup diameters, etc.
+spacing, stirrup diameters, etc. for the corresponding unit system depending on the unit of the concrete resistance.
+If `f_c` is indicated in psi or ksi, the default unit system will be `imperial` and if it is indicated in
+Pa or MPa, it will be `metric`.
 
 Example 2: Custom Settings
 --------------------------
 
 You can customize specific settings by passing a dictionary of values during
 section initialization. In this example, we increase the clear cover and
-modify the longitudinal bar diameter. You must call the properties by their
+modify the minimum longitudinal bar diameter. You must call the properties by their
 name correctly for this to work.
 
 .. code-block:: python
 
-    custom_settings = {'clear_cover': 50 * mm, 'longitudinal_diameter_ini': 25 * mm}
+  custom_settings = {'clear_cover': 50 * mm, 'minimum_longitudinal_diameter': 12 * mm}
 
-    # Create section with custom settings
-    section = RectangularConcreteBeam(
-        label="V-12x18",
-        concrete=concrete,
-        steel_bar=steel,
-        width=12 * inch,
-        height=18 * inch,
-        settings=custom_settings
-    )
+  # Create section with custom settings
+  section = RectangularBeam(
+      label="101",
+      concrete=concrete,
+      steel_bar=steel,
+      width=12 * inch,
+      height=18 * inch,
+      settings=custom_settings
+  )
 
-    # Print the updated settings
-    print(section.settings.settings)
+  # Print the updated settings
+  print(section.settings)
 
 Attributes
 ----------
 
-- **default_settings**: Contains default design parameters such
-  as clear cover, spacing, stirrup diameter, etc.
-- **aci_318_19_settings**: Contains ACI 318-19 specific settings
+- **default_settings_imperial**: Contains default design parameters such
+  as clear cover, spacing, stirrup diameter, etc. for imperial units.
+- **default_settings_metric**: Contains default design parameters such
+  as clear cover, spacing, stirrup diameter, etc. for metric units.
+- **ACI_318_19_settings**: Contains ACI 318-19 specific settings
   (e.g., reduction factors, minimum reinforcement considerations).
-  **en_1992_2004_settings**: Contains EN 1992-1-1:2004 specific settings.
+- **EN_1992_2004_settings**: Contains EN 1992-1-1:2004 specific settings.
 - **settings**: Current instance settings, which can be a mix of
   defaults and user-defined values.
 
@@ -147,15 +154,3 @@ Methods
 - **load_en_1992_2004_settings()**: Loads the EN 1992-1-1:2004 design settings.
 - **get_setting(key)**: Retrieves the value of a specific setting.
 - **set_setting(key, value)**: Sets the value of a specific setting.
-- **add_settings(new_settings)**: Adds or updates multiple settings at once.
-- **update(new_settings)**: Updates the current settings with a
-  dictionary of new values.
-
-Conclusion
-----------
-
-The `Settings` class provides a robust way to manage design parameters,
-allowing users to work with defaults or customize their section properties.
-Whether you're following standard design codes like ACI 318-19 or using
-unique configurations, the `Settings` class ensures flexibility and
-clarity in structural calculations.

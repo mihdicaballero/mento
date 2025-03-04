@@ -445,7 +445,7 @@ class RectangularBeam(RectangularSection):
         beta_1 = self.concrete.get_properties()["beta_1"]
         b = self._width
 
-        self.settings.load_aci_318_19_settings()
+        self.settings.load_ACI_318_19_settings()
         self.phi_t = self.settings.get_setting('phi_t')
 
         # Determine minimum and maximum reinforcement areas
@@ -627,7 +627,7 @@ class RectangularBeam(RectangularSection):
         """
 
         # Load design settings for ACI 318-19
-        self.settings.load_aci_318_19_settings()
+        self.settings.load_ACI_318_19_settings()
         self.phi_t = self.settings.get_setting('phi_t')
 
         # Calculate minimum and maximum reinforcement ratios
@@ -768,7 +768,7 @@ class RectangularBeam(RectangularSection):
         """
 
         # Load design settings for ACI 318-19
-        self.settings.load_aci_318_19_settings()
+        self.settings.load_ACI_318_19_settings()
         self.phi_t = self.settings.get_setting('phi_t')
         # Initial assumptions for mechanical cover and compression depth
         rec_mec = self.c_c + self._stirrup_d_b + 1*cm
@@ -1218,7 +1218,7 @@ class RectangularBeam(RectangularSection):
         else:
             self._M_u_bot = 0*kNm
             self._M_u_top = self._M_u
-        self.settings.load_aci_318_19_settings()
+        self.settings.load_ACI_318_19_settings()
         self.phi_v = self.settings.get_setting('phi_v')
         self.phi_t = self.settings.get_setting('phi_t')
         self.lambda_factor = self.settings.get_setting('lambda')
@@ -1234,7 +1234,7 @@ class RectangularBeam(RectangularSection):
             self._V_Ed_2 = force.V_z  # Consider the same shear at the edge of support and in d
 
             # Load settings for gamma factors
-            self.settings.load_en_1992_2004_settings()
+            self.settings.load_EN_1992_2004_settings()
             self._alpha_cc = self.settings.get_setting('alpha_cc')
             self._gamma_c = self.settings.get_setting('gamma_c')
             self._gamma_s = self.settings.get_setting('gamma_s')

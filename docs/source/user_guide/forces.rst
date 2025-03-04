@@ -35,6 +35,7 @@ The default unit_system for units display is *metric*.
 
     # Define a forces object with specific values
     force = Forces(N_x=2*kN, V_z=10*kN, M_y=5*kNm)
+    print(force)
 
 2. Accessing Forces
 **********
@@ -65,6 +66,8 @@ Forces can be modified at any point by calling the `set_forces()` method. This m
 
     # Update the axial and moment forces
     force.set_forces(N_x=3*kN, M_y=7*kNm)
+    force.unit_system = "metric"
+    print(force)
 
 4. Retrieving Forces as a Dictionary
 **********
@@ -104,39 +107,5 @@ Each `Forces` object con be printed in the terminal with `print(force)` method. 
 .. code-block:: python
 
     print(force)  # Output: Force ID: 1, Label: Crane load, N_x: 3.00 kN, V_z: 0.00 kN, M_y: 7.00 kN·m
-
-Example Workflow
-----------------
-
-Here's a full example of how the `Forces` class could be used in a typical workflow:
-
-.. code-block:: python
-
-    from mento import Forces, kN, kNm
-
-    # Create a new Forces object
-    force = Forces(N_x=2*kN, V_z=10*kN, M_y=5*kNm)
-
-    # Check current values of forces
-    print(force.N_x)  # Output: 2.00 kN
-    print(force.V_z)  # Output: 10.00 kN
-    print(force.M_y)  # Output: 5.00 kN*m
-
-    # Modify the forces
-    force.set_forces(N_x=3*kN, M_y=7*kNm)
-
-    # Retrieve forces as a dictionary
-    force_dict = force.get_forces()
-    print(force_dict)
-
-    # Assign a label to the forces object
-    force.label = "Crane load"
-    print(forces.label)
-
-    # Check the unique ID assigned to this object
-    print(force.id)
-
-    # Get a string print of the forces object with all it's roperties
-    print(force)
 
 This flexible interface ensures that you can easily manage forces during the design and analysis of structural elements, while maintaining clear and consistent units.
