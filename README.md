@@ -12,8 +12,6 @@
 
 This repository provides a comprehensive package for the design and structural analysis of concrete sections, beams and columns. The package adheres to multiple design codes, ensuring broad applicability in structural engineering projects.
 
-> We are currently working on the v0.0.1 release. We are close! ( ͡° ͜ʖ ͡°)
-
 #### Features
 - Check and design for flexure and shear of:
     - Rectangular Concrete Beam
@@ -27,7 +25,7 @@ This repository provides a comprehensive package for the design and structural a
 
 #### Roadmap
 The development is structured around key milestones, with ongoing tasks that aim to enhance functionality and compliance with design standards:
-- [x] Rectangular concrete beam section check and design for ACI 318-19.
+- [x] Rectangular concrete beam section check and design for ACI 318-19 and CIRSOC 201-25.
 - [ ] Rectangular concrete beam section check and design for EN 1992-2024.
 - [ ] Circular concrete column section check and design for ACI 318-19.
 - [ ] Circular concrete column section check and design for EN 1992-2024.
