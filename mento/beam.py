@@ -692,7 +692,6 @@ class RectangularBeam(RectangularSection):
         # Initial assumptions for mechanical cover and compression depth
         rec_mec = self.c_c + self._stirrup_d_b + 1*cm
         d_prima = self.c_c + self._stirrup_d_b + 1*cm
-
         # Start the iterative process
         tol = 0.01 * cm  # Tolerance for convergence
         Err = 2 * tol
@@ -711,7 +710,6 @@ class RectangularBeam(RectangularSection):
                 A_s_comp_top,
                 self._c_d_bot
             ) = self._calculate_flexural_reinforcement_ACI_318_19(max_M_y_bot, d, d_prima)
-
             # Initialize bottom and top reinforcement
             self._A_s_bot = A_s_final_bot_Positive_M
             self._A_s_top = A_s_comp_top
@@ -724,10 +722,11 @@ class RectangularBeam(RectangularSection):
                     A_s_comp_bot,
                     self._c_d_top
                 ) = self._calculate_flexural_reinforcement_ACI_318_19(abs(max_M_y_top), self.height-d_prima, rec_mec)
-
+                
                 # Adjust reinforcement areas based on positive and negative moments
-                self._A_s_bot = max(min(A_s_final_bot_Positive_M,self._A_s_max_bot), A_s_comp_bot) # En caso de que falle la viga, diseñamos con el A_s_max 
-                self._A_s_top = max(A_s_comp_top, min(A_s_final_top_Negative_M,self._A_s_max_top)) # En caso de que falle la viga, diseñamos con el A_s_max
+                self._A_s_bot = max(A_s_final_bot_Positive_M, A_s_comp_bot)                 
+                self._A_s_top = max(A_s_comp_top,A_s_final_top_Negative_M)
+                
             # Design bottom reinforcement
             section_rebar_bot = Rebar(self)
             self.flexure_design_results_bot = section_rebar_bot.longitudinal_rebar_ACI_318_19(self._A_s_bot)
@@ -2275,7 +2274,6 @@ def flexure_Mn() -> None:
     )
     A_s=10.92 * inch**2
     d=27*inch
-    debug(beam._c_mec_bot)
     result=beam._determine_nominal_moment_simple_reinf_ACI_318_19(A_s,d)
     print(result.to(kip*ft))
 
@@ -2415,10 +2413,10 @@ def shear_CIRSOC() -> None:
 if __name__ == "__main__":
     # flexure_check_test()
     # flexure_design_test()
-    # flexure_design_test_calcpad_example() 
+    flexure_design_test_calcpad_example() 
     # flexure_Mn()
-    shear_ACI_imperial()
-    shear_EN_1992()
-    rebar()
-    shear_ACI_metric()
-    shear_CIRSOC()
+    # shear_ACI_imperial()
+    # shear_EN_1992()
+    # rebar()
+    # shear_ACI_metric()
+    # shear_CIRSOC()
