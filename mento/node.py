@@ -69,6 +69,11 @@ class Node:
     def flexure_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
         return self.section._flexure_results_detailed_doc(force)
 
+    # Beam results for Jupyter Notebook
+    @property
+    def results(self) -> None:
+        return self.section.results
+
 
 
 ##########################################################################

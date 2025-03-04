@@ -2,8 +2,7 @@ Beam
 ==========
 
 The `Beam` class in the `mento` package is designed to model and analyze rectangular reinforced concrete beams.
-It allows users to define the geometry, material properties, reinforcement, and applied forces, and then perform checks for shear and flexure.
-The results are presented in a user-friendly format, with color-coded Demand-Capacity Ratios (DCR) for quick assessment.
+It allows users to define the geometry, material properties, reinforcement and custom settings.
 
 Key Concepts
 ------------
@@ -11,10 +10,7 @@ Key Concepts
 - **Beam Geometry**: Defined by `width` and `height`.
 - **Material Properties**: Requires a `Concrete` object (e.g., `Concrete_ACI_318_19`) and a `SteelBar` object for reinforcement.
 - **Reinforcement**: Longitudinal and transverse reinforcement can be defined using `set_longitudinal_rebar_bot`, `set_longitudinal_rebar_top`, and `set_transverse_rebar`.
-- **Forces**: Applied forces are assigned to the beam through a `Node` object.
-- **Checks**: The beam can be checked for shear and flexure using `check_shear()` and `check_flexure()`.
-- **Design**: The beam transverse and longitudinal rebar can be designed using `design_shear()` and `design_flexure()`.
-- **Results**: Results are displayed with color-coded DCR values for easy interpretation in a Jupyter Notebook. Also can be exported to Word.
+- **Custom settings**: A `Beam` object can havce custom settings overriding the default settings of `mento.
 
 Usage
 -----
@@ -43,25 +39,7 @@ The `RectangularBeam` class is used for this purpose. If no custom settings are 
     # Define beam geometry
     beam = RectangularBeam(label="101", concrete=concrete, steel_bar=steel, width=20*cm, height=50*cm)
 
-2. Assigning Forces to the Beam
-*******************************
-
-Forces are applied to the beam through a `Node` object, which joins the `Beam` and `Forces` object together.
-A `Node` can hold multiple forces, which are passed as a list. 
-Once created, the `Beam` object can retrieve the information from the list of `Forces` objects and perform checks and design.
-
-.. code-block:: python
-
-    from mento import Forces, Node, kN, kNm
-
-    # Define forces
-    f1 = Forces(label='1.4D', V_z=50*kN, M_y=90*kNm)
-    f2 = Forces(label='1.2D+1.6L', V_z=55*kN, M_y=-80*kNm)
-
-    # Create a node and assign forces to the beam
-    Node(section=beam, forces=[f1, f2])
-
-3. Setting Reinforcement
+2. Setting Reinforcement
 ************************
 
 You can define the longitudinal and transverse reinforcement for the beam using the following methods:
@@ -104,6 +82,13 @@ For example, if a positive moment is so large that the section must be reinforce
     # Set transverse reinforcement (stirrups)
     beam.set_transverse_rebar(n_stirrups=1, d_b=10*mm, s_l=20*cm)
 
+3. Assigning Forces to the Beam
+*******************************
+
+Forces are applied to the beam through a `Node` object, which joins the `Beam` and `Forces` object together.
+See the `Node` section for more information on how to create a `Node` and assign forces to the section. 
+
+
 4. Performing Checks
 ********************
 
@@ -113,7 +98,7 @@ See the `Node` section for more information on how to create a Node and check th
 5. Design the section
 ********************
 
-If you don't assign transverse or longitudinal rebar, you can as *Mento* to design for shear and flexure.
+If you don't assign transverse or longitudinal rebar, you can ask *Mento* to design for shear and flexure.
 See the `Node` section for more information on how to create a Node and design the section. 
 
 6. Jupyter Notebook Results
@@ -121,7 +106,7 @@ See the `Node` section for more information on how to create a Node and design t
 
 After performing the checks, you can view the results in a formatted way in a Notebook.
 
-When you run `beam.results`, the output includes:
+When you run `node.results`, the output includes:
 
 - **Top and bottom longitudinal reinforcement**.
 - **Shear reinforcement**.
@@ -189,16 +174,6 @@ The first line provides the beam's geometry and material properties:
   - :math:`V_u = 80 \, \textsf{kN}`: Applied shear force.
   - :math:`\phi V_n = 196.24 \, \textsf{kN}`: Design shear capacity.
   - :math:`\textsf{DCR} = 0.41`: Design capacity ratio :math:`\textsf{DCR} = V_u / \phi V_n`.
-
-
-Beam Data
----------
-
-The `beam.data` command provides the beam's geometry and material properties. Here’s an example:
-
-.. math::
-
-    \textsf{Beam 101}, \, b = 20.00 \, \textsf{cm}, \, h = 60.00 \, \textsf{cm}, \, c_{\text{c}} = 2.50 \, \textsf{cm}, \, \textsf{Concrete C25}, \, \textsf{Rebar ADN 420}.
 
 - **Check DCR Values**: A DCR less than 1.0 indicates that the beam is safe under the applied loads.
 - **Review Warnings**: If the output includes warnings, review the design to ensure compliance with code requirements. You can check detailed results for more information.

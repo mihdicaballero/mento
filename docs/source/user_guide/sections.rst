@@ -57,6 +57,22 @@ Usage Notes
   Since these are base classes, you won't be using them to create objects per se but to access its atrributes
   which other classes inherit, like RectangularBeam, RectangularColumn or CircularColumn.
 
+You can access the section properties directly in a `RectangularBeam` object.
+
+.. code-block:: python
+  section = RectangularBeam(
+      label="101",
+      concrete=concrete,
+      steel_bar=steel,
+      width=20*cm,
+      height=50*cm
+  )
+  print('b =', section.width)
+  print('h =', section.height)
+  print('A_x =', section.A_x)
+  print('I_y =', section.I_y)
+  print('I_z =', section.I_z)
+
 
 Future Extensions
 -----------------

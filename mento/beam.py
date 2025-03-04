@@ -1859,10 +1859,10 @@ class RectangularBeam(RectangularSection):
         if top_result_data:
             top_rebar_1 = top_result_data['Value'][0]
             top_rebar_2 = top_result_data['Value'][1]
-            area_top = top_result_data['Value'][6]
+            area_top = top_result_data['Value'][7]
             Mu_top = self._limiting_case_flexure_top_details['forces']['Value'][0]
-            Mn_top = top_result_data['Value'][8]
-            DCR_top = top_result_data['Value'][9]
+            Mn_top = top_result_data['Value'][9]
+            DCR_top = top_result_data['Value'][10]
 
             rebar_top = f"{top_rebar_1}" + (f" ++ {top_rebar_2}" if top_rebar_2 != '-' else "")
             formatted_DCR_top = formatter.DCR(DCR_top)
@@ -1878,10 +1878,10 @@ class RectangularBeam(RectangularSection):
         if bot_result_data:
             bot_rebar_1 = bot_result_data['Value'][0]
             bot_rebar_2 = bot_result_data['Value'][1]
-            area_bot = bot_result_data['Value'][6]
+            area_bot = bot_result_data['Value'][7]
             Mu_bot = self._limiting_case_flexure_bot_details['forces']['Value'][1]
-            Mn_bot = bot_result_data['Value'][8]
-            DCR_bot = bot_result_data['Value'][9]
+            Mn_bot = bot_result_data['Value'][9]
+            DCR_bot = bot_result_data['Value'][10]
 
             rebar_bot = f"{bot_rebar_1}" + (f" ++ {bot_rebar_2}" if bot_rebar_2 != '-' else "")
             formatted_DCR_bot = formatter.DCR(DCR_bot)

@@ -94,11 +94,4 @@ a material you will get a string output with all it's properties.
 .. note::
    All material properties in `mento` are automatically converted to appropriate units (MPa, kg/m³, etc.) based on the design code selected.
 
-Getting Started
----------------
-
-To get started with the materials in `mento`, simply import
-the material class, create an instance, and access its properties.
-Make sure to select the correct design code for your project.
-
 For more details, consult the relevant structural design codes.
