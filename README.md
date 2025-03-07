@@ -21,16 +21,16 @@ This repository provides a comprehensive package for the design and structural a
 - Interactive usage in Jupyter Notebooks, allowing users to create custom calculations using package modules.
 - Results are presented in markdown format within the notebook and as pandas DataFrames for easy handling of multiple checks.
 - Ability to generate detailed calculation reports in Word.
-- Comprehensive testing for design code compliance, including ACI 318-19, EN 1992-2024, and CIRSOC 201-2024.
+- Comprehensive testing for design code compliance, including ACI 318-19, EN 1992-2004, and CIRSOC 201-2024.
 
 #### Roadmap
 The development is structured around key milestones, with ongoing tasks that aim to enhance functionality and compliance with design standards:
 - [x] Rectangular concrete beam section check and design for ACI 318-19 and CIRSOC 201-25.
-- [ ] Rectangular concrete beam section check and design for EN 1992-2024.
-- [ ] Circular concrete column section check and design for ACI 318-19.
-- [ ] Circular concrete column section check and design for EN 1992-2024.
-- [ ] Rectangular concrete column section check and design for ACI 318-19.
-- [ ] Rectangular concrete column section check and design for EN 1992-2024.
+- [ ] Rectangular concrete beam section check and design for EN 1992-2004.
+- [ ] Circular concrete column section check and design for ACI 318-19 and CIRSOC 201-25.
+- [ ] Circular concrete column section check and design for EN 1992-2004.
+- [ ] Rectangular concrete column section check and design for ACI 318-19 and CIRSOC 201-25.
+- [ ] Rectangular concrete column section check and design for EN 1992-2004.
 
 Each milestone incorporates rigorous testing and continuous integration to ensure code quality and reliability.
 
