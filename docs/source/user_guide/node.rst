@@ -81,8 +81,8 @@ the best rebar configuration balancing the amount of rebars, layers and differen
 .. code-block:: python
 
     # Perform shear and flexure checks
-    beam.design_shear()
-    beam.design_flexure()
+    node_1.design_shear()
+    node_1.design_flexure()
 
 *Mento* will also create a Pandas DataFrame with all the check results for each Load Case in the Force object assigned to the Node, both for shear and flexure analysis.
 You can print those results from the previous method.
@@ -90,9 +90,9 @@ You can print those results from the previous method.
 .. code-block:: python
 
     # Perform shear and flexure checks
-    shear_results = beam.design_shear()
+    shear_results = node_1.design_shear()
     print(shear_results)
-    flexure_results = beam.design_flexure()
+    flexure_results = node_1.design_flexure()
     print(flexure_results)
 
 4. Jupyter Notebook Results
