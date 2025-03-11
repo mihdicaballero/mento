@@ -8,7 +8,6 @@ import pandas as pd
 from pandas import DataFrame
 import math
 import warnings
-from devtools import debug 
 
 from mento.rectangular import RectangularSection
 from mento.material import Concrete, SteelBar, Concrete_ACI_318_19, Concrete_EN_1992_2004, Concrete_CIRSOC_201_25
@@ -16,7 +15,6 @@ from mento.rebar import Rebar
 from mento.units import MPa, ksi, psi, kip, mm, inch, kN, m, cm, kNm, ft, dimensionless
 from mento.results import Formatter, TablePrinter, DocumentBuilder
 from mento.forces import Forces  
-
 
 
 @dataclass
@@ -2291,8 +2289,6 @@ def test_on_determine_nominal_moment_ACI_318_19()->None:
 
     f = Forces(label='Test_01', M_y=400*kip*ft)
     beam._determine_nominal_moment_ACI_318_19(f)
-    debug(beam._phi_M_n_bot.to(kNm))
-    debug(beam._phi_M_n_top.to(kNm))
 
 
 
