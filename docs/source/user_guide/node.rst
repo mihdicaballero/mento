@@ -91,9 +91,9 @@ You can print those results from the previous method.
 
     # Perform shear and flexure checks
     shear_results = node_1.design_shear()
-    print(shear_results)
+    shear_results
     flexure_results = node_1.design_flexure()
-    print(flexure_results)
+    flexure_results
 
 4. Jupyter Notebook Results
 ******************
@@ -159,11 +159,16 @@ The `Node` class provides the following methods for changing the Forces assigned
 .. code-block:: python
 
     # Add a single force
+    force1 = Forces(label='D', V_z=10*kN)
     node_1.add_forces(force1) 
     # Add multiple forces
+    force2 = Forces(label='L', V_z=20*kN)
+    force3 = Forces(label='W', V_z=30*kN)
     node_1.add_forces([force2, force3])  
     # Get forces list.
     forces_list = node_1.get_forces_list()
-    print(forces_list)
-    # Reset forces
-    node_1.reset_forces()
+    # Print each force item in the list
+    for force in forces_list:
+        print(f"Label: {force.label}, N_x: {force._N_x}, V_z: {force._V_z}, M_y: {force._M_y}")
+    # Remove forces from the node
+    node_1.clear_forces()
