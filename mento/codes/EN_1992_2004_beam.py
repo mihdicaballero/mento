@@ -165,6 +165,14 @@ def _check_shear_EN_1992_2004(self: 'RectangularBeam', Force:Forces) -> DataFram
 def _design_shear_EN_1992_2004(self: 'RectangularBeam', Force:Forces) -> None:
     return None
 
+def _design_flexure_EN_1992_2004(self: 'RectangularBeam', force: Forces) -> None:
+    pass
+
+
+##########################################################
+# RESULTS
+##########################################################
+
 def _initialize_dicts_EN_1992_2004_shear(self: 'RectangularBeam') -> None:
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         """Initialize the dictionaries used in check and design methods."""
@@ -270,8 +278,6 @@ def _initialize_dicts_EN_1992_2004_shear(self: 'RectangularBeam') -> None:
                     round(self._V_Rd.to('kN').magnitude,2), check_max, round(self._DCRv,2)],
             "Unit": ["", "", "MPa", "deg", "kN", "kN", "kN", "", check_DCR]
         }
-
-
 
 
 # # Helper function to convert degrees to radians
