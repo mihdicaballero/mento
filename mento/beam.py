@@ -9,7 +9,6 @@ from pandas import DataFrame
 import math
 import warnings
 
-
 from mento.rectangular import RectangularSection
 from mento.material import Concrete, SteelBar, Concrete_ACI_318_19, Concrete_EN_1992_2004, Concrete_CIRSOC_201_25
 from mento.rebar import Rebar
@@ -1707,6 +1706,257 @@ class RectangularBeam(RectangularSection):
 
 
 ##########################################################################################################
+
+
+def clear_console() -> None:
+    """
+    Clears the console based on the operating system.
+    """
+    if os.name == 'nt':  # For Windows
+        os.system('cls')
+    else:  # For macOS and Linux
+        os.system('clear')
+
+
+
+def test_on_determine_nominal_moment_ACI_318_19()->None:
+    concrete = Concrete_ACI_318_19(name="fc 4000", f_c=4000*psi)  
+    steelBar = SteelBar(name="fy 60000", f_y=60*ksi)  
+    custom_settings = {'clear_cover': 1.5*inch} 
+    beam = RectangularBeam(
+        label="B-12x24",
+        concrete=concrete,
+        steel_bar=steelBar,
+        width=12*inch,  
+        height=24*inch,
+        settings=custom_settings  
+    )
+    
+    beam.set_longitudinal_rebar_bot(n1=2,d_b1=1.128*inch, n2=1, d_b2=1.128*inch,  n3=2,d_b3=1*inch, n4=1, d_b4=1*inch)
+    beam.set_longitudinal_rebar_top(n1=2,d_b1=1.128*inch, n2=1, d_b2=1.128*inch,  n3=2,d_b3=1*inch, n4=1, d_b4=1*inch)
+
+    f = Forces(label='Test_01', M_y=400*kip*ft)
+    beam._determine_nominal_moment_ACI_318_19(f)
+
+
+
+
+
+def flexure_design_test() -> None:
+    # clear_console()
+    concrete= Concrete_ACI_318_19(name="C25",f_c=25*MPa) 
+    steelBar= SteelBar(name="ADN 420", f_y=420*MPa)
+    custom_settings = {'clear_cover': 2.5*cm}
+    beam = RectangularBeam(label="101",
+                                      concrete=concrete,steel_bar=steelBar,width=15*cm, height=50*cm,
+                                       settings=custom_settings)
+    f1 = Forces(label='C1', M_y=20*kNm)
+    f2 = Forces(label='C2', M_y=-20*kNm)
+    forces=[f1, f2]
+    results=beam._design_flexure(forces)
+    # print(beam.flexure_design_results_bot,'\n', beam.flexure_design_results_top)
+    print(results)
+    # beam.flexure_results_detailed()
+
+def flexure_design_test_calcpad_example() -> None:
+    concrete = Concrete_ACI_318_19(name="fc 4000", f_c=4000*psi)  
+    steelBar = SteelBar(name="fy 60000", f_y=60*ksi)  
+    custom_settings = {'clear_cover': 1.5*inch} 
+    beam = RectangularBeam(
+        label="B-12x24",
+        concrete=concrete,
+        steel_bar=steelBar,
+        width=12*inch,  
+        height=24*inch,
+        settings=custom_settings  
+    )
+    
+    #beam.set_longitudinal_rebar_bot(n1=2,d_b1=1.375*inch, n3=2,d_b3=1.27*inch)
+    #beam.set_longitudinal_rebar_top(n1=2,d_b1=1.375*inch, n3=2,d_b3=1.27*inch)
+
+    f = Forces(label='Test_01', V_z = 40*kip, M_y=400*kip*ft)
+    f2 = Forces(label='Test_01', V_z = 100*kip, M_y=-400*kip*ft)
+    forces=[f,f2]
+
+    flexure_results = beam._design_flexure(forces)
+    print(flexure_results)
+ 
+
+
+def flexure_check_test() -> None:
+    clear_console()
+    concrete = Concrete_ACI_318_19(name="H-25",f_c=25*MPa) 
+    steelBar = SteelBar(name="420", f_y=420*MPa) 
+
+    beam = RectangularBeam(
+        label="101",
+        concrete=concrete,
+        steel_bar=steelBar,
+        width=20*cm,  
+        height=60*cm,   
+    )
+
+    # beam.set_longitudinal_rebar_bot(n1=2,d_b1=20*mm)
+    beam.set_longitudinal_rebar_bot(n1=2,d_b1=12*mm, n2=1, d_b2=12*mm, n3=2,d_b3=12*mm, n4=1, d_b4=10*mm)
+    beam.set_longitudinal_rebar_top(n1=2,d_b1=16*mm)
+    f1 = Forces(label='D', M_y=0*kNm, V_z=50*kN)
+    f2 = Forces(label='L', M_y=-100*kNm)
+    f3 = Forces(label='W', M_y=-50*kNm)
+    f4 = Forces(label='S', M_y=110*kNm)
+    forces=[f1,f2,f3,f4]
+    print(beam._check_flexure(forces))
+    
+    # beam.check_shear()
+    beam.flexure_results_detailed()
+    # beam.flexure_results_detailed_doc()
+    # beam.shear_results_detailed_doc()
+
+def flexure_Mn() -> None:
+    clear_console()
+    # MOMENTO NOMINAL SIMPLEMENTE ARMADO
+    #Example from https://www.google.com/search?q=ACI+318+19+nominal+moment+of+section&oq=ACI+318+19+nominal+moment+of+section&gs_lcrp=EgZjaHJvbWUyBggAEEUYOTIHCAEQIRigAdIBCTIyNzkzajBqN6gCALACAA&sourceid=chrome&ie=UTF-8#fpstate=ive&vld=cid:dab5f5e7,vid:m4H0QbGDYIg,st:0
+    concrete = Concrete_ACI_318_19(name="C6",f_c=6000*psi) 
+    steelBar = SteelBar(name="G80", f_y=80000*psi) 
+    beam = RectangularBeam(
+        label="B20x30",
+        concrete=concrete,
+        steel_bar=steelBar,
+        width=20 * inch,  
+        height=30 * inch,  
+
+    )
+    A_s=10.92 * inch**2
+    d=27*inch
+    result=beam._determine_nominal_moment_simple_reinf_ACI_318_19(A_s,d)
+    print(result.to(kip*ft))
+
+
+    # MOMENTO NOMINAL DOBLEMENTE ARMADO
+    concrete2 = Concrete_ACI_318_19(name="C4",f_c=4000*psi) 
+    steelBar2 = SteelBar(name="G60", f_y=60000*psi) 
+    beam2 = RectangularBeam(
+        label="B14x27",
+        concrete=concrete2,
+        steel_bar=steelBar2,
+        width=14 * inch,  
+        height=27 * inch,   
+    )
+    A_s=6 * inch**2
+    d=24*inch
+    d_prime=2.5*inch
+    A_s_prime=1.8*inch**2
+    result=beam2._determine_nominal_moment_double_reinf_ACI_318_19(A_s, d, d_prime, A_s_prime)
+    print(result.to(kip*ft))
+
+
+
+
+def shear_ACI_metric() -> None:
+    concrete= Concrete_ACI_318_19(name="C30",f_c=30*MPa) 
+    steelBar= SteelBar(name="ADN 420", f_y=420*MPa)
+    custom_settings = {'clear_cover': 30*mm}
+    beam = RectangularBeam(label="101",
+                                      concrete=concrete,steel_bar=steelBar,width=20*cm, height=50*cm,
+                                       settings=custom_settings)
+    f1 = Forces(label='1.4D', V_z=100*kN)
+    f2 = Forces(label='1.2D+1.6L', V_z=1.55*kN)
+    f3 = Forces(label='W', V_z=2.20*kN)
+    f4 = Forces(label='S', V_z=8.0*kN)
+    f5 = Forces(label='E', V_z=1.0*kN)
+    forces=[f1, f2, f3, f4, f5]
+    beam.set_longitudinal_rebar_bot(n1=2, d_b1=16 * mm)
+    # beam.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=20*cm) 
+    # results = beam.check_shear()
+    results = beam._design_shear(forces)
+    print(results)
+    print(beam.shear_design_results)
+    # beam.shear_results_detailed()
+    # print(beam.shear_design_results)
+    # print(beam.results)
+    # beam.shear_results_detailed_doc()
+
+def shear_ACI_imperial() -> None:
+    concrete = Concrete_ACI_318_19(name="C4", f_c=4000*psi)  
+    steelBar = SteelBar(name="ADN 420", f_y=60*ksi)  
+    custom_settings = {'clear_cover': 1.5*inch} 
+    beam = RectangularBeam(
+        label="102",
+        concrete=concrete,
+        steel_bar=steelBar,
+        width=10*inch,  
+        height=16*inch,
+        settings=custom_settings  
+    )
+
+    # f1 = Forces(label='D', V_z=37.727*kip, N_x=20*kip)
+    f1 = Forces(label='D', V_z=37.727*kip)
+    # f1 = Forces(label='D', V_z=8*kip)
+    # f2 = Forces(label='L', V_z=6*kip) # No shear reinforcing
+    forces=[f1]
+    beam.set_transverse_rebar(n_stirrups=1, d_b=0.5*inch, s_l=6*inch)
+
+    # beam.set_longitudinal_rebar_bot(n1=2, d_b1=0.625*inch)
+    print(beam._A_v)
+    results = beam._check_shear(forces)
+    # results = beam.design_shear()
+    print(results)
+    # section.design_shear(f, A_s=0.847*inch**2)
+    beam.shear_results_detailed()  
+    # section.shear_results_detailed_doc()
+
+def rebar() -> None:
+    concrete= Concrete_ACI_318_19(name="H30",f_c=30*MPa) 
+    steelBar= SteelBar(name="ADN 420", f_y=420*MPa)
+    custom_settings = {'clear_cover': 30*mm, 'stirrup_diameter_ini':8*mm}
+    section = RectangularBeam(
+        label="V 20x50",
+        concrete=concrete,
+        steel_bar=steelBar,
+        width=20*cm,  
+        height=50*cm,
+        settings=custom_settings  
+    )
+    as_req = 7*cm**2
+
+    beam_rebar = Rebar(section)
+    long_rebar_df = beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=as_req)
+    best_design = beam_rebar.longitudinal_rebar_design
+    print(long_rebar_df)
+
+def rebar_df() -> None:
+    concrete= Concrete_ACI_318_19(name="H30",f_c=30*MPa) 
+    steelBar= SteelBar(name="ADN 420", f_y=420*MPa)
+    custom_settings = {'clear_cover': 30*mm, 'stirrup_diameter_ini':8*mm}
+    section = RectangularBeam(
+        label="V 20x50",
+        concrete=concrete,
+        steel_bar=steelBar,
+        width=20*cm,  
+        height=50*cm,
+        settings=custom_settings  
+    )
+    beam_rebar = Rebar(section)
+    # Create a list of required steel areas from 0.5 to 10 with a step of 0.5 cm²
+    as_req_list = np.arange(0.5, 10.5, 0.5)*cm**2
+    # Initialize an empty DataFrame to store the results
+    results_df = pd.DataFrame()
+
+    # Loop through each required steel area
+    for as_req in as_req_list:
+        # Run the longitudinal_rebar_ACI_19 method
+        long_rebar_df = beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=as_req)
+        
+        # Extract the first row of the resulting DataFrame
+        first_row = long_rebar_df.iloc[0:1].copy()
+        
+        # Add a column to store the required steel area
+        first_row['as_req'] = as_req.magnitude  # Store the magnitude (value without units)
+        
+        # Append the first row to the results DataFrame
+        results_df = pd.concat([results_df, first_row], ignore_index=True)
+
+    # Display the results DataFrame
+    print(results_df)
 
 def shear_EN_1992() -> None:
     concrete= Concrete_EN_1992_2004(name="C25",f_ck=25*MPa) 

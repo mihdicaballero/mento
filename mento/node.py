@@ -36,14 +36,9 @@ class Node:
         """Returns the list of forces applied to this node."""
         return self.forces
 
-    def reset_forces(self) -> None:
-        """Reset all forces in the node to zero."""   
-        if isinstance(self.forces, Forces):
-            # Replace the single Forces object with a zero-initialized Forces object
-            self.forces = [Forces()]
-        elif isinstance(self.forces, list):
-            # Replace each force in the list with a zero-initialized Forces object
-            self.forces = [Forces() for _ in self.forces]
+    def clear_forces(self) -> None:
+        """Remove all forces from the node."""
+        self.forces.clear()
 
     def check_flexure(self) -> pd.DataFrame:
         return self.section.check_flexure(self.forces)
