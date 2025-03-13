@@ -45,28 +45,28 @@ class Section:
         """Updates settings with new values."""
         self.settings.update(new_settings)
 
-    def _check_shear(self, forces: List[Forces]) -> None:
+    def check_shear(self, forces: List[Forces]) -> None:
         pass
 
-    def _design_shear(self, forces: List[Forces]) -> None:
+    def design_shear(self, forces: List[Forces]) -> None:
         pass
 
-    def _check_flexure(self, forces: List[Forces]) -> None:
+    def check_flexure(self, forces: List[Forces]) -> None:
         pass
 
-    def _design_flexure(self, forces: List[Forces]) -> None:
+    def design_flexure(self, forces: List[Forces]) -> None:
         pass
 
-    def _shear_results_detailed(self, force: Optional[Forces] = None) -> None:
+    def shear_results_detailed(self, force: Optional[Forces] = None) -> None:
         pass
 
-    def _shear_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
+    def shear_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
         pass
 
-    def _flexure_results_detailed(self, force: Optional[Forces] = None) -> None:
+    def flexure_results_detailed(self, force: Optional[Forces] = None) -> None:
         pass
 
-    def _flexure_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
+    def flexure_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
         pass
     
     # Beam results for Jupyter Notebook

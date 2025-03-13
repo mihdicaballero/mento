@@ -8,12 +8,12 @@ import pandas as pd
 from pandas import DataFrame
 import math
 import warnings
-from devtools import debug 
+
 
 from mento.rectangular import RectangularSection
 from mento.material import Concrete, SteelBar, Concrete_ACI_318_19, Concrete_EN_1992_2004, Concrete_CIRSOC_201_25
 from mento.rebar import Rebar
-from mento.units import MPa, ksi, psi, kip, mm, inch, kN, m, cm, kNm, ft, dimensionless
+from mento.units import MPa, psi, mm, inch, kN, m, cm, kNm, dimensionless
 from mento.results import Formatter, TablePrinter, DocumentBuilder
 from mento.forces import Forces  
 
@@ -907,7 +907,7 @@ class RectangularBeam(RectangularSection):
     def _design_flexure_EN_1992(self, force: Forces) -> None:
         pass
 
-    def _design_flexure(self, forces: list[Forces]) -> pd.DataFrame:
+    def design_flexure(self, forces: list[Forces]) -> pd.DataFrame:
         """
         Designs flexural reinforcement for the beam using the provided forces and design code.
         Identifies the limiting cases for top and bottom reinforcement, designs for those cases, 
@@ -945,7 +945,7 @@ class RectangularBeam(RectangularSection):
         all_results = self._check_flexure(forces)
         return all_results
 
-    def _check_flexure(self, forces: list[Forces]) -> DataFrame:
+    def check_flexure(self, forces: list[Forces]) -> DataFrame:
         
         # Initialize variables to track limiting cases
         max_dcr_top: float = 0
@@ -1724,31 +1724,6 @@ def shear_EN_1992() -> None:
     beam.shear_results_detailed()
     # beam.shear_results_detailed_doc()
 
-def shear_ACI_metric() -> None:
-    concrete= Concrete_ACI_318_19(name="C30",f_c=30*MPa) 
-    steelBar= SteelBar(name="ADN 420", f_y=420*MPa)
-    custom_settings = {'clear_cover': 30*mm}
-    beam = RectangularBeam(label="101",
-                                      concrete=concrete,steel_bar=steelBar,width=20*cm, height=50*cm,
-                                       settings=custom_settings)
-    f1 = Forces(label='1.4D', V_z=100*kN)
-    f2 = Forces(label='1.2D+1.6L', V_z=1.55*kN)
-    f3 = Forces(label='W', V_z=2.20*kN)
-    f4 = Forces(label='S', V_z=8.0*kN)
-    f5 = Forces(label='E', V_z=1.0*kN)
-    forces=[f1, f2, f3, f4, f5]
-    beam.set_longitudinal_rebar_bot(n1=2, d_b1=16 * mm)
-    # beam.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=20*cm) 
-    results = beam.check_shear(forces)
-    # results = beam.design_shear(forces)
-    print(results)
-    # print(beam.shear_design_results)
-    # beam.shear_results_detailed()
-    # print(beam.shear_design_results)
-    # print(beam.results)
-    # beam.shear_results_detailed_doc()
-
 if __name__ == "__main__":
-    # shear_EN_1992()
-    shear_ACI_metric()
+    shear_EN_1992()
 
