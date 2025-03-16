@@ -182,3 +182,16 @@ The first line provides the beam's geometry and material properties:
 *******************
 
 See the `Node` section for more information on how to display and save detailed results of the analysis. 
+
+8. Plot section
+*******************
+
+You can use the method `plot()` to visualize the beam's cross-section and reinforcement layout.
+
+.. code-block:: python
+
+  # Plot the beam section
+  beam.plot()
+
+The `plot()` method generates a graphical representation of the beam, including its geometry and reinforcement details.
+This can be useful for verifying the input data and for presentation purposes.

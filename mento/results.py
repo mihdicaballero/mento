@@ -11,6 +11,9 @@ from docx.oxml.ns import nsdecls
 CUSTOM_COLORS = {
         'blue': '#1f77b4',  # Default Matplotlib blue
         'red': '#d62728',   # Default Matplotlib red
+        'dark_gray': '#323232',
+        'light_gray': '#e3e3e3',
+        'dark_blue':  '#073165'
     }
 
 # Default Matplotlib and Seaborn settings
