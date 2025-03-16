@@ -9,6 +9,9 @@
     "makefile.makePath": "",
     "python.REPL.enableREPLSmartSend": false,
     "cSpell.words": [
-        "textsf"
+        "cmax",
+        "cmin",
+        "textsf",
+        "Vmax"
     ],
 }

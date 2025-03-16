@@ -2,10 +2,10 @@ from typing import Union, Optional, List
 import pandas as pd
 
 from mento.beam import RectangularBeam
-from mento.material import SteelBar, Concrete_ACI_318_19
+from mento.material import SteelBar, Concrete_ACI_318_19, Concrete_EN_1992_2004
 from mento.section import Section
 from mento.forces import Forces
-from mento.units import ksi, psi, kip, inch, ft
+from mento.units import ksi, psi, kip, inch, ft, MPa, cm, mm, kN
 
 class Node:
     def __init__(self, section: Section, forces: Union[Forces, List[Forces]]) -> None:
@@ -41,35 +41,33 @@ class Node:
         self.forces.clear()
 
     def check_flexure(self) -> pd.DataFrame:
-        return self.section._check_flexure(self.forces)
+        return self.section.check_flexure(self.forces)
 
     def design_flexure(self) -> pd.DataFrame:
-        return self.section._design_flexure(self.forces)
+        return self.section.design_flexure(self.forces)
 
     def check_shear(self) -> pd.DataFrame:
-        return self.section._check_shear(self.forces)
+        return self.section.check_shear(self.forces)
 
     def design_shear(self) -> pd.DataFrame:
-        return self.section._design_shear(self.forces)
+        return self.section.design_shear(self.forces)
     
     def shear_results_detailed(self, force: Optional[Forces] = None) -> None:
-        return self.section._shear_results_detailed(force)
+        return self.section.shear_results_detailed(force)
     
     def shear_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
-        return self.section._shear_results_detailed_doc(force)
+        return self.section.shear_results_detailed_doc(force)
 
     def flexure_results_detailed(self, force: Optional[Forces] = None) -> None:
-        return self.section._flexure_results_detailed(force)
+        return self.section.flexure_results_detailed(force)
 
     def flexure_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
-        return self.section._flexure_results_detailed_doc(force)
+        return self.section.flexure_results_detailed_doc(force)
 
     # Beam results for Jupyter Notebook
     @property
     def results(self) -> None:
         return self.section.results
-
-
 
 ##########################################################################
 # DEBUG ZONE
@@ -94,16 +92,8 @@ def flexure_design_test() -> None:
 
     flexure_results = node_1.design_flexure()
     node_1.flexure_results_detailed()
-    print(node_1.section._n1_b, node_1.section._d_b1_b)
-    print(node_1.section._n2_b, node_1.section._d_b2_b)
-    print(node_1.section._n3_b, node_1.section._d_b3_b)
-    print(node_1.section._n4_b, node_1.section._d_b4_b)
-    print(node_1.section._n1_t, node_1.section._d_b1_t)
-    print(node_1.section._n2_t, node_1.section._d_b2_t)
-    print(node_1.section._n3_t, node_1.section._d_b3_t)
-    print(node_1.section._n4_t, node_1.section._d_b4_t)
     # node_1.flexure_results_detailed_doc()
-    # print(flexure_results)
+    print(flexure_results)
 
 def shear_ACI_imperial() -> None:
     concrete = Concrete_ACI_318_19(name="C4", f_c=4000*psi)  
@@ -134,6 +124,50 @@ def shear_ACI_imperial() -> None:
     node_1.shear_results_detailed()  
     node_1.shear_results_detailed_doc()
 
+def shear_ACI_metric() -> None:
+    concrete= Concrete_ACI_318_19(name="C30",f_c=30*MPa) 
+    steelBar= SteelBar(name="ADN 420", f_y=420*MPa)
+    custom_settings = {'clear_cover': 30*mm}
+    beam = RectangularBeam(label="101",
+                                      concrete=concrete,steel_bar=steelBar,width=20*cm, height=50*cm,
+                                       settings=custom_settings)
+    f1 = Forces(label='1.4D', V_z=100*kN)
+    f2 = Forces(label='1.2D+1.6L', V_z=1.55*kN)
+    f3 = Forces(label='W', V_z=2.20*kN)
+    f4 = Forces(label='S', V_z=8.0*kN)
+    f5 = Forces(label='E', V_z=1.0*kN)
+    forces=[f1, f2, f3, f4, f5]
+    beam.set_longitudinal_rebar_bot(n1=2, d_b1=16 * mm)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=20*cm) 
+    node = Node(section=beam, forces=forces)
+    results = node.check_shear()
+    # results = beam.design_shear(forces)
+    print(results)
+    # print(beam.shear_design_results)
+    # beam.shear_results_detailed()
+    # print(beam.shear_design_results)
+    # print(beam.results)
+    # beam.shear_results_detailed_doc()
+
+def shear_EN_1992() -> None:
+    concrete= Concrete_EN_1992_2004(name="C25",f_ck=25*MPa) 
+    steelBar= SteelBar(name="B500S", f_y=500*MPa)
+    custom_settings = {'clear_cover': 2.6*cm}
+    beam = RectangularBeam(label="101",
+                                      concrete=concrete,steel_bar=steelBar,width=20*cm, height=60*cm,
+                                       settings=custom_settings)
+    # f = Forces(V_z=100*kN, M_y=100*kNm)
+    f = Forces(V_z=30*kN, N_x=0*kN)
+    forces=[f]
+    beam.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=25*cm)
+    beam.set_longitudinal_rebar_bot(n1=4,d_b1=16*mm)
+    # results = beam.check_shear(forces)
+    results = beam.design_shear(forces)
+    print(results)
+    beam.shear_results_detailed()
+    # beam.shear_results_detailed_doc()
 if __name__ == "__main__":
-    flexure_design_test()
+    # flexure_design_test()
     # shear_ACI_imperial()
+    # shear_ACI_metric()
+    shear_EN_1992()
