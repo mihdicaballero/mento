@@ -16,7 +16,7 @@ from mento.units import MPa, psi, mm, inch, kN, m, cm, kNm, dimensionless
 from mento.results import Formatter, TablePrinter, DocumentBuilder
 from mento.forces import Forces  
 
-from mento.codes.EN_1992_2004_beam import _check_shear_EN_1992_2004
+from mento.codes.EN_1992_2004_beam import _check_shear_EN_1992_2004, _design_shear_EN_1992_2004
 from mento.codes.ACI_318_19_beam import _check_shear_ACI_318_19, _design_shear_ACI_318_19, _check_flexure_ACI_318_19, _design_flexure_ACI_318_19
 
 
@@ -57,6 +57,7 @@ class RectangularBeam(RectangularSection):
         self._DCRv: float = 0
         self._DCRb_top: float = 0
         self._DCRb_bot: float = 0
+        self._alpha: float = math.radians(90)
 
         # Design checks and effective heights
         self._rho_l_bot: PlainQuantity = 0 * dimensionless
@@ -96,7 +97,7 @@ class RectangularBeam(RectangularSection):
         if isinstance(self.concrete, Concrete_ACI_318_19):
             self._initialize_ACI_318_attributes()
         elif isinstance(self.concrete, Concrete_EN_1992_2004):
-            self._initialize_en_1992_2004_attributes()
+            self._initialize_EN_1992_2004_attributes()
 
     def _initialize_longitudinal_rebar_attributes(self) -> None:
         """Initialize all rebar-related attributes with default values."""
@@ -156,7 +157,7 @@ class RectangularBeam(RectangularSection):
             self.flexure_design_results_bot: DataFrame = None
             self.flexure_design_results_top: DataFrame = None
 
-    def _initialize_en_1992_2004_attributes(self) -> None:
+    def _initialize_EN_1992_2004_attributes(self) -> None:
         if isinstance(self.concrete, Concrete_EN_1992_2004):
             self._f_yk = self.steel_bar.f_y
             self._f_ck = self.concrete.f_ck
@@ -167,6 +168,7 @@ class RectangularBeam(RectangularSection):
             self._sigma_cd: PlainQuantity = 0*MPa
             self._V_Rd_c: PlainQuantity = 0*kN
             self._V_Rd_s: PlainQuantity = 0*kN
+            self._V_s_req: PlainQuantity = 0*kN
             self._V_Rd_max: PlainQuantity = 0*kN
             self._V_Rd: PlainQuantity = 0*kN
             self._k_value: float = 0
@@ -176,11 +178,11 @@ class RectangularBeam(RectangularSection):
             self._f_ywk: PlainQuantity = 0*MPa
             self._f_ywd: PlainQuantity = 0*MPa
             self._f_cd: PlainQuantity = 0*MPa
-            self._alpha: float = 0
             self._A_p = 0*cm**2 # No prestressed for now
             self._sigma_cp: PlainQuantity = 0*MPa
             self._theta: float = 0
             self._cot_theta: float = 0
+            self._z: PlainQuantity = 0*cm
 
 ##########################################################
 # SET LONGITUDINAL AND TRANSVERSE REBAR AND UPDATE ATTRIBUTES
@@ -470,8 +472,8 @@ class RectangularBeam(RectangularSection):
         for force in forces:
             if self.concrete.design_code=="ACI 318-19" or self.concrete.design_code=="CIRSOC 201-25":
                 _design_shear_ACI_318_19(self, force)
-            # elif self.concrete.design_code=="EN 1992-2004":
-                # self._design_shear_EN_1992_2004(force)
+            elif self.concrete.design_code=="EN 1992-2004":
+                _design_shear_EN_1992_2004(self, force)
             else:
                 raise ValueError(f"Shear design method not implemented for concrete type:"\
                     f"{type(self.concrete).__name__}")
@@ -483,7 +485,7 @@ class RectangularBeam(RectangularSection):
 
         # Step 2: Perform rebar design for the worst-case force
         section_rebar = Rebar(self)
-        self.shear_design_results = section_rebar.transverse_rebar(max_A_v_req, max_V_s_req)
+        self.shear_design_results = section_rebar.transverse_rebar(max_A_v_req, max_V_s_req, self._alpha)
         self._best_rebar_design = section_rebar.transverse_rebar_design
         self._stirrup_s_l = self._best_rebar_design['s_l']
         self._stirrup_s_w = self._best_rebar_design['s_w']
@@ -1240,22 +1242,6 @@ def rebar_df() -> None:
 
     # Display the results DataFrame
     print(results_df)
-
-def shear_EN_1992() -> None:
-    concrete= Concrete_EN_1992_2004(name="C25",f_ck=25*MPa) 
-    steelBar= SteelBar(name="B500S", f_y=500*MPa)
-    custom_settings = {'clear_cover': 2.6*cm}
-    beam = RectangularBeam(label="101",
-                                      concrete=concrete,steel_bar=steelBar,width=20*cm, height=60*cm,
-                                       settings=custom_settings)
-    # f = Forces(V_z=100*kN, M_y=100*kNm)
-    f = Forces(V_z=30*kN, N_x=0*kN)
-    forces=[f]
-    beam.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=25*cm)
-    beam.set_longitudinal_rebar_bot(n1=4,d_b1=16*mm)
-    beam.check_shear(forces)
-    beam.shear_results_detailed()
-    # beam.shear_results_detailed_doc()
 
 if __name__ == "__main__":
     flexure_check_test()

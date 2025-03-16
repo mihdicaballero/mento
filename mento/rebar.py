@@ -43,7 +43,209 @@ class Rebar:
     def transverse_rebar_design(self) -> DataFrame:
         return self._trans_combos_df.iloc[0]
 
+##########################################################
+# TRANSVERSE REBAR DESIGN
+##########################################################
+
+    def calculate_max_spacing_ACI_318_19(self, V_s_req: PlainQuantity,
+                                   A_cv: PlainQuantity) -> Tuple[PlainQuantity, PlainQuantity]:
+        """
+        Calculate the maximum allowable spacing across the length and width of the beam
+        based on design requirements.
+
+        Parameters:
+        -----------
+        V_s_req : float
+            Required shear force for the rebar.
+        A_cv : float
+            Effective shear area of the concrete section.
+
+        Returns:
+        --------
+        tuple
+            (s_max_l, s_max_w): The maximum spacing across the length and width of the beam.
+        """
+
+        f_c=self.beam.concrete.f_c
+        lambda_factor = self.beam.settings.get_setting('lambda')
+        
+        # Determine maximum spacing based on V_s_req condition
+        # Maximum spacing for lower shear demand
+        if self.beam.concrete.unit_system == "metric":
+            if V_s_req <= 0.083 * lambda_factor * math.sqrt(f_c / MPa) * MPa * A_cv:
+                s_max_l = min(self.beam._d_shear / 2, 60 * cm)
+                s_max_w = min(self.beam._d_shear, 60 * cm)
+            else:
+            # Maximum spacing for higher shear demand
+                s_max_l = min(self.beam._d_shear / 4, 30 * cm)
+                s_max_w = min(self.beam._d_shear / 2, 30 * cm)
+        else:
+            if V_s_req <= 4 * lambda_factor * math.sqrt(f_c / psi) * psi * A_cv:
+                s_max_l = min(self.beam._d_shear / 2, 24*inch)
+                s_max_w = min(self.beam._d_shear, 24*inch)
+            else:
+                s_max_l = min(self.beam._d_shear / 4, 12*inch)
+                s_max_w = min(self.beam._d_shear / 2, 12*inch)
+        
+        return s_max_l, s_max_w  
     
+    def calculate_max_spacing_EN_1992_2004(self, alpha: float) -> Tuple[PlainQuantity, PlainQuantity]:
+        """
+        Calculate the maximum allowable spacing across the length and width of the beam
+        based on design requirements for EN 1992-2004.
+        
+        Parameters:
+        -----------
+        alpha: stirrups angle
+
+        Returns:
+        --------
+        tuple
+            (s_max_l, s_max_w): The maximum spacing along the length and width of the beam.
+        """
+        s_max_l = 0.75*self.beam._d_shear*(1+1 / math.tan(alpha))
+        s_max_w = min(0.75*self.beam._d_shear, 60 * cm)
+           
+        return s_max_l, s_max_w
+
+    def transverse_rebar_ACI_318_19(self, V_s_req: PlainQuantity) -> Any:
+
+        if self.beam.concrete.unit_system == "metric":
+            valid_diameters = self.rebar_diameters[2:5] #Minimum 10 mm
+        else: 
+            valid_diameters = self.rebar_diameters[0:3]
+        
+        A_cv = self.beam.width*self.beam._d_shear
+        s_max_l, s_max_w = self.calculate_max_spacing_ACI_318_19(V_s_req, A_cv)
+
+        return valid_diameters, s_max_l, s_max_w
+    
+    def transverse_rebar_CIRSOC_201_25(self, V_s_req: PlainQuantity) -> Any:
+
+        valid_diameters = self.rebar_diameters[0:5] #Minimum 6 mm
+        
+        A_cv = self.beam.width*self.beam._d_shear
+        s_max_l, s_max_w = self.calculate_max_spacing_ACI_318_19(V_s_req, A_cv)
+
+        return valid_diameters, s_max_l, s_max_w
+    
+    def transverse_rebar_EN_1992_2004(self, alpha: float) -> Any:
+        valid_diameters = self.rebar_diameters[0:5] #Minimum 6 mm
+
+        s_max_l, s_max_w = self.calculate_max_spacing_EN_1992_2004(alpha)
+
+        return valid_diameters, s_max_l, s_max_w
+
+    def transverse_rebar(self, A_v_req: PlainQuantity, V_s_req: PlainQuantity, alpha:float) -> DataFrame:
+        """
+        Computes the required transverse reinforcement based on ACI 318-19.
+
+        Args:
+            A_v_req: Required area for transverse reinforcement.
+
+        Returns:
+            A dictionary containing the transverse rebar design.
+        """
+
+        # Prepare the list for valid combinations
+        valid_combinations = []
+
+        # Get code specific limitations
+        if self.beam.concrete.design_code=="ACI 318-19":
+            valid_diameters, s_max_l, s_max_w = self.transverse_rebar_ACI_318_19(V_s_req)
+        elif self.beam.concrete.design_code=="CIRSOC 201-25":
+            valid_diameters, s_max_l, s_max_w = self.transverse_rebar_CIRSOC_201_25(V_s_req)
+        elif self.beam.concrete.design_code == "EN 1992-2004":
+            valid_diameters, s_max_l, s_max_w = self.transverse_rebar_EN_1992_2004(alpha)
+        else:
+            raise ValueError(f"Shear design method not implemented for concrete type: {type(self.beam.concrete).__name__}")
+
+        # Iterate through available diameters
+        for d_b in valid_diameters:
+            # Start with 2 legs = 1 stirrup
+            n_legs = 2
+
+            # Start with maximum allowed spacing s_max_l
+            if self.beam.concrete.unit_system == "metric":
+                s_l: PlainQuantity = math.floor(s_max_l.to('cm').magnitude)*cm
+            else:
+                s_l = math.floor(s_max_l.to('inch').magnitude)*inch
+
+            while True:
+                # Calculate spacing based on current legs
+                n_stirrups = math.ceil(n_legs / 2)  # Number of stirrups based on number of legs
+                n_legs_actual = n_stirrups * 2      # Ensure legs are even
+                # Consider 1 leg less for spacing laong width
+                s_w = (self.beam.width - 2 * self.beam.c_c - self.beam._stirrup_d_b) / (n_legs_actual - 1)  # noqa: F841
+
+                A_db = self.rebar_areas[d_b]  # Area of a stirrup bar
+                A_vs = n_legs_actual * A_db  # Area of vertical stirrups
+                A_v: PlainQuantity = A_vs / s_l  # Area of vertical stirrups per unit length
+
+                # Store the valid combination if spacing is also valid
+                if self.beam.concrete.unit_system == "metric":
+                    # Check if the calculated A_v meets or exceeds the required A_v
+                    if A_v >= A_v_req:
+                        valid_combinations.append({
+                            'n_stir': int(n_stirrups),
+                            'd_b': d_b,
+                            's_l': s_l.to('cm'),  # spacing along length
+                            's_w': s_w.to('cm'), # spacing along width
+                            'A_v': A_v.to('cm**2/m'),
+                            's_max_l': s_max_l.to('cm'),
+                            's_max_w': s_max_w.to('cm')
+                        })
+                        # Stop checking larger diameters
+                        break  
+                        
+                    # If A_v is insufficient, reduce s_l by 1 cm
+                    s_l -= 1 * cm
+                    # If s_l becomes less than 5 cm, increase the number of legs by 2 and reset s_l to s_max_l
+                    if s_l < 5 * cm:  # If spacing is less than 5 cm, increase 1 stirrup
+                        n_legs += 2
+                        s_l = math.floor(s_max_l.to('cm').magnitude)*cm # Reset s_l to the max allowed spacing
+                    # Break the loop if legs exceed the limit of legs or max stirrup diameter
+                    if n_legs > 6:
+                        break
+                else:
+                    # Check if the calculated A_v meets or exceeds the required A_v
+                    if A_v >= A_v_req:
+                        valid_combinations.append({
+                            'n_stir': int(n_stirrups),
+                            'd_b': d_b,
+                            's_l': s_l.to('inch'),  # spacing along length
+                            's_w': s_w.to('inch'), # spacing along width
+                            'A_v': A_v.to('inch**2/ft'),
+                            's_max_l': s_max_l.to('inch'),
+                            's_max_w': s_max_w.to('inch')
+                        })
+                        # Stop checking larger diameters
+                        break  
+                        
+                    # If A_v is insufficient, reduce s_l by 1 inch
+                    s_l -= 1 * inch
+                    # If s_l becomes less than 2 inch, increase the number of legs by 2 and reset s_l to s_max_l
+                    if s_l < 2 * inch:  # If spacing is less than 2 inch, increase 1 stirrup
+                        n_legs += 2
+                        s_l = math.floor(s_max_l.to('inch').magnitude)*inch # Reset s_l to the max allowed spacing
+                    # Break the loop if legs exceed the limit of legs or max stirrup diameter
+                    if n_legs > 6:
+                        break
+
+        # Create a DataFrame with all valid combinations
+        df_combinations = pd.DataFrame(valid_combinations)
+
+        # Sort combinations by the total rebar area required (ascending)
+        # Sort by 'A_v' first, then by 'n_stir' to prioritize fewer bars
+        df_combinations.sort_values(by=['n_stir','A_v'], inplace=True)
+        df_combinations.reset_index(drop=True, inplace=True)
+        self._trans_combos_df = df_combinations
+        return df_combinations
+
+##########################################################
+# LONGITUDINAL REBAR DESIGN
+##########################################################
+
     def longitudinal_rebar_ACI_318_19(self, A_s_req: PlainQuantity) -> DataFrame:
         """
         Computes the required longitudinal reinforcement based on ACI 318-19.
@@ -223,8 +425,7 @@ class Rebar:
 
         return modified_df.head(10)
 
-
-    def longitudinal_rebar_EN_1992(self, A_s_req: PlainQuantity) -> None:
+    def longitudinal_rebar_EN_1992_2004(self, A_s_req: PlainQuantity) -> None:
         pass
   
     def _check_spacing(self, n1:int, n2:int, d_b1: PlainQuantity, d_b2:PlainQuantity,
@@ -361,137 +562,6 @@ class Rebar:
 
         return df
 
-    def transverse_rebar_ACI_318_19(self, V_s_req: PlainQuantity) -> Any:
-
-        if self.beam.concrete.unit_system == "metric":
-            valid_diameters = self.rebar_diameters[2:5] #Minimum 10 mm
-        else: 
-            valid_diameters = self.rebar_diameters[0:3]
-        
-        A_cv = self.beam.width*self.beam._d_shear
-        s_max_l, s_max_w = self.calculate_max_spacing_ACI_318_19(V_s_req, A_cv)
-
-        return valid_diameters, s_max_l, s_max_w
-    
-    def transverse_rebar_CIRSOC_201_25(self, V_s_req: PlainQuantity) -> Any:
-
-        valid_diameters = self.rebar_diameters[0:5] #Minimum 6 mm
-        
-        A_cv = self.beam.width*self.beam._d_shear
-        s_max_l, s_max_w = self.calculate_max_spacing_ACI_318_19(V_s_req, A_cv)
-
-        return valid_diameters, s_max_l, s_max_w
-    
-    
-    def transverse_rebar(self, A_v_req: PlainQuantity, V_s_req: PlainQuantity) -> DataFrame:
-        """
-        Computes the required transverse reinforcement based on ACI 318-19.
-
-        Args:
-            A_v_req: Required area for transverse reinforcement.
-
-        Returns:
-            A dictionary containing the transverse rebar design.
-        """
-
-        # Prepare the list for valid combinations
-        valid_combinations = []
-
-        # Get code specific limitations
-        if self.beam.concrete.design_code=="ACI 318-19":
-            valid_diameters, s_max_l, s_max_w = self.transverse_rebar_ACI_318_19(V_s_req)
-        elif self.beam.concrete.design_code=="CIRSOC 201-25":
-            valid_diameters, s_max_l, s_max_w = self.transverse_rebar_CIRSOC_201_25(V_s_req)
-        else:
-            raise ValueError(f"Shear design method not implemented \
-                             for concrete type: {type(self.beam.concrete).__name__}")
-
-        # Iterate through available diameters
-        for d_b in valid_diameters:
-            # Start with 2 legs = 1 stirrup
-            n_legs = 2
-
-            # Start with maximum allowed spacing s_max_l
-            if self.beam.concrete.unit_system == "metric":
-                s_l: PlainQuantity = math.floor(s_max_l.to('cm').magnitude)*cm
-            else:
-                s_l = math.floor(s_max_l.to('inch').magnitude)*inch
-
-            while True:
-                # Calculate spacing based on current legs
-                n_stirrups = math.ceil(n_legs / 2)  # Number of stirrups based on number of legs
-                n_legs_actual = n_stirrups * 2      # Ensure legs are even
-                # Consider 1 leg less for spacing laong width
-                s_w = (self.beam.width - 2 * self.beam.c_c - self.beam._stirrup_d_b) / (n_legs_actual - 1)  # noqa: F841
-
-                A_db = self.rebar_areas[d_b]  # Area of a stirrup bar
-                A_vs = n_legs_actual * A_db  # Area of vertical stirrups
-                A_v: PlainQuantity = A_vs / s_l  # Area of vertical stirrups per unit length
-
-                # Store the valid combination if spacing is also valid
-                if self.beam.concrete.unit_system == "metric":
-                    # Check if the calculated A_v meets or exceeds the required A_v
-                    if A_v >= A_v_req:
-                        valid_combinations.append({
-                            'n_stir': int(n_stirrups),
-                            'd_b': d_b,
-                            's_l': s_l.to('cm'),  # spacing along length
-                            's_w': s_w.to('cm'), # spacing along width
-                            'A_v': A_v.to('cm**2/m'),
-                            's_max_l': s_max_l.to('cm'),
-                            's_max_w': s_max_w.to('cm')
-                        })
-                        # Stop checking larger diameters
-                        break  
-                        
-                    # If A_v is insufficient, reduce s_l by 1 cm
-                    s_l -= 1 * cm
-                    # If s_l becomes less than 5 cm, increase the number of legs by 2 and reset s_l to s_max_l
-                    if s_l < 5 * cm:  # If spacing is less than 5 cm, increase 1 stirrup
-                        n_legs += 2
-                        s_l = math.floor(s_max_l.to('cm').magnitude)*cm # Reset s_l to the max allowed spacing
-                    # Break the loop if legs exceed the limit of legs or max stirrup diameter
-                    if n_legs > 6:
-                        break
-                else:
-                    # Check if the calculated A_v meets or exceeds the required A_v
-                    if A_v >= A_v_req:
-                        valid_combinations.append({
-                            'n_stir': int(n_stirrups),
-                            'd_b': d_b,
-                            's_l': s_l.to('inch'),  # spacing along length
-                            's_w': s_w.to('inch'), # spacing along width
-                            'A_v': A_v.to('inch**2/ft'),
-                            's_max_l': s_max_l.to('inch'),
-                            's_max_w': s_max_w.to('inch')
-                        })
-                        # Stop checking larger diameters
-                        break  
-                        
-                    # If A_v is insufficient, reduce s_l by 1 inch
-                    s_l -= 1 * inch
-                    # If s_l becomes less than 2 inch, increase the number of legs by 2 and reset s_l to s_max_l
-                    if s_l < 2 * inch:  # If spacing is less than 2 inch, increase 1 stirrup
-                        n_legs += 2
-                        s_l = math.floor(s_max_l.to('inch').magnitude)*inch # Reset s_l to the max allowed spacing
-                    # Break the loop if legs exceed the limit of legs or max stirrup diameter
-                    if n_legs > 6:
-                        break
-
-        # Create a DataFrame with all valid combinations
-        df_combinations = pd.DataFrame(valid_combinations)
-
-        # Sort combinations by the total rebar area required (ascending)
-        # Sort by 'A_v' first, then by 'n_stir' to prioritize fewer bars
-        df_combinations.sort_values(by=['n_stir','A_v'], inplace=True)
-        df_combinations.reset_index(drop=True, inplace=True)
-        self._trans_combos_df = df_combinations
-        return df_combinations
-    
-    def transverse_rebar_EN_1992_2004(self, A_v_req: PlainQuantity, V_s_req: PlainQuantity) -> None:
-        pass
-    
-    # Factory method to select the transverse rebar method
     def longitudinal_rebar(self, A_s_req: PlainQuantity) -> Dict[str, Any]:
         """
         Selects the appropriate longitudinal rebar method based on the design code.
@@ -521,65 +591,3 @@ class Rebar:
     #         raise ValueError(f"Shear design method not implemented \
     #                          for concrete type: {type(self.beam.concrete).__name__}")
         
-    def calculate_max_spacing_ACI_318_19(self, V_s_req: PlainQuantity,
-                                   A_cv: PlainQuantity) -> Tuple[PlainQuantity, PlainQuantity]:
-        """
-        Calculate the maximum allowable spacing across the length and width of the beam
-        based on design requirements.
-
-        Parameters:
-        -----------
-        V_s_req : float
-            Required shear force for the rebar.
-        A_cv : float
-            Effective shear area of the concrete section.
-
-        Returns:
-        --------
-        tuple
-            (s_max_l, s_max_w): The maximum spacing across the length and width of the beam.
-        """
-
-        f_c=self.beam.concrete.f_c
-        lambda_factor = self.beam.settings.get_setting('lambda')
-        
-        # Determine maximum spacing based on V_s_req condition
-        # Maximum spacing for lower shear demand
-        if self.beam.concrete.unit_system == "metric":
-            if V_s_req <= 0.083 * lambda_factor * math.sqrt(f_c / MPa) * MPa * A_cv:
-                s_max_l = min(self.beam._d_shear / 2, 60 * cm)
-                s_max_w = min(self.beam._d_shear, 60 * cm)
-            else:
-            # Maximum spacing for higher shear demand
-                s_max_l = min(self.beam._d_shear / 4, 30 * cm)
-                s_max_w = min(self.beam._d_shear / 2, 30 * cm)
-        else:
-            if V_s_req <= 4 * lambda_factor * math.sqrt(f_c / psi) * psi * A_cv:
-                s_max_l = min(self.beam._d_shear / 2, 24*inch)
-                s_max_w = min(self.beam._d_shear, 24*inch)
-            else:
-                s_max_l = min(self.beam._d_shear / 4, 12*inch)
-                s_max_w = min(self.beam._d_shear / 2, 12*inch)
-        
-        return s_max_l, s_max_w  
-    
-    def calculate_max_spacing_EN_1992_2004(self, alpha: float) -> Tuple[PlainQuantity, PlainQuantity]:
-        """
-        Calculate the maximum allowable spacing across the length and width of the beam
-        based on design requirements for EN 1992-2004.
-        
-        Parameters:
-        -----------
-        alpha: stirrups angle
-
-        Returns:
-        --------
-        tuple
-            (s_max_l, s_max_w): The maximum spacing along the length and width of the beam.
-        """
-        s_max_l = 0.75*self.beam._d_shear*(1+1 / math.tan(alpha))
-        s_max_w = min(0.75*self.beam._d_shear, 60 * cm)
-           
-        return s_max_l, s_max_w
-
-

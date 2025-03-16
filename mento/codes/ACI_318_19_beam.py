@@ -33,6 +33,10 @@ def _initialize_variables_ACI_318_19(self: 'RectangularBeam', force: Forces) -> 
             # Consider bottom or top tension reinforcement
             self._A_s_tension = self._A_s_bot if force._M_y >= 0*kNm else self._A_s_top
 
+##########################################################
+# SHEAR CHECK AND DESIGN
+##########################################################
+
 def _calculate_shear_reinforcement_aci(self: 'RectangularBeam') -> None:
     V_s = self._A_v * self.f_yt * self._d_shear  # Shear contribution of reinforcement
     self._phi_V_s = self.phi_v * V_s  # Reduced shear contribution of reinforcement
@@ -193,7 +197,7 @@ def _check_shear_ACI_318_19(self: 'RectangularBeam', force: Forces) -> pd.DataFr
         _initialize_dicts_ACI_318_19_shear(self)
         return pd.DataFrame([results], index=[0])
     else:
-        raise ValueError("Concrete type is not compatible with EN 1992 shear check.")
+        raise ValueError("Concrete type is not compatible with ACI 318-19 shear check.")
 
 def _design_shear_ACI_318_19(self: 'RectangularBeam', force: Forces) -> None:
         # Set the initial variables
@@ -376,6 +380,9 @@ def _calculate_phi_ACI_318_19(self: 'RectangularBeam', epsilon_most_strained: fl
     else:
         return 0.9
 
+##########################################################
+# FLEXURE CHECK AND DESIGN
+##########################################################
 
 def _maximum_flexural_reinforcement_ratio_ACI_318_19(self: 'RectangularBeam') -> float:
     """
