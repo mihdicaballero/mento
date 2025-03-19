@@ -40,7 +40,7 @@ class RectangularBeam(RectangularSection):
         # self.shear_design_results: DataFrame = None
 
 ##########################################################
-# INITILIZE ATTRIBUTES
+# INITIALIZE ATTRIBUTES
 ##########################################################
 
     def _initialize_attributes(self) -> None:
@@ -1044,7 +1044,6 @@ class RectangularBeam(RectangularSection):
         """
         # Calculate y-position based on layer and bottom/top
         y_base = c_c_cm + stirrup_d_b_cm if is_bottom else height_cm - c_c_cm - stirrup_d_b_cm
-        print(c_c_cm , stirrup_d_b_cm, layers_spacing_cm, d_b1.to('cm').magnitude)
 
         if is_second_layer:
             y_base += layers_spacing_cm + max_db.to('cm').magnitude if is_bottom else -layers_spacing_cm-max_db.to('cm').magnitude
@@ -1053,7 +1052,6 @@ class RectangularBeam(RectangularSection):
         if n1 > 0:
             diameter_cm = d_b1.to('cm').magnitude
             y_center = y_base + diameter_cm/2 if is_bottom else y_base -diameter_cm/2
-            print(y_base, y_center)
             for i in range(n1):
                 x = c_c_cm + stirrup_d_b_cm + diameter_cm/2 + (i * (width_cm - 2 * (c_c_cm + stirrup_d_b_cm+diameter_cm/2)) / (n1 - 1))
                 circle = Circle((x, y_center), diameter_cm / 2, color='black', fill=True)

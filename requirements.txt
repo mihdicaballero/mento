@@ -6,3 +6,4 @@ IPython
 ipykernel
 tabulate
 python-docx
+matplotlib

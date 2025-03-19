@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mento"
-version = "0.0.2"
-description = "A package for structural engineering analysis"
+version = "0.0.3"
+description = "A package for structural engineering analysis and design"
 readme = "README.md"
 authors = [
     {name = "Mehdí Caballero", email = "mihdicaballero@gmail.com"},
