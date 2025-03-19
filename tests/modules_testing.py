@@ -77,16 +77,16 @@ def material() -> None:
 def shear_EN_1992() -> None:
     concrete= Concrete_EN_1992_2004(name="C25",f_ck=25*MPa) 
     steelBar= SteelBar(name="B500S", f_y=500*MPa)
-    custom_settings = {'clear_cover': 2.6*cm}
+    custom_settings = {'clear_cover': 2.5*cm}
     beam = RectangularBeam(label="101",
-                                      concrete=concrete,steel_bar=steelBar,width=20*cm, height=60*cm,
+                                      concrete=concrete,steel_bar=steelBar,width=30*cm, height=60*cm,
                                        settings=custom_settings)
     # f = Forces(V_z=100*kN, M_y=100*kNm)
     f = Forces(V_z=30*kN, N_x=0*kN)
     forces=[f]
     beam.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=25*cm)
-    beam.set_longitudinal_rebar_bot(n1=2,d_b1=16*mm, n2=1, d_b2=12*mm)
-    beam.set_longitudinal_rebar_top(n1=2,d_b1=16*mm)
+    beam.set_longitudinal_rebar_bot(n1=2,d_b1=32*mm, n2=3, d_b2=20*mm, n3=2, d_b3=10*mm, n4=2, d_b4=8*mm)
+    beam.set_longitudinal_rebar_top(n1=2,d_b1=25*mm, n2=3, d_b2=16*mm, n3=2, d_b3=10*mm, n4=2, d_b4=8*mm)
     results = beam.check_shear(forces)
     #results = beam.design_shear(forces)
     print(results)
