@@ -15,7 +15,7 @@ from mento.rectangular import RectangularSection
 from mento.material import Concrete, SteelBar, Concrete_ACI_318_19, Concrete_EN_1992_2004, Concrete_CIRSOC_201_25
 from mento.rebar import Rebar
 from mento.units import MPa, psi, mm, inch, kN, m, cm, kNm, dimensionless
-from mento.results import Formatter, TablePrinter, DocumentBuilder
+from mento.results import Formatter, TablePrinter, DocumentBuilder, CUSTOM_COLORS
 from mento.forces import Forces  
 
 from mento.codes.EN_1992_2004_beam import _check_shear_EN_1992_2004, _design_shear_EN_1992_2004
@@ -1056,7 +1056,7 @@ class RectangularBeam(RectangularSection):
             print(y_base, y_center)
             for i in range(n1):
                 x = c_c_cm + stirrup_d_b_cm + diameter_cm/2 + (i * (width_cm - 2 * (c_c_cm + stirrup_d_b_cm+diameter_cm/2)) / (n1 - 1))
-                circle = Circle((x, y_center), diameter_cm / 2, color='black', fill=True)
+                circle = Circle((x, y_center), diameter_cm / 2, color=CUSTOM_COLORS['dark_gray'], fill=True)
                 self._ax.add_patch(circle)
 
         # Plot intermediate bars (position 2 or 4)
@@ -1065,7 +1065,7 @@ class RectangularBeam(RectangularSection):
             y_center = y_base + diameter_cm/2 if is_bottom else y_base -diameter_cm/2
             for i in range(n2):
                 x = c_c_cm + stirrup_d_b_cm + diameter_cm/2 + ((i + 1) * (width_cm - 2 * (c_c_cm + stirrup_d_b_cm+diameter_cm/2)) / (n2 + 1))
-                circle = Circle((x, y_center), diameter_cm / 2, color='black', fill=True)
+                circle = Circle((x, y_center), diameter_cm / 2, color=CUSTOM_COLORS['dark_gray'], fill=True)
                 self._ax.add_patch(circle)
 
 ##########################################################################################################

@@ -84,7 +84,7 @@ def shear_EN_1992() -> None:
     # f = Forces(V_z=100*kN, M_y=100*kNm)
     f = Forces(V_z=30*kN, N_x=0*kN)
     forces=[f]
-    beam.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=25*cm)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=8*mm, s_l=25*cm)
     beam.set_longitudinal_rebar_bot(n1=2,d_b1=32*mm, n2=3, d_b2=20*mm, n3=2, d_b3=10*mm, n4=2, d_b4=8*mm)
     beam.set_longitudinal_rebar_top(n1=2,d_b1=25*mm, n2=3, d_b2=16*mm, n3=2, d_b3=10*mm, n4=2, d_b4=8*mm)
     results = beam.check_shear(forces)
