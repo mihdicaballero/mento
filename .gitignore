@@ -11,6 +11,7 @@ videos/
 
 # Examples folder
 tests/examples/
+_notebooks/
 
 # Virtual environment folders
 .venv/
