@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from pint.facets.plain import PlainQuantity
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle, FancyBboxPatch
-from matplotlib.path import Path
 
 
 from mento.section import Section
@@ -155,6 +154,3 @@ class RectangularSection(Section):
         self._ax.set_aspect('equal')
         # Remove axes for better visualization
         self._ax.axis('off')
-
-        # Show plot
-        #plt.show()

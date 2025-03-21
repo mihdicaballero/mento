@@ -1,12 +1,12 @@
 
-from devtools import debug
+# from devtools import debug
 
 from mento import cm, MPa, m, kg, kN, kNm, inch, ft, kip, lb, psi, mm, ksi
 from mento.settings import Settings
 from mento.material import Concrete, SteelBar, Concrete_EN_1992_2004, Concrete_ACI_318_19
 from mento.section import Section
 from mento.rectangular import RectangularSection
-from mento import Forces, RectangularBeam
+from mento import Forces, RectangularBeam, Node
 
 def units() -> None:
     debug(2*cm, 3*MPa, 4*kg, 1*mm, 1*m, 3*kN, 2*kNm)
@@ -83,13 +83,13 @@ def shear_EN_1992() -> None:
                                        settings=custom_settings)
     # f = Forces(V_z=100*kN, M_y=100*kNm)
     f = Forces(V_z=30*kN, N_x=0*kN)
-    forces=[f]
-    beam.set_transverse_rebar(n_stirrups=1, d_b=8*mm, s_l=25*cm)
-    beam.set_longitudinal_rebar_bot(n1=2,d_b1=32*mm, n2=3, d_b2=20*mm, n3=2, d_b3=10*mm, n4=2, d_b4=8*mm)
-    beam.set_longitudinal_rebar_top(n1=2,d_b1=25*mm, n2=3, d_b2=16*mm, n3=2, d_b3=10*mm, n4=2, d_b4=8*mm)
-    results = beam.check_shear(forces)
-    #results = beam.design_shear(forces)
-    print(results)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=25*cm)
+    beam.set_longitudinal_rebar_bot(n1=2,d_b1=32*mm, n2=3, d_b2=20*mm, n3=2, d_b3=16*mm, n4=2, d_b4=12*mm)
+    beam.set_longitudinal_rebar_top(n1=2,d_b1=25*mm, n2=3, d_b2=16*mm, n3=2, d_b3=10*mm, n4=1, d_b4=8*mm)
+    node = Node(section=beam, forces=f)
+    results = node.check_shear()
+    #results = node.design_shear()
+    # print(results)
     beam.plot()
 
 if __name__ == "__main__":
