@@ -10,3 +10,4 @@ from .forces import Forces # noqa: F401, E402
 from .material import Concrete_ACI_318_19, SteelBar # noqa: F401, E402
 from .beam import RectangularBeam # noqa: F401, E402
 from .results import Formatter, TablePrinter, DocumentBuilder # noqa: F401, E402
+from .codes import EN_1992_2004_beam, ACI_318_19_beam # noqa: F401, E402

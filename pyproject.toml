@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mento"
-version = "0.2.0"
+version = "0.2.3"
 description = "An intuitive tool for structural engineers to design concrete elements efficiently."
 readme = "README.md"
 authors = [
@@ -29,7 +29,7 @@ keywords = [
 "Homepage" = "https://github.com/mihdicaballero/mento"
 
 [tool.setuptools]
-packages = ["mento"]
+packages = ["mento", "mento.codes"]
 
 [tool.setuptools.dynamic]
 dependencies = { file = "requirements.txt" }

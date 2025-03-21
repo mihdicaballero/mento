@@ -1,5 +1,4 @@
-
-# from devtools import debug
+from devtools import debug
 
 from mento import cm, MPa, m, kg, kN, kNm, inch, ft, kip, lb, psi, mm, ksi
 from mento.settings import Settings
@@ -38,7 +37,7 @@ def section() -> None:
     debug(section.get_settings, section.id)
     custom_settings = {'clear_cover': 20}
     section.update_settings(custom_settings)
-    debug(section.settings.default_settings)
+    debug(section.settings.default_settings_metric)
     debug(section.get_settings)
     debug(section)
     debug(section.get_settings)
@@ -88,7 +87,7 @@ def shear_EN_1992() -> None:
     beam.set_longitudinal_rebar_top(n1=2,d_b1=25*mm, n2=3, d_b2=16*mm, n3=2, d_b3=10*mm, n4=1, d_b4=8*mm)
     node = Node(section=beam, forces=f)
     results = node.check_shear()
-    #results = node.design_shear()
+    # results = node.design_shear()
     # print(results)
     beam.plot()
 
