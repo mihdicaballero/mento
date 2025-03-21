@@ -182,3 +182,8 @@ The first line provides the beam's geometry and material properties:
 *******************
 
 See the `Node` section for more information on how to display and save detailed results of the analysis. 
+
+8. Plot the section
+*******************
+
+ Use `beam.plot()` to visualize the beam's cross-section, including the geometry and reinforcement layout.
