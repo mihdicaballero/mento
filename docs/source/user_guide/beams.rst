@@ -195,3 +195,4 @@ You can use the method `plot()` to visualize the beam's cross-section and reinfo
 
 The `plot()` method generates a graphical representation of the beam, including its geometry and reinforcement details.
 This can be useful for verifying the input data and for presentation purposes.
+
