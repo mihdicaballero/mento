@@ -29,6 +29,7 @@ class Section:
             self.settings.update(settings)  # Update with any provided settings
         self.c_c: PlainQuantity = self.settings.get_setting('clear_cover')
         self._stirrup_d_b: PlainQuantity = self.settings.get_setting('stirrup_diameter_ini')
+        self._layers_spacing: PlainQuantity = self.settings.get_setting('layers_spacing')
         
 
     @property

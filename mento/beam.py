@@ -2,6 +2,8 @@ import os # Cleaning console
 from dataclasses import dataclass
 from IPython.display import Markdown, display
 from typing import Optional, Dict, Any
+import matplotlib.pyplot as plt
+from matplotlib.patches import Circle
 from pint.facets.plain import PlainQuantity
 import numpy as np
 import pandas as pd
@@ -13,7 +15,7 @@ from mento.rectangular import RectangularSection
 from mento.material import Concrete, SteelBar, Concrete_ACI_318_19, Concrete_EN_1992_2004, Concrete_CIRSOC_201_25
 from mento.rebar import Rebar
 from mento.units import MPa, psi, mm, inch, kN, m, cm, kNm, dimensionless
-from mento.results import Formatter, TablePrinter, DocumentBuilder
+from mento.results import Formatter, TablePrinter, DocumentBuilder, CUSTOM_COLORS
 from mento.forces import Forces  
 
 from mento.codes.EN_1992_2004_beam import _check_shear_EN_1992_2004, _design_shear_EN_1992_2004
@@ -38,7 +40,7 @@ class RectangularBeam(RectangularSection):
         # self.shear_design_results: DataFrame = None
 
 ##########################################################
-# INITILIZE ATTRIBUTES
+# INITIALIZE ATTRIBUTES
 ##########################################################
 
     def _initialize_attributes(self) -> None:
@@ -1000,6 +1002,69 @@ class RectangularBeam(RectangularSection):
             if n2 > 0 and d_b2.magnitude > 0:  # Check if n2 and d_b2 are defined
                 rebar_string += f"+{n2}Ø{int(d_b2.magnitude)}"
         return rebar_string
+
+##########################################################
+# PLOT LONGIDTUINAL REBAR
+##########################################################
+
+    def plot(self) -> None:
+        """
+        Plots the longitudinal rebars for the beam or column.
+        """
+        # Call parent class to plot geometry
+        super().plot()
+        # Convert dimensions to consistent units (cm)
+        width_cm: float = self.width.to('cm').magnitude
+        height_cm: float = self.height.to('cm').magnitude
+        c_c_cm: float = self.c_c.to('cm').magnitude
+        stirrup_d_b_cm: float = self._stirrup_d_b.to('cm').magnitude
+        layers_spacing_cm: float = self.layers_spacing.to('cm').magnitude
+
+        # Calculate rebar positions
+        # Bottom rebars
+        self._plot_rebar_layer(width_cm, height_cm, c_c_cm, stirrup_d_b_cm, layers_spacing_cm,
+                              self._n1_b, self._d_b1_b, self._n2_b, self._d_b2_b,max_db=self._d_b1_b, is_bottom=True)
+        self._plot_rebar_layer(width_cm, height_cm, c_c_cm, stirrup_d_b_cm, layers_spacing_cm,
+                              self._n3_b, self._d_b3_b, self._n4_b, self._d_b4_b, max_db=self._d_b1_b, is_bottom=True, is_second_layer=True)
+
+        # Top rebars
+        self._plot_rebar_layer(width_cm, height_cm, c_c_cm, stirrup_d_b_cm, layers_spacing_cm,
+                              self._n1_t, self._d_b1_t, self._n2_t, self._d_b2_t, max_db=self._d_b1_t, is_bottom=False)
+        self._plot_rebar_layer(width_cm, height_cm, c_c_cm, stirrup_d_b_cm, layers_spacing_cm,
+                              self._n3_t, self._d_b3_t, self._n4_t, self._d_b4_t, max_db=self._d_b1_t, is_bottom=False, is_second_layer=True)
+
+        # Show plot
+        plt.show()
+
+    def _plot_rebar_layer(self, width_cm: float, height_cm: float, c_c_cm: float, stirrup_d_b_cm: float, layers_spacing_cm: float,
+                          n1: int, d_b1: PlainQuantity, n2: int, d_b2: PlainQuantity, max_db: PlainQuantity, 
+                          is_bottom: bool=True, is_second_layer: bool=False) -> None:
+        """
+        Helper method to plot a single layer of rebars.
+        """
+        # Calculate y-position based on layer and bottom/top
+        y_base = c_c_cm + stirrup_d_b_cm if is_bottom else height_cm - c_c_cm - stirrup_d_b_cm
+
+        if is_second_layer:
+            y_base += layers_spacing_cm + max_db.to('cm').magnitude if is_bottom else -layers_spacing_cm-max_db.to('cm').magnitude
+
+        # Plot side bars (position 1 or 3)
+        if n1 > 0:
+            diameter_cm = d_b1.to('cm').magnitude
+            y_center = y_base + diameter_cm/2 if is_bottom else y_base -diameter_cm/2
+            for i in range(n1):
+                x = c_c_cm + stirrup_d_b_cm + diameter_cm/2 + (i * (width_cm - 2 * (c_c_cm + stirrup_d_b_cm+diameter_cm/2)) / (n1 - 1))
+                circle = Circle((x, y_center), diameter_cm / 2, color=CUSTOM_COLORS['dark_gray'], fill=True)
+                self._ax.add_patch(circle)
+
+        # Plot intermediate bars (position 2 or 4)
+        if n2 > 0:
+            diameter_cm = d_b2.to('cm').magnitude
+            y_center = y_base + diameter_cm/2 if is_bottom else y_base -diameter_cm/2
+            for i in range(n2):
+                x = c_c_cm + stirrup_d_b_cm + diameter_cm/2 + ((i + 1) * (width_cm - 2 * (c_c_cm + stirrup_d_b_cm+diameter_cm/2)) / (n2 + 1))
+                circle = Circle((x, y_center), diameter_cm / 2, color=CUSTOM_COLORS['dark_gray'], fill=True)
+                self._ax.add_patch(circle)
 
 ##########################################################################################################
 
