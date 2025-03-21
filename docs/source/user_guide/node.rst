@@ -131,6 +131,7 @@ This reuslts will print in the Terminal or in a Jupyter Notebook the same way.
     node_1.flexure_results_detailed()
 
 You can also print the detailed results for the analysis of a specific corce if you pass it as an input:
+
 .. code-block:: python
 
     # Print detailed results for shear, for specific force
