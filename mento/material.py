@@ -124,6 +124,7 @@ class Concrete_EN_1992_2004(Concrete):
     _f_ck: PlainQuantity = field(init=False)  # Characteristic concrete strength
     _f_cm: PlainQuantity = field(init=False)  # Mean compressive strength
     _f_ctm: PlainQuantity = field(init=False)  # Mean tensile strength
+    _epsilon_cu3: float = field(init=False)
 
     def __init__(self, name: str, f_ck: PlainQuantity):
         super().__init__(name=name, f_c=f_ck)
@@ -134,11 +135,30 @@ class Concrete_EN_1992_2004(Concrete):
         self._f_cm = self._f_ck + 8 * MPa
         self._E_cm = 22000 * (self._f_cm / (10 * MPa)) ** 0.3 * MPa       
         self._f_ctm = 0.3 * (self._f_ck / MPa) ** (2/3) * MPa
+        self._epsilon_cu3 = 0.0035 # Ultimate strain in concrete
 
     def alpha_cc(self) -> float:
         # Example implementation for alpha_cc, as per Eurocode EN 1992-1-1
         return 1.0  # Typically, this value is taken as 1.0 for normal weight concrete
     
+    def lambda_factor(self) -> float:
+        """
+        Calculate the effective compression zone depth factor (λ) as per EN 1992-1-1.
+        """
+        if self._f_ck  <= 50*MPa:
+            return 0.8
+        else:
+            return 0.8 - (self._f_ck/MPa  - 50) / 400
+
+    def eta_factor(self) -> float:
+        """
+        Calculate the effective compressive strength factor (η) as per EN 1992-1-1.
+        """
+        if self._f_ck  <= 50*MPa:
+            return 1.0
+        else:
+            return 1.0 - (self._f_ck/MPa  - 50) / 200
+
     def get_properties(self) -> Dict[str, PlainQuantity]:
         properties = super().get_properties()
         properties.update({

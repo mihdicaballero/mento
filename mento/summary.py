@@ -167,7 +167,7 @@ class BeamSummary:
 
             if capacity_check:
                 # Reset forces to zero for capacity check
-                node.reset_forces()
+                node.clear_forces()
                 # Perform the shear check
                 shear_results = beam.check_shear()
                 flexure_results = beam.check_flexure()

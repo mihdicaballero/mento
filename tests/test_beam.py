@@ -337,7 +337,7 @@ def test_flexural_beam_determine_nominal_moment_double_reinf_ACI_318_19() -> Non
 
 #BEAM FROM CALPCAD "ACI 318-19 Beam Flexure 02-TEST_1"
 @pytest.fixture()
-def beam_example_flexure() -> RectangularBeam:
+def beam_example_flexure_ACI() -> RectangularBeam:
     concrete = Concrete_ACI_318_19(name="fc 4000", f_c=4000*psi)  
     steelBar = SteelBar(name="fy 60000", f_y=60*ksi)  
     custom_settings = {'clear_cover': 1.5*inch} 
@@ -352,13 +352,13 @@ def beam_example_flexure() -> RectangularBeam:
     return section
 
 
-def test_check_flexure_ACI_318_19_1(beam_example_flexure: RectangularBeam) -> None:
+def test_check_flexure_ACI_318_19_1(beam_example_flexure_ACI: RectangularBeam) -> None:
     # Testing the check of the reinforced beam with a large moment that requires compression reinforcement, the moment being positive
     # # See calcpad: ACI 318-19 Beam Flexure 02-TEST_1.cpd
     f = Forces(label='Test_01', M_y=400*kip*ft)
-    beam_example_flexure.set_longitudinal_rebar_bot(n1=2,d_b1=1.41*inch, n3=2,d_b3=1.27*inch)
-    beam_example_flexure.set_longitudinal_rebar_top(n1=2,d_b1=0.75*inch)
-    node = Node(section=beam_example_flexure, forces=f)
+    beam_example_flexure_ACI.set_longitudinal_rebar_bot(n1=2,d_b1=1.41*inch, n3=2,d_b3=1.27*inch)
+    beam_example_flexure_ACI.set_longitudinal_rebar_top(n1=2,d_b1=0.75*inch)
+    node = Node(section=beam_example_flexure_ACI, forces=f)
     results = node.check_flexure() 
 
     assert results.iloc[0]['Section Label'] == 'B-12x24'
@@ -370,14 +370,14 @@ def test_check_flexure_ACI_318_19_1(beam_example_flexure: RectangularBeam) -> No
     assert results.iloc[0]['As'].to(inch**2).magnitude == pytest.approx(5.66, rel=1e-2)
     assert results.iloc[0]['Mu'].to(kip*ft).magnitude == pytest.approx(400, rel=1e-5)
 
-def test_check_flexure_ACI_318_19_2(beam_example_flexure: RectangularBeam) -> None:
+def test_check_flexure_ACI_318_19_2(beam_example_flexure_ACI: RectangularBeam) -> None:
     # Testeo el checkeo de la viga armada con un momento grande que requiere armadura de compresión, siendo el momento NEGATIVO.
     # Ver calcpad: ACI 318-19 Beam Flexure 02-TEST_1.cpd
     # Invierto el armado respecto al test anterior para poder usar el mismo calcpad
     f = Forces(label='Test_02', M_y=-400*kip*ft)
-    beam_example_flexure.set_longitudinal_rebar_bot(n1=2,d_b1=0.75*inch)
-    beam_example_flexure.set_longitudinal_rebar_top(n1=2,d_b1=1.41*inch, n3=2,d_b3=1.27*inch)
-    node = Node(section=beam_example_flexure, forces=f)
+    beam_example_flexure_ACI.set_longitudinal_rebar_bot(n1=2,d_b1=0.75*inch)
+    beam_example_flexure_ACI.set_longitudinal_rebar_top(n1=2,d_b1=1.41*inch, n3=2,d_b3=1.27*inch)
+    node = Node(section=beam_example_flexure_ACI, forces=f)
     results = node.check_flexure() 
 
     assert results.iloc[0]['Section Label'] == 'B-12x24'
@@ -391,10 +391,10 @@ def test_check_flexure_ACI_318_19_2(beam_example_flexure: RectangularBeam) -> No
 
 
 
-# def test_design_flexure_ACI_318_19_1(beam_example_flexure: RectangularBeam) -> None:
+# def test_design_flexure_ACI_318_19_1(beam_example_flexure_ACI: RectangularBeam) -> None:
 #     f = Forces(label='Test_01', M_y=400*kip*ft)
 #     forces=[f]
-#     results = beam_example_flexure._design_flexure(forces)
+#     results = beam_example_flexure_ACI._design_flexure(forces)
 
 #     assert results.iloc[0]['Section Label'] == 'B-12x24'
 #     assert results.iloc[0]['Load Combo']  == 'Test_01'
@@ -404,17 +404,16 @@ def test_check_flexure_ACI_318_19_2(beam_example_flexure: RectangularBeam) -> No
 #     assert results.iloc[0]['As,req top'].to(cm**2).magnitude == pytest.approx(4.93, rel=1e-2)
 #     assert results.iloc[0]['As'].to(inch**2).magnitude == pytest.approx(5.66, rel=1e-2)
 
-def testing_determine_nominal_moment_ACI_318_19(beam_example_flexure: RectangularBeam) -> None:
+def testing_determine_nominal_moment_ACI_318_19(beam_example_flexure_ACI: RectangularBeam) -> None:
     
-    beam_example_flexure.set_longitudinal_rebar_bot(n1=2,d_b1=1.128*inch, n2=1, d_b2=1.128*inch,  n3=2,d_b3=1*inch, n4=1, d_b4=1*inch)
-    beam_example_flexure.set_longitudinal_rebar_top(n1=2,d_b1=1.128*inch, n2=1, d_b2=1.128*inch,  n3=2,d_b3=1*inch, n4=1, d_b4=1*inch)
+    beam_example_flexure_ACI.set_longitudinal_rebar_bot(n1=2,d_b1=1.128*inch, n2=1, d_b2=1.128*inch,  n3=2,d_b3=1*inch, n4=1, d_b4=1*inch)
+    beam_example_flexure_ACI.set_longitudinal_rebar_top(n1=2,d_b1=1.128*inch, n2=1, d_b2=1.128*inch,  n3=2,d_b3=1*inch, n4=1, d_b4=1*inch)
 
     f = Forces(label='Test_01', M_y=400*kip*ft)
-    _determine_nominal_moment_ACI_318_19(beam_example_flexure, f)
-    assert beam_example_flexure._phi_M_n_bot.to(kNm).magnitude == pytest.approx(587.0589108678, rel=1e-2)
-    assert beam_example_flexure._phi_M_n_top.to(kNm).magnitude == pytest.approx(587.0589108678, rel=1e-2)
-
-
+    node_1 = Node(section=beam_example_flexure_ACI, forces=f)
+    node_1.check_flexure()
+    assert beam_example_flexure_ACI._phi_M_n_bot.to(kNm).magnitude == pytest.approx(587.0589108678, rel=1e-2)
+    assert beam_example_flexure_ACI._phi_M_n_top.to(kNm).magnitude == pytest.approx(587.0589108678, rel=1e-2)
 
 
 # This is where pytest will collect the tests and run them

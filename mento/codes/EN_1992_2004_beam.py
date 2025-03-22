@@ -1,19 +1,38 @@
 import math
 from pint.facets.plain import PlainQuantity
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, Any, Tuple
 import pandas as pd
 from pandas import DataFrame
 
 from mento.material import Concrete_EN_1992_2004
 from mento.rebar import Rebar
-from mento.units import MPa, mm, kNm, dimensionless, kN, inch
+from mento.units import MPa, mm, kNm, dimensionless, kN, inch, cm
 from mento.forces import Forces  
 
 
 if TYPE_CHECKING:
     from ..beam import RectangularBeam  # Import Beam for type checking only
 
-def _initialize_variables_EN_1992_2004(self: 'RectangularBeam', force: Forces) -> None:
+def _initialize_variables_EN_1992_2004(self: 'RectangularBeam') -> None:
+    """
+    Initialize variables for EN 1992-2004 design code.
+    """
+    if isinstance(self.concrete, Concrete_EN_1992_2004):
+        # Load settings for gamma factors
+        self.settings.load_EN_1992_2004_settings()
+        self._alpha_cc = self.settings.get_setting('alpha_cc')
+        self._gamma_c = self.settings.get_setting('gamma_c')
+        self._gamma_s = self.settings.get_setting('gamma_s')
+        self._f_ywk = self._f_yk
+        self._f_ywd = self._f_ywk/self._gamma_s
+        self._f_cd = self._alpha_cc*self._f_ck/self._gamma_c
+        self._f_yd = self._f_yk/self._gamma_s
+
+##########################################################
+# SHEAR CHECK AND DESIGN
+##########################################################
+
+def _initialize_shear_variables_EN_1992_2004(self: 'RectangularBeam', force: Forces) -> Tuple[PlainQuantity, PlainQuantity]:
     """
     Initialize variables for EN 1992-2004 design code.
     """
@@ -23,18 +42,6 @@ def _initialize_variables_EN_1992_2004(self: 'RectangularBeam', force: Forces) -
         self._V_Ed_1 = force.V_z  # Consider the same shear at the edge of support and in d
         self._V_Ed_2 = force.V_z  # Consider the same shear at the edge of support and in d
 
-        # Load settings for gamma factors
-        self.settings.load_EN_1992_2004_settings()
-        self._alpha_cc = self.settings.get_setting('alpha_cc')
-        self._gamma_c = self.settings.get_setting('gamma_c')
-        self._gamma_s = self.settings.get_setting('gamma_s')
-        self._f_ywk = self._f_yk
-        self._f_ywd = self._f_ywk/self._gamma_s
-        self._f_cd = self._alpha_cc*self._f_ck/self._gamma_c
-
-        # Consider bottom or top tension reinforcement
-        self._A_s_tension = self._A_s_bot if force._M_y >= 0*kNm else self._A_s_top
-
         # Minimum shear reinforcement calculation
         rho_min = 0.08*math.sqrt(self._f_ck.to('MPa').magnitude) / (self._f_ywk)*MPa
         self._A_v_min = rho_min * self.width * math.sin(self._alpha)
@@ -43,14 +50,15 @@ def _initialize_variables_EN_1992_2004(self: 'RectangularBeam', force: Forces) -
             self._rho_l_bot = min((self._A_s_tension + self._A_p) / (self.width * self._d_shear), 0.02*dimensionless)
         else:
             self._rho_l_top = min((self._A_s_tension + self._A_p) / (self.width * self._d_shear), 0.02*dimensionless)
+
         # Shear calculation for sections without rebar
         self._k_value = min(1 + math.sqrt(200 * mm / self._d_shear), 2)
+
         # Positive of compression
         self._sigma_cp = min(self._N_Ed / self.A_x, 0.2*self._f_cd)
 
-##########################################################
-# SHEAR CHECK AND DESIGN
-##########################################################
+        # Consider bottom or top tension reinforcement
+        self._A_s_tension = self._A_s_bot if force._M_y >= 0*kNm else self._A_s_top
 
 def _shear_without_rebar_EN_1992_2004(self: 'RectangularBeam') -> PlainQuantity:
     self._stirrup_d_b = 0*mm
@@ -121,10 +129,11 @@ def _calculate_required_shear_reinforcement_EN_1992_2004(self: 'RectangularBeam'
             #Maximum shear capacity is the same as the steel capacity
     self._V_Rd = self._V_Rd_s
 
-def _check_shear_EN_1992_2004(self: 'RectangularBeam', Force:Forces) -> DataFrame:
+def _check_shear_EN_1992_2004(self: 'RectangularBeam', force:Forces) -> DataFrame:
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         # Initialize all the code related variables
-        _initialize_variables_EN_1992_2004(self, Force)            
+        _initialize_variables_EN_1992_2004(self, force)
+        _initialize_shear_variables_EN_1992_2004(self, force)            
         
         if self._stirrup_n == 0:
             # Calculate V_Rd_c
@@ -183,10 +192,11 @@ def _check_shear_EN_1992_2004(self: 'RectangularBeam', Force:Forces) -> DataFram
     else:
         raise ValueError("Concrete type is not compatible with EN 1992 shear check.")
 
-def _design_shear_EN_1992_2004(self: 'RectangularBeam', Force:Forces) -> None:
+def _design_shear_EN_1992_2004(self: 'RectangularBeam', force:Forces) -> None:
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         # Initialize all the code related variables
-        _initialize_variables_EN_1992_2004(self, Force)
+        _initialize_variables_EN_1992_2004(self, force)
+        _initialize_shear_variables_EN_1992_2004(self, force) 
         # Calculate maximum shear strength
         _calculate_max_shear_strength_EN_1992_2004(self)
         # Calculate required shear reinforcement area
@@ -200,8 +210,131 @@ def _design_shear_EN_1992_2004(self: 'RectangularBeam', Force:Forces) -> None:
 # FLEXURE CHECK AND DESIGN
 ##########################################################
 
-def _design_flexure_EN_1992_2004(self: 'RectangularBeam', force: Forces) -> None:
-    pass
+def _min_max_flexural_reinforcement_ratio_EN_1992_2004(self: 'RectangularBeam') -> Tuple[PlainQuantity, PlainQuantity]:
+    """
+    Initialize variables for EN 1992-2004 design code.
+    """
+    if isinstance(self.concrete, Concrete_EN_1992_2004):
+        # Calculate the minimum tensile reinforcement ratio
+        rho_min = max(0.26 * self._f_ctm / self._f_yk, 0.0013)
+        # Set the maximum tensile reinforcement ratio
+        rho_max = 0.04
+
+        # # For positive moments (tension in the bottom), set minimum reinforcement accordingly.
+        # if force._M_y > 0 * kNm:
+        #     rho_min_top = 0 * dimensionless
+        #     rho_min_bot = rho_min
+        # else:
+        #     rho_min_top = rho_min
+        #     rho_min_bot = 0 * dimensionless
+
+        # Calculate minimum and maximum bottom reinforcement areas
+        # self._A_s_min_bot = rho_min_bot * self._d_bot * self._width
+        # self._A_s_max_bot = rho_max * self._d_bot * self._width
+
+        return rho_min, rho_max
+
+def _calculate_flexural_reinforcement_EN_1992_2004(self: 'RectangularBeam', M_Ed:PlainQuantity, d: PlainQuantity, d_prima: float) -> None:
+    """
+    Calculate the required top and bottom reinforcement areas for bending.
+    """
+    rho_min, rho_max = _min_max_flexural_reinforcement_ratio_EN_1992_2004(self)
+    A_s_min = rho_min*d*self.width
+    A_s_max = rho_max*d*self.width
+
+
+    # Constants and material properties
+    if isinstance(self.concrete, Concrete_EN_1992_2004):
+        lambda_ = self.concrete.lambda_factor()  # Factor for effective compression zone depth (EN 1992-1-1)
+        eta = self.concrete.eta_factor()  # Factor for concrete strength (EN 1992-1-1)
+
+    # Design reinforcement yield strain
+    epsilon_yd = (self._f_yd / self._E_s).to('dimensionless').magnitude  # Yield strain in reinforcement
+
+    # Relative depth of compression zone at yielding of bottom reinforcement
+    xi_eff_lim = lambda_ * (self._epsilon_cu3 / (self._epsilon_cu3 + epsilon_yd))
+
+    # Compression zone depth limit
+    x_eff_lim = xi_eff_lim * d
+
+    # Limit moment for compressive reinforcement
+    M_lim = (eta * self._f_cd * self.width * x_eff_lim * (d - 0.5 * x_eff_lim))
+
+    # Check if compressive reinforcement is required
+    if M_Ed <= M_lim:
+        # Compressive reinforcement is NOT required
+        print("Compressive reinforcement is NOT required.")
+
+        # Relative design bending moment
+        K = (M_Ed / (self.width * d**2 * eta * self._f_cd)).to('dimensionless').magnitude
+
+        # Compression zone depth
+        x_eff = d * (1 - math.sqrt(1 - 2 * K))
+
+        # Lever arm of internal forces
+        z = d - 0.5 * lambda_ * x_eff
+
+        # Area of required tensile reinforcement
+        A_s1 = (self.width * x_eff * eta * self._f_cd / self._f_yd).to('cm^2')
+
+        # Ensure the area meets the minimum requirement
+        A_s1 = max(A_s1, A_s_min)
+
+        # No compressive reinforcement required
+        A_s2 = 0 * cm**2
+
+    else:
+        # Compressive reinforcement is required
+        print("Compressive reinforcement is required.")
+
+        # Limit tensile reinforcement area
+        A_s1_lim = (M_lim / ((d - 0.5 * x_eff_lim) * self._f_yd)).to('cm^2')
+
+        # Extra moment to take with top reinforcement
+        delta_M = M_Ed - M_lim
+
+        # Required compressive reinforcement area
+        A_s2 = (delta_M / ((d - d_prima) * self._f_yd)).to('cm^2')
+
+        # Required tensile reinforcement area
+        A_s1 = max(A_s1_lim + A_s2, A_s_min)
+
+
+def _design_flexure_EN_1992_2004(self: 'RectangularBeam', max_M_y_bot: PlainQuantity, max_M_y_top: PlainQuantity) -> Dict[str, Any]:
+    if isinstance(self.concrete, Concrete_EN_1992_2004):
+        # Initialize all the code related variables
+        _initialize_variables_EN_1992_2004(self)
+
+        # Calculate reinforcement for the positive moment, even if it is 0
+        (
+            self._A_s_min_bot,
+            self._A_s_max_bot,
+            A_s_final_bot_Positive_M,
+            A_s_comp_top,
+            self._c_d_bot
+        ) = _calculate_flexural_reinforcement_EN_1992_2004(self, max_M_y_bot, self._d_bot, self._c_mec_top)
+        # Initialize bottom and top reinforcement
+        self._A_s_bot = A_s_final_bot_Positive_M
+        self._A_s_top = A_s_comp_top
+                # If there is a negative moment, calculate the top reinforcement
+        if max_M_y_top < 0:
+            (
+                self._A_s_min_top,
+                self._A_s_max_top,
+                A_s_final_top_Negative_M,
+                A_s_comp_bot,
+                self._c_d_top
+            ) = _calculate_flexural_reinforcement_EN_1992_2004(self, abs(max_M_y_top), self._d_top, self._c_mec_bot)
+            
+            # Adjust reinforcement areas based on positive and negative moments
+            self._A_s_bot = max(A_s_final_bot_Positive_M, A_s_comp_bot)                 
+            self._A_s_top = max(A_s_comp_top,A_s_final_top_Negative_M)
+
+
+
+        return None
+    else:
+        raise ValueError("Concrete type is not compatible with EN 1992 flexure design.")
 
 
 ##########################################################
@@ -315,220 +448,12 @@ def _initialize_dicts_EN_1992_2004_shear(self: 'RectangularBeam') -> None:
         }
 
 
-# # Helper function to convert degrees to radians
-# def degrees_to_radians(degrees: Union[int, float]) -> float:
-#     return degrees * (math.pi / 180.0)
-
-# *** (A) ***
-# class Concrete:
-#     def __init__(self, fck_value):
-#         self._f_ck = fck_value  # Characteristic compressive cylinder strength of concrete at 28 days [Pa]
-#         self._gamma_c = 1.5      # Concrete partial material safety factor
-#         self._f_cd = self._f_ck / self._gamma_c  # Design value of concrete compressive strength
-#         self._f_ck_MPa = self._f_ck * 1e-6  # Convert to MPa
-#         self._f_cm_MPa = self._f_ck_MPa + 8.0  # Mean value of concrete cylinder compressive strength [MPa]
-
-#         if self._f_ck <= 50 * 1e6:
-#             self._f_ctm_MPa = 0.3 * (self._f_ck_MPa ** (2.0 / 3.0))  # Mean value of axial tensile strength [MPa]
-#             self._f_ctm = self._f_ctm_MPa * 1e6  # Convert back to Pa
-#             self._epsilon_cu3 = 0.0035  # Ultimate compressive strain
-#             self._lambda = 0.8  # EN 1992-1-1 (3.19)
-#             self._eta = 1.0     # EN 1992-1-1 (3.21)
-#         else:
-#             self._f_ctm_MPa = 2.11 * math.log(1 + 0.1 * self._f_cm_MPa)  # Mean value of axial tensile strength [MPa]
-#             self._f_ctm = self._f_ctm_MPa * 1e6  # Convert back to Pa
-#             self._epsilon_cu3 = 0.001 * (2.6 + 35 * ((90 - self._f_ck_MPa) / 100) ** 4.0)  # Ultimate compressive strain
-#             self._lambda = 0.8 - ((self._f_ck_MPa - 50) / 400)  # EN 1992-1-1 (3.20)
-#             self._eta = 1.0 - ((self._f_ck_MPa - 50) / 200)  # EN 1992-1-1 (3.22)
-
-#         self._eta_x_fcd = self._eta * self._f_cd  # eta * f_cd
-
-#     # Getters
-#     def f_ck(self):
-#         return self._f_ck
-
-#     def f_ck_MPa(self):
-#         return self._f_ck_MPa
-
-#     def f_ctm(self):
-#         return self._f_ctm
-
-#     def f_ctm_MPa(self):
-#         return self._f_ctm_MPa
-
-#     def gamma_c(self):
-#         return self._gamma_c
-
-#     def f_cd(self):
-#         return self._f_cd
-
-#     def epsilon_cu3(self):
-#         return self._epsilon_cu3
-
-#     def lambda_(self):
-#         return self._lambda
-
-#     def eta(self):
-#         return self._eta
-
-#     def eta_x_fcd(self):
-#         return self._eta_x_fcd
-
-
-# # *** part of (A) ***
-# class Steel:
-#     def __init__(self, fyk_value, fyk_value_trans):
-#         self._f_yk = fyk_value  # Characteristic yield strength of reinforcement [Pa]
-#         self._gamma_s = 1.15    # Partial factor for reinforcing steel
-#         self._f_yd = self._f_yk / self._gamma_s  # Design yield strength of reinforcement
-#         self._E_s = 200 * 1e9   # Modulus of elasticity of reinforcing steel [Pa]
-#         self._epsilon_yd = self._f_yd / self._E_s  # Yield strain
-#         self._f_ywk = fyk_value_trans  # Characteristic yield of shear reinforcement [Pa]
-#         self._f_ywd = self._f_ywk / self._gamma_s  # Design yield of shear reinforcement
-#         self._f_ywk_MPa = self._f_ywk * 1e-6  # Convert to MPa
-
-#     # Getters
-#     def f_yk(self):
-#         return self._f_yk
-
-#     def f_yd(self):
-#         return self._f_yd
-
-#     def gamma_s(self):
-#         return self._gamma_s
-
-#     def E_s(self):
-#         return self._E_s
-
-#     def epsilon_yd(self):
-#         return self._epsilon_yd
-
-#     def f_ywk(self):
-#         return self._f_ywk
-
-#     def f_ywd(self):
-#         return self._f_ywd
-
-#     def f_ywk_MPa(self):
-#         return self._f_ywk_MPa
-
-
-# # *** part of (A) ***
-# class Geometry:
-#     def __init__(self, c_nom, phi, phi_s, height, width):
-#         self._c_nom = c_nom  # Nominal cover [m]
-#         self._phi = phi      # Diameter of longitudinal bars [m]
-#         self._phi_s = phi_s  # Diameter of transverse reinforcement (stirrups) [m]
-#         self._height = height  # Height of the beam [m]
-#         self._width = width    # Width of the beam [m]
-#         self._a = self._c_nom + self._phi_s + 0.5 * self._phi  # Effective depth [m]
-#         self._d = self._height - self._a  # Effective depth [m]
-#         self._A_c = self._width * self._height  # Concrete cross-sectional area [m²]
-#         self._b_w = self._width  # Smallest width of the cross-section in the tensile area [m]
-
-#     # Getters
-#     def width(self):
-#         return self._width
-
-#     def height(self):
-#         return self._height
-
-#     def a(self):
-#         return self._a
-
-#     def d(self):
-#         return self._d
-
-#     def A_c(self):
-#         return self._A_c
-
-#     def b_w(self):
-#         return self._b_w
-
-
-# # *** part of (A) ***
-# class Reinforcement:
-#     def __init__(self, concrete, steel, geometry, phi, phi_s, n_st):
-#         f_ctm = concrete.f_ctm()  # Mean value of axial tensile strength [Pa]
-#         f_yk = steel.f_yk()       # Characteristic yield strength of reinforcement [Pa]
-#         width = geometry.width()  # Width of the beam [m]
-#         d = geometry.d()          # Effective depth [m]
-#         A_c = geometry.A_c()      # Concrete cross-sectional area [m²]
-
-#         A_s_min1 = 0.26 * (f_ctm / f_yk) * width * d
-#         A_s_min2 = 0.0013 * width * d
-#         self._A_s_min = max(A_s_min1, A_s_min2)  # Minimum reinforcement area [m²]
-#         self._A_s_max = 0.04 * A_c               # Maximum reinforcement area [m²]
-#         self._A_phi = (math.pi * (phi ** 2)) / 4  # Cross-sectional area of one bar [m²]
-#         self._A_phi_s = (math.pi * (phi_s ** 2)) / 4  # Cross-sectional area of one stirrup [m²]
-#         self._rho_l_min = self._A_s_min / (width * d)  # Minimum reinforcement ratio
-#         self._rho_l_max = self._A_s_max / (width * d)  # Maximum reinforcement ratio
-#         self._n_st = n_st  # Number of stirrups' legs
-#         self._A_sw = self._n_st * self._A_phi_s  # Area of shear reinforcement [m²]
-
-#     # Getters
-#     def A_s_min(self):
-#         return self._A_s_min
-
-#     def A_s_max(self):
-#         return self._A_s_max
-
-#     def A_phi(self):
-#         return self._A_phi
-
-#     def A_phi_s(self):
-#         return self._A_phi_s
-
-#     def rho_l_min(self):
-#         return self._rho_l_min
-
-#     def rho_l_max(self):
-#         return self._rho_l_max
-
-#     def A_sw(self):
-#         return self._A_sw
-
-#     def n_st(self):
-#         return self._n_st
-
-
-# # *** (K) ***
-# class Forces:
-#     def __init__(self, M_Ed, V_Ed, N_Ed):
-#         self.M_Ed = M_Ed  # Design moment [Nm]
-#         self.V_Ed = V_Ed  # Design shear force [N]
-#         self.N_Ed = N_Ed  # Design axial force [N]
-
-
-# class Angle:
-#     def __init__(self, theta=45, alpha=90):
-#         self.theta = degrees_to_radians(theta)  # Angle between concrete compression strut and beam axis [rad]
-#         self.alpha = degrees_to_radians(alpha)  # Angle between shear reinforcement and beam axis [rad]
-#         self.cot_theta = 1 / math.tan(self.theta)
-#         self.tan_theta = math.tan(self.theta)
-#         self.sin_alpha = math.sin(self.alpha)
-#         self.cot_alpha = 1 / math.tan(self.alpha)
-
-
-# class ReinforcementAreas:
-#     def __init__(self, bottom=0, top=0, is_correct=True):
-#         self.bottom = bottom  # Bottom reinforcement area [m²]
-#         self.top = top        # Top reinforcement area [m²]
-#         self.is_correct = is_correct  # Flag to indicate if the reinforcement is within limits
-
-
-# class TransverseReinforcement:
-#     def __init__(self, s_req=0, density=0, is_correct=True):
-#         self.s_req = s_req      # Required spacing of stirrups [m]
-#         self.density = density  # Transverse reinforcement density
-#         self.is_correct = is_correct  # Flag to indicate if the reinforcement is within limits
-
 
 # # *** (B), (C), (D), (E) ***
 # def calculate_required_reinforcement_area(M_Ed, concrete, steel, geometry, reinforcement):
 #     if M_Ed > 0:
 #         # *** (B) ***
-#         xi_eff_lim = concrete.lambda_() * (concrete.epsilon_cu3() / (concrete.epsilon_cu3() + steel.epsilon_yd()))
+#         xi_eff_lim = concrete.lambda_() * (concrete.self._epsilon_cu3() / (concrete.self._epsilon_cu3() + steel.epsilon_yd()))
 #         x_eff_lim = xi_eff_lim * geometry.d()
 #         M_lim = concrete.eta_x_fcd() * geometry.width() * x_eff_lim * (geometry.d() - 0.5 * x_eff_lim)
 
