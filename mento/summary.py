@@ -351,9 +351,10 @@ def main() -> None:
     # check = beam_summary.check(capacity_check=False)
     # print(check)
     # beam_summary.check().to_excel('hola.xlsx', index=False)
-    results = beam_summary.shear_results(capacity_check=False)
-    # print(results)
-    beam_summary.nodes[0].shear_results_detailed()
+    # results = beam_summary.shear_results(capacity_check=False)
+    results = beam_summary.shear_results(capacity_check=True)
+    print(results)
+    beam_summary.nodes[2].shear_results_detailed()
 
 if __name__ == "__main__":
     main()

@@ -91,7 +91,7 @@ To export the results of the capacity check to an Excel file, use the following 
 Viewing Detailed Results
 ------------------------
 
-For a detailed breakdown of the results, you can use the `shear_results` or `flexure_results` method. 
+For a detailed breakdown of the results, you can use the `shear_results` method. Only available for ACI 318-10 for now.
 Thess methods provide a DataFrame with detailed results for each beam:
 
 - **Without Capacity Check**:
@@ -99,13 +99,16 @@ Thess methods provide a DataFrame with detailed results for each beam:
 .. code-block:: python
 
     beam_summary.shear_results(capacity_check=False)
-    beam_summary.flexure_results(capacity_check=False)
 
 - **With Capacity Check**:
 
 .. code-block:: python
 
     beam_summary.shear_results(capacity_check=True)
-    beam_summary.flexure_results(capacity_check=True)
 
+You can also see a more detailed and complete result for a specific beam of the summmary table indicating the item in the list of beams.
+For example, detailed shear results for row number 3 of the summary are accesses like this:
 
+.. code-block:: python
+
+    beam_summary.nodes[2].shear_results_detailed()
