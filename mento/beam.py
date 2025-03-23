@@ -24,14 +24,14 @@ from mento.codes.ACI_318_19_beam import _check_shear_ACI_318_19, _design_shear_A
 
 @dataclass
 class RectangularBeam(RectangularSection):
-    label: Optional[str] = None
+    
 
     def __init__(self, label: Optional[str], concrete: Concrete, steel_bar: SteelBar, 
                  width: PlainQuantity, height: PlainQuantity, settings: Optional[Dict[str, Any]] = None):   
-        super().__init__(concrete, steel_bar, width, height, settings)
+        super().__init__(label, concrete, steel_bar, width, height, settings)
         if settings:
             self.settings.update(settings)  # Update with any provided settings
-        self.label = label
+        
         self.layers_spacing = self.settings.get_setting('layers_spacing')
         
         # Centralized attribute initialization
@@ -113,7 +113,7 @@ class RectangularBeam(RectangularSection):
         self._n3_t, self._d_b3_t = 0, 0 * mm
         self._n4_t, self._d_b4_t = 0, 0 * mm
 
-        # Unit system default minimum rebar
+        # Unit system default starter rebar for initial effective height
         if self.concrete.unit_system == "metric":
             self._n1_b, self._d_b1_b = 2, 8 * mm
             self._n1_t, self._d_b1_t = 2, 8 * mm
@@ -163,6 +163,9 @@ class RectangularBeam(RectangularSection):
         if isinstance(self.concrete, Concrete_EN_1992_2004):
             self._f_yk = self.steel_bar.f_y
             self._f_ck = self.concrete.f_ck
+            self._f_ctm = self.concrete.f_ctm
+            self._epsilon_cu3 = self.concrete._epsilon_cu3
+            self._E_s = self.steel_bar.E_s
             self._V_Ed_1: PlainQuantity = 0*kN
             self._V_Ed_2: PlainQuantity = 0*kN
             self._N_Ed: PlainQuantity = 0*kN
@@ -179,7 +182,9 @@ class RectangularBeam(RectangularSection):
             self._gamma_s:float  = 0
             self._f_ywk: PlainQuantity = 0*MPa
             self._f_ywd: PlainQuantity = 0*MPa
+            self._f_yd: PlainQuantity = 0*MPa
             self._f_cd: PlainQuantity = 0*MPa
+            self._A_s_tension: PlainQuantity = 0*cm**2
             self._A_p = 0*cm**2 # No prestressed for now
             self._sigma_cp: PlainQuantity = 0*MPa
             self._theta: float = 0
@@ -379,7 +384,6 @@ class RectangularBeam(RectangularSection):
             if force._M_y <= max_M_y_top:
                 max_M_y_top = force._M_y
                 self._limiting_case_bot=force
-
             # For bottom reinforcement, consider the maximum positive moment
             if force._M_y > max_M_y_bot:
                 max_M_y_bot = force._M_y

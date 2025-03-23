@@ -11,6 +11,7 @@ videos/
 
 # Examples folder
 tests/examples/
+_notebooks/
 
 # Virtual environment folders
 .venv/
@@ -72,7 +73,7 @@ dist/
 # Documentation files
 *.pdf
 *.docx
-*.ipynb
+*.xlsx
 
 # Editor and OS swap/backup files
 *~

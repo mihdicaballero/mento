@@ -1,0 +1,28 @@
+/* Make DataFrames use more horizontal space */
+.dataframe {
+    width: 90% !important;
+    max-width: 90% !important;
+    table-layout: auto !important;
+}
+
+.dataframe th,
+.dataframe td {
+    white-space: nowrap; /* Prevent text wrapping */
+    padding: 0.4em 0.2em; /* Adjust padding as needed */
+}
+
+.dataframe thead th {
+    text-align: center !important; /* Center-align headers */
+}
+
+/* Hide input and output prompts */
+.nbinput .prompt,
+.nboutput .prompt {
+    display: none;
+}
+
+/* Adjust margins to remove extra space left by hidden prompts */
+.nbinput .input,
+.nboutput .output {
+    margin-left: 0;
+}

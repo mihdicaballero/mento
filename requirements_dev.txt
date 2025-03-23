@@ -17,3 +17,4 @@ sphinx_design
 sphinx-copybutton
 build
 twine
+myst_nb

@@ -690,10 +690,6 @@ def _determine_nominal_moment_ACI_318_19(self: 'RectangularBeam', force: Forces)
         None
     """
 
-    # Load design settings for ACI 318-19
-    self.settings.load_ACI_318_19_settings()
-    self.phi_t = self.settings.get_setting('phi_t')
-
     # Calculate minimum and maximum reinforcement ratios
     rho_min = _minimum_flexural_reinforcement_ratio_ACI_318_19(self, force._M_y)
     rho_max = _maximum_flexural_reinforcement_ratio_ACI_318_19(self)
@@ -738,7 +734,7 @@ def _determine_nominal_moment_ACI_318_19(self: 'RectangularBeam', force: Forces)
     # Calculate the design moment capacities for both bottom and top reinforcement
     self._phi_M_n_bot = self.phi_t * M_n_positive
     self._phi_M_n_top = self.phi_t * M_n_negative
-
+    
     return None
 
 def _check_flexure_ACI_318_19(self: 'RectangularBeam', force: Forces) -> pd.DataFrame:
@@ -828,7 +824,6 @@ def _design_flexure_ACI_318_19(self: 'RectangularBeam', max_M_y_bot: PlainQuanti
         areas and their spacing.
     """
 
-    # Load design settings for ACI 318-19
     self.settings.load_ACI_318_19_settings()
     self.phi_t = self.settings.get_setting('phi_t')
     # Initial assumptions for mechanical cover and compression depth

@@ -10,7 +10,7 @@ def setup_section() -> RectangularSection:
     steel_bar = SteelBar(name="ADN 420", f_y=60 * ksi)
     width = 10 * inch
     height = 16 * inch
-    section = RectangularSection(concrete=concrete, steel_bar=steel_bar, width=width, height=height)
+    section = RectangularSection(label="V101",concrete=concrete, steel_bar=steel_bar, width=width, height=height)
     return section
 
 def test_width(setup_section: RectangularSection) -> None:

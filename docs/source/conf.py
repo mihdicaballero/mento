@@ -10,7 +10,7 @@ from importlib.metadata import version
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'mento'
-author = 'Mihdí Caballero & Juan Pablo Romaris'
+author = 'Mehdí Caballero & Juan Pablo Romaris'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -25,7 +25,7 @@ except Exception:  # pragma: no cover
 
 release = version
 this_year = datetime.date.today().year
-copyright = f"2024-{this_year}, mento Developers"
+copyright = f"2025-{this_year}, mento Developers"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -48,14 +48,19 @@ extensions = [
     "sphinx_design",
 ]
 
+# Hide input and output prompts
+nbsphinx_input_prompt = "%.0s"
+nbsphinx_output_prompt = "%.0s"
+
 master_doc = "index"
 
 templates_path = ['_templates']
 
-# The suffix of source filenames.
-source_suffix = ".rst"
+source_suffix = {
+    '.rst': 'restructuredtext',
+}
 
-exclude_patterns = ["_build"]
+exclude_patterns = ["build"]
 
 
 
@@ -64,7 +69,9 @@ exclude_patterns = ["_build"]
 
 html_theme = 'sphinx_book_theme'
 html_static_path = ['_static']
-
+html_css_files = [
+    'custom.css',  # Add a custom CSS file
+]
 html_theme_options = {
     "repository_url": "https://github.com/mihdicaballero/mento",
     "repository_branch": "main",

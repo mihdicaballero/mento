@@ -7,3 +7,4 @@ ipykernel
 tabulate
 python-docx
 matplotlib
+openpyxl

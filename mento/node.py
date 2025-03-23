@@ -1,5 +1,6 @@
 from typing import Union, Optional, List
 import pandas as pd
+from dataclasses import field
 
 from mento.beam import RectangularBeam
 from mento.material import SteelBar, Concrete_ACI_318_19, Concrete_EN_1992_2004
@@ -8,7 +9,14 @@ from mento.forces import Forces
 from mento.units import ksi, psi, kip, inch, ft, MPa, cm, mm, kN
 
 class Node:
+    _id: int
+    _last_id: int = 0  # Class variable to keep track of last assigned ID
+    
     def __init__(self, section: Section, forces: Union[Forces, List[Forces]]) -> None:
+        # Initialize the private ID automatically
+        Node._last_id += 1  # Increment the class variable for the next ID
+        self._id = Node._last_id  # Assign the next available ID 
+
         if not isinstance(section, Section):
             raise TypeError("section must be an instance of Section")
         
@@ -63,11 +71,26 @@ class Node:
 
     def flexure_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
         return self.section.flexure_results_detailed_doc(force)
+    
+    def __repr__(self) -> str:
+        # Get the section label (assuming Section has a `_id` attribute)
+        section_label = f"Section label: {self.section.label}"
+        
+        # Get the list of forces applied
+        forces_list = [str(force) for force in self.forces]  # Assuming Forces has a `__repr__` or `__str__` method
+        forces_str = "\n  - " + "\n  - ".join(forces_list) if forces_list else "No forces applied"
+        
+        # Combine section label and forces into a single string
+        return f"Node ID: {self.id} - {section_label}\nForces Applied:{forces_str}"
 
     # Beam results for Jupyter Notebook
     @property
     def results(self) -> None:
         return self.section.results
+    @property
+    def id(self) -> int:
+        """Read-only property to access the private _id."""
+        return self._id
 
 ##########################################################################
 # DEBUG ZONE
@@ -93,7 +116,7 @@ def flexure_design_test() -> None:
     flexure_results = node_1.design_flexure()
     node_1.flexure_results_detailed()
     # node_1.flexure_results_detailed_doc()
-    print(flexure_results)
+    print(node_1)
 
 def shear_ACI_imperial() -> None:
     concrete = Concrete_ACI_318_19(name="C4", f_c=4000*psi)  
@@ -142,7 +165,7 @@ def shear_ACI_metric() -> None:
     node = Node(section=beam, forces=forces)
     results = node.check_shear()
     # results = beam.design_shear(forces)
-    print(results)
+    print(node)
     # print(beam.shear_design_results)
     # beam.shear_results_detailed()
     # print(beam.shear_design_results)
@@ -169,5 +192,5 @@ def shear_EN_1992() -> None:
 if __name__ == "__main__":
     # flexure_design_test()
     # shear_ACI_imperial()
-    # shear_ACI_metric()
-    shear_EN_1992()
+    shear_ACI_metric()
+    # shear_EN_1992()

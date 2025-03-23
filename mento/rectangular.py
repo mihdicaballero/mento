@@ -11,9 +11,12 @@ from mento.results import CUSTOM_COLORS
     
 @dataclass
 class RectangularSection(Section):
-    def __init__(self, concrete: Concrete, steel_bar: SteelBar, width: PlainQuantity, height: PlainQuantity,
-                 settings: Optional[Dict[str, Any]] = None,) -> None:
-        super().__init__(concrete, steel_bar, settings)
+    
+    label: Optional[str] = None
+
+    def __init__(self, label: Optional[str], concrete: Concrete, steel_bar: SteelBar, width: PlainQuantity, height: PlainQuantity,
+                 settings: Optional[Dict[str, Any]] = None) -> None:
+        super().__init__(label, concrete, steel_bar, settings)
 
         if settings:
             self.settings.update(settings)  # Update with any provided settings
@@ -24,7 +27,7 @@ class RectangularSection(Section):
         self._I_y = self._width*self._height**3/12
         self._I_z = self._height*self._width**3/12
 
-        self._ax: plt.Axes = None
+        self._ax: Optional[plt.Axes] = None
 
 
     @property

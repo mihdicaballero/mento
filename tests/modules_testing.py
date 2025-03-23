@@ -91,10 +91,30 @@ def shear_EN_1992() -> None:
     # print(results)
     beam.plot()
 
+
+def flexure_ACI_318_19() -> None:
+    concrete = Concrete_ACI_318_19(name="C4", f_c=4000*psi)  
+    steelBar = SteelBar(name="ADN 420", f_y=60*ksi)  
+    custom_settings = {'clear_cover': 1.5*inch} 
+    section = RectangularBeam(
+        label="V-10x16",
+        concrete=concrete,
+        steel_bar=steelBar,
+        width=10*inch,  
+        height=16*inch,
+        settings=custom_settings  
+    )
+    section.set_longitudinal_rebar_bot(n1=2,d_b1=1.128*inch, n2=1, d_b2=1.128*inch,  n3=2,d_b3=1*inch, n4=1, d_b4=1*inch)
+    section.set_longitudinal_rebar_top(n1=2,d_b1=1.128*inch, n2=1, d_b2=1.128*inch,  n3=2,d_b3=1*inch, n4=1, d_b4=1*inch)
+
+    f = Forces(label='Test_01', M_y=400*kip*ft)
+    node_1 = Node(section=section, forces=f)
+    node_1.check_flexure()
 if __name__ == "__main__":
     # units()
     # settings()
     # section()
     # rectangular()
     # material()
-    shear_EN_1992()
+    # shear_EN_1992()
+    flexure_ACI_318_19()
