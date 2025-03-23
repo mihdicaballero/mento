@@ -14,7 +14,7 @@ def beam_example_imperial() -> RectangularBeam:
     steelBar = SteelBar(name="ADN 420", f_y=60*ksi)  
     custom_settings = {'clear_cover': 1.5*inch} 
     section = RectangularBeam(
-        label="V-10x16",
+        label="V101",
         concrete=concrete,
         steel_bar=steelBar,
         width=10*inch,  

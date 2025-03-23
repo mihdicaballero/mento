@@ -24,14 +24,14 @@ from mento.codes.ACI_318_19_beam import _check_shear_ACI_318_19, _design_shear_A
 
 @dataclass
 class RectangularBeam(RectangularSection):
-    label: Optional[str] = None
+    
 
     def __init__(self, label: Optional[str], concrete: Concrete, steel_bar: SteelBar, 
                  width: PlainQuantity, height: PlainQuantity, settings: Optional[Dict[str, Any]] = None):   
-        super().__init__(concrete, steel_bar, width, height, settings)
+        super().__init__(label, concrete, steel_bar, width, height, settings)
         if settings:
             self.settings.update(settings)  # Update with any provided settings
-        self.label = label
+        
         self.layers_spacing = self.settings.get_setting('layers_spacing')
         
         # Centralized attribute initialization
@@ -184,6 +184,7 @@ class RectangularBeam(RectangularSection):
             self._f_ywd: PlainQuantity = 0*MPa
             self._f_yd: PlainQuantity = 0*MPa
             self._f_cd: PlainQuantity = 0*MPa
+            self._A_s_tension: PlainQuantity = 0*cm**2
             self._A_p = 0*cm**2 # No prestressed for now
             self._sigma_cp: PlainQuantity = 0*MPa
             self._theta: float = 0

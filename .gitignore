@@ -73,7 +73,7 @@ dist/
 # Documentation files
 *.pdf
 *.docx
-*.ipynb
+*.xlsx
 
 # Editor and OS swap/backup files
 *~

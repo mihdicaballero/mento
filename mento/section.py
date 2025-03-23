@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Optional, TYPE_CHECKING, Dict, Any, List
+from typing import Optional, TYPE_CHECKING, Dict, Any, List, Optional
 
 from mento.settings import Settings
 from mento.material import Concrete, SteelBar
@@ -15,13 +15,15 @@ class Section:
     settings: Settings = field(default_factory=Settings)
     _last_id: int = field(default=0, init=False, repr=False)  # Class variable to keep track of last assigned ID
     node: Optional["Node"] = None  # Use forward declaration with Optional["Node"]
+    label: Optional[str] = None
 
-    def __init__(self, concrete: Concrete, steel_bar: SteelBar, settings: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(self, label: Optional[str], concrete: Concrete, steel_bar: SteelBar, settings: Optional[Dict[str, Any]] = None) -> None:
         # Initialize the private ID automatically
         Section._last_id += 1  # Increment the class variable for the next ID
         self._id = Section._last_id  # Assign the next available ID
         self.concrete = concrete
         self.steel_bar = steel_bar
+        self.label = label
         
         # Initialize with default settings
         self.settings = Settings(concrete) 

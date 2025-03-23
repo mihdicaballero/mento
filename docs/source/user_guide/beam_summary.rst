@@ -13,7 +13,7 @@ The first step is to define the concrete and steel materials that will be used i
     conc = Concrete_ACI_318_19(name="C25", f_c=25*MPa)
     steel = SteelBar(name="ADN 420", f_y=420*MPa)
 
-These materials are required for all beam designs.
+These materials are required for all beam designs. For now, ACI 318-19 and CIRSOC 201-25 are only supported.
 
 Loading Input Data from Excel
 -----------------------------
@@ -91,7 +91,7 @@ To export the results of the capacity check to an Excel file, use the following 
 Viewing Detailed Results
 ------------------------
 
-For a detailed breakdown of the results, you can use the `shear_results` method. Only available for ACI 318-10 for now.
+For a detailed breakdown of the results, you can use the `shear_results` method. Only available for ACI 318-19 for now.
 Thess methods provide a DataFrame with detailed results for each beam:
 
 - **Without Capacity Check**:

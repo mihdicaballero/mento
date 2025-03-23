@@ -32,7 +32,7 @@ def _initialize_variables_EN_1992_2004(self: 'RectangularBeam') -> None:
 # SHEAR CHECK AND DESIGN
 ##########################################################
 
-def _initialize_shear_variables_EN_1992_2004(self: 'RectangularBeam', force: Forces) -> Tuple[PlainQuantity, PlainQuantity]:
+def _initialize_shear_variables_EN_1992_2004(self: 'RectangularBeam', force: Forces) -> None:
     """
     Initialize variables for EN 1992-2004 design code.
     """
@@ -45,6 +45,10 @@ def _initialize_shear_variables_EN_1992_2004(self: 'RectangularBeam', force: For
         # Minimum shear reinforcement calculation
         rho_min = 0.08*math.sqrt(self._f_ck.to('MPa').magnitude) / (self._f_ywk)*MPa
         self._A_v_min = rho_min * self.width * math.sin(self._alpha)
+
+        # Consider bottom or top tension reinforcement
+        self._A_s_tension = self._A_s_bot if force._M_y >= 0*kNm else self._A_s_top
+
         # Compression stress, positive
         if force._M_y >= 0*kNm:
             self._rho_l_bot = min((self._A_s_tension + self._A_p) / (self.width * self._d_shear), 0.02*dimensionless)
@@ -57,8 +61,6 @@ def _initialize_shear_variables_EN_1992_2004(self: 'RectangularBeam', force: For
         # Positive of compression
         self._sigma_cp = min(self._N_Ed / self.A_x, 0.2*self._f_cd)
 
-        # Consider bottom or top tension reinforcement
-        self._A_s_tension = self._A_s_bot if force._M_y >= 0*kNm else self._A_s_top
 
 def _shear_without_rebar_EN_1992_2004(self: 'RectangularBeam') -> PlainQuantity:
     self._stirrup_d_b = 0*mm
@@ -132,7 +134,7 @@ def _calculate_required_shear_reinforcement_EN_1992_2004(self: 'RectangularBeam'
 def _check_shear_EN_1992_2004(self: 'RectangularBeam', force:Forces) -> DataFrame:
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         # Initialize all the code related variables
-        _initialize_variables_EN_1992_2004(self, force)
+        _initialize_variables_EN_1992_2004(self)
         _initialize_shear_variables_EN_1992_2004(self, force)            
         
         if self._stirrup_n == 0:
@@ -195,7 +197,7 @@ def _check_shear_EN_1992_2004(self: 'RectangularBeam', force:Forces) -> DataFram
 def _design_shear_EN_1992_2004(self: 'RectangularBeam', force:Forces) -> None:
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         # Initialize all the code related variables
-        _initialize_variables_EN_1992_2004(self, force)
+        _initialize_variables_EN_1992_2004(self)
         _initialize_shear_variables_EN_1992_2004(self, force) 
         # Calculate maximum shear strength
         _calculate_max_shear_strength_EN_1992_2004(self)
@@ -210,29 +212,28 @@ def _design_shear_EN_1992_2004(self: 'RectangularBeam', force:Forces) -> None:
 # FLEXURE CHECK AND DESIGN
 ##########################################################
 
-def _min_max_flexural_reinforcement_ratio_EN_1992_2004(self: 'RectangularBeam') -> Tuple[PlainQuantity, PlainQuantity]:
+def _min_max_flexural_reinforcement_ratio_EN_1992_2004(self: 'RectangularBeam') -> Tuple[float, float]:
     """
     Initialize variables for EN 1992-2004 design code.
     """
-    if isinstance(self.concrete, Concrete_EN_1992_2004):
-        # Calculate the minimum tensile reinforcement ratio
-        rho_min = max(0.26 * self._f_ctm / self._f_yk, 0.0013)
-        # Set the maximum tensile reinforcement ratio
-        rho_max = 0.04
+    # Calculate the minimum tensile reinforcement ratio
+    rho_min = max(0.26 * self._f_ctm.to('MPa').magnitude / self._f_yk.to('MPa').magnitude, 0.0013)
+    # Set the maximum tensile reinforcement ratio
+    rho_max = 0.04
 
-        # # For positive moments (tension in the bottom), set minimum reinforcement accordingly.
-        # if force._M_y > 0 * kNm:
-        #     rho_min_top = 0 * dimensionless
-        #     rho_min_bot = rho_min
-        # else:
-        #     rho_min_top = rho_min
-        #     rho_min_bot = 0 * dimensionless
+    # # For positive moments (tension in the bottom), set minimum reinforcement accordingly.
+    # if force._M_y > 0 * kNm:
+    #     rho_min_top = 0 * dimensionless
+    #     rho_min_bot = rho_min
+    # else:
+    #     rho_min_top = rho_min
+    #     rho_min_bot = 0 * dimensionless
 
-        # Calculate minimum and maximum bottom reinforcement areas
-        # self._A_s_min_bot = rho_min_bot * self._d_bot * self._width
-        # self._A_s_max_bot = rho_max * self._d_bot * self._width
+    # Calculate minimum and maximum bottom reinforcement areas
+    # self._A_s_min_bot = rho_min_bot * self._d_bot * self._width
+    # self._A_s_max_bot = rho_max * self._d_bot * self._width
 
-        return rho_min, rho_max
+    return rho_min, rho_max
 
 def _calculate_flexural_reinforcement_EN_1992_2004(self: 'RectangularBeam', M_Ed:PlainQuantity, d: PlainQuantity, d_prima: float) -> None:
     """

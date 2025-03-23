@@ -4,8 +4,9 @@ import pandas as pd
 from devtools import debug
 import copy
 
-from mento.material import Concrete, SteelBar, Concrete_ACI_318_19
+from mento.material import Concrete, SteelBar, Concrete_ACI_318_19, Concrete_EN_1992_2004
 from mento.forces import Forces
+from mento.section import Section
 from mento.beam import RectangularBeam
 from mento import mm, cm, kN, MPa, m, inch, ft, kNm
 from mento.node import Node
@@ -145,9 +146,13 @@ class BeamSummary:
         DataFrame
             A DataFrame with the results of the check.
         """
+
+        if isinstance(self.concrete, Concrete_EN_1992_2004):
+            raise ValueError(f"Summary method not implemented for concrete type: {type(self.concrete).__name__}")  # noqa: E501
+
         results_list = []
         for node in self.nodes:
-            beam: RectangularBeam = node.section
+            beam: RectangularBeam = node.section  # type: ignore
             original_forces = [copy.deepcopy(force) for force in node.get_forces_list()]
 
             rebar_v = '-' if beam._stirrup_n == 0 else f"{int(beam._stirrup_n)}eØ{int(beam._stirrup_d_b.to('mm').magnitude)}/{beam._stirrup_s_l.to('cm').magnitude}"  # noqa: E501
@@ -275,6 +280,9 @@ class BeamSummary:
         :return: A DataFrame of detailed results for the specific beam, 
                 or a DataFrame of all beams if no index is provided.
         """
+        if isinstance(self.concrete, Concrete_EN_1992_2004):
+            raise ValueError(f"Summary method not implemented for concrete type: {type(self.concrete).__name__}")  # noqa: E501
+        
         def process_beam(node: Node) -> DataFrame:
             """
             Process a single beam to calculate shear results.
@@ -322,7 +330,8 @@ class BeamSummary:
         return pd.concat(all_shear_results, ignore_index=True)
 
 def main() -> None:
-    conc = Concrete_ACI_318_19(name="C25", f_c=25*MPa)
+    # conc = Concrete_ACI_318_19(name="C25", f_c=25*MPa)
+    conc = Concrete_EN_1992_2004(name="C25", f_ck=25*MPa)
     steel = SteelBar(name="ADN 420", f_y=420*MPa)
     # input_df = pd.read_excel(r'.\tests\examples\Mento-Input.xlsx', sheet_name='Beams', usecols='B:R', skiprows=4)
     data = {'Label': ['', 'V101', 'V102', 'V103', 'V104'],
@@ -350,11 +359,11 @@ def main() -> None:
     # print(capacity)
     # check = beam_summary.check(capacity_check=False)
     # print(check)
-    # beam_summary.check().to_excel('hola.xlsx', index=False)
-    # results = beam_summary.shear_results(capacity_check=False)
-    results = beam_summary.shear_results(capacity_check=True)
-    print(results)
-    beam_summary.nodes[2].shear_results_detailed()
+    # # beam_summary.check().to_excel('hola.xlsx', index=False)
+    results = beam_summary.shear_results(capacity_check=False)
+    # results = beam_summary.shear_results(capacity_check=True)
+    # print(results)
+    # beam_summary.nodes[2].shear_results_detailed()
 
 if __name__ == "__main__":
     main()
