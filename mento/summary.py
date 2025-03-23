@@ -1,6 +1,8 @@
 from typing import List, Dict, Optional
 from pandas import DataFrame
 import pandas as pd
+from devtools import debug
+import copy
 
 from mento.material import Concrete, SteelBar, Concrete_ACI_318_19
 from mento.forces import Forces
@@ -17,10 +19,10 @@ class BeamSummary:
         self.beam_list: DataFrame = beam_list
         self.units_row: List[str] = []
         self.data: DataFrame = None
-        self.beams: List[RectangularBeam] = []
+        self.nodes: List[Node] = []
         self._beam_summary: List = []
         self.check_and_process_input()
-        self.convert_to_beams()
+        self.convert_to_nodes()
 
     def check_and_process_input(self) -> None:
         # Separate the header, units, and data
@@ -78,8 +80,8 @@ class BeamSummary:
         else:
             raise ValueError(f"Unit '{unit_str}' is not recognized.")
         
-    def convert_to_beams(self) -> None:
-        self.beams = []
+    def convert_to_nodes(self) -> None:
+        self.nodes = []
 
         for index, row in self.data.iterrows():
             # Extract forces for each row
@@ -100,8 +102,6 @@ class BeamSummary:
                                               steel_bar=self.steel_bar,
                                               width=width,
                                               height=height)        
-            # Create a Node for each pair of beam and forces
-            Node(section=beam, forces=forces)
             # Set transverse rebar (stirrups) for the beam
             n_stirrups = row['ns']  # Number of stirrups
             d_b = row['dbs']  # Diameter of rebar (mm)
@@ -124,9 +124,11 @@ class BeamSummary:
                     beam.set_longitudinal_rebar_bot(n1, d_b1, n2, d_b2, n3, d_b3, n4, d_b4)
                 else:
                     beam.set_longitudinal_rebar_top(n1, d_b1, n2, d_b2, n3, d_b3, n4, d_b4)
-            
+            # Create a Node for each pair of beam and forces
+            node = Node(section=beam, forces=forces)
+
             # Store the section and its corresponding forces
-            self.beams.append(beam)
+            self.nodes.append(node)
     
     def check(self, capacity_check: bool = False) -> DataFrame:
         """
@@ -144,14 +146,9 @@ class BeamSummary:
             A DataFrame with the results of the check.
         """
         results_list = []
-
-        for beam in self.beams:
-            # Save the original forces
-            if beam.node is None:
-                raise ValueError(f"Node is not set for the section {beam.label}")
-            assert beam.node is not None  # Inform MyPy that node is not None
-            node = beam.node # get the node associated with the beam
-            original_forces = node.get_forces_list()
+        for node in self.nodes:
+            beam: RectangularBeam = node.section
+            original_forces = [copy.deepcopy(force) for force in node.get_forces_list()]
 
             rebar_v = '-' if beam._stirrup_n == 0 else f"{int(beam._stirrup_n)}eØ{int(beam._stirrup_d_b.to('mm').magnitude)}/{beam._stirrup_s_l.to('cm').magnitude}"  # noqa: E501
             rebar_f_top = '-' if beam._n1_t == 0 else (
@@ -164,13 +161,16 @@ class BeamSummary:
                 (f" ++ {beam._format_longitudinal_rebar_string(beam._n3_b, beam._d_b3_b, beam._n4_b, beam._d_b4_b)}"
                 if beam._n3_b != 0 else "")
             )
-
+            
             if capacity_check:
-                # Reset forces to zero for capacity check
+                # Remove all forces assignments
                 node.clear_forces()
+                # Create empty force
+                empty_force = Forces()
+                node.add_forces(empty_force)
                 # Perform the shear check
-                shear_results = beam.check_shear()
-                flexure_results = beam.check_flexure()
+                shear_results = node.check_shear()
+                flexure_results = node.check_flexure()
                 # Design results
                 #TODO: Change output if its another Concrete Class
                 results_dict = {
@@ -180,8 +180,8 @@ class BeamSummary:
                     'As,top': rebar_f_top,  
                     'As,bot': rebar_f_bot,
                     'Av': rebar_v, 
-                    'As,top,real': round(flexure_results['As,top'][0].magnitude,2), 
-                    'As,bot,real': round(flexure_results['As,bot'][0].magnitude,2),
+                    'As,top,real': round(beam._A_s_top.to('cm**2').magnitude,2), 
+                    'As,bot,real': round(beam._A_s_bot.to('cm**2').magnitude,2),
                     'Av,real': round(shear_results['Av'][0].magnitude,2), 
                     'ØMn,top': round(beam._phi_M_n_top.to('kN*m').magnitude,2),
                     'ØMn,bot': round(beam._phi_M_n_bot.to('kN*m').magnitude,2),
@@ -202,10 +202,13 @@ class BeamSummary:
                     'ØMn,bot': 'kNm',
                     'ØVn': 'kN'
                 }])
+                # Restore the original forces after capacity check
+                node.clear_forces()
+                node.add_forces(original_forces)
             else:
                 # Perform the shear check
-                shear_results = beam.check_shear()
-                flexure_results = beam.check_flexure()
+                shear_results = node.check_shear()
+                flexure_results = node.check_flexure()
                 # Design results
                 results_dict = {
                     'Beam': beam.label,  # Minimum shear reinforcement area
@@ -250,8 +253,7 @@ class BeamSummary:
                     'DCRb,bot': '',
                     'DCRv': '',
                 }])
-            # Restore the original forces after capacity check
-            node.forces = original_forces
+
             # Add the results to the list
             results_list.append(results_dict)
 
@@ -273,45 +275,46 @@ class BeamSummary:
         :return: A DataFrame of detailed results for the specific beam, 
                 or a DataFrame of all beams if no index is provided.
         """
-        def process_beam(beam: RectangularBeam) -> DataFrame:
+        def process_beam(node: Node) -> DataFrame:
             """
             Process a single beam to calculate shear results.
 
             :param beam: A RectangularBeam object.
             :return: A DataFrame with shear results for the beam.
             """
-            if beam.node is None:
-                raise ValueError(f"Node is not set for the section {beam.label}")
-            assert beam.node is not None  # Inform MyPy that node is not None
-            node = beam.node # get the node associated with the beam
-            original_forces = node.get_forces_list()
+            original_forces = [copy.deepcopy(force) for force in node.get_forces_list()]
 
             # Perform capacity check by resetting forces to zero
             if capacity_check:
-                beam.node.reset_forces()
+                node.clear_forces()
+                # Create empty force
+                empty_force = Forces()
+                node.add_forces(empty_force)
 
             # Run shear check
-            results = beam.check_shear()
+            results = node.check_shear()
 
             # Restore original forces after capacity check
             if capacity_check:
-                beam.node.forces = original_forces
+                # Restore the original forces after capacity check
+                node.clear_forces()
+                node.add_forces(original_forces)
 
             return results
 
         # If index is provided, return results for the specific beam
         if index is not None:
-            if index - 1 >= len(self.beams):
+            if index - 1 >= len(self.nodes):
                 raise IndexError(f"Index {index} is out of range for the beam list.")
 
             # Access the specific beam item
-            item = self.beams[max(index - 1, 0)]
+            item = self.nodes[max(index - 1, 0)]
             return process_beam(item)  # Return results for the specific beam
 
         # If no index is provided, calculate results for all beams
         all_shear_results = []
 
-        for item in self.beams:
+        for item in self.nodes:
             results = process_beam(item)
             all_shear_results.append(results)
 
@@ -345,14 +348,12 @@ def main() -> None:
     # print(beam_summary.data)
     # capacity = beam_summary.check(capacity_check=True)
     # print(capacity)
-    check = beam_summary.check(capacity_check=False)
-    print(check)
-    check = beam_summary.check(capacity_check=True)
-    print(check)
+    # check = beam_summary.check(capacity_check=False)
+    # print(check)
     # beam_summary.check().to_excel('hola.xlsx', index=False)
-    # results = beam_summary.shear_results(capacity_check=False)
+    results = beam_summary.shear_results(capacity_check=False)
     # print(results)
-    # beam_summary.beams[0].shear_results_detailed()
+    beam_summary.nodes[0].shear_results_detailed()
 
 if __name__ == "__main__":
     main()
