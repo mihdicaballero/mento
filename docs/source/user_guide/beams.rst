@@ -51,7 +51,7 @@ You can define the longitudinal and transverse reinforcement for the beam using 
 .. note::
     Consider that:
 
-    - If no transverse reinforcement is defined, it is assumed that plain concrete will resist shear forces. 
+    - If no transverse reinforcement is defined, it is assumed that plain concrete will resist shear forces.
     - If no longitudinal reinforcement is defined, a minimum of 2Ø8 will be considered for metric system or 2#3 for imperial system of units. Mento won't check a beam without longitudinal rebar.
     - Skin rebar is not considered for the check or design of the beam.
 
@@ -59,7 +59,7 @@ You can define the longitudinal and transverse reinforcement for the beam using 
 This is set indicating amount of stirrups, the diameter of the stirrups and the spacing of the legs along the beam.
 
 **Longitudinal reinforcement**
-This is set indicating rebar for two layers, differentiating between border bars and inner bars. 
+This is set indicating rebar for two layers, differentiating between border bars and inner bars.
 Each group of bars, for each layer has a unique number id. Bars can be defined both for top and bottom of the beam,
 which will be considered for negative and positive bending moments respectively.
 
@@ -86,20 +86,20 @@ For example, if a positive moment is so large that the section must be reinforce
 *******************************
 
 Forces are applied to the beam through a `Node` object, which joins the `Beam` and `Forces` object together.
-See the `Node` section for more information on how to create a `Node` and assign forces to the section. 
+See the `Node` section for more information on how to create a `Node` and assign forces to the section.
 
 
 4. Performing Checks
 ********************
 
 Once the beam is defined and forces are assigned in a `Node` object, you can perform checks for shear and flexure.
-See the `Node` section for more information on how to create a Node and check the section. 
+See the `Node` section for more information on how to create a Node and check the section.
 
 5. Design the section
 ********************
 
 If you don't assign transverse or longitudinal rebar, you can ask *Mento* to design for shear and flexure.
-See the `Node` section for more information on how to create a Node and design the section. 
+See the `Node` section for more information on how to create a Node and design the section.
 
 6. Jupyter Notebook Results
 ******************
@@ -181,7 +181,7 @@ The first line provides the beam's geometry and material properties:
 7. Detailed Results
 *******************
 
-See the `Node` section for more information on how to display and save detailed results of the analysis. 
+See the `Node` section for more information on how to display and save detailed results of the analysis.
 
 8. Plot section
 *******************
@@ -195,4 +195,3 @@ You can use the method `plot()` to visualize the beam's cross-section and reinfo
 
 The `plot()` method generates a graphical representation of the beam, including its geometry and reinforcement details.
 This can be useful for verifying the input data and for presentation purposes.
-

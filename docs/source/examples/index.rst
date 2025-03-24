@@ -12,5 +12,3 @@ In this folder, you will find detailed examples of how to use mento.
 
    rectangular_beam_check
    beam_summary
-
-

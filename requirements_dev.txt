@@ -2,6 +2,7 @@ devtools
 ruff
 pint
 pytest
+pytest-cov
 numpy
 pandas
 IPython
@@ -15,6 +16,5 @@ nbsphinx
 sphinx_book_theme
 sphinx_design
 sphinx-copybutton
-build
-twine
-myst_nb
+pre-commit
+black

@@ -60,7 +60,7 @@ Usage Scenarios
 
 .. note::
     The default values are used to calculate effective heights when designing a concrete section,
-    before knowing which diameters bars will be final. Also for designing user-tailored rebar layouts in beams.   
+    before knowing which diameters bars will be final. Also for designing user-tailored rebar layouts in beams.
 
 
 2. **Customizing Settings**:

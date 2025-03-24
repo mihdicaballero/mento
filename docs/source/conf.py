@@ -9,19 +9,19 @@ from importlib.metadata import version
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'mento'
-author = 'Mehdí Caballero & Juan Pablo Romaris'
+project = "mento"
+author = "Mehdí Caballero & Juan Pablo Romaris"
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
 # built documents.
 
 try:  # pragma: no cover
-    version = version(project) #type: ignore
+    version = version(project)  # type: ignore
 except Exception:  # pragma: no cover
     # we seem to have a local copy not installed without setuptools
     # so the reported version will be unknown
-    version = "unknown" #type: ignore
+    version = "unknown"  # type: ignore
 
 release = version
 this_year = datetime.date.today().year
@@ -54,29 +54,28 @@ nbsphinx_output_prompt = "%.0s"
 
 master_doc = "index"
 
-templates_path = ['_templates']
+templates_path = ["_templates"]
 
 source_suffix = {
-    '.rst': 'restructuredtext',
+    ".rst": "restructuredtext",
 }
 
 exclude_patterns = ["build"]
 
 
-
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = 'sphinx_book_theme'
-html_static_path = ['_static']
+html_theme = "sphinx_book_theme"
+html_static_path = ["_static"]
 html_css_files = [
-    'custom.css',  # Add a custom CSS file
+    "custom.css",  # Add a custom CSS file
 ]
 html_theme_options = {
     "repository_url": "https://github.com/mihdicaballero/mento",
     "repository_branch": "main",
     "use_repository_button": True,
-    "use_issues_button": True
+    "use_issues_button": True,
 }
 
 # Output file base name for HTML help builder.

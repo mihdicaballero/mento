@@ -50,8 +50,8 @@ as beams or columns. It adds specific geometric properties and methods relevant 
 Usage Notes
 -----------
 
-- **Settings Initialization**: 
-  The `Section` class uses default settings unless explicitly updated. Ensure that any custom settings are 
+- **Settings Initialization**:
+  The `Section` class uses default settings unless explicitly updated. Ensure that any custom settings are
   provided as a dictionary during initialization or by calling `update_settings`.
 - **Section and RectangularSection Usage**:
   Since these are base classes, you won't be using them to create objects per se but to access its atrributes

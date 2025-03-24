@@ -1,8 +1,8 @@
 Forces
 ============
 
-The `Forces` class in the `mento` package allows users to define and manipulate the primary forces acting on a structural element, such as axial force, 
-shear force, and bending moment. This class is designed for flexibility in defining forces, with the ability to adjust and retrieve 
+The `Forces` class in the `mento` package allows users to define and manipulate the primary forces acting on a structural element, such as axial force,
+shear force, and bending moment. This class is designed for flexibility in defining forces, with the ability to adjust and retrieve
 them in different stages of a structural analysis or design workflow.
 
 Key Concepts
@@ -13,7 +13,7 @@ Key Concepts
 - **Bending Moment (`M_y`)**: The moment caused by forces that induce bending about the y-y axis.
 - **Unit System**: You can define the unit system to display the forces for a Force object, *metric* or *imperial*.
 
-These are the main forces considered to  analyze a beam along it's main axis. 
+These are the main forces considered to  analyze a beam along it's main axis.
 For Columns analysis in future releases, the Forces object will have to have shear and bending moment in both axis.
 
 These forces are defined using compatible units from the `Pint` library, like `kN` or `kip` for forces and `kN*m` or `ft*kip` for moments.
@@ -27,7 +27,7 @@ Below is a step-by-step guide on how to use the `Forces` class in your structura
 **********
 
 To define the forces acting on a structural element, instantiate a `Forces` object. You can provide initial values for axial force (`N_x`), shear force (`V_z`), and bending moment (`M_y`). If no values are provided, the forces default to zero.
-The default unit_system for units display is *metric*. 
+The default unit_system for units display is *metric*.
 
 .. code-block:: python
 
@@ -40,7 +40,7 @@ The default unit_system for units display is *metric*.
 2. Accessing Forces
 **********
 
-Once a `Forces` object is created, you can access individual forces using the respective properties `N_x`, `V_z`, and `M_y`. These properties will return the forces in metric system by default, making it easy to inspect the current state of forces in your structure. 
+Once a `Forces` object is created, you can access individual forces using the respective properties `N_x`, `V_z`, and `M_y`. These properties will return the forces in metric system by default, making it easy to inspect the current state of forces in your structure.
 
 .. code-block:: python
 

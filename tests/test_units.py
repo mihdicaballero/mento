@@ -1,10 +1,11 @@
 import pytest
 from pint import UnitRegistry
 
+
 # Initialize UnitRegistry fixture
 @pytest.fixture
 def unit_registry() -> UnitRegistry:
-    return UnitRegistry(system='mks')
+    return UnitRegistry(system="mks")
 
 
 def test_metric_units(unit_registry: UnitRegistry) -> None:
@@ -25,7 +26,7 @@ def test_imperial_units(unit_registry: UnitRegistry) -> None:
 def test_derived_units(unit_registry: UnitRegistry) -> None:
     ureg = unit_registry
     N = 3 * ureg.kilonewton
-    A = 3 * ureg.meter ** 2
+    A = 3 * ureg.meter**2
     stress = (N / A).to(ureg.pascal)
     assert stress.magnitude == 1000
 
@@ -34,14 +35,15 @@ def test_conversion_and_formatting(unit_registry: UnitRegistry) -> None:
     ureg = unit_registry
     a = 3 * ureg.meter
     N = 3 * ureg.kilonewton
-    assert N.to('kip').magnitude == pytest.approx(0.674, 0.001)
-    assert '{:~P}'.format(a) == '3 m'
+    assert N.to("kip").magnitude == pytest.approx(0.674, 0.001)
+    assert "{:~P}".format(a) == "3 m"
 
 
 def test_frequency_calculation(unit_registry: UnitRegistry) -> None:
     ureg = unit_registry
     wavelength = 1550 * ureg.nanometer
-    frequency = (ureg.speed_of_light / wavelength).to('Hz')
+    frequency = (ureg.speed_of_light / wavelength).to("Hz")
     assert frequency.magnitude == pytest.approx(1.934e14, 1e12)
+
 
 # Run the tests using pytest framework

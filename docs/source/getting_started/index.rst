@@ -22,4 +22,3 @@ You can install Mento via `pip`, the Python package manager. Simply run the foll
    pip install mento
 
 This will install the latest stable version of the Mento package, along with any necessary dependencies.
-

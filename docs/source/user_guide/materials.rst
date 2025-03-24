@@ -37,7 +37,7 @@ Concrete properties depend in the design code selected. For example:
   specific to ACI.
 
 .. note::
-   The metric system of units or imperial system of units will be automatically set based on the unit for the concrete strength. 
+   The metric system of units or imperial system of units will be automatically set based on the unit for the concrete strength.
 
 Example: Creating ACI Concrete
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -88,7 +88,7 @@ returns a dictionary of key properties such as:
 - **Concrete**: Compressive strength, tensile strength, modulus of elasticity.
 - **Steel**: Yield strength, elastic modulus, and density.
 
-Simply call this method to access material attributes. If you `print()` 
+Simply call this method to access material attributes. If you `print()`
 a material you will get a string output with all it's properties.
 
 .. note::

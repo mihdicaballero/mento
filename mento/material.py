@@ -9,13 +9,15 @@ from mento import ureg
 if TYPE_CHECKING:
     from pint.facets.plain import PlainQuantity
 
+
 @dataclass
 class Material:
     name: str  # Name will be provided by subclasses or instances
 
+
 @dataclass
 class Concrete(Material):
-    f_c: PlainQuantity = field(default=25*MPa)
+    f_c: PlainQuantity = field(default=25 * MPa)
     design_code: str = field(default="ACI 318-19")
     unit_system: str = field(init=False)
 
@@ -23,20 +25,18 @@ class Concrete(Material):
         # Detect the unit system based on f_c
         if self.f_c.units == MPa or self.f_c.units == Pa:
             self.unit_system = "metric"
-            self.density: PlainQuantity = 2500*kg/m**3
+            self.density: PlainQuantity = 2500 * kg / m**3
         elif self.f_c.units == psi or self.f_c.units == ksi:
             self.unit_system = "imperial"
-            self.density = 155*lb/ft**3
+            self.density = 155 * lb / ft**3
         else:
             raise ValueError("Unsupported unit system for f_c. Please use MPa or ksi.")
 
     def get_properties(self) -> Dict[str, PlainQuantity]:
         # Return properties in the appropriate unit system
-        properties = {
-            'f_c': self.f_c,
-            'density': self.density
-        }
+        properties = {"f_c": self.f_c, "density": self.density}
         return properties
+
 
 @dataclass
 class Concrete_ACI_318_19(Concrete):
@@ -53,21 +53,31 @@ class Concrete_ACI_318_19(Concrete):
         self.design_code = "ACI 318-19"
         # Adjust calculations based on unit system
         if self.unit_system == "metric":
-            self._E_c = ((self.density / (kg / m**3)) ** 1.5) * 0.043 * math.sqrt(self.f_c / MPa) * MPa
+            self._E_c = (
+                ((self.density / (kg / m**3)) ** 1.5)
+                * 0.043
+                * math.sqrt(self.f_c / MPa)
+                * MPa
+            )
             self._f_r = 0.625 * math.sqrt(self.f_c / MPa) * MPa
         else:  # imperial
-            self._E_c = ((self.density / (lb / ft**3)) ** 1.5) * 33 * math.sqrt(self.f_c / psi) * psi
+            self._E_c = (
+                ((self.density / (lb / ft**3)) ** 1.5)
+                * 33
+                * math.sqrt(self.f_c / psi)
+                * psi
+            )
             self._f_r = 7.5 * math.sqrt(self.f_c / psi) * psi
         self._beta_1 = self.__beta_1()
 
     def get_properties(self) -> Dict[str, PlainQuantity]:
-        properties = super().get_properties()       
-        properties['E_c'] = self._E_c
-        properties['f_r'] = self._f_r
-        properties['beta_1'] = ureg.Quantity(self._beta_1, '')
-        properties['epsilon_c']=ureg.Quantity(self._epsilon_c, '')
+        properties = super().get_properties()
+        properties["E_c"] = self._E_c
+        properties["f_r"] = self._f_r
+        properties["beta_1"] = ureg.Quantity(self._beta_1, "")
+        properties["epsilon_c"] = ureg.Quantity(self._epsilon_c, "")
         return properties
-    
+
     def __beta_1(self) -> float:
         # Table 22.2.2.4.3—Values of β1 for equivalent rectangular concrete stress distribution
         # Page 399
@@ -80,7 +90,7 @@ class Concrete_ACI_318_19(Concrete):
         else:
             # Handle case where f_c / MPa < 17
             return 0.85  # or another appropriate value based on your requirements
-        
+
     @property
     def E_c(self) -> PlainQuantity:
         return self._E_c
@@ -88,11 +98,11 @@ class Concrete_ACI_318_19(Concrete):
     @property
     def f_r(self) -> PlainQuantity:
         return self._f_r
-    
+
     @property
     def beta_1(self) -> float:
         return self._beta_1
-    
+
     def __str__(self) -> str:
         """Customize the string representation for user-friendly display."""
         properties = self.get_properties()
@@ -106,9 +116,11 @@ class Concrete_ACI_318_19(Concrete):
             f"  epsilon_c: {properties['epsilon_c'].magnitude:.3f}"
         )
 
+
 @dataclass
 class Concrete_CIRSOC_201_25(Concrete_ACI_318_19):
     """Concrete class for a CIRSOC 201 design code with metric units."""
+
     def __post_init__(self) -> None:
         # Call the parent class's __post_init__ to inherit initializations
         super().__post_init__()
@@ -117,6 +129,7 @@ class Concrete_CIRSOC_201_25(Concrete_ACI_318_19):
         # Ensure the name is specific to this design code
         if not self.name:
             self.name = "Concrete CIRSOC 201-25"
+
 
 @dataclass
 class Concrete_EN_1992_2004(Concrete):
@@ -133,40 +146,42 @@ class Concrete_EN_1992_2004(Concrete):
         self.design_code = "EN 1992-2004"
         self._f_ck = self.f_c
         self._f_cm = self._f_ck + 8 * MPa
-        self._E_cm = 22000 * (self._f_cm / (10 * MPa)) ** 0.3 * MPa       
-        self._f_ctm = 0.3 * (self._f_ck / MPa) ** (2/3) * MPa
-        self._epsilon_cu3 = 0.0035 # Ultimate strain in concrete
+        self._E_cm = 22000 * (self._f_cm / (10 * MPa)) ** 0.3 * MPa
+        self._f_ctm = 0.3 * (self._f_ck / MPa) ** (2 / 3) * MPa
+        self._epsilon_cu3 = 0.0035  # Ultimate strain in concrete
 
     def alpha_cc(self) -> float:
         # Example implementation for alpha_cc, as per Eurocode EN 1992-1-1
         return 1.0  # Typically, this value is taken as 1.0 for normal weight concrete
-    
+
     def lambda_factor(self) -> float:
         """
         Calculate the effective compression zone depth factor (λ) as per EN 1992-1-1.
         """
-        if self._f_ck  <= 50*MPa:
+        if self._f_ck <= 50 * MPa:
             return 0.8
         else:
-            return 0.8 - (self._f_ck/MPa  - 50) / 400
+            return 0.8 - (self._f_ck / MPa - 50) / 400
 
     def eta_factor(self) -> float:
         """
         Calculate the effective compressive strength factor (η) as per EN 1992-1-1.
         """
-        if self._f_ck  <= 50*MPa:
+        if self._f_ck <= 50 * MPa:
             return 1.0
         else:
-            return 1.0 - (self._f_ck/MPa  - 50) / 200
+            return 1.0 - (self._f_ck / MPa - 50) / 200
 
     def get_properties(self) -> Dict[str, PlainQuantity]:
         properties = super().get_properties()
-        properties.update({
-            'E_cm': self._E_cm.to('MPa'),
-            'f_ck': self._f_ck.to('MPa'),
-            'f_cm': self._f_cm.to('MPa'),
-            'f_ctm': self._f_ctm.to('MPa'),
-        })
+        properties.update(
+            {
+                "E_cm": self._E_cm.to("MPa"),
+                "f_ck": self._f_ck.to("MPa"),
+                "f_cm": self._f_cm.to("MPa"),
+                "f_ctm": self._f_ctm.to("MPa"),
+            }
+        )
         return properties
 
     @property
@@ -185,12 +200,15 @@ class Concrete_EN_1992_2004(Concrete):
     def f_ctm(self) -> PlainQuantity:
         return self._f_ctm
 
+
 @dataclass
 class Steel(Material):
     _f_y: PlainQuantity = field(init=False)
-    _density: PlainQuantity = field(default=7850 * kg / m**3) 
+    _density: PlainQuantity = field(default=7850 * kg / m**3)
 
-    def __init__(self, name: str, f_y: PlainQuantity, density: PlainQuantity = 7850 * kg / m**3):
+    def __init__(
+        self, name: str, f_y: PlainQuantity, density: PlainQuantity = 7850 * kg / m**3
+    ):
         super().__init__(name)
         self._f_y = f_y
         self._density = density
@@ -198,19 +216,22 @@ class Steel(Material):
     @property
     def f_y(self) -> PlainQuantity:
         return self._f_y
-    
+
     @property
     def density(self) -> PlainQuantity:
         return self._density
 
+
 @dataclass
 class SteelBar(Steel):
-    _E_s: PlainQuantity = field(default=200*GPa)
+    _E_s: PlainQuantity = field(default=200 * GPa)
     _epsilon_y: PlainQuantity = field(init=False)
 
-    def __init__(self, name: str, f_y: PlainQuantity, density: PlainQuantity =7850 *kg/m**3):
+    def __init__(
+        self, name: str, f_y: PlainQuantity, density: PlainQuantity = 7850 * kg / m**3
+    ):
         super().__init__(name, f_y, density)
-        self._epsilon_y = f_y.to('MPa') /(self._E_s.to('MPa')) # 21.2.2.1 - Page 392
+        self._epsilon_y = f_y.to("MPa") / (self._E_s.to("MPa"))  # 21.2.2.1 - Page 392
 
     @property
     def E_s(self) -> PlainQuantity:
@@ -222,11 +243,12 @@ class SteelBar(Steel):
 
     def get_properties(self) -> Dict[str, PlainQuantity]:
         properties = {
-            'E_s': self._E_s.to('GPa'),
-            'f_y': self._f_y.to('MPa'),
-            'epsilon_y': self._epsilon_y
-            }
+            "E_s": self._E_s.to("GPa"),
+            "f_y": self._f_y.to("MPa"),
+            "epsilon_y": self._epsilon_y,
+        }
         return properties
+
     def __str__(self) -> str:
         """Customize the string representation for user-friendly display."""
         properties = self.get_properties()
@@ -238,31 +260,31 @@ class SteelBar(Steel):
             f"  Density: {self.density}"
         )
 
+
 @dataclass
 class SteelStrand(Steel):
-    _f_u: PlainQuantity = field(default=1860*MPa)
-    _E_s: PlainQuantity = field(default=190000*MPa)
-    prestress_stress: PlainQuantity = field(default=0*MPa)
+    _f_u: PlainQuantity = field(default=1860 * MPa)
+    _E_s: PlainQuantity = field(default=190000 * MPa)
+    prestress_stress: PlainQuantity = field(default=0 * MPa)
 
-    def __init__(self, name: str, f_y: PlainQuantity, density: PlainQuantity =7850 *kg/m**3):
+    def __init__(
+        self, name: str, f_y: PlainQuantity, density: PlainQuantity = 7850 * kg / m**3
+    ):
         super().__init__(name, f_y, density)
         self._epsilon_y = self._f_y / self._E_s
 
-
     def get_properties(self) -> Dict[str, PlainQuantity]:
         properties = {
-            'E_s': self._E_s.to('MPa'),
-            'f_y': self._f_y.to('MPa'),
-            'f_u': self._f_u.to('MPa')
+            "E_s": self._E_s.to("MPa"),
+            "f_y": self._f_y.to("MPa"),
+            "f_u": self._f_u.to("MPa"),
         }
         return properties
-    
+
     @property
     def f_u(self) -> PlainQuantity:
         return self._f_u
-    
+
     @property
     def E_s(self) -> PlainQuantity:
         return self._E_s
-
-

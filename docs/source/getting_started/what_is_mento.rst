@@ -21,7 +21,7 @@ Some key features of Mento include:
 - **Results in Markdown and DataFrames**: Results are provided in markdown format and as Pandas DataFrames, facilitating the handling and presentation of multiple design checks.
 - **Report generation**: Mento can generate detailed reports in LaTeX format, making it easy to document the results of the analysis.
 
-Mento is thoroughly tested for compliance with major design codes such as **ACI 318-19**, **EN 1992**, and **CIRSOC 201-2005**, ensuring reliable results that meet industry standards. 
+Mento is thoroughly tested for compliance with major design codes such as **ACI 318-19**, **EN 1992**, and **CIRSOC 201-2005**, ensuring reliable results that meet industry standards.
 
 Using Mento is easy and intuitive:
 

@@ -12,7 +12,7 @@ A `Node` connects a `Section` (e.g., a rectangular concrete beam or column) with
 - Design for shear or flexure.
 
 This guide will walk you through how to use the `Node` class effectively.
-A `Section` could be a `Beam`, `Slab` or `Column` object since it just connects the section with the forces. 
+A `Section` could be a `Beam`, `Slab` or `Column` object since it just connects the section with the forces.
 
 1. Attributes
 ********************
@@ -51,8 +51,8 @@ To create a `Node` you must define the concrete and steel materials, the concret
 The `Node` class provides the following methods for checking, designing and printing results. They all apply for beams and columns.
 Once the `Section` is defined and forces are assigned in a `Node` object, you can perform checks for shear and flexure.
 
-*Mento* will apply corresponding design code formulas depending on the type of `Concrete` object 
-created for all the forces assigned and store the limiting case for shear and top and bottom bending moment. 
+*Mento* will apply corresponding design code formulas depending on the type of `Concrete` object
+created for all the forces assigned and store the limiting case for shear and top and bottom bending moment.
 
 - **Shear Check**: Use `check_shear()`.
 - **Flexure Check**: Use `check_flexure()`.
@@ -67,11 +67,11 @@ created for all the forces assigned and store the limiting case for shear and to
 ********************
 
 If you don't assign transverse or longitudinal rebar, you can ask *Mento* to design for shear and flexure.
-*Mento* will apply corresponding design code formulas depending on the type of `Concrete` object 
-created for all the forces assigned and store the limiting case for shear and top and bottom bending moment. 
+*Mento* will apply corresponding design code formulas depending on the type of `Concrete` object
+created for all the forces assigned and store the limiting case for shear and top and bottom bending moment.
 
 After performing the numerical design, *Mento* will assign the optimal rebar combination of stirrups and longitudinal reinforcement,
-considering all the longitudinal positions in the beam. This optimizations takes into account the default settings 
+considering all the longitudinal positions in the beam. This optimizations takes into account the default settings
 for longitudinal rebar limitation (vibrator size, maximum rebar diameter difference) and engineering criteria to suggest
 the best rebar configuration balancing the amount of rebars, layers and different diamaters.
 
@@ -120,7 +120,7 @@ For more detailed results, you can use the following methods:
 - **Shear Results**: Use `shear_results_detailed()`.
 - **Flexure Results**: Use `flexure_results_detailed()`.
 
-These methods provide a comprehensive breakdown of the calculations, which can be useful for reporting or further analysis. 
+These methods provide a comprehensive breakdown of the calculations, which can be useful for reporting or further analysis.
 This reuslts will print in the Terminal or in a Jupyter Notebook the same way.
 
 .. code-block:: python
@@ -161,11 +161,11 @@ The `Node` class provides the following methods for changing the Forces assigned
 
     # Add a single force
     force1 = Forces(label='D', V_z=10*kN)
-    node_1.add_forces(force1) 
+    node_1.add_forces(force1)
     # Add multiple forces
     force2 = Forces(label='L', V_z=20*kN)
     force3 = Forces(label='W', V_z=30*kN)
-    node_1.add_forces([force2, force3])  
+    node_1.add_forces([force2, force3])
     # Get forces list.
     forces_list = node_1.get_forces_list()
     # Print each force item in the list

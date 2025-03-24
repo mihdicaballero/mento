@@ -2,8 +2,8 @@ from pint import UnitRegistry
 import math
 
 # Initialize UnitRegistry
-ureg = UnitRegistry(system='mks')
-ureg.formatter.default_format = '.2f~P'  # Standardize output formatting
+ureg = UnitRegistry(system="mks")
+ureg.formatter.default_format = ".2f~P"  # Standardize output formatting
 
 # Metric system units
 m = ureg.meter
@@ -28,12 +28,14 @@ ksi = ureg.ksi
 inch = ureg.inch
 ft = ureg.foot
 
+
 def main() -> None:
-    print(45*deg)
-    a= 45*ureg.degree
+    print(45 * deg)
+    a = 45 * ureg.degree
     print(a, math.cos(a))
-    b = 0.000545*dimensionless
+    b = 0.000545 * dimensionless
     print(b.magnitude)
+
 
 if __name__ == "__main__":
     main()
