@@ -73,7 +73,7 @@ created for all the forces assigned and store the limiting case for shear and to
 After performing the numerical design, *Mento* will assign the optimal rebar combination of stirrups and longitudinal reinforcement,
 considering all the longitudinal positions in the beam. This optimizations takes into account the default settings
 for longitudinal rebar limitation (vibrator size, maximum rebar diameter difference) and engineering criteria to suggest
-the best rebar configuration balancing the amount of rebars, layers and different diamaters.
+the best rebar configuration balancing the amount of rebars, layers and different diameters.
 
 - **Shear Design**: Use `design_shear()`.
 - **Flexure Design**: Use `design_flexure()`.
@@ -121,7 +121,7 @@ For more detailed results, you can use the following methods:
 - **Flexure Results**: Use `flexure_results_detailed()`.
 
 These methods provide a comprehensive breakdown of the calculations, which can be useful for reporting or further analysis.
-This reuslts will print in the Terminal or in a Jupyter Notebook the same way.
+This results will print in the Terminal or in a Jupyter Notebook the same way.
 
 .. code-block:: python
 
@@ -130,7 +130,7 @@ This reuslts will print in the Terminal or in a Jupyter Notebook the same way.
     # View detailed flexure results
     node_1.flexure_results_detailed()
 
-You can also print the detailed results for the analysis of a specific corce if you pass it as an input:
+You can also print the detailed results for the analysis of a specific force if you pass it as an input:
 
 .. code-block:: python
 
