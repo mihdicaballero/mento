@@ -12,7 +12,10 @@ Mento uses (and thanks):
 - black, ruff and mypy as code linter and pre-commit to enforce them.
 - pytest to write tests
 - Sphinx to write docs
-- CalcPad for calculation validation
+- `CalcPad`_ for calculation validation
+- GitHub Discussions for community support.
+
+.. _CalcPad: https://github.com/Proektsoftbg/Calcpad
 
 You can contribute in different ways:
 
@@ -25,19 +28,21 @@ Contribute Code
 ---------------
 To contribute fixes, code or documentation to Mento:
 
-1. Fork Mento on GitHub
-2. Submit changes using a pull request against the master branch
-3. If submitting new code:
+1. Open a Discussions thread to discuss the changes you want to make.
+2. Fork Mento on GitHub
+3. Submit changes using a pull request against the master branch
+4. If submitting new code:
+
    - Add tests (see below)
    - Add documentation
    - Validate all calculations in CalcPad
    - Include the CalcPad validation files with your PR
-4. Write "Closes #<bug number>" in the PR description or comment
-5. Execute ``pre-commit run --all-files`` and resolve any issues
+5. Write "Closes #<bug number>" in the PR description or comment
+6. Execute ``pre-commit run --all-files`` and resolve any issues
 
 We won't merge a PR if:
 - Tests are failing
-- Calculations aren't validated in CalcPad
+- Calculations aren't validated in CalcPad against design code guides
 - Code doesn't adhere to linting standards
 - Documentation builds with errors
 
