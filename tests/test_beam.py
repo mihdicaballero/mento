@@ -343,6 +343,39 @@ def test_shear_design_ACI_318_19(beam_example_imperial: RectangularBeam) -> None
 
 # # ------- Flexural test --------------
 
+def test_flexure_check_EN_1992_2004_1(
+    beam_example_EN_1992_2004: RectangularBeam,
+) -> None:
+    # Example from Calcpad Validation
+    f = Forces(M_y=150 * kNm)
+    beam_example_EN_1992_2004.set_longitudinal_rebar_bot(n1 = 4, d_b1=16 * mm)
+    node = Node(section=beam_example_EN_1992_2004, forces = f)
+    results = node.check_flexure()
+
+    assert results.iloc[0]["Position"] == "Bottom"
+    assert results.iloc[0]["As,min"].to(cm**2).magnitude == pytest.approx(1.49, rel=1e-2)
+    assert results.iloc[0]["As,req bot"].to(cm**2).magnitude == pytest.approx(6.6, rel=1e-3)
+    assert results.iloc[0]["As,req top"].to(cm**2).magnitude == pytest.approx(0, rel=1e-3)
+    assert results.iloc[0]["As"].to(inch**2).magnitude == pytest.approx(8.04, rel=1e-2)
+    assert results.iloc[0]["MRd"].to(kip * ft).magnitude == pytest.approx(182.88, rel=1e-5)
+    assert results.iloc[0]["DCR"] == pytest.approx(0.82, rel=1e-5)
+
+def test_flexure_check_EN_1992_2004_2(
+    beam_example_EN_1992_2004: RectangularBeam,
+) -> None:
+    # Example from Calcpad Validation
+    f = Forces(M_y=450 * kNm)
+    beam_example_EN_1992_2004.set_longitudinal_rebar_bot(n1 = 4, d_b1=25 * mm)
+    node = Node(section=beam_example_EN_1992_2004, forces = f)
+    results = node.check_flexure()
+
+    assert results.iloc[0]["Position"] == "Bottom"
+    assert results.iloc[0]["As,min"].to(cm**2).magnitude == pytest.approx(1.48, rel=1e-2)
+    assert results.iloc[0]["As,req bot"].to(cm**2).magnitude == pytest.approx(24.13, rel=1e-3)
+    assert results.iloc[0]["As,req top"].to(cm**2).magnitude == pytest.approx(3.19, rel=1e-3)
+    assert results.iloc[0]["As"].to(inch**2).magnitude == pytest.approx(19.63, rel=1e-2)
+    assert results.iloc[0]["MRd"].to(kip * ft).magnitude == pytest.approx(466.16, rel=1e-5)
+    assert results.iloc[0]["DCR"] == pytest.approx(0.965, rel=1e-5)
 
 def test_flexural_beam_determine_nominal_moment_simple_reinf_ACI_318_19() -> None:
     """
@@ -423,18 +456,10 @@ def test_check_flexure_ACI_318_19_1(beam_example_flexure_ACI: RectangularBeam) -
     assert results.iloc[0]["Section Label"] == "B-12x24"
     assert results.iloc[0]["Load Combo"] == "Test_01"
     assert results.iloc[0]["Position"] == "Bottom"
-    assert results.iloc[0]["As,min"].to(cm**2).magnitude == pytest.approx(
-        5.26, rel=1e-2
-    )
-    assert results.iloc[0]["As,req bot"].to(cm**2).magnitude == pytest.approx(
-        33.1712108, rel=1e-3
-    )
-    assert results.iloc[0]["As,req top"].to(cm**2).magnitude == pytest.approx(
-        4.9250577, rel=1e-3
-    )
-    assert results.iloc[0]["As"].to(inch**2).magnitude == pytest.approx(
-        5.66, rel=1e-2
-    )
+    assert results.iloc[0]["As,min"].to(cm**2).magnitude == pytest.approx(5.26, rel=1e-2)
+    assert results.iloc[0]["As,req bot"].to(cm**2).magnitude == pytest.approx(33.1712108, rel=1e-3)
+    assert results.iloc[0]["As,req top"].to(cm**2).magnitude == pytest.approx(4.9250577, rel=1e-3)
+    assert results.iloc[0]["As"].to(inch**2).magnitude == pytest.approx(5.66, rel=1e-2)
     assert results.iloc[0]["Mu"].to(kip * ft).magnitude == pytest.approx(400, rel=1e-5)
 
 

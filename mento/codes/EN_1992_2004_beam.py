@@ -319,13 +319,13 @@ def _min_max_flexural_reinforcement_ratio_EN_1992_2004(
 
 def _calculate_flexural_reinforcement_EN_1992_2004(
     self: "RectangularBeam", M_Ed: PlainQuantity, d: PlainQuantity, d_prima: float
-) -> None:
+    ) -> None:
     """
     Calculate the required top and bottom reinforcement areas for bending.
     """
     rho_min, rho_max = _min_max_flexural_reinforcement_ratio_EN_1992_2004(self)
     A_s_min = rho_min * d * self.width
-    A_s_max = rho_max * d * self.width
+    A_s_max = rho_max * d * self.width  # noqa: F841
 
     # Constants and material properties
     if isinstance(self.concrete, Concrete_EN_1992_2004):
@@ -350,9 +350,7 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
 
     # Check if compressive reinforcement is required
     if M_Ed <= M_lim:
-        # Compressive reinforcement is NOT required
-        print("Compressive reinforcement is NOT required.")
-
+        # No compressive reinforcement required
         # Relative design bending moment
         K = (
             (M_Ed / (self.width * d**2 * eta * self._f_cd))
@@ -362,9 +360,6 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
 
         # Compression zone depth
         x_eff = d * (1 - math.sqrt(1 - 2 * K))
-
-        # Lever arm of internal forces
-        z = d - 0.5 * lambda_ * x_eff
 
         # Area of required tensile reinforcement
         A_s1 = (self.width * x_eff * eta * self._f_cd / self._f_yd).to("cm^2")
@@ -377,7 +372,6 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
 
     else:
         # Compressive reinforcement is required
-        print("Compressive reinforcement is required.")
 
         # Limit tensile reinforcement area
         A_s1_lim = (M_lim / ((d - 0.5 * x_eff_lim) * self._f_yd)).to("cm^2")
@@ -594,53 +588,239 @@ def _initialize_dicts_EN_1992_2004_shear(self: "RectangularBeam") -> None:
             "Unit": ["", "", "MPa", "deg", "kN", "kN", "kN", "", check_DCR],
         }
 
+def _initialize_dicts_EN_1992_2004_flexure(self: "RectangularBeam") -> None:
+    if isinstance(self.concrete, Concrete_EN_1992_2004):
+        """Initialize the dictionaries used in check and design methods."""
+        self._materials_flexure = {
+            "Materials": [
+                "Section Label",
+                "Concrete strength",
+                "Steel reinforcement yield strength",
+            ],
+            "Variable": ["", "fck", "fyk"],
+            "Value": [
+                self.label,
+                round(self.concrete.f_ck.to("MPa").magnitude, 2),
+                round(self.steel_bar.f_y.to("MPa").magnitude, 2),
+            ],
+            "Unit": ["", "MPa", "MPa"],
+        }
+        self._geometry_flexure = {
+            "Geometry": [
+                "Section height",
+                "Section width",
+                "Clear cover",
+                "Mechanical top cover",
+                "Mechanical bottom cover",
+            ],
+            "Variable": ["h", "b", "cc", "cm,top", "cm,bot"],
+            # TODO: ver bien tema As de armadura traccionada que podria ser superior o inferior.
+            "Value": [
+                self.height.to("cm").magnitude,
+                self.width.to("cm").magnitude,
+                self.c_c.to("cm").magnitude,
+                round(self._c_mec_top.to("cm").magnitude, 2),
+                round(self._c_mec_bot.to("cm").magnitude, 2),
+            ],
+            "Unit": ["cm", "cm", "cm", "cm", "cm"],
+        }
+        self._forces_flexure = {
+            "Design forces": [
+                "Top max moment",
+                "Bottom max moment",
+            ],
+            "Variable": ["MEd,top", "MEd,bot"],
+            "Value": [
+                round(self._M_u_top.to("kN*m").magnitude, 2),
+                round(self._M_u_bot.to("kN*m").magnitude, 2),
+            ],
+            "Unit": ["kNm", "kNm"],
+        }
+        # Min max lists
+        min_spacing_top: PlainQuantity = max(
+            self.settings.get_setting("clear_spacing"),
+            self.settings.get_setting("vibrator_size"),
+            self._d_b_max_top,
+        )
+        min_spacing_bot: PlainQuantity = max(
+            self.settings.get_setting("clear_spacing"), self._d_b_max_bot
+        )
+        min_values = [
+            self._A_s_min_top,
+            min_spacing_top,
+            self._A_s_min_bot,
+            min_spacing_bot,
+        ]  # Use None for items without a minimum constraint
+        max_values = [
+            self._A_s_max_top,
+            None,
+            self._A_s_max_bot,
+            None,
+        ]  # Use None for items without a maximum constraint
+        current_values = [
+            self._A_s_top,
+            self._available_s_top,
+            self._A_s_bot,
+            self._available_s_bot,
+        ]  # Current values to check
 
-# # *** (B), (C), (D), (E) ***
-# def calculate_required_reinforcement_area(M_Ed, concrete, steel, geometry, reinforcement):
-#     if M_Ed > 0:
-#         # *** (B) ***
-#         xi_eff_lim = concrete.lambda_() * (concrete.self._epsilon_cu3() / (concrete.self._epsilon_cu3() + steel.epsilon_yd()))
-#         x_eff_lim = xi_eff_lim * geometry.d()
-#         M_lim = concrete.eta_x_fcd() * geometry.width() * x_eff_lim * (geometry.d() - 0.5 * x_eff_lim)
-
-#         if M_Ed <= M_lim:
-#             # *** (D) ***
-#             S_c_eff = M_Ed / (geometry.width() * (geometry.d() ** 2) * concrete.eta_x_fcd())
-#             xi_eff = 1 - math.sqrt(1 - 2 * S_c_eff)
-#             x_eff = xi_eff * geometry.d()
-#             A_s = (concrete.eta_x_fcd() * x_eff * geometry.width()) / steel.f_yd()
-#             A_s_req = max(A_s, reinforcement.A_s_min())
-#             return ReinforcementAreas(A_s_req, 0)
-#         else:
-#             # *** (E) ***
-#             a_2 = geometry.a()
-#             A_s1 = M_lim / ((geometry.d() - 0.5 * x_eff_lim) * steel.f_yd())
-#             delta_M = M_Ed - M_lim
-#             A_s2 = delta_M / ((geometry.d() - a_2) * steel.f_yd())
-#             A_s_req1 = max(A_s1 + A_s2, reinforcement.A_s_min())
-#             return ReinforcementAreas(A_s_req1, A_s2)
-#     else:
-#         return ReinforcementAreas(0, 0)
-
-
-# # *** (F), (G), (H), (I), (J) ***
-# def calculate_provided_reinforcement_area(required_reinforcement_areas, reinforcement):
-#     A_s_req1 = required_reinforcement_areas.bottom
-#     A_s_req2 = required_reinforcement_areas.top
-#     A_s_req = A_s_req1 + A_s_req2
-
-#     n1 = math.ceil(A_s_req1 / reinforcement.A_phi())
-#     A_s_prov1 = n1 * reinforcement.A_phi()
-
-#     n2 = math.ceil(A_s_req2 / reinforcement.A_phi())
-#     A_s_prov2 = n2 * reinforcement.A_phi()
-
-#     A_s_prov = A_s_prov1 + A_s_prov2
-
-#     if reinforcement.A_s_min() <= A_s_req <= reinforcement.A_s_max():
-#         if A_s_prov <= reinforcement.A_s_max():
-#             return ReinforcementAreas(A_s_prov1, A_s_prov2)
-#         else:
-#             return ReinforcementAreas(A_s_prov1, A_s_prov2, False)
-#     else:
-#         return ReinforcementAreas(A_s_prov1, A_s_prov2, False)
+        # Generate check marks based on the range conditions
+        checks = [
+            "✔️"
+            if (min_val is None or curr >= min_val)
+            and (max_val is None or curr <= max_val)
+            else "❌"
+            for curr, min_val, max_val in zip(current_values, min_values, max_values)
+        ]
+        self._all_flexure_checks_passed = all(check == "✔️" for check in checks)
+        self._data_min_max_flexure = {
+            "Check": [
+                "Min/Max As rebar top",
+                "Minimum spacing top",
+                "Min/Max As rebar bottom",
+                "Minimum spacing bottom",
+            ],
+            "Unit": ["cm²", "mm", "cm²", "mm"],
+            "Value": [
+                round(self._A_s_top.to("cm**2").magnitude, 2),
+                round(self._available_s_top.to("mm").magnitude, 2),
+                round(self._A_s_bot.to("cm**2").magnitude, 2),
+                round(self._available_s_bot.to("mm").magnitude, 2),
+            ],
+            "Min.": [
+                round(self._A_s_min_top.to("cm**2").magnitude, 2),
+                round(min_spacing_top.to("mm").magnitude, 2),
+                round(self._A_s_min_bot.to("cm**2").magnitude, 2),
+                round(min_spacing_bot.to("mm").magnitude, 2),
+            ],
+            "Max.": [
+                round(self._A_s_max_top.to("cm**2").magnitude, 2),
+                "",
+                round(self._A_s_max_bot.to("cm**2").magnitude, 2),
+                "",
+            ],
+            "Ok?": checks,
+        }
+        check_DCR_top = "✔️" if self._DCRb_top < 1 else "❌"
+        check_DCR_bot = "✔️" if self._DCRb_bot < 1 else "❌"
+        self._flexure_capacity_top = {
+            "Top reinforcement check": [
+                "First layer bars",
+                "Second layer bars",
+                "Effective height",
+                "Depth of equivalent strength block ratio",
+                "Minimum rebar reinforcing",
+                "Required rebar reinforcing top",
+                "Required rebar reinforcing bottom",
+                "Defined rebar reinforcing top",
+                "Longitudinal reinforcement ratio",
+                "Total flexural strength",
+                "Demand Capacity Ratio",
+            ],
+            "Variable": [
+                "n1+n2",
+                "n3+n4",
+                "d",
+                "c/d",
+                "As,min",
+                "As,req top",
+                "As,req bot",
+                "As",
+                "ρl",
+                "MRd",
+                "DCR",
+            ],
+            "Value": [
+                self._format_longitudinal_rebar_string(
+                    self._n1_t, self._d_b1_t, self._n2_t, self._d_b2_t
+                ),
+                self._format_longitudinal_rebar_string(
+                    self._n3_t, self._d_b3_t, self._n4_t, self._d_b4_t
+                ),
+                round(self._d_top.to("cm").magnitude, 2),
+                self._c_d_top,
+                round(self._A_s_min_top.to("cm**2").magnitude, 2),
+                round(self._A_s_req_top.to("cm**2").magnitude, 2),
+                round(self._A_s_req_bot.to("cm**2").magnitude, 2),
+                round(self._A_s_top.to("cm**2").magnitude, 2),
+                round(self._rho_l_top.magnitude, 5),
+                round(self._M_Rd_top.to("kN*m").magnitude, 2),
+                round(self._DCRb_top, 2),
+            ],
+            "Unit": [
+                "",
+                "",
+                "cm",
+                "",
+                "cm²",
+                "cm²",
+                "cm²",
+                "cm²",
+                "",
+                "kNm",
+                check_DCR_top,
+            ],
+        }
+        self._flexure_capacity_bot = {
+            "Bottom reinforcement check": [
+                "First layer bars",
+                "Second layer bars",
+                "Effective height",
+                "Depth of equivalent strength block ratio",
+                "Minimum rebar reinforcing",
+                "Required rebar reinforcing bottom",
+                "Required rebar reinforcing top",
+                "Defined rebar reinforcing bottom",
+                "Longitudinal reinforcement ratio",
+                "Total flexural strength",
+                "Demand Capacity Ratio",
+            ],
+            "Variable": [
+                "n1+n2",
+                "n3+n4",
+                "d",
+                "c/d",
+                "As,min",
+                "As,req top",
+                "As,req bot",
+                "As",
+                "ρl",
+                "MRd",
+                "DCR",
+            ],
+            "Value": [
+                self._format_longitudinal_rebar_string(
+                    self._n1_b, self._d_b1_b, self._n2_b, self._d_b2_b
+                ),
+                self._format_longitudinal_rebar_string(
+                    self._n3_b, self._d_b3_b, self._n4_b, self._d_b4_b
+                ),
+                round(self._d_bot.to("cm").magnitude, 2),
+                self._c_d_bot,
+                round(self._A_s_min_bot.to("cm**2").magnitude, 2),
+                round(self._A_s_req_top.to("cm**2").magnitude, 2),
+                round(self._A_s_req_bot.to("cm**2").magnitude, 2),
+                round(self._A_s_bot.to("cm**2").magnitude, 2),
+                round(self._rho_l_bot.magnitude, 5),
+                round(self._M_Rd_bot.to("kN*m").magnitude, 2),
+                round(self._DCRb_bot, 2),
+            ],
+            "Unit": [
+                "",
+                "",
+                "cm",
+                "",
+                "cm²",
+                "cm²",
+                "cm²",
+                "cm²",
+                "",
+                "kNm",
+                check_DCR_bot,
+            ],
+        }
+        self._flexure_all_checks = (
+            self._all_flexure_checks_passed
+            and (check_DCR_bot == "✔️")
+            and (check_DCR_top == "✔️")
+        )
