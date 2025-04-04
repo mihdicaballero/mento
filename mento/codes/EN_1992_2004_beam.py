@@ -319,7 +319,7 @@ def _min_max_flexural_reinforcement_ratio_EN_1992_2004(
 
 def _calculate_flexural_reinforcement_EN_1992_2004(
     self: "RectangularBeam", M_Ed: PlainQuantity, d: PlainQuantity, d_prima: float
-    ) -> None:
+) -> None:
     """
     Calculate the required top and bottom reinforcement areas for bending.
     """
@@ -587,6 +587,7 @@ def _initialize_dicts_EN_1992_2004_shear(self: "RectangularBeam") -> None:
             ],
             "Unit": ["", "", "MPa", "deg", "kN", "kN", "kN", "", check_DCR],
         }
+
 
 def _initialize_dicts_EN_1992_2004_flexure(self: "RectangularBeam") -> None:
     if isinstance(self.concrete, Concrete_EN_1992_2004):

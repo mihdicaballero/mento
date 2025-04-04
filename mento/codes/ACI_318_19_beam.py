@@ -1082,6 +1082,7 @@ def _compile_results_ACI_flexure_metric(
 # RESULTS
 ##########################################################
 
+
 def _initialize_dicts_ACI_318_19_shear(self: "RectangularBeam") -> None:
     if isinstance(self.concrete, Concrete_ACI_318_19):
         """Initialize the dictionaries used in check and design methods."""
@@ -1265,7 +1266,6 @@ def _initialize_dicts_ACI_318_19_shear(self: "RectangularBeam") -> None:
         self._shear_all_checks = (
             self._all_shear_checks_passed and (check_max == "✔️") and (check_FU == "✔️")
         )
-
 
 
 def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
