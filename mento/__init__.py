@@ -6,6 +6,7 @@ from .units import (
     mm,
     kN,
     kNm,
+    kPa,
     MPa,
     GPa,
     kg,
