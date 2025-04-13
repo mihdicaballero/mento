@@ -319,7 +319,7 @@ def _min_max_flexural_reinforcement_ratio_EN_1992_2004(
 
 def _calculate_flexural_reinforcement_EN_1992_2004(
     self: "RectangularBeam", M_Ed: PlainQuantity, d: PlainQuantity, d_prima: float
-) -> None:
+)-> tuple[PlainQuantity, PlainQuantity, PlainQuantity, PlainQuantity]:
     """
     Calculate the required top and bottom reinforcement areas for bending.
     """
@@ -363,9 +363,6 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
         # Compression zone depth
         x_eff = d * (1 - math.sqrt(1 - 2 * K))
 
-        # Lever arm of internal forces
-        z = d - 0.5 * lambda_ * x_eff
-
         # Area of required tensile reinforcement
         A_s1 = (self.width * x_eff * eta * self._f_cd / self._f_yd).to("cm^2")
 
@@ -391,6 +388,8 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
         # Required tensile reinforcement area
         A_s1 = max(A_s1_lim + A_s2, A_s_min)
 
+    return A_s_min, A_s_max, A_s1, A_s2
+
 
 def _design_flexure_EN_1992_2004(
     self: "RectangularBeam", max_M_y_bot: PlainQuantity, max_M_y_top: PlainQuantity
@@ -404,11 +403,8 @@ def _design_flexure_EN_1992_2004(
             self._A_s_min_bot,
             self._A_s_max_bot,
             A_s_final_bot_Positive_M,
-            A_s_comp_top,
-            self._c_d_bot,
-        ) = _calculate_flexural_reinforcement_EN_1992_2004(
-            self, max_M_y_bot, self._d_bot, self._c_mec_top
-        )
+            A_s_comp_top
+        ) = _calculate_flexural_reinforcement_EN_1992_2004(max_M_y_bot, self._d_bot, self._c_mec_top)
         # Initialize bottom and top reinforcement
         self._A_s_bot = A_s_final_bot_Positive_M
         self._A_s_top = A_s_comp_top
