@@ -34,6 +34,9 @@ The development is structured around key milestones, with ongoing tasks that aim
 
 Each milestone incorporates rigorous testing and continuous integration to ensure code quality and reliability.
 
+#### Documentation
+You can read the official documentation in this link: [Mento Docs](https://mento-docs.readthedocs.io/)
+
 #### Contributing
 We welcome contributions from the community to expand and enhance the package. Please check the roadmap for current milestones and open issues for collaboration opportunities.
 
