@@ -391,6 +391,54 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
     return A_s_min, A_s_max, A_s1, A_s2
 
 
+
+
+
+
+
+
+def _determine_nominal_moment_simple_reinf_EN_1992_2004(
+    self: "RectangularBeam", A_s: PlainQuantity, d: PlainQuantity
+) -> PlainQuantity:
+
+    # Steel force:
+    steel_force=self.steel_bar.f_yd*A_s
+    # Constants and material properties
+    if isinstance(self.concrete, Concrete_EN_1992_2004):
+        eta = self.concrete.eta_factor()  # Factor for concrete strength (EN 1992-1-1)
+    # Concrete force shall be same as steel force, so we can obtain the compression block height:
+    lambda_x_eff=steel_force/(self._width *self._f_cd*eta)
+    # Now we can get the momentum arm 
+    z=d-0.5*lambda_x_eff
+    # And calculate the resistance
+    M_Rd=steel_force*z
+    return M_Rd
+
+
+
+def _determine_nominal_moment_double_reinf_EN_1992_2004(
+    self: "RectangularBeam", A_s: PlainQuantity, d: PlainQuantity,
+    d_prime: PlainQuantity, A_s_prime: PlainQuantity
+) -> PlainQuantity:
+    #TODO VER COMO SE CALCULA ESTO FALTA FALTA FALTA
+
+
+    M_Rd=1*kNm
+    return M_Rd
+
+#TODO FALTA LA FUNCION _determine_nominal_moment_EN_1992_2004
+
+
+
+
+
+
+
+
+
+
+
+
 def _design_flexure_EN_1992_2004(
     self: "RectangularBeam", max_M_y_bot: PlainQuantity, max_M_y_top: PlainQuantity
 ) -> Dict[str, Any]:
@@ -525,6 +573,78 @@ def _design_flexure_EN_1992_2004(
         return pd.DataFrame([results], index=[0])
     else:
         raise ValueError("Concrete type is not compatible with EN 1992 shear design.")
+
+
+
+
+
+
+def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> pd.DataFrame:
+    """
+    """
+
+    # Initialize the design variables according to ACI 318-19 requirements using the provided force.
+    _initialize_variables_EN_1992_2004(self)
+
+    # Calculate the nominal moments for both top and bottom reinforcement.
+    _determine_nominal_moment_ACI_318_19(self, force)
+
+    if self._M_u >= 0:
+        # For positive moments, calculate the reinforcement requirements for the bottom tension side.
+        (
+            self._A_s_min_bot,
+            self._A_s_max_bot,
+            self._A_s_req_bot,
+            self._A_s_req_top,
+            self._c_d_bot,
+        ) = _calculate_flexural_reinforcement_ACI_318_19(
+            self, self._M_u_bot, self._d_bot, self._c_mec_top
+        )
+        self._c_d_top = 0
+        # Calculate the design capacity ratio for the bottom side.
+        self._DCRb_bot = round(
+            self._M_u_bot.to("kN*m").magnitude / self._phi_M_n_bot.to("kN*m").magnitude,
+            3,
+        )
+        self._DCRb_top = 0
+    else:
+        # For negative moments, calculate the reinforcement requirements for the top tension side.
+        (
+            self._A_s_min_top,
+            self._A_s_max_top,
+            self._A_s_req_top,
+            self._A_s_req_bot,
+            self._c_d_top,
+        ) = _calculate_flexural_reinforcement_ACI_318_19(
+            self, abs(self._M_u_top), self._d_top, self._c_mec_bot
+        )
+        self._c_d_bot = 0
+        # Calculate the design capacity ratio for the top side.
+        self._DCRb_top = round(
+            -self._M_u_top.to("kN*m").magnitude
+            / self._phi_M_n_top.to("kN*m").magnitude,
+            3,
+        )
+        self._DCRb_bot = 0
+
+    # Determine the maximum detailing cover dimensions for top and bottom.
+    self._d_b_max_top = max(self._d_b1_t, self._d_b2_t, self._d_b3_t, self._d_b4_t)
+    self._d_b_max_bot = max(self._d_b1_b, self._d_b2_b, self._d_b3_b, self._d_b4_b)
+
+    # Calculate the longitudinal reinforcement ratios for both sides.
+    self._rho_l_bot = self._A_s_bot / (self._d_bot * self._width)
+    self._rho_l_top = self._A_s_bot / (self._d_top * self._width)
+
+    # Compile the design results into a dictionary.
+    results = _compile_results_ACI_flexure_metric(self, force)
+
+    # Initialize any additional dictionaries required for ACI 318-19 flexural checks.
+    _initialize_dicts_ACI_318_19_flexure(self)
+
+    # Return the results as a Pandas DataFrame.
+    return pd.DataFrame([results], index=[0])
+
+
 
 
 ##########################################################
