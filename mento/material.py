@@ -148,6 +148,9 @@ class Concrete_EN_1992_2004(Concrete):
         self._f_cm = self._f_ck + 8 * MPa
         self._E_cm = 22000 * (self._f_cm / (10 * MPa)) ** 0.3 * MPa
         self._f_ctm = 0.3 * (self._f_ck / MPa) ** (2 / 3) * MPa
+        #TODO ARREGLAR ESTO, HAY QUE CALCULAR EL epsilon_cu3 para hormigones de mas de 50MPa:
+        if (self._f_ck>50*MPa):
+            print("WARNING: epsilon_cu3 is set to 0.0035, which is valid for concretes with f_ck ≤ 50 MPa.")
         self._epsilon_cu3 = 0.0035  # Ultimate strain in concrete
 
     def alpha_cc(self) -> float:
