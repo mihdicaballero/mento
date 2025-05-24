@@ -27,6 +27,7 @@ from mento.forces import Forces
 from mento.codes.EN_1992_2004_beam import (
     _check_shear_EN_1992_2004,
     _design_shear_EN_1992_2004,
+    _design_flexure_EN_1992_2004
 )
 from mento.codes.ACI_318_19_beam import (
     _check_shear_ACI_318_19,
@@ -456,6 +457,8 @@ class RectangularBeam(RectangularSection):
             or self.concrete.design_code == "CIRSOC 201-25"
         ):
             _design_flexure_ACI_318_19(self, max_M_y_bot, max_M_y_top)
+        elif (self.concrete.design_code == "EN 1992-2004"):
+            _design_flexure_EN_1992_2004(self, max_M_y_bot, max_M_y_top)
         else:
             raise ValueError(
                 f"Longitudinal design method not implemented "
@@ -1486,7 +1489,31 @@ def flexure_design_test_calcpad_example() -> None:
     f2 = Forces(label="Test_01", V_z=100 * kip, M_y=-400 * kip * ft)
     forces = [f, f2]
 
-    flexure_results = beam._design_flexure(forces)
+    flexure_results = beam.design_flexure(forces)
+    print(flexure_results)
+
+
+
+def flexure_design_test_EN() -> None:
+    concrete = Concrete_EN_1992_2004(name="H25", f_ck=25 * MPa)
+    steelBar = SteelBar(name="fy 60000", f_y=420*MPa)
+    custom_settings = {"clear_cover": 2.6*cm}
+    beam = RectangularBeam(
+        label="V-20x60",
+        concrete=concrete,
+        steel_bar=steelBar,
+        width=20 * cm,
+        height=60 * cm,
+        settings=custom_settings,
+    )
+
+    # beam.set_longitudinal_rebar_bot(n1=2,d_b1=1.375*inch, n3=2,d_b3=1.27*inch)
+    # beam.set_longitudinal_rebar_top(n1=2,d_b1=1.375*inch, n3=2,d_b3=1.27*inch)
+
+    f = Forces(label="Test_01", M_y=100 * kNm)
+    forces = [f]
+
+    flexure_results = beam.design_flexure(forces)
     print(flexure_results)
 
 
@@ -1678,4 +1705,5 @@ def rebar_df() -> None:
 
 
 if __name__ == "__main__":
-    flexure_check_test()
+    #flexure_check_test()
+    flexure_design_test_EN()

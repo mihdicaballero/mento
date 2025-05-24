@@ -398,35 +398,133 @@ def _design_flexure_EN_1992_2004(
         # Initialize all the code related variables
         _initialize_variables_EN_1992_2004(self)
 
-        # Calculate reinforcement for the positive moment, even if it is 0
-        (
-            self._A_s_min_bot,
-            self._A_s_max_bot,
-            A_s_final_bot_Positive_M,
-            A_s_comp_top
-        ) = _calculate_flexural_reinforcement_EN_1992_2004(max_M_y_bot, self._d_bot, self._c_mec_top)
-        # Initialize bottom and top reinforcement
-        self._A_s_bot = A_s_final_bot_Positive_M
-        self._A_s_top = A_s_comp_top
-        # If there is a negative moment, calculate the top reinforcement
-        if max_M_y_top < 0:
+        # Initial assumptions for mechanical cover and compression depth
+        rec_mec = self.c_c + self._stirrup_d_b + 1 * cm
+        d_prima = self.c_c + self._stirrup_d_b + 1 * cm
+        # Start the iterative process
+        tol = 0.01 * cm  # Tolerance for convergence
+        Err = 2 * tol
+        iteration_count = 0
+
+
+        while Err >= tol:
+            iteration_count += 1
+            # Update the effective depth for bottom tension reinforcement
+            d = self._height - rec_mec
+                # Calculate reinforcement for the positive moment, even if it is 0
             (
-                self._A_s_min_top,
-                self._A_s_max_top,
-                A_s_final_top_Negative_M,
-                A_s_comp_bot,
-                self._c_d_top,
-            ) = _calculate_flexural_reinforcement_EN_1992_2004(
-                self, abs(max_M_y_top), self._d_top, self._c_mec_bot
+                self._A_s_min_bot,
+                self._A_s_max_bot,
+                A_s_final_bot_Positive_M,
+                A_s_comp_top
+            ) = _calculate_flexural_reinforcement_EN_1992_2004(self, max_M_y_bot, d, d_prima)
+            # Initialize bottom and top reinforcement
+            self._A_s_bot = A_s_final_bot_Positive_M
+            self._A_s_top = A_s_comp_top
+            # If there is a negative moment, calculate the top reinforcement
+            if max_M_y_top < 0:
+                (
+                    self._A_s_min_top,
+                    self._A_s_max_top,
+                    A_s_final_top_Negative_M,
+                    A_s_comp_bot
+                ) = _calculate_flexural_reinforcement_EN_1992_2004(self, abs(max_M_y_top), d, d_prima)
+
+                # Adjust reinforcement areas based on positive and negative moments
+                self._A_s_bot = max(A_s_final_bot_Positive_M, A_s_comp_bot)
+                self._A_s_top = max(A_s_comp_top, A_s_final_top_Negative_M)
+
+            # Design bottom reinforcement
+            section_rebar_bot = Rebar(self)
+            self.flexure_design_results_bot = (
+                section_rebar_bot.longitudinal_rebar_ACI_318_19(self._A_s_bot)
             )
+            best_design = section_rebar_bot.longitudinal_rebar_design
+            # Extract bar information
+            d_b1_bot = best_design["d_b1"]
+            d_b2_bot = best_design["d_b2"]
+            d_b3_bot = best_design["d_b3"]
+            d_b4_bot = best_design["d_b4"]
+            n_1_bot = best_design["n_1"]
+            n_2_bot = best_design["n_2"]
+            n_3_bot = best_design["n_3"]
+            n_4_bot = best_design["n_4"]
 
-            # Adjust reinforcement areas based on positive and negative moments
-            self._A_s_bot = max(A_s_final_bot_Positive_M, A_s_comp_bot)
-            self._A_s_top = max(A_s_comp_top, A_s_final_top_Negative_M)
+            # Set rebar information to section
+            c_mec_calc = self.c_c + self._stirrup_d_b + self._bot_rebar_centroid
 
-        return None
+            # Design top reinforcement
+            if self._A_s_top > 0:
+                section_rebar_top = Rebar(self)
+                self.flexure_design_results_top = (
+                    section_rebar_top.longitudinal_rebar_ACI_318_19(self._A_s_top)
+                )
+                best_design_top = section_rebar_top.longitudinal_rebar_design
+
+                # Extract bar information for top reinforcement
+                d_b1_top = best_design_top["d_b1"]
+                d_b2_top = best_design_top["d_b2"]
+                d_b3_top = best_design_top["d_b3"]
+                d_b4_top = best_design_top["d_b4"]
+                n_1_top = best_design_top["n_1"]
+                n_2_top = best_design_top["n_2"]
+                n_3_top = best_design_top["n_3"]
+                n_4_top = best_design_top["n_4"]
+
+                # Set rebar information to section
+                self.set_longitudinal_rebar_bot(
+                    n_1_bot,
+                    d_b1_bot,
+                    n_2_bot,
+                    d_b2_bot,
+                    n_3_bot,
+                    d_b3_bot,
+                    n_4_bot,
+                    d_b4_bot,
+                )
+                self.set_longitudinal_rebar_top(
+                    n_1_top,
+                    d_b1_top,
+                    n_2_top,
+                    d_b2_top,
+                    n_3_top,
+                    d_b3_top,
+                    n_4_top,
+                    d_b4_top,
+                )
+
+                d_prima_calc = self.c_c + self._stirrup_d_b + self._top_rebar_centroid
+            else:
+                # If no top reinforcement is required
+                d_prima_calc = d_prima
+                # Set rebar information to section
+                self.set_longitudinal_rebar_bot(
+                    n_1_bot,
+                    d_b1_bot,
+                    n_2_bot,
+                    d_b2_bot,
+                    n_3_bot,
+                    d_b3_bot,
+                    n_4_bot,
+                    d_b4_bot,
+                )
+                self.set_longitudinal_rebar_top(0, 0 * mm, 0, 0 * mm, 0, 0 * mm, 0, 0 * mm)
+
+            # Update error for iteration
+            Err = max(abs(c_mec_calc - rec_mec), abs(d_prima_calc - d_prima))
+            rec_mec = c_mec_calc
+            d_prima = d_prima_calc
+
+        # Return results as a DataFrame
+        results = {
+            "Bottom_As_adopted": self._A_s_bot.to("inch**2"),
+            "Bottom separation of bars": self._available_s_bot.to("inch"),
+            "As_compression_adopted": self._A_s_top.to("inch**2"),
+            "Top separation of bars": self._available_s_top.to("inch"),
+        }
+        return pd.DataFrame([results], index=[0])
     else:
-        raise ValueError("Concrete type is not compatible with EN 1992 flexure design.")
+        raise ValueError("Concrete type is not compatible with EN 1992 shear design.")
 
 
 ##########################################################
