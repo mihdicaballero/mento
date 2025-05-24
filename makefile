@@ -8,11 +8,11 @@ all: mypy ruff test
 
 mypy:
 	@echo "Running mypy..."
-	mypy .
+	mypy . --exclude build
 
 ruff:
 	@echo "Running ruff..."
-	ruff .
+	ruff check . --fix --exclude build
 
 test:
 	@echo "Running pytest..."

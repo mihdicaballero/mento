@@ -17,10 +17,9 @@ from mento.material import (
     SteelBar,
     Concrete_ACI_318_19,
     Concrete_EN_1992_2004,
-    Concrete_CIRSOC_201_25,
 )
 from mento.rebar import Rebar
-from mento.units import MPa, psi, mm, inch, kN, m, cm, kNm, dimensionless
+from mento.units import MPa, psi, mm, inch, kN, m, cm, kNm, dimensionless, kip, ksi, ft
 from mento.results import Formatter, TablePrinter, DocumentBuilder, CUSTOM_COLORS
 from mento.forces import Forces
 
@@ -506,7 +505,7 @@ class RectangularBeam(RectangularSection):
             current_dcr_bot = self._DCRb_bot
 
             # Update top limiting case
-            if current_dcr_top > max_dcr_top:
+            if current_dcr_top >= max_dcr_top:
                 max_dcr_top = current_dcr_top
                 limiting_case_top = result
                 limiting_case_top_details = self._flexure_results_detailed_list[
@@ -514,7 +513,7 @@ class RectangularBeam(RectangularSection):
                 ]
 
             # Update bottom limiting case
-            if current_dcr_bot > max_dcr_bot:
+            if current_dcr_bot >= max_dcr_bot:
                 max_dcr_bot = current_dcr_bot
                 limiting_case_bot = result
                 limiting_case_bot_details = self._flexure_results_detailed_list[
@@ -776,10 +775,19 @@ class RectangularBeam(RectangularSection):
                 if not checks_pass
                 else ""
             )
-            markdown_content = (
-                f"Shear reinforcing {rebar_v}, $A_v$={limiting_reinforcement['Value'][6]} cm²/m"
-                f", $V_u$={limiting_forces['Value'][1]} kN, $\\phi V_n$={limiting_shear_concrete['Value'][7]} kN → {formatted_DCR} {warning}"
-            )  # noqa: E501
+            if (
+                self.concrete.design_code == "ACI 318-19"
+                or self.concrete.design_code == "CIRSOC 201-25"
+            ):
+                markdown_content = (
+                    f"Shear reinforcing {rebar_v}, $A_v$={limiting_reinforcement['Value'][6]} cm²/m"
+                    f", $V_u$={limiting_forces['Value'][1]} kN, $\\phi V_n$={limiting_shear_concrete['Value'][7]} kN → {formatted_DCR} {warning}"
+                )  # noqa: E501
+            else:  # self.concrete.design_code == "EN 1992-2004"
+                markdown_content = (
+                    f"Shear reinforcing {rebar_v}, $A_{{sw}}$={limiting_reinforcement['Value'][6]} cm²/m"
+                    f", $V_{{Ed,2}}$={limiting_forces['Value'][1]} kN, $V_{{Rd}}$={limiting_shear_concrete['Value'][6]} kN → {formatted_DCR} {warning}"
+                )  # noqa: E501
         else:
             markdown_content += "No shear to check."
         self._md_shear_results = markdown_content
@@ -1596,7 +1604,7 @@ def rebar() -> None:
     beam_rebar = Rebar(section)
     long_rebar_df = beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=as_req)
     best_design = beam_rebar.longitudinal_rebar_design
-    print(long_rebar_df)
+    print(long_rebar_df, best_design)
 
 
 def rebar_df() -> None:

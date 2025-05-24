@@ -110,7 +110,7 @@ def shear_EN_1992() -> None:
     node = Node(section=beam, forces=f)
     results = node.check_shear()
     # results = node.design_shear()
-    # print(results)
+    print(results)
     beam.plot()
 
 

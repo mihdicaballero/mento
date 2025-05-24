@@ -405,7 +405,7 @@ def _maximum_flexural_reinforcement_ratio_ACI_318_19(self: "RectangularBeam") ->
 
     """
     # Cast the concrete object to the specific ACI subclass
-    concrete_aci = cast(Concrete_ACI_318_19, self.concrete)
+    concrete_aci = cast("Concrete_ACI_318_19", self.concrete)
 
     # Calculate minimum steel strain for ductility (tension controlled according 9.3.3.1 and 21.2.2)
     epsilon_min_rebar_ACI_318_19 = self.steel_bar.epsilon_y + concrete_aci._epsilon_c
