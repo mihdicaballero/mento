@@ -341,6 +341,8 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
 
     # Relative depth of compression zone at yielding of bottom reinforcement
     xi_eff_lim = lambda_ * (self._epsilon_cu3 / (self._epsilon_cu3 + epsilon_yd))
+    #TODO VER SI ESTO NO DEPENDE DEL HORMIGON
+
 
     # Compression zone depth limit
     x_eff_lim = xi_eff_lim * d
@@ -382,8 +384,21 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
         # Extra moment to take with top reinforcement
         delta_M = M_Ed - M_lim
 
+        # Lever arm of internal forces for compressive reinforcement
+        z_2=d - d_prima
+
+        #Compression zone depth with plastic limit
+        x_u = d*(δ - 0.4)
+
+
+        #Compressive reinforcement strain'
+        epsilon_s2 = (x_u - d_prima)/x_u*self._epsilon_cu3
+
+        # Compressive reinforcement stress'
+        f_sd = min(epsilon_s2*self._E_s; f_yd)|
+
         # Required compressive reinforcement area
-        A_s2 = (delta_M / ((d - d_prima) * self._f_yd)).to("cm^2")
+        A_s2 = (delta_M / ((z_2) * self._f_yd)).to("cm^2")
 
         # Required tensile reinforcement area
         A_s1 = max(A_s1_lim + A_s2, A_s_min)
@@ -420,10 +435,21 @@ def _determine_nominal_moment_double_reinf_EN_1992_2004(
     self: "RectangularBeam", A_s: PlainQuantity, d: PlainQuantity,
     d_prime: PlainQuantity, A_s_prime: PlainQuantity
 ) -> PlainQuantity:
-    #TODO VER COMO SE CALCULA ESTO FALTA FALTA FALTA
+    
+    # Constants and material properties
+    if isinstance(self.concrete, Concrete_EN_1992_2004):
+        lambda_ = (
+            self.concrete.lambda_factor()
+        )  # Factor for effective compression zone depth (EN 1992-1-1)
+        eta = self.concrete.eta_factor()  # Factor for concrete strength (EN 1992-1-1)
+
+    # Limit moment for compressive reinforcement
+    M_lim = eta * self._f_cd * self.width * x_eff_lim * (d - 0.5 * x_eff_lim)
+    # Limit tensile reinforcement area
+    A_s1_lim = (M_lim / ((d - 0.5 * x_eff_lim) * self._f_yd)).to("cm^2")
 
 
-    M_Rd=1*kNm
+    M_Rd=A_s1_lim *z*f_yd+ f_sd*A_s2*z_2
     return M_Rd
 
 #TODO FALTA LA FUNCION _determine_nominal_moment_EN_1992_2004
