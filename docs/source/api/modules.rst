@@ -1,9 +1,7 @@
-.. _api/modules:
-
-API reference
-===================
+mento
+=====
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 4
 
    mento
