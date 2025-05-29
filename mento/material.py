@@ -151,8 +151,12 @@ class Concrete_EN_1992_2004(Concrete):
         self._epsilon_cu3 = 0.0035  # Ultimate strain in concrete
 
     def alpha_cc(self) -> float:
-        # Example implementation for alpha_cc, as per Eurocode EN 1992-1-1
-        return 1.0  # Typically, this value is taken as 1.0 for normal weight concrete
+        # Implementation for alpha_cc, as per Eurocode EN 1992-1-1
+        # Designers Guide to EN 1992-1-1, Page 62
+        # Study of the data available on the behaviour of compression zones at failure suggests that the
+        # use of 1.0 is unconservative. For this reason, the UK National Annex recommends a value for
+        # αcc of 0.85, as is proposed in the CEB Model Codes.
+        return 0.85
 
     def lambda_factor(self) -> float:
         """

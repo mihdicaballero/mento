@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Optional, TYPE_CHECKING, Dict, Any, List, Optional
+from typing import TYPE_CHECKING, Dict, Any, List, Optional
 
 from mento.settings import Settings
 from mento.material import Concrete, SteelBar

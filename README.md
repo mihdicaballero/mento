@@ -21,7 +21,7 @@ This repository provides a comprehensive package for the design and structural a
 - Interactive usage in Jupyter Notebooks, allowing users to create custom calculations using package modules.
 - Results are presented in markdown format within the notebook and as pandas DataFrames for easy handling of multiple checks.
 - Ability to generate detailed calculation reports in Word.
-- Comprehensive testing for design code compliance, including ACI 318-19, EN 1992-2004, and CIRSOC 201-2024.
+- Comprehensive testing for design code compliance, including ACI 318-19, EN 1992-2004, and CIRSOC 201-2025.
 
 #### Roadmap
 The development is structured around key milestones, with ongoing tasks that aim to enhance functionality and compliance with design standards:

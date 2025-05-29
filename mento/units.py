@@ -12,6 +12,7 @@ mm = ureg.millimeter
 kN = ureg.kilonewton
 kNm = kN * m
 Pa = ureg.pascal
+kPa = ureg.kilopascal
 MPa = ureg.megapascal
 GPa = ureg.gigapascal
 kg = ureg.kilogram

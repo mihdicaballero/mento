@@ -17,10 +17,9 @@ from mento.material import (
     SteelBar,
     Concrete_ACI_318_19,
     Concrete_EN_1992_2004,
-    Concrete_CIRSOC_201_25,
 )
 from mento.rebar import Rebar
-from mento.units import MPa, psi, mm, inch, kN, m, cm, kNm, dimensionless
+from mento.units import MPa, psi, mm, inch, kN, m, cm, kNm, dimensionless, kip, ksi, ft
 from mento.results import Formatter, TablePrinter, DocumentBuilder, CUSTOM_COLORS
 from mento.forces import Forces
 
@@ -75,10 +74,12 @@ class RectangularBeam(RectangularSection):
         self._A_s_req_bot: PlainQuantity = 0 * cm**2
         self._A_s_req_top: PlainQuantity = 0 * cm**2
         self._A_v_req: PlainQuantity = 0 * cm**2 / m
+        self._A_s_tension: PlainQuantity = 0 * cm**2
         self._DCRv: float = 0
         self._DCRb_top: float = 0
         self._DCRb_bot: float = 0
         self._alpha: float = math.radians(90)
+        self._V_s_req: PlainQuantity = 0 * kN
 
         # Design checks and effective heights
         self._rho_l_bot: PlainQuantity = 0 * dimensionless
@@ -158,14 +159,12 @@ class RectangularBeam(RectangularSection):
             self._k_c_min: PlainQuantity = 0 * MPa
             self._sigma_Nu: PlainQuantity = 0 * MPa
             self.V_c: PlainQuantity = 0 * kN
-            self._V_s_req: PlainQuantity = 0 * kN
             self.phi_v: float = 0
             self.phi_t: float = 0
             self.lambda_factor = 0
             self._rho_w: PlainQuantity = 0 * dimensionless
             self._lambda_s: float = 0
             self.f_yt: PlainQuantity = 0 * MPa
-            self._A_s_tension: PlainQuantity = 0 * cm**2
             self._max_shear_ok: bool = False
             self._A_s_min_bot: PlainQuantity = 0 * cm**2
             self._A_s_min_top: PlainQuantity = 0 * cm**2
@@ -192,7 +191,6 @@ class RectangularBeam(RectangularSection):
             self._sigma_cd: PlainQuantity = 0 * MPa
             self._V_Rd_c: PlainQuantity = 0 * kN
             self._V_Rd_s: PlainQuantity = 0 * kN
-            self._V_s_req: PlainQuantity = 0 * kN
             self._V_Rd_max: PlainQuantity = 0 * kN
             self._V_Rd: PlainQuantity = 0 * kN
             self._k_value: float = 0
@@ -203,7 +201,6 @@ class RectangularBeam(RectangularSection):
             self._f_ywd: PlainQuantity = 0 * MPa
             self._f_yd: PlainQuantity = 0 * MPa
             self._f_cd: PlainQuantity = 0 * MPa
-            self._A_s_tension: PlainQuantity = 0 * cm**2
             self._A_p = 0 * cm**2  # No prestressed for now
             self._sigma_cp: PlainQuantity = 0 * MPa
             self._theta: float = 0
@@ -508,7 +505,7 @@ class RectangularBeam(RectangularSection):
             current_dcr_bot = self._DCRb_bot
 
             # Update top limiting case
-            if current_dcr_top > max_dcr_top:
+            if current_dcr_top >= max_dcr_top:
                 max_dcr_top = current_dcr_top
                 limiting_case_top = result
                 limiting_case_top_details = self._flexure_results_detailed_list[
@@ -516,7 +513,7 @@ class RectangularBeam(RectangularSection):
                 ]
 
             # Update bottom limiting case
-            if current_dcr_bot > max_dcr_bot:
+            if current_dcr_bot >= max_dcr_bot:
                 max_dcr_bot = current_dcr_bot
                 limiting_case_bot = result
                 limiting_case_bot_details = self._flexure_results_detailed_list[
@@ -778,10 +775,19 @@ class RectangularBeam(RectangularSection):
                 if not checks_pass
                 else ""
             )
-            markdown_content = (
-                f"Shear reinforcing {rebar_v}, $A_v$={limiting_reinforcement['Value'][6]} cm²/m"
-                f", $V_u$={limiting_forces['Value'][1]} kN, $\\phi V_n$={limiting_shear_concrete['Value'][7]} kN → {formatted_DCR} {warning}"
-            )  # noqa: E501
+            if (
+                self.concrete.design_code == "ACI 318-19"
+                or self.concrete.design_code == "CIRSOC 201-25"
+            ):
+                markdown_content = (
+                    f"Shear reinforcing {rebar_v}, $A_v$={limiting_reinforcement['Value'][6]} cm²/m"
+                    f", $V_u$={limiting_forces['Value'][1]} kN, $\\phi V_n$={limiting_shear_concrete['Value'][7]} kN → {formatted_DCR} {warning}"
+                )  # noqa: E501
+            else:  # self.concrete.design_code == "EN 1992-2004"
+                markdown_content = (
+                    f"Shear reinforcing {rebar_v}, $A_{{sw}}$={limiting_reinforcement['Value'][6]} cm²/m"
+                    f", $V_{{Ed,2}}$={limiting_forces['Value'][1]} kN, $V_{{Rd}}$={limiting_shear_concrete['Value'][6]} kN → {formatted_DCR} {warning}"
+                )  # noqa: E501
         else:
             markdown_content += "No shear to check."
         self._md_shear_results = markdown_content
@@ -849,7 +855,7 @@ class RectangularBeam(RectangularSection):
                 "flexure_capacity_bot"
             ]
             forces_result = {
-                "Design forces": [
+                "Design_forces": [
                     "Top max moment",
                     "Bottom max moment",
                 ],
@@ -1513,50 +1519,12 @@ def flexure_check_test() -> None:
     f3 = Forces(label="W", M_y=-50 * kNm)
     f4 = Forces(label="S", M_y=110 * kNm)
     forces = [f1, f2, f3, f4]
-    print(beam.check_flexure(forces))
+    beam.check_flexure(forces)
 
     # beam.check_shear()
-    # beam.flexure_results_detailed()
+    beam.flexure_results_detailed()
     # beam.flexure_results_detailed_doc()
     # beam.shear_results_detailed_doc()
-
-
-def flexure_Mn() -> None:
-    clear_console()
-    # MOMENTO NOMINAL SIMPLEMENTE ARMADO
-    # Example from https://www.google.com/search?q=ACI+318+19+nominal+moment+of+section&oq=ACI+318+19+nominal+moment+of+section&gs_lcrp=EgZjaHJvbWUyBggAEEUYOTIHCAEQIRigAdIBCTIyNzkzajBqN6gCALACAA&sourceid=chrome&ie=UTF-8#fpstate=ive&vld=cid:dab5f5e7,vid:m4H0QbGDYIg,st:0
-    concrete = Concrete_ACI_318_19(name="C6", f_c=6000 * psi)
-    steelBar = SteelBar(name="G80", f_y=80000 * psi)
-    beam = RectangularBeam(
-        label="B20x30",
-        concrete=concrete,
-        steel_bar=steelBar,
-        width=20 * inch,
-        height=30 * inch,
-    )
-    A_s = 10.92 * inch**2
-    d = 27 * inch
-    result = beam._determine_nominal_moment_simple_reinf_ACI_318_19(A_s, d)
-    print(result.to(kip * ft))
-
-    # MOMENTO NOMINAL DOBLEMENTE ARMADO
-    concrete2 = Concrete_ACI_318_19(name="C4", f_c=4000 * psi)
-    steelBar2 = SteelBar(name="G60", f_y=60000 * psi)
-    beam2 = RectangularBeam(
-        label="B14x27",
-        concrete=concrete2,
-        steel_bar=steelBar2,
-        width=14 * inch,
-        height=27 * inch,
-    )
-    A_s = 6 * inch**2
-    d = 24 * inch
-    d_prime = 2.5 * inch
-    A_s_prime = 1.8 * inch**2
-    result = beam2._determine_nominal_moment_double_reinf_ACI_318_19(
-        A_s, d, d_prime, A_s_prime
-    )
-    print(result.to(kip * ft))
 
 
 def shear_ACI_metric() -> None:
@@ -1636,7 +1604,7 @@ def rebar() -> None:
     beam_rebar = Rebar(section)
     long_rebar_df = beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=as_req)
     best_design = beam_rebar.longitudinal_rebar_design
-    print(long_rebar_df)
+    print(long_rebar_df, best_design)
 
 
 def rebar_df() -> None:
