@@ -144,6 +144,7 @@ class Concrete_EN_1992_2004(Concrete):
         if not self.name:
             self.name = "Concrete EN 1992-2004"
         self.design_code = "EN 1992-2004"
+        self._delta=0.85
         self._f_ck = self.f_c
         self._f_cm = self._f_ck + 8 * MPa
         self._E_cm = 22000 * (self._f_cm / (10 * MPa)) ** 0.3 * MPa

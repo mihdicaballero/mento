@@ -388,14 +388,14 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
         z_2=d - d_prima
 
         #Compression zone depth with plastic limit
-        x_u = d*(δ - 0.4)
+        x_u = d*(self.concrete._delta - 0.4)
 
 
         #Compressive reinforcement strain'
         epsilon_s2 = (x_u - d_prima)/x_u*self._epsilon_cu3
 
         # Compressive reinforcement stress'
-        f_sd = min(epsilon_s2*self._E_s; f_yd)|
+        f_sd = min(epsilon_s2*self._E_s, self._f_yd)
 
         # Required compressive reinforcement area
         A_s2 = (delta_M / ((z_2) * self._f_yd)).to("cm^2")
@@ -443,13 +443,29 @@ def _determine_nominal_moment_double_reinf_EN_1992_2004(
         )  # Factor for effective compression zone depth (EN 1992-1-1)
         eta = self.concrete.eta_factor()  # Factor for concrete strength (EN 1992-1-1)
 
+    epsilon_eff=(self.concrete._delta-k_1)/k_2
+    epsilon_eff_lim=self.concrete._delta*epsilon_eff
+    x_eff_lim=d*x_eff_lim
     # Limit moment for compressive reinforcement
     M_lim = eta * self._f_cd * self.width * x_eff_lim * (d - 0.5 * x_eff_lim)
+    
+    z=(d - 0.5 * x_eff_lim)
+    
     # Limit tensile reinforcement area
-    A_s1_lim = (M_lim / ((d - 0.5 * x_eff_lim) * self._f_yd)).to("cm^2")
+    A_s1_lim = (M_lim / ( z* self._f_yd)).to("cm^2")
 
 
-    M_Rd=A_s1_lim *z*f_yd+ f_sd*A_s2*z_2
+    x_u=d*(self.concrete._delta-0.4) # TODO no entiendo esto. De donde sale?
+
+    epsilon_s_2=(x_u-d_prime)/x_u
+
+    z_2=d-d_prime
+
+    f_sd=epsilon_s_2*self.steel_bar.E_s # NO ESTA DEPENDIENDO DE LA CANTIDA DE A_s_prime QUE LE METO. OSEA QUE NO LO PUEDO MULTIPLICAR DIRECTO
+    # ESTA PENSADO PARA DISEÑAR Y ENCONTRAR EL A_s_prime requerido, no para verificar. Me parece
+
+    M_Rd=A_s1_lim *z*self._f_yd+ min(f_sd*A_s_prime,self._f_yd*(A_s-A_s1_lim))*z_2
+    #TODO, la deformacion del acero de arriba queda limitada por el limite del hormigon. Entonces lo que aporta el acero comprimido no puede superar la capcadidad del acero traccionado extra (el que no trabaja en conjunto con el hormigon. Para aumentar la capacidad de la viga hay que aumentar simultaneamente los dos aceros, uno solo no cambia nada)
     return M_Rd
 
 #TODO FALTA LA FUNCION _determine_nominal_moment_EN_1992_2004
