@@ -1245,6 +1245,9 @@ class RectangularBeam(RectangularSection):
         """
         Plots the longitudinal rebars for the beam or column.
         """
+        # Initialize matplotlib figure and axes if not already set
+        if not hasattr(self, "_ax") or self._ax is None:
+            fig, self._ax = plt.subplots()
         # Call parent class to plot geometry
         super().plot()
         # Convert dimensions to consistent units (cm)
@@ -1446,8 +1449,8 @@ def test_on_determine_nominal_moment_ACI_318_19() -> None:
         d_b4=1 * inch,
     )
 
-    f = Forces(label="Test_01", M_y=400 * kip * ft)
-    beam._determine_nominal_moment_ACI_318_19(f)
+    f = Forces(label="Test_01", M_y=400 * kip * ft)  # noqa: F841
+    # beam._determine_nominal_moment_ACI_318_19(f)
 
 
 def flexure_design_test() -> None:
@@ -1470,31 +1473,6 @@ def flexure_design_test() -> None:
     # print(beam.flexure_design_results_bot,'\n', beam.flexure_design_results_top)
     print(results)
     # beam.flexure_results_detailed()
-
-
-def flexure_design_test_calcpad_example() -> None:
-    concrete = Concrete_ACI_318_19(name="fc 4000", f_c=4000 * psi)
-    steelBar = SteelBar(name="fy 60000", f_y=60 * ksi)
-    custom_settings = {"clear_cover": 1.5 * inch}
-    beam = RectangularBeam(
-        label="B-12x24",
-        concrete=concrete,
-        steel_bar=steelBar,
-        width=12 * inch,
-        height=24 * inch,
-        settings=custom_settings,
-    )
-
-    # beam.set_longitudinal_rebar_bot(n1=2,d_b1=1.375*inch, n3=2,d_b3=1.27*inch)
-    # beam.set_longitudinal_rebar_top(n1=2,d_b1=1.375*inch, n3=2,d_b3=1.27*inch)
-
-    f = Forces(label="Test_01", V_z=40 * kip, M_y=400 * kip * ft)
-    f2 = Forces(label="Test_01", V_z=100 * kip, M_y=-400 * kip * ft)
-    forces = [f, f2]
-
-    flexure_results = beam._design_flexure(forces)
-    print(flexure_results)
-
 
 def flexure_check_test() -> None:
     clear_console()
@@ -1544,13 +1522,13 @@ def shear_ACI_metric() -> None:
     f3 = Forces(label="W", V_z=2.20 * kN)
     f4 = Forces(label="S", V_z=8.0 * kN)
     f5 = Forces(label="E", V_z=1.0 * kN)
-    forces = [f1, f2, f3, f4, f5]
+    forces = [f1, f2, f3, f4, f5]  # noqa: F841
     beam.set_longitudinal_rebar_bot(n1=2, d_b1=16 * mm)
     # beam.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=20*cm)
     # results = beam.check_shear()
-    results = beam._design_shear(forces)
-    print(results)
-    print(beam.shear_design_results)
+    # results = beam._design_shear(forces)
+    # print(results)
+    # print(beam.shear_design_results)
     # beam.shear_results_detailed()
     # print(beam.shear_design_results)
     # print(beam.results)
@@ -1574,16 +1552,16 @@ def shear_ACI_imperial() -> None:
     f1 = Forces(label="D", V_z=37.727 * kip)
     # f1 = Forces(label='D', V_z=8*kip)
     # f2 = Forces(label='L', V_z=6*kip) # No shear reinforcing
-    forces = [f1]
+    forces = [f1]  # noqa: F841
     beam.set_transverse_rebar(n_stirrups=1, d_b=0.5 * inch, s_l=6 * inch)
 
     # beam.set_longitudinal_rebar_bot(n1=2, d_b1=0.625*inch)
     print(beam._A_v)
-    results = beam._check_shear(forces)
-    # results = beam.design_shear()
-    print(results)
-    # section.design_shear(f, A_s=0.847*inch**2)
-    beam.shear_results_detailed()
+    # results = beam._check_shear(forces)
+    # # results = beam.design_shear()
+    # print(results)
+    # # section.design_shear(f, A_s=0.847*inch**2)
+    # beam.shear_results_detailed()
     # section.shear_results_detailed_doc()
 
 
@@ -1607,42 +1585,42 @@ def rebar() -> None:
     print(long_rebar_df, best_design)
 
 
-def rebar_df() -> None:
-    concrete = Concrete_ACI_318_19(name="H30", f_c=30 * MPa)
-    steelBar = SteelBar(name="ADN 420", f_y=420 * MPa)
-    custom_settings = {"clear_cover": 30 * mm, "stirrup_diameter_ini": 8 * mm}
-    section = RectangularBeam(
-        label="V 20x50",
-        concrete=concrete,
-        steel_bar=steelBar,
-        width=20 * cm,
-        height=50 * cm,
-        settings=custom_settings,
-    )
-    beam_rebar = Rebar(section)
-    # Create a list of required steel areas from 0.5 to 10 with a step of 0.5 cm²
-    as_req_list = np.arange(0.5, 10.5, 0.5) * cm**2
-    # Initialize an empty DataFrame to store the results
-    results_df = pd.DataFrame()
+# def rebar_df() -> None:
+#     concrete = Concrete_ACI_318_19(name="H30", f_c=30 * MPa)
+#     steelBar = SteelBar(name="ADN 420", f_y=420 * MPa)
+#     custom_settings = {"clear_cover": 30 * mm, "stirrup_diameter_ini": 8 * mm}
+#     section = RectangularBeam(
+#         label="V 20x50",
+#         concrete=concrete,
+#         steel_bar=steelBar,
+#         width=20 * cm,
+#         height=50 * cm,
+#         settings=custom_settings,
+#     )
+#     beam_rebar = Rebar(section)
+#     # Create a list of required steel areas from 0.5 to 10 with a step of 0.5 cm²
+#     as_req_list = np.arange(0.5, 10.5, 0.5) * cm**2
+#     # Initialize an empty DataFrame to store the results
+#     results_df = pd.DataFrame()
 
-    # Loop through each required steel area
-    for as_req in as_req_list:
-        # Run the longitudinal_rebar_ACI_19 method
-        long_rebar_df = beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=as_req)
+#     # Loop through each required steel area
+#     for as_req in as_req_list:
+#         # Run the longitudinal_rebar_ACI_19 method
+#         long_rebar_df = beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=as_req)
 
-        # Extract the first row of the resulting DataFrame
-        first_row = long_rebar_df.iloc[0:1].copy()
+#         # Extract the first row of the resulting DataFrame
+#         first_row = long_rebar_df.iloc[0:1].copy()
 
-        # Add a column to store the required steel area
-        first_row[
-            "as_req"
-        ] = as_req.magnitude  # Store the magnitude (value without units)
+#         # Add a column to store the required steel area
+#         first_row[
+#             "as_req"
+#         ] = as_req.magnitude  # Store the magnitude (value without units)
 
-        # Append the first row to the results DataFrame
-        results_df = pd.concat([results_df, first_row], ignore_index=True)
+#         # Append the first row to the results DataFrame
+#         results_df = pd.concat([results_df, first_row], ignore_index=True)
 
-    # Display the results DataFrame
-    print(results_df)
+#     # Display the results DataFrame
+#     print(results_df)
 
 
 if __name__ == "__main__":

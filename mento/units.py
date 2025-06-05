@@ -1,8 +1,10 @@
 from pint import UnitRegistry
 import math
+import pint
 
 # Initialize UnitRegistry
 ureg = UnitRegistry(system="mks")
+pint.set_application_registry(ureg)
 ureg.formatter.default_format = ".2f~P"  # Standardize output formatting
 
 # Metric system units
