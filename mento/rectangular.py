@@ -1,6 +1,6 @@
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
-from pint.facets.plain import PlainQuantity
+from pint import Quantity
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle, FancyBboxPatch
 
@@ -19,8 +19,8 @@ class RectangularSection(Section):
         label: Optional[str],
         concrete: Concrete,
         steel_bar: SteelBar,
-        width: PlainQuantity,
-        height: PlainQuantity,
+        width: Quantity,
+        height: Quantity,
         settings: Optional[Dict[str, Any]] = None,
     ) -> None:
         super().__init__(label, concrete, steel_bar, settings)
@@ -37,27 +37,27 @@ class RectangularSection(Section):
         self._ax: Optional[plt.Axes] = None
 
     @property
-    def width(self) -> PlainQuantity:
+    def width(self) -> Quantity:
         "Beam width."
         return self._width.to("cm")
 
     @property
-    def height(self) -> PlainQuantity:
+    def height(self) -> Quantity:
         "Beam height."
         return self._height.to("cm")
 
     @property
-    def A_x(self) -> PlainQuantity:
+    def A_x(self) -> Quantity:
         "Cross section area."
         return self._A_x.to("cm**2")
 
     @property
-    def I_y(self) -> PlainQuantity:
+    def I_y(self) -> Quantity:
         "Moment of inertia about the Y axis."
         return self._I_y.to("cm**4")
 
     @property
-    def I_z(self) -> PlainQuantity:
+    def I_z(self) -> Quantity:
         "Moment of inertia about the Z axis."
         return self._I_z.to("cm**4")
 
