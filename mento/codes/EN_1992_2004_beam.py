@@ -288,6 +288,8 @@ def _design_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> None:
 # FLEXURE CHECK AND DESIGN
 ##########################################################
 
+#TODO limitar hormigon a C50/60
+
 
 def _min_max_flexural_reinforcement_ratio_EN_1992_2004(
     self: "RectangularBeam",
@@ -442,10 +444,11 @@ def _determine_nominal_moment_double_reinf_EN_1992_2004(
             self.concrete.lambda_factor()
         )  # Factor for effective compression zone depth (EN 1992-1-1)
         eta = self.concrete.eta_factor()  # Factor for concrete strength (EN 1992-1-1)
-
+    k_1=0.4
+    k_2=0.6+0.0014/self._epsilon_cu3 
     epsilon_eff=(self.concrete._delta-k_1)/k_2
     epsilon_eff_lim=self.concrete._delta*epsilon_eff
-    x_eff_lim=d*x_eff_lim
+    x_eff_lim=d*epsilon_eff_lim
     # Limit moment for compressive reinforcement
     M_lim = eta * self._f_cd * self.width * x_eff_lim * (d - 0.5 * x_eff_lim)
     
@@ -468,7 +471,72 @@ def _determine_nominal_moment_double_reinf_EN_1992_2004(
     #TODO, la deformacion del acero de arriba queda limitada por el limite del hormigon. Entonces lo que aporta el acero comprimido no puede superar la capcadidad del acero traccionado extra (el que no trabaja en conjunto con el hormigon. Para aumentar la capacidad de la viga hay que aumentar simultaneamente los dos aceros, uno solo no cambia nada)
     return M_Rd
 
-#TODO FALTA LA FUNCION _determine_nominal_moment_EN_1992_2004
+
+
+def _determine_nominal_moment_EN_1992_2004(
+    self: "RectangularBeam", force: Forces
+) -> None:
+    """
+    Determines the nominal moment for a given section with both top and bottom reinforcement,
+    calculating the nominal moment for both positive and negative moment scenarios.
+
+    For positive moments, the tension is in the bottom reinforcement.
+    For negative moments, the tension is in the top reinforcement.
+
+    Parameters:
+        force (Forces): An object containing the forces acting on the section, including the moment M_y.
+
+    Returns:
+        None
+    """
+
+    # Calculate minimum and maximum reinforcement ratios
+    [rho_min, rho_max] = _min_max_flexural_reinforcement_ratio_EN_1992_2004(self)
+    
+
+    # For positive moments (tension in the bottom), set minimum reinforcement accordingly.
+    if force._M_y > 0 * kNm:
+        rho_min_top = 0 * dimensionless
+        rho_min_bot = rho_min
+    else:
+        rho_min_top = rho_min
+        rho_min_bot = 0 * dimensionless
+
+    # Calculate minimum and maximum bottom reinforcement areas
+    self._A_s_min_bot = rho_min_bot * self._d_bot * self._width
+    self._A_s_max_bot = rho_max * self._d_bot * self._width
+
+    # Determine the nominal moment for positive moments
+    if self._A_s_top == 0 * cm**2:
+        M_Rd_positive = _determine_nominal_moment_simple_reinf_EN_1992_2004(
+            self, self._A_s_max_bot, self._d_bot
+        )
+    else:
+        M_Rd_positive = _determine_nominal_moment_double_reinf_EN_1992_2004(
+            self, self._A_s_bot, self._d_bot, self._c_mec_top, self._A_s_top
+        )
+
+    # Determine capacity for negative moment (tension at the top)
+    self._A_s_min_top = rho_min_top * self._d_top * self._width
+    self._A_s_max_top = rho_max * self._d_top * self._width
+
+    if self._A_s_top == 0 * cm**2:
+        M_Rd_negative = 0 * kNm
+    elif self._A_s_bot == 0 * cm**2:
+        M_Rd_negative = _determine_nominal_moment_simple_reinf_EN_1992_2004(
+            self, self._A_s_max_top, self._d_top
+        )
+    else:
+        M_Rd_negative = _determine_nominal_moment_double_reinf_EN_1992_2004(
+            self, self._A_s_top, self._d_top, self._c_mec_bot, self._A_s_bot
+        )
+
+    # Calculate the design moment capacities for both bottom and top reinforcement
+    self._phi_M_Rd_bot = M_Rd_positive
+    self._phi_M_Rd_top = M_Rd_negative
+
+    return None
+
 
 
 
@@ -547,7 +615,7 @@ def _design_flexure_EN_1992_2004(
             if self._A_s_top > 0:
                 section_rebar_top = Rebar(self)
                 self.flexure_design_results_top = (
-                    section_rebar_top.longitudinal_rebar_ACI_318_19(self._A_s_top)
+                    section_rebar_top.longitudinal_rebar_EN_1992_2004(self._A_s_top)
                 )
                 best_design_top = section_rebar_top.longitudinal_rebar_design
 
@@ -629,23 +697,22 @@ def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> pd.Da
     _initialize_variables_EN_1992_2004(self)
 
     # Calculate the nominal moments for both top and bottom reinforcement.
-    _determine_nominal_moment_ACI_318_19(self, force)
+    _determine_nominal_moment_EN_1992_2004(self, force)
 
-    if self._M_u >= 0:
+    if self._M_Ed >= 0:
         # For positive moments, calculate the reinforcement requirements for the bottom tension side.
         (
             self._A_s_min_bot,
             self._A_s_max_bot,
             self._A_s_req_bot,
-            self._A_s_req_top,
-            self._c_d_bot,
-        ) = _calculate_flexural_reinforcement_ACI_318_19(
-            self, self._M_u_bot, self._d_bot, self._c_mec_top
+            self._A_s_req_top
+        ) = _calculate_flexural_reinforcement_EN_1992_2004(
+            self, self._M_Ed_bot, self._d_bot, self._c_mec_top
         )
         self._c_d_top = 0
         # Calculate the design capacity ratio for the bottom side.
         self._DCRb_bot = round(
-            self._M_u_bot.to("kN*m").magnitude / self._phi_M_n_bot.to("kN*m").magnitude,
+            self._M_Ed_bot.to("kN*m").magnitude / self._phi_M_n_bot.to("kN*m").magnitude,
             3,
         )
         self._DCRb_top = 0
@@ -657,8 +724,8 @@ def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> pd.Da
             self._A_s_req_top,
             self._A_s_req_bot,
             self._c_d_top,
-        ) = _calculate_flexural_reinforcement_ACI_318_19(
-            self, abs(self._M_u_top), self._d_top, self._c_mec_bot
+        ) = _calculate_flexural_reinforcement_EN_1992_2004(
+            self, abs(self._M_Ed_top), self._d_top, self._c_mec_bot
         )
         self._c_d_bot = 0
         # Calculate the design capacity ratio for the top side.

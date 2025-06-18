@@ -26,6 +26,7 @@ from mento.forces import Forces
 
 from mento.codes.EN_1992_2004_beam import (
     _check_shear_EN_1992_2004,
+    _check_flexure_EN_1992_2004,
     _design_shear_EN_1992_2004,
     _design_flexure_EN_1992_2004
 )
@@ -190,6 +191,8 @@ class RectangularBeam(RectangularSection):
             self._V_Ed_2: PlainQuantity = 0 * kN
             self._N_Ed: PlainQuantity = 0 * kN
             self._M_Ed: PlainQuantity = 0 * kNm
+            self._M_Ed_bot: PlainQuantity = 0 * kNm
+            self._M_Ed_top: PlainQuantity = 0 * kNm
             self._sigma_cd: PlainQuantity = 0 * MPa
             self._V_Rd_c: PlainQuantity = 0 * kN
             self._V_Rd_s: PlainQuantity = 0 * kN
@@ -489,8 +492,8 @@ class RectangularBeam(RectangularSection):
                 or self.concrete.design_code == "CIRSOC 201-25"
             ):
                 result = _check_flexure_ACI_318_19(self, force)
-            # elif self.concrete.design_code=="EN 1992-2004":
-            #     result =  _check_shear_EN_1992_2004(self, force)
+            elif self.concrete.design_code=="EN 1992-2004":
+                 result =  _check_flexure_EN_1992_2004(self, force)
             else:
                 raise ValueError(
                     f"Flexure design method not implemented for concrete type: {type(self.concrete).__name__}"
