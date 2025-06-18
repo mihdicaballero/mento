@@ -529,8 +529,8 @@ def _determine_nominal_moment_EN_1992_2004(
         )
 
     # Calculate the design moment capacities for both bottom and top reinforcement
-    self._phi_M_Rd_bot = M_Rd_positive
-    self._phi_M_Rd_top = M_Rd_negative
+    self._M_Rd_bot = M_Rd_positive
+    self._M_Rd_top = M_Rd_negative
 
     return None
 
@@ -709,7 +709,7 @@ def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> pd.Da
         self._c_d_top = 0
         # Calculate the design capacity ratio for the bottom side.
         self._DCRb_bot = round(
-            self._M_Ed_bot.to("kN*m").magnitude / self._phi_M_n_bot.to("kN*m").magnitude,
+            self._M_Ed_bot.to("kN*m").magnitude / self._M_Rd_bot.to("kN*m").magnitude,
             3,
         )
         self._DCRb_top = 0
@@ -719,8 +719,7 @@ def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> pd.Da
             self._A_s_min_top,
             self._A_s_max_top,
             self._A_s_req_top,
-            self._A_s_req_bot,
-            self._c_d_top,
+            self._A_s_req_bot
         ) = _calculate_flexural_reinforcement_EN_1992_2004(
             self, abs(self._M_Ed_top), self._d_top, self._c_mec_bot
         )
@@ -743,14 +742,56 @@ def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> pd.Da
 
     # Compile the design results into a dictionary.
     #TODO HAY QUE ARMAR EL COMPILE RESULTS DE EN
-    results = _compile_results_ACI_flexure_metric(self, force)
+    results = _compile_results_EN_1992_2004_flexure_metric(self, force)
 
     # Initialize any additional dictionaries required for ACI 318-19 flexural checks.
-    _initialize_dicts_ACI_318_19_flexure(self)
+    _initialize_dicts_EN_1992_2004_flexure(self)
 
     # Return the results as a Pandas DataFrame.
     return pd.DataFrame([results], index=[0])
 
+
+
+
+
+
+
+
+def _compile_results_EN_1992_2004_flexure_metric(
+    self: "RectangularBeam", force: Forces
+) -> Dict[str, Any]:
+    # Create dictionaries for bottom and top rows
+    if self._M_Ed >= 0:
+        result = {
+            "Section Label": self.label,
+            "Load Combo": force.label,
+            "Position": "Bottom",
+            "As,min": self._A_s_min_bot.to("cm ** 2"),
+            "As,req top": self._A_s_req_top.to("cm ** 2"),
+            "As,req bot": self._A_s_req_bot.to("cm ** 2"),
+            "As": self._A_s_bot.to("cm ** 2"),
+            # 'c/d': self._c_d_bot,
+            "M_Ed": self._M_Ed_bot.to("kN*m"),
+            "M_Rd": self._M_Rd_bot.to("kN*m"),
+            "M_Ed<M_Rd": self._M_Ed_bot <= self._M_Rd_bot,
+            "DCR": self._DCRb_bot,
+        }
+    else:
+        result = {
+            "Section Label": self.label,
+            "Load Combo": force.label,
+            "Position": "Top",
+            "As,min": self._A_s_min_top.to("cm ** 2"),
+            "As,req top": self._A_s_req_top.to("cm ** 2"),
+            "As,req bot": self._A_s_req_bot.to("cm ** 2"),
+            "As": self._A_s_top.to("cm ** 2"),
+            # 'c/d': self._c_d_top,
+            "M_Ed": self._M_Ed_top.to("kN*m"),
+            "M_Rd": self._M_Rd_top.to("kN*m"),
+            "M_Ed<M_Rd": -self._M_Ed_top <= self._M_Rd_top,
+            "DCR": self._DCRb_top,
+        }
+    return result
 
 
 
@@ -959,8 +1000,8 @@ def _initialize_dicts_EN_1992_2004_flexure(self: "RectangularBeam") -> None:
             ],
             "Variable": ["MEd,top", "MEd,bot"],
             "Value": [
-                round(self._M_u_top.to("kN*m").magnitude, 2),
-                round(self._M_u_bot.to("kN*m").magnitude, 2),
+                round(self._M_Ed_top.to("kN*m").magnitude, 2),
+                round(self._M_Ed_bot.to("kN*m").magnitude, 2),
             ],
             "Unit": ["kNm", "kNm"],
         }
@@ -1152,3 +1193,5 @@ def _initialize_dicts_EN_1992_2004_flexure(self: "RectangularBeam") -> None:
             and (check_DCR_bot == "✔️")
             and (check_DCR_top == "✔️")
         )
+
+

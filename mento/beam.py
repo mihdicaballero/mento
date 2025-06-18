@@ -192,6 +192,8 @@ class RectangularBeam(RectangularSection):
             self._M_Ed: PlainQuantity = 0 * kNm
             self._M_Ed_bot: PlainQuantity = 0 * kNm
             self._M_Ed_top: PlainQuantity = 0 * kNm
+            self._M_Rd_bot: PlainQuantity = 0 * kNm
+            self._M_Rd_top: PlainQuantity = 0 * kNm
             self._sigma_cd: PlainQuantity = 0 * MPa
             self._V_Rd_c: PlainQuantity = 0 * kN
             self._V_Rd_s: PlainQuantity = 0 * kN
@@ -1504,6 +1506,7 @@ def flexure_design_test_calcpad_example() -> None:
 
 
 def flexure_design_test_EN() -> None:
+    #TODO Sale mal el DCR
     concrete = Concrete_EN_1992_2004(name="H25", f_ck=25 * MPa)
     steelBar = SteelBar(name="fy 60000", f_y=420*MPa)
     custom_settings = {"clear_cover": 2.6*cm}
