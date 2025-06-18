@@ -742,6 +742,7 @@ def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> pd.Da
     self._rho_l_top = self._A_s_bot / (self._d_top * self._width)
 
     # Compile the design results into a dictionary.
+    #TODO HAY QUE ARMAR EL COMPILE RESULTS DE EN
     results = _compile_results_ACI_flexure_metric(self, force)
 
     # Initialize any additional dictionaries required for ACI 318-19 flexural checks.
