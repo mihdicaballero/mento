@@ -7,7 +7,7 @@ Subpackages
 .. toctree::
    :maxdepth: 4
 
-   mento.concrete
+   mento.codes
 
 Submodules
 ----------
@@ -16,6 +16,14 @@ mento.beam module
 -----------------
 
 .. automodule:: mento.beam
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+mento.column module
+-------------------
+
+.. automodule:: mento.column
    :members:
    :undoc-members:
    :show-inheritance:
@@ -52,6 +60,14 @@ mento.rebar module
    :undoc-members:
    :show-inheritance:
 
+mento.rectangular module
+------------------------
+
+.. automodule:: mento.rectangular
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 mento.results module
 --------------------
 
@@ -72,6 +88,14 @@ mento.settings module
 ---------------------
 
 .. automodule:: mento.settings
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+mento.summary module
+--------------------
+
+.. automodule:: mento.summary
    :members:
    :undoc-members:
    :show-inheritance:

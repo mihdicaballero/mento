@@ -341,191 +341,6 @@ def _compile_results_ACI_shear(
     }
 
 
-def _initialize_dicts_ACI_318_19_shear(self: "RectangularBeam") -> None:
-    if isinstance(self.concrete, Concrete_ACI_318_19):
-        """Initialize the dictionaries used in check and design methods."""
-        self._materials_shear = {
-            "Materials": [
-                "Section Label",
-                "Concrete strength",
-                "Steel reinforcement yield strength",
-                "Concrete density",
-                "Normalweight concrete",
-                "Safety factor for shear",
-            ],
-            "Variable": ["", "fc", "fy", "wc", "λ", "Øv"],
-            "Value": [
-                self.label,
-                round(self.concrete.f_c.to("MPa").magnitude, 2),
-                round(self.steel_bar.f_y.to("MPa").magnitude, 2),
-                round(self.concrete.density.to("kg/m**3").magnitude, 1),
-                self.settings.get_setting("lambda"),
-                self.settings.get_setting("phi_v"),
-            ],
-            "Unit": ["", "MPa", "MPa", "kg/m³", "", ""],
-        }
-        self._geometry_shear = {
-            "Geometry": [
-                "Section height",
-                "Section width",
-                "Clear cover",
-                "Longitudinal tension rebar",
-            ],
-            "Variable": ["h", "b", "cc", "As"],
-            "Value": [
-                self.height.to("cm").magnitude,
-                self.width.to("cm").magnitude,
-                self.c_c.to("cm").magnitude,
-                round(self._A_s_tension.to("cm**2").magnitude, 2),
-            ],
-            "Unit": ["cm", "cm", "cm", "cm²"],
-        }
-        self._forces_shear = {
-            "Design forces": [
-                "Axial, positive for compression",
-                "Shear",
-            ],
-            "Variable": ["Nu", "Vu"],
-            "Value": [
-                round(self._N_u.to("kN").magnitude, 2),
-                round(self._V_u.to("kN").magnitude, 2),
-            ],
-            "Unit": ["kN", "kN"],
-        }
-        # Min max lists
-        if self._phi_V_s == 0 * kN:
-            db_min = 0 * mm if self.concrete.unit_system == "metric" else 0 * inch
-            self._stirrup_d_b = (
-                0 * mm if self.concrete.unit_system == "metric" else 0 * inch
-            )
-        else:
-            db_min = 10 * mm if self.concrete.unit_system == "metric" else 3 / 8 * inch
-        min_values = [
-            None,
-            None,
-            self._A_v_min,
-            db_min,
-        ]  # Use None for items without a minimum constraint
-        max_values = [
-            self._stirrup_s_max_l,
-            self._stirrup_s_max_w,
-            None,
-            None,
-        ]  # Use None for items without a maximum constraint
-        current_values = [
-            self._stirrup_s_l,
-            self._stirrup_s_w,
-            self._A_v,
-            self._stirrup_d_b,
-        ]  # Current values to check
-
-        # Generate check marks based on the range conditions
-        checks = [
-            "✔️"
-            if (min_val is None or curr >= min_val)
-            and (max_val is None or curr <= max_val)
-            else "❌"
-            for curr, min_val, max_val in zip(current_values, min_values, max_values)
-        ]
-        self._all_shear_checks_passed = all(check == "✔️" for check in checks)
-        self._data_min_max_shear = {
-            "Check": [
-                "Stirrup spacing along length",
-                "Stirrup spacing along width",
-                "Minimum shear reinforcement",
-                "Minimum rebar diameter",
-            ],
-            "Unit": ["cm", "cm", "cm²/m", "mm"],
-            "Value": [
-                round(self._stirrup_s_l.to("cm").magnitude, 2),
-                round(self._stirrup_s_w.to("cm").magnitude, 2),
-                round(self._A_v.to("cm**2/m").magnitude, 2),
-                round(self._stirrup_d_b.magnitude, 0),
-            ],
-            "Min.": [
-                "",
-                "",
-                round(self._A_v_min.to("cm**2/m").magnitude, 2),
-                round(db_min.magnitude, 0),
-            ],
-            "Max.": [
-                round(self._stirrup_s_max_l.to("cm").magnitude, 2),
-                round(self._stirrup_s_max_w.to("cm").magnitude, 2),
-                "",
-                "",
-            ],
-            "Ok?": checks,
-        }
-        self._shear_reinforcement = {
-            "Shear reinforcement strength": [
-                "Number of stirrups",
-                "Stirrup diameter",
-                "Stirrup spacing",
-                "Effective height",
-                "Minimum shear reinforcing",
-                "Required shear reinforcing",
-                "Defined shear reinforcing",
-                "Shear rebar strength",
-            ],
-            "Variable": ["ns", "db", "s", "d", "Av,min", "Av,req", "Av", "ØVs"],
-            "Value": [
-                self._stirrup_n,
-                self._stirrup_d_b.to("mm").magnitude,
-                self._stirrup_s_l.to("cm").magnitude,
-                self._d_shear.to("cm").magnitude,
-                round(self._A_v_min.to("cm**2/m").magnitude, 2),
-                round(self._A_v_req.to("cm**2/m").magnitude, 2),
-                round(self._A_v.to("cm**2/m").magnitude, 2),
-                round(self._phi_V_s.to("kN").magnitude, 2),
-            ],
-            "Unit": ["", "mm", "cm", "cm", "cm²/m", "cm²/m", "cm²/m", "kN"],
-        }
-        check_max = "✔️" if self._max_shear_ok else "❌"
-        check_FU = "✔️" if self._DCRv < 1 else "❌"
-        self._shear_concrete = {
-            "Shear strength": [
-                "Effective shear area",
-                "Longitudinal reinforcement ratio",
-                "Size modification factor",
-                "Axial stress",
-                "Concrete effective shear stress",
-                "Concrete strength",
-                "Maximum shear strength",
-                "Total shear strength",
-                "Max shear check",
-                "Demand Capacity Ratio",
-            ],
-            "Variable": [
-                "Acv",
-                "ρw",
-                "λs",
-                "σNu",
-                "kc",
-                "ØVc",
-                "ØVmax",
-                "ØVn",
-                "",
-                "DCR",
-            ],
-            "Value": [
-                round(self._A_cv.to("cm**2").magnitude, 2),
-                round(self._rho_w.magnitude, 5),
-                round(self._lambda_s, 3),
-                round(self._sigma_Nu.to("MPa").magnitude, 2),
-                round(self._k_c_min.to("MPa").magnitude, 2),
-                round(self._phi_V_c.to("kN").magnitude, 2),
-                round(self._phi_V_max.to("kN").magnitude, 2),
-                round(self._phi_V_n.to("kN").magnitude, 2),
-                check_max,
-                round(self._DCRv, 2),
-            ],
-            "Unit": ["cm²", "", "", "MPa", "MPa", "kN", "kN", "kN", "", check_FU],
-        }
-        self._shear_all_checks = (
-            self._all_shear_checks_passed and (check_max == "✔️") and (check_FU == "✔️")
-        )
-
-
 def _calculate_phi_ACI_318_19(
     self: "RectangularBeam", epsilon_most_strained: float
 ) -> float:
@@ -590,7 +405,7 @@ def _maximum_flexural_reinforcement_ratio_ACI_318_19(self: "RectangularBeam") ->
 
     """
     # Cast the concrete object to the specific ACI subclass
-    concrete_aci = cast(Concrete_ACI_318_19, self.concrete)
+    concrete_aci = cast("Concrete_ACI_318_19", self.concrete)
 
     # Calculate minimum steel strain for ductility (tension controlled according 9.3.3.1 and 21.2.2)
     epsilon_min_rebar_ACI_318_19 = self.steel_bar.epsilon_y + concrete_aci._epsilon_c
@@ -1266,6 +1081,191 @@ def _compile_results_ACI_flexure_metric(
 ##########################################################
 # RESULTS
 ##########################################################
+
+
+def _initialize_dicts_ACI_318_19_shear(self: "RectangularBeam") -> None:
+    if isinstance(self.concrete, Concrete_ACI_318_19):
+        """Initialize the dictionaries used in check and design methods."""
+        self._materials_shear = {
+            "Materials": [
+                "Section Label",
+                "Concrete strength",
+                "Steel reinforcement yield strength",
+                "Concrete density",
+                "Normalweight concrete",
+                "Safety factor for shear",
+            ],
+            "Variable": ["", "fc", "fy", "wc", "λ", "Øv"],
+            "Value": [
+                self.label,
+                round(self.concrete.f_c.to("MPa").magnitude, 2),
+                round(self.steel_bar.f_y.to("MPa").magnitude, 2),
+                round(self.concrete.density.to("kg/m**3").magnitude, 1),
+                self.settings.get_setting("lambda"),
+                self.settings.get_setting("phi_v"),
+            ],
+            "Unit": ["", "MPa", "MPa", "kg/m³", "", ""],
+        }
+        self._geometry_shear = {
+            "Geometry": [
+                "Section height",
+                "Section width",
+                "Clear cover",
+                "Longitudinal tension rebar",
+            ],
+            "Variable": ["h", "b", "cc", "As"],
+            "Value": [
+                self.height.to("cm").magnitude,
+                self.width.to("cm").magnitude,
+                self.c_c.to("cm").magnitude,
+                round(self._A_s_tension.to("cm**2").magnitude, 2),
+            ],
+            "Unit": ["cm", "cm", "cm", "cm²"],
+        }
+        self._forces_shear = {
+            "Design forces": [
+                "Axial, positive for compression",
+                "Shear",
+            ],
+            "Variable": ["Nu", "Vu"],
+            "Value": [
+                round(self._N_u.to("kN").magnitude, 2),
+                round(self._V_u.to("kN").magnitude, 2),
+            ],
+            "Unit": ["kN", "kN"],
+        }
+        # Min max lists
+        if self._phi_V_s == 0 * kN:
+            db_min = 0 * mm if self.concrete.unit_system == "metric" else 0 * inch
+            self._stirrup_d_b = (
+                0 * mm if self.concrete.unit_system == "metric" else 0 * inch
+            )
+        else:
+            db_min = 10 * mm if self.concrete.unit_system == "metric" else 3 / 8 * inch
+        min_values = [
+            None,
+            None,
+            self._A_v_min,
+            db_min,
+        ]  # Use None for items without a minimum constraint
+        max_values = [
+            self._stirrup_s_max_l,
+            self._stirrup_s_max_w,
+            None,
+            None,
+        ]  # Use None for items without a maximum constraint
+        current_values = [
+            self._stirrup_s_l,
+            self._stirrup_s_w,
+            self._A_v,
+            self._stirrup_d_b,
+        ]  # Current values to check
+
+        # Generate check marks based on the range conditions
+        checks = [
+            "✔️"
+            if (min_val is None or curr >= min_val)
+            and (max_val is None or curr <= max_val)
+            else "❌"
+            for curr, min_val, max_val in zip(current_values, min_values, max_values)
+        ]
+        self._all_shear_checks_passed = all(check == "✔️" for check in checks)
+        self._data_min_max_shear = {
+            "Check": [
+                "Stirrup spacing along length",
+                "Stirrup spacing along width",
+                "Minimum shear reinforcement",
+                "Minimum rebar diameter",
+            ],
+            "Unit": ["cm", "cm", "cm²/m", "mm"],
+            "Value": [
+                round(self._stirrup_s_l.to("cm").magnitude, 2),
+                round(self._stirrup_s_w.to("cm").magnitude, 2),
+                round(self._A_v.to("cm**2/m").magnitude, 2),
+                round(self._stirrup_d_b.magnitude, 0),
+            ],
+            "Min.": [
+                "",
+                "",
+                round(self._A_v_min.to("cm**2/m").magnitude, 2),
+                round(db_min.magnitude, 0),
+            ],
+            "Max.": [
+                round(self._stirrup_s_max_l.to("cm").magnitude, 2),
+                round(self._stirrup_s_max_w.to("cm").magnitude, 2),
+                "",
+                "",
+            ],
+            "Ok?": checks,
+        }
+        self._shear_reinforcement = {
+            "Shear reinforcement strength": [
+                "Number of stirrups",
+                "Stirrup diameter",
+                "Stirrup spacing",
+                "Effective height",
+                "Minimum shear reinforcing",
+                "Required shear reinforcing",
+                "Defined shear reinforcing",
+                "Shear rebar strength",
+            ],
+            "Variable": ["ns", "db", "s", "d", "Av,min", "Av,req", "Av", "ØVs"],
+            "Value": [
+                self._stirrup_n,
+                self._stirrup_d_b.to("mm").magnitude,
+                self._stirrup_s_l.to("cm").magnitude,
+                self._d_shear.to("cm").magnitude,
+                round(self._A_v_min.to("cm**2/m").magnitude, 2),
+                round(self._A_v_req.to("cm**2/m").magnitude, 2),
+                round(self._A_v.to("cm**2/m").magnitude, 2),
+                round(self._phi_V_s.to("kN").magnitude, 2),
+            ],
+            "Unit": ["", "mm", "cm", "cm", "cm²/m", "cm²/m", "cm²/m", "kN"],
+        }
+        check_max = "✔️" if self._max_shear_ok else "❌"
+        check_FU = "✔️" if self._DCRv < 1 else "❌"
+        self._shear_concrete = {
+            "Shear strength": [
+                "Effective shear area",
+                "Longitudinal reinforcement ratio",
+                "Size modification factor",
+                "Axial stress",
+                "Concrete effective shear stress",
+                "Concrete strength",
+                "Maximum shear strength",
+                "Total shear strength",
+                "Max shear check",
+                "Demand Capacity Ratio",
+            ],
+            "Variable": [
+                "Acv",
+                "ρw",
+                "λs",
+                "σNu",
+                "kc",
+                "ØVc",
+                "ØVmax",
+                "ØVn",
+                "",
+                "DCR",
+            ],
+            "Value": [
+                round(self._A_cv.to("cm**2").magnitude, 2),
+                round(self._rho_w.magnitude, 5),
+                round(self._lambda_s, 3),
+                round(self._sigma_Nu.to("MPa").magnitude, 2),
+                round(self._k_c_min.to("MPa").magnitude, 2),
+                round(self._phi_V_c.to("kN").magnitude, 2),
+                round(self._phi_V_max.to("kN").magnitude, 2),
+                round(self._phi_V_n.to("kN").magnitude, 2),
+                check_max,
+                round(self._DCRv, 2),
+            ],
+            "Unit": ["cm²", "", "", "MPa", "MPa", "kN", "kN", "kN", "", check_FU],
+        }
+        self._shear_all_checks = (
+            self._all_shear_checks_passed and (check_max == "✔️") and (check_FU == "✔️")
+        )
 
 
 def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:

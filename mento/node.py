@@ -1,6 +1,5 @@
 from typing import Union, Optional, List
 import pandas as pd
-from dataclasses import field
 
 from mento.beam import RectangularBeam
 from mento.material import SteelBar, Concrete_ACI_318_19, Concrete_EN_1992_2004
@@ -127,7 +126,7 @@ def flexure_design_test() -> None:
     f2 = Forces(label="Test_01", V_z=100 * kip, M_y=-400 * kip * ft)
     node_1 = Node(section=beam, forces=[f, f2])
 
-    flexure_results = node_1.design_flexure()
+    node_1.design_flexure()
     node_1.flexure_results_detailed()
     # node_1.flexure_results_detailed_doc()
     print(node_1)
@@ -186,7 +185,7 @@ def shear_ACI_metric() -> None:
     node = Node(section=beam, forces=forces)
     results = node.check_shear()
     # results = beam.design_shear(forces)
-    print(node)
+    print(results)
     # print(beam.shear_design_results)
     # beam.shear_results_detailed()
     # print(beam.shear_design_results)

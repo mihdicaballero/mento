@@ -38,9 +38,10 @@ To contribute fixes, code or documentation to Mento:
    - Validate all calculations in CalcPad
    - Include the CalcPad validation files with your PR
 5. Write "Closes #<bug number>" in the PR description or comment
-6. Execute ``pre-commit run --all-files`` and resolve any issues
+6. Execute ``pre-commit run --all-files`` twice and resolve any issues
 
 We won't merge a PR if:
+
 - Tests are failing
 - Calculations aren't validated in CalcPad against design code guides
 - Code doesn't adhere to linting standards

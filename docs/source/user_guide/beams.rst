@@ -130,7 +130,7 @@ Here’s an example of the output from `beam.results`:
 
     \textsf{Bottom longitudinal rebar: } 2\phi16 + 1\phi12 ++ 2\phi12 + 1\phi10, \, A_{s,\text{bot}} = 8.2 \, \textsf{cm}^2, \, M_u = 90 \, \textsf{kNm}, \, \phi M_n = 154.95 \, \textsf{kNm} \rightarrow \textsf{DCR} = 0.58
 
-    \textsf{Shear reinforcing: } 1e\phi10/20 \, \textsf{cm}, \, A_v = 7.85 \, \textsf{cm}^2/\textsf{m}, \, V_u = 80 \, \textsf{kN}, \, \phi V_n = 196.24 \, \textsf{kN} \rightarrow \textsf{DCR} = 0.41
+    \textsf{Shear reinforcing: } 1s\phi10/20 \, \textsf{cm}, \, A_v = 7.85 \, \textsf{cm}^2/\textsf{m}, \, V_u = 80 \, \textsf{kN}, \, \phi V_n = 196.24 \, \textsf{kN} \rightarrow \textsf{DCR} = 0.41
 
 
 Interpreting the Output
@@ -169,7 +169,7 @@ The first line provides the beam's geometry and material properties:
 
 - **Shear reinforcing**: Shear reinforcement details.
 
-  - :math:`1e\phi10/20 \, \textsf{cm}`: 10 mm diameter stirrups spaced at 20 cm.
+  - :math:`1s\phi10/20 \, \textsf{cm}`: 10 mm diameter stirrups spaced at 20 cm.
   - :math:`A_v = 7.85 \, \textsf{cm}^2/\textsf{m}`: Area of shear reinforcement per meter.
   - :math:`V_u = 80 \, \textsf{kN}`: Applied shear force.
   - :math:`\phi V_n = 196.24 \, \textsf{kN}`: Design shear capacity.

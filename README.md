@@ -21,7 +21,7 @@ This repository provides a comprehensive package for the design and structural a
 - Interactive usage in Jupyter Notebooks, allowing users to create custom calculations using package modules.
 - Results are presented in markdown format within the notebook and as pandas DataFrames for easy handling of multiple checks.
 - Ability to generate detailed calculation reports in Word.
-- Comprehensive testing for design code compliance, including ACI 318-19, EN 1992-2004, and CIRSOC 201-2024.
+- Comprehensive testing for design code compliance, including ACI 318-19, EN 1992-2004, and CIRSOC 201-2025.
 
 #### Roadmap
 The development is structured around key milestones, with ongoing tasks that aim to enhance functionality and compliance with design standards:
@@ -33,6 +33,9 @@ The development is structured around key milestones, with ongoing tasks that aim
 - [ ] Rectangular concrete column section check and design for EN 1992-2004.
 
 Each milestone incorporates rigorous testing and continuous integration to ensure code quality and reliability.
+
+#### Documentation
+You can read the official documentation in this link: [Mento Docs](https://mento-docs.readthedocs.io/)
 
 #### Contributing
 We welcome contributions from the community to expand and enhance the package. Please check the roadmap for current milestones and open issues for collaboration opportunities.
