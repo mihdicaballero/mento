@@ -63,7 +63,7 @@ def _calculate_concrete_shear_strength_aci(self: "RectangularBeam") -> None:
     )  # Axial stress influence
     if self.concrete.unit_system == "metric":
         V_cmin = 0 * kN
-        if self._A_v < self._A_v_min:
+        if self._A_v <= self._A_v_min:
             if self._A_s_tension == 0 * cm**2:
                 warnings.warn(
                     "Longitudinal rebar As cannot be zero if A_v is less than A_v_min.",
@@ -74,35 +74,37 @@ def _calculate_concrete_shear_strength_aci(self: "RectangularBeam") -> None:
                 * self._lambda_s
                 * self.lambda_factor
                 * self._rho_w ** (1 / 3)
-                * math.sqrt(f_c / MPa)
+                * math.sqrt(f_c.to("MPa") / MPa)
                 * MPa
                 + self._sigma_Nu
             )
         else:
             self._k_c_min = max(
-                0.17 * self.lambda_factor * math.sqrt(f_c / MPa) * MPa + self._sigma_Nu,
+                0.17 * self.lambda_factor * math.sqrt(f_c.to("MPa") / MPa) * MPa
+                + self._sigma_Nu,
                 0.66
                 * self.lambda_factor
                 * self._rho_w ** (1 / 3)
-                * math.sqrt(f_c / MPa)
+                * math.sqrt(f_c.to("MPa") / MPa)
                 * MPa
                 + self._sigma_Nu,
             )
     else:
         V_cmin = 0 * kip
-        if self._A_v < self._A_v_min:
+        if self._A_v <= self._A_v_min:
             self._k_c_min = (
                 8
                 * self._lambda_s
                 * self.lambda_factor
                 * self._rho_w ** (1 / 3)
-                * math.sqrt(f_c / psi)
+                * math.sqrt(f_c.to("psi") / psi)
                 * psi
                 + self._sigma_Nu
             )
         else:
             self._k_c_min = max(
-                2 * self.lambda_factor * math.sqrt(f_c / psi) * psi + self._sigma_Nu,
+                2 * self.lambda_factor * math.sqrt(f_c.to("psi") / psi) * psi
+                + self._sigma_Nu,
                 8
                 * self.lambda_factor
                 * self._rho_w ** (1 / 3)
@@ -113,11 +115,14 @@ def _calculate_concrete_shear_strength_aci(self: "RectangularBeam") -> None:
     # Maximum concrete shear strength
     if self.concrete.unit_system == "metric":
         V_cmax = (
-            0.42 * self.lambda_factor * math.sqrt(self.concrete.f_c / MPa) * MPa
+            0.42
+            * self.lambda_factor
+            * math.sqrt(self.concrete.f_c.to("MPa") / MPa)
+            * MPa
         ) * self._A_cv
     else:
         V_cmax = (
-            5 * self.lambda_factor * math.sqrt(self.concrete.f_c / psi) * psi
+            5 * self.lambda_factor * math.sqrt(self.concrete.f_c.to("psi") / psi) * psi
         ) * self._A_cv
     self.V_c = min(V_cmax, max(V_cmin, self._k_c_min * self._A_cv))
     self._phi_V_c = self.phi_v * self.V_c
@@ -128,13 +133,23 @@ def _calculate_max_shear_capacity_aci(self: "RectangularBeam") -> None:
     if self.concrete.unit_system == "metric":
         V_max = (
             self.V_c
-            + (0.66 * self.lambda_factor * math.sqrt(self.concrete.f_c / MPa) * MPa)
+            + (
+                0.66
+                * self.lambda_factor
+                * math.sqrt(self.concrete.f_c.to("MPa") / MPa)
+                * MPa
+            )
             * self._A_cv
         )
     else:
         V_max = (
             self.V_c
-            + (8 * self.lambda_factor * math.sqrt(self.concrete.f_c / psi) * psi)
+            + (
+                8
+                * self.lambda_factor
+                * math.sqrt(self.concrete.f_c.to("psi") / psi)
+                * psi
+            )
             * self._A_cv
         )
     self._phi_V_max = self.phi_v * V_max
@@ -151,12 +166,12 @@ def _calculate_A_v_min_ACI(self: "RectangularBeam", f_c: PlainQuantity) -> None:
 
     if self.concrete.unit_system == "metric":
         self._A_v_min = max(
-            (0.062 * math.sqrt(f_c / MPa) * MPa / f_yt) * self.width,
+            (0.062 * math.sqrt(f_c.to("MPa") / MPa) * MPa / f_yt) * self.width,
             (0.35 * MPa / f_yt) * self.width,
         )
     else:
         self._A_v_min = max(
-            (0.75 * math.sqrt(f_c / psi) * psi / f_yt) * self.width,
+            (0.75 * math.sqrt(f_c.to("psi") / psi) * psi / f_yt) * self.width,
             (50 * psi / f_yt) * self.width,
         )
 
@@ -176,7 +191,7 @@ def _check_minimum_reinforcement_requirement_aci(self: "RectangularBeam") -> Non
             < 0.083
             * self.phi_v
             * self.lambda_factor
-            * math.sqrt(self.concrete.f_c / MPa)
+            * math.sqrt(self.concrete.f_c.to("MPa") / MPa)
             * MPa
             * self._A_cv
         ):
@@ -187,7 +202,7 @@ def _check_minimum_reinforcement_requirement_aci(self: "RectangularBeam") -> Non
             0.083
             * self.phi_v
             * self.lambda_factor
-            * math.sqrt(self.concrete.f_c / MPa)
+            * math.sqrt(self.concrete.f_c.to("MPa") / MPa)
             * MPa
             * self._A_cv
             < self._V_u
@@ -203,7 +218,7 @@ def _check_minimum_reinforcement_requirement_aci(self: "RectangularBeam") -> Non
             self._V_u
             < self.phi_v
             * self.lambda_factor
-            * math.sqrt(self.concrete.f_c / psi)
+            * math.sqrt(self.concrete.f_c.to("psi") / psi)
             * psi
             * self._A_cv
         ):
@@ -215,7 +230,7 @@ def _check_minimum_reinforcement_requirement_aci(self: "RectangularBeam") -> Non
         elif (
             self.phi_v
             * self.lambda_factor
-            * math.sqrt(self.concrete.f_c / psi)
+            * math.sqrt(self.concrete.f_c.to("psi") / psi)
             * psi
             * self._A_cv
             < self._V_u
@@ -474,12 +489,22 @@ def _minimum_flexural_reinforcement_ratio_ACI_318_19(
     else:
         if self.concrete.unit_system == "metric":
             minimum_ratio = max(
-                (0.25 * np.sqrt(self.concrete.f_c / MPa) * MPa / self.steel_bar.f_y),
+                (
+                    0.25
+                    * np.sqrt(self.concrete.f_c.to("MPa") / MPa)
+                    * MPa
+                    / self.steel_bar.f_y
+                ),
                 (1.4 * MPa / self.steel_bar.f_y),
             )
         else:
             minimum_ratio = max(
-                (3 * np.sqrt(self.concrete.f_c / psi) * psi / self.steel_bar.f_y),
+                (
+                    3
+                    * np.sqrt(self.concrete.f_c.to("psi") / psi)
+                    * psi
+                    / self.steel_bar.f_y
+                ),
                 (200 * psi / self.steel_bar.f_y),
             )
     return minimum_ratio

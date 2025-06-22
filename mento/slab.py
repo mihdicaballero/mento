@@ -14,7 +14,7 @@ from mento.material import (
     Concrete_ACI_318_19,
     # Concrete_EN_1992_2004,
 )
-from mento.units import m, mm, cm, inch, MPa, kNm
+from mento.units import m, mm, cm, inch, MPa, kNm, kN, kip, ksi, psi
 
 if TYPE_CHECKING:
     from pint import Quantity
@@ -57,13 +57,14 @@ class OneWaySlab(RectangularBeam):
         self._d_b4_t, self._s_b4_t = 0 * mm, 0 * mm
 
         # Default starter rebar (for effective depth calculation only)
+        # Initialize with 12 mm or #4 bars in top & bottom.
         if self.concrete.unit_system == "metric":
             self._d_b1_b, self._d_b1_t = (
-                8 * mm,
-                8 * mm,
+                12 * mm,
+                12 * mm,
             )  # Diameter only, spacing left as 0
         else:
-            self._d_b1_b, self._d_b1_t = (3 * inch) / 8, (3 * inch) / 8
+            self._d_b1_b, self._d_b1_t = (4 * inch) / 8, (4 * inch) / 8
 
         # Update dependent attributes
         self._calculate_longitudinal_rebars()
@@ -145,7 +146,7 @@ class OneWaySlab(RectangularBeam):
                 return 0
             # Round up to ensure full bars (e.g., 3.2 bars → 4 bars)
             return int(
-                np.ceil((width / spacing).magnitude)
+                np.ceil((width.to("cm").magnitude / spacing.to("cm").magnitude))
             )  # Returns dimensionless count
 
         # --- BOTTOM REBAR ---
@@ -160,9 +161,19 @@ class OneWaySlab(RectangularBeam):
         self._n3_t = calculate_bars(self._s_b3_t, self.width)
         self._n4_t = calculate_bars(self._s_b4_t, self.width)
 
+    def _update_effective_heights(self) -> None:
+        """Update effective heights and depths for moment and shear calculations."""
+        # Consider average effective height so it works for analysis in X and Y directions for
+        # a two-way slab.
+        self._c_mec_bot = self.c_c + self._bot_rebar_centroid + self._d_b1_b / 2
+        self._c_mec_top = self.c_c + self._top_rebar_centroid + self._d_b1_t / 2
+        self._d_bot = self._height - self._c_mec_bot
+        self._d_top = self._height - self._c_mec_top
+        # Use bottom or top effective height
+        self._d_shear = min(self._d_bot, self._d_top)
 
-if __name__ == "__main__":
-    # Example usage
+
+def slab_metric() -> None:
     concrete = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
     steelBar = SteelBar(name="ADN 420", f_y=420 * MPa)
     slab = OneWaySlab(
@@ -180,8 +191,46 @@ if __name__ == "__main__":
         slab._A_s_bot, slab._A_s_top, slab._available_s_bot, slab._available_s_top
     )  # Debugging output for areas
     f1 = Forces(label="C1", M_y=20 * kNm)
-    f2 = Forces(label="C1", M_y=-20 * kNm)
+    f2 = Forces(label="C1", V_z=30 * kN, M_y=-20 * kNm)
     node_1 = Node(slab, [f1, f2])
     print(node_1.check_flexure())
     node_1.flexure_results_detailed()
+    # node_1.check_shear()
+    # node_1.shear_results_detailed()
     # slab.plot()
+
+
+def slab_imperial() -> None:
+    concrete = Concrete_ACI_318_19(name="C4", f_c=4 * ksi)
+    steelBar = SteelBar(name="ADN 420", f_y=60 * ksi)
+    custom_settings = {"clear_cover": 0.75 * inch}
+    slab = OneWaySlab(
+        label="Slab 01",
+        concrete=concrete,
+        steel_bar=steelBar,
+        thickness=7 * inch,
+        width=12 * inch,
+        settings=custom_settings,
+    )
+    # Set only position 1 bottom rebar
+    slab.set_slab_longitudinal_rebar_bot(d_b1=0.5 * inch, s_b1=12 * inch)
+    # Set top rebar positions 1 and 2
+    slab.set_slab_longitudinal_rebar_top(d_b1=0.5 * inch, s_b1=12 * inch)
+    debug(
+        slab._A_s_bot,
+        slab._A_s_top,
+        slab._n1_b,
+        slab._available_s_bot,
+        slab._available_s_top,
+    )  # Debugging output for areas
+    f1 = Forces(label="C1", M_y=20 * kNm)
+    f2 = Forces(label="C1", V_z=1.52 * kip, M_y=-20 * kNm)
+    node_1 = Node(slab, [f1, f2])
+    # print(node_1.check_flexure())
+    # node_1.flexure_results_detailed()
+    node_1.check_shear()
+    node_1.shear_results_detailed()
+
+
+if __name__ == "__main__":
+    slab_imperial()

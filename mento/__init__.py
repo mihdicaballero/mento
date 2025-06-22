@@ -51,6 +51,7 @@ __all__ = [
     "deg",
     "Node",
     "Forces",
+    "OneWaySlab",
     "Concrete_ACI_318_19",
     "SteelBar",
     "Concrete_CIRSOC_201_25",
@@ -66,6 +67,7 @@ __all__ = [
 
 if TYPE_CHECKING:
     from .beam import RectangularBeam
+    from .slab import OneWaySlab
     from .codes import ACI_318_19_beam, EN_1992_2004_beam
     from .forces import Forces
     from .material import (
@@ -78,6 +80,7 @@ if TYPE_CHECKING:
     from .results import DocumentBuilder, Formatter, TablePrinter
     from .summary import BeamSummary
 
+
 # Lazy imports to avoid circular dependencies
 def __getattr__(name: str) -> object:
     if name in {
@@ -87,6 +90,7 @@ def __getattr__(name: str) -> object:
         "SteelBar",
         "Concrete_CIRSOC_201_25",
         "Concrete_EN_1992_2004",
+        "OneWaySlab",
         "RectangularBeam",
         "Formatter",
         "TablePrinter",
