@@ -63,7 +63,8 @@ class Settings:
         self.EN_1992_2004_settings: Dict[str, Any] = {
             "gamma_c": 1.5,
             "gamma_s": 1.15,
-            "alpha_cc": 1.00,
+            "alpha_cc": 0.85,
+            "delta": 0.85
         }
 
     def load_ACI_318_19_settings(self) -> None:

@@ -10,6 +10,7 @@ import pandas as pd
 from pandas import DataFrame
 import math
 import warnings
+from devtools import debug
 
 from mento.rectangular import RectangularSection
 from mento.material import (
@@ -438,7 +439,7 @@ class RectangularBeam(RectangularSection):
         DataFrame
             A DataFrame summarizing the flexural design results for all forces.
         """
-
+        debug("Invocaron a la funcion design_flexure")
         # Initialize limiting cases
         max_M_y_top = 0 * kN * m  # For negative M_y (top reinforcement design)
         max_M_y_bot = 0 * kN * m  # For positive M_y (bottom reinforcement design)
@@ -461,6 +462,11 @@ class RectangularBeam(RectangularSection):
             _design_flexure_ACI_318_19(self, max_M_y_bot, max_M_y_top)
         elif (self.concrete.design_code == "EN 1992-2004"):
             _design_flexure_EN_1992_2004(self, max_M_y_bot, max_M_y_top)
+            #TODO BORRAR ESTE TEST:
+            debug(f"MAX My Bot {max_M_y_bot}, MAX My TOP {max_M_y_top}")
+            TEST=_design_flexure_EN_1992_2004(self, max_M_y_bot, max_M_y_top)
+            debug("TEST")
+            debug(TEST)
         else:
             raise ValueError(
                 f"Longitudinal design method not implemented "
@@ -1505,10 +1511,25 @@ def flexure_design_test_calcpad_example() -> None:
 
 
 
+def test_design_flexure_EN_1992_2004() -> None:
+    concrete = Concrete_EN_1992_2004(name="H25", f_ck=25 * MPa)
+    steelBar = SteelBar(name="fy 60000", f_y=420*MPa)
+    custom_settings = {"clear_cover": 2.6*cm}
+    beam = RectangularBeam(
+        label="V-20x60",
+        concrete=concrete,
+        steel_bar=steelBar,
+        width=20 * cm,
+        height=60 * cm,
+        settings=custom_settings,
+    )
+    
+
+
 def flexure_design_test_EN() -> None:
     #TODO Sale mal el DCR
     concrete = Concrete_EN_1992_2004(name="H25", f_ck=25 * MPa)
-    steelBar = SteelBar(name="fy 60000", f_y=420*MPa)
+    steelBar = SteelBar(name="fy 60000", f_y=500*MPa)
     custom_settings = {"clear_cover": 2.6*cm}
     beam = RectangularBeam(
         label="V-20x60",
@@ -1527,6 +1548,7 @@ def flexure_design_test_EN() -> None:
 
     flexure_results = beam.design_flexure(forces)
     print(flexure_results)
+
 
 
 def flexure_check_test() -> None:

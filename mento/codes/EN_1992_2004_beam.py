@@ -3,11 +3,13 @@ from pint.facets.plain import PlainQuantity
 from typing import TYPE_CHECKING, Dict, Any, Tuple
 import pandas as pd
 from pandas import DataFrame
+from devtools import debug
 
 from mento.material import Concrete_EN_1992_2004
 from mento.rebar import Rebar
 from mento.units import MPa, mm, kNm, dimensionless, kN, inch, cm
 from mento.forces import Forces
+
 
 
 if TYPE_CHECKING:
@@ -24,6 +26,7 @@ def _initialize_variables_EN_1992_2004(self: "RectangularBeam") -> None:
         self._alpha_cc = self.settings.get_setting("alpha_cc")
         self._gamma_c = self.settings.get_setting("gamma_c")
         self._gamma_s = self.settings.get_setting("gamma_s")
+        self._delta = self.settings.get_setting("delta")
         self._f_ywk = self._f_yk
         self._f_ywd = self._f_ywk / self._gamma_s
         self._f_cd = self._alpha_cc * self._f_ck / self._gamma_c
@@ -325,6 +328,9 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
     """
     Calculate the required top and bottom reinforcement areas for bending.
     """
+    debug("INVOCARON A LA FUNCION _calculate_flexural_reinforcement_EN_1992_2004")
+    debug("M_Ed:", M_Ed)
+
     rho_min, rho_max = _min_max_flexural_reinforcement_ratio_EN_1992_2004(self)
     A_s_min = rho_min * d * self.width
     A_s_max = rho_max * d * self.width  # noqa: F841
@@ -342,7 +348,9 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
     )  # Yield strain in reinforcement
 
     # Relative depth of compression zone at yielding of bottom reinforcement
-    xi_eff_lim = lambda_ * (self._epsilon_cu3 / (self._epsilon_cu3 + epsilon_yd))
+    k_1=0.4
+    k_2=0.6+0.0014/self._epsilon_cu3
+    xi_eff_lim = lambda_ * ((self._delta - k_1)/ k_2)
     #TODO VER SI ESTO NO DEPENDE DEL HORMIGON
 
 
@@ -354,6 +362,7 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
 
     # Check if compressive reinforcement is required
     if M_Ed <= M_lim:
+        debug("M_Ed<=M_lim")
         # No compressive reinforcement required
         # Relative design bending moment
         K = (
@@ -361,20 +370,28 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
             .to("dimensionless")
             .magnitude
         )
-
+        debug("d: ",d)
+        debug("f_cd: " , self._f_cd)
+        debug("K: " , K)
         # Compression zone depth
         x_eff = d * (1 - math.sqrt(1 - 2 * K))
+        debug("x_eff: " , x_eff)
 
         # Area of required tensile reinforcement
-        A_s1 = (self.width * x_eff * eta * self._f_cd / self._f_yd).to("cm^2")
-
+        # TODO ACA NO SE BIEN QUE ES EL ETA, VER QUE EL CALCPAD LO HACE DISTINTO ,CON EL BRAZO DE PALANCA.
+        #A_s1 = (self.width * x_eff * eta * self._f_cd / self._f_yd).to("cm^2")
+        z=d-0.5*lambda_*x_eff
+        debug("z: ",z)
+        A_s1=M_Ed/(z*self._f_yd)
+        debug("A_s1:", A_s1.to(cm**2))
         # Ensure the area meets the minimum requirement
         A_s1 = max(A_s1, A_s_min)
-
+        debug("A_s1:", A_s1.to(cm**2))
         # No compressive reinforcement required
         A_s2 = 0 * cm**2
 
     else:
+        debug("SE REQUIERE ARMADO DE COMPRESION")
         # Compressive reinforcement is required
 
         # Limit tensile reinforcement area
@@ -395,7 +412,7 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
 
         # Compressive reinforcement stress'
         f_sd = min(epsilon_s2*self._E_s, self._f_yd)
-
+        #TODO VER QUE ACA FALTA ALGO
         # Required compressive reinforcement area
         A_s2 = (delta_M / ((z_2) * self._f_yd)).to("cm^2")
 
