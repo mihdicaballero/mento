@@ -1,7 +1,7 @@
 import os  # Cleaning console
 from dataclasses import dataclass
 from IPython.display import Markdown, display
-from typing import Optional, Dict, Any
+from typing import Optional, Dict
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 from pint.facets.plain import PlainQuantity
@@ -22,6 +22,7 @@ from mento.rebar import Rebar
 from mento.units import MPa, psi, mm, inch, kN, m, cm, kNm, dimensionless, kip, ksi, ft
 from mento.results import Formatter, TablePrinter, DocumentBuilder, CUSTOM_COLORS
 from mento.forces import Forces
+from mento.settings import BeamSettings, GLOBAL_BEAM_SETTINGS
 
 from mento.codes.EN_1992_2004_beam import (
     _check_shear_EN_1992_2004,
@@ -44,18 +45,18 @@ class RectangularBeam(RectangularSection):
         steel_bar: SteelBar,
         width: PlainQuantity,
         height: PlainQuantity,
-        settings: Optional[Dict[str, Any]] = None,
     ):
-        super().__init__(label, concrete, steel_bar, width, height, settings)
-        if settings:
-            self.settings.update(settings)  # Update with any provided settings
-
-        self.layers_spacing = self.settings.get_setting("layers_spacing")
+        super().__init__(label, concrete, steel_bar, width, height)
 
         # Centralized attribute initialization
         self._initialize_attributes()
 
         # self.shear_design_results: DataFrame = None
+
+    @property 
+    def settings(self) -> BeamSettings:
+        """Access global design rules."""
+        return GLOBAL_BEAM_SETTINGS
 
     ##########################################################
     # INITIALIZE ATTRIBUTES
@@ -358,8 +359,8 @@ class RectangularBeam(RectangularSection):
         # Calculate the vertical positions of the bar layers
         y1_b = self._d_b1_b / 2
         y2_b = self._d_b2_b / 2
-        y3_b = max(self._d_b1_b, self._d_b2_b) + self.layers_spacing + self._d_b3_b / 2
-        y4_b = max(self._d_b1_b, self._d_b2_b) + self.layers_spacing + self._d_b4_b / 2
+        y3_b = max(self._d_b1_b, self._d_b2_b) + self.settings.layers_spacing + self._d_b3_b / 2
+        y4_b = max(self._d_b1_b, self._d_b2_b) + self.settings.layers_spacing + self._d_b4_b / 2
         # Calculate the total area of each layer
         area_1_b = (
             self._n1_b * self._d_b1_b**2 * np.pi / 4

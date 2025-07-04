@@ -2,13 +2,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, TYPE_CHECKING
 import math
-from mento.units import kg, m, MPa, ksi, GPa, psi, Pa, lb, ft
+from mento.units import kg, m, MPa, ksi, GPa, psi, Pa, lb, ft, kPa
 from mento import ureg
 
 # Conditional import for type checking only
 if TYPE_CHECKING:
     from pint.facets.plain import PlainQuantity
-
 
 @dataclass
 class Material:
@@ -23,7 +22,7 @@ class Concrete(Material):
 
     def __post_init__(self) -> None:
         # Detect the unit system based on f_c
-        if self.f_c.units == MPa or self.f_c.units == Pa:
+        if self.f_c.units == MPa or self.f_c.units == Pa or self.f_c.units == kPa:
             self.unit_system = "metric"
             self.density: PlainQuantity = 2500 * kg / m**3
         elif self.f_c.units == psi or self.f_c.units == ksi:
@@ -69,6 +68,11 @@ class Concrete_ACI_318_19(Concrete):
             )
             self._f_r = 7.5 * math.sqrt(self.f_c / psi) * psi
         self._beta_1 = self.__beta_1()
+        self._lambda = 1 # Normalweight concrete
+        self._phi_v = 0.75 # Shear strength reduction factor
+        self._phi_c = 0.65,  # Compression controlled strength reduction factor
+        self._phi_t = 0.90,  # Tension controlled strength reduction factor
+        self._flexureal_min_reduction = True # True selects 4/3 of calculated steel if it's less than minimum
 
     def get_properties(self) -> Dict[str, PlainQuantity]:
         properties = super().get_properties()
@@ -149,6 +153,9 @@ class Concrete_EN_1992_2004(Concrete):
         self._E_cm = 22000 * (self._f_cm / (10 * MPa)) ** 0.3 * MPa
         self._f_ctm = 0.3 * (self._f_ck / MPa) ** (2 / 3) * MPa
         self._epsilon_cu3 = 0.0035  # Ultimate strain in concrete
+        self._gamma_c = 1.5
+        self._gamma_s = 1.15
+        self._alpha_cc = 1.00
 
     def alpha_cc(self) -> float:
         # Implementation for alpha_cc, as per Eurocode EN 1992-1-1

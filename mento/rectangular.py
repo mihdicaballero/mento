@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Any
+from typing import Optional
 from dataclasses import dataclass
 from pint.facets.plain import PlainQuantity
 import matplotlib.pyplot as plt
@@ -21,12 +21,8 @@ class RectangularSection(Section):
         steel_bar: SteelBar,
         width: PlainQuantity,
         height: PlainQuantity,
-        settings: Optional[Dict[str, Any]] = None,
     ) -> None:
-        super().__init__(label, concrete, steel_bar, settings)
-
-        if settings:
-            self.settings.update(settings)  # Update with any provided settings
+        super().__init__(label, concrete, steel_bar)
 
         self._width = width
         self._height = height

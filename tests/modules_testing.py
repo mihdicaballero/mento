@@ -1,7 +1,7 @@
 from devtools import debug
 
 from mento import cm, MPa, m, kg, kN, kNm, inch, ft, kip, lb, psi, mm, ksi
-from mento.settings import Settings
+from mento.settings import BeamSettings
 from mento.material import (
     Concrete,
     SteelBar,
@@ -30,12 +30,26 @@ def units() -> None:
 
 
 def settings() -> None:
-    settings_test = Settings()
-    # debug(settings_test.default_settings, settings_test.aci_318_19_settings)
-    custom_settings = {"clear_cover": 50 * mm, "longitudinal_diameter_ini": 25 * mm}
-    settings_test.update(custom_settings)
-    # debug(settings_test.default_settings)
-    print(settings_test)
+    # Metric defaults
+    settings = BeamSettings()
+    print(settings, "\n")
+
+    # Metric defaults with override
+    settings = BeamSettings(clear_spacing=35 * mm)
+    print(settings, "\n")
+
+    # Imperial defaults with override
+    settings = BeamSettings(unit_system="imperial", clear_spacing=2 * inch)
+    print(settings, "\n")
+
+    # Create with imperial defaults
+    # settings = BeamSettings(unit_system="imperial")
+
+    # Update settings
+    # settings.update(
+    #     max_bars_per_layer=4
+    # )
+    
 
 
 def section() -> None:
@@ -45,7 +59,7 @@ def section() -> None:
     debug(section.get_settings, section.id)
     custom_settings = {"clear_cover": 20}
     section.update_settings(custom_settings)
-    debug(section.settings.default_settings_metric)
+    debug(section.settings)
     debug(section.get_settings)
     debug(section)
     debug(section.get_settings)
@@ -154,9 +168,9 @@ def flexure_ACI_318_19() -> None:
 
 if __name__ == "__main__":
     # units()
-    # settings()
+    settings()
     # section()
     # rectangular()
     # material()
     # shear_EN_1992()
-    flexure_ACI_318_19()
+    # flexure_ACI_318_19()
