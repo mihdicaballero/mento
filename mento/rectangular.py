@@ -1,59 +1,52 @@
 from typing import Optional
-from dataclasses import dataclass
-from pint.facets.plain import PlainQuantity
+from dataclasses import dataclass, field
+from pint import Quantity
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle, FancyBboxPatch
 
 
 from mento.section import Section
-from mento.material import SteelBar, Concrete
 from mento.results import CUSTOM_COLORS
-
+from mento.settings import BeamSettings, GLOBAL_BEAM_SETTINGS
 
 @dataclass
 class RectangularSection(Section):
-    label: Optional[str] = None
+    # Fields unique to RectangularSection
+    width: Quantity
+    height:Quantity
+    label: str = field(default=None)
+    _ax: Optional[plt.Axes] = field(default=None, init=False, repr=False) # Default (and not part of init)
 
-    def __init__(
-        self,
-        label: Optional[str],
-        concrete: Concrete,
-        steel_bar: SteelBar,
-        width: PlainQuantity,
-        height: PlainQuantity,
-    ) -> None:
-        super().__init__(label, concrete, steel_bar)
 
-        self._width = width
-        self._height = height
-        self._A_x = self._width * self._height
-        self._I_y = self._width * self._height**3 / 12
-        self._I_z = self._height * self._width**3 / 12
+    def __post_init__(self) -> None:
+        # Call the parent's __post_init__ first to ensure parent's initialization is done
+        super().__post_init__()
 
-        self._ax: Optional[plt.Axes] = None
+        self._A_x = self.width * self.height
+        self._I_y = self.width * self.height**3 / 12
+        self._I_z = self.height * self.width**3 / 12
+        self._stirrup_d_b = self.settings.stirrup_diameter_ini
 
+    @property 
+    def settings(self) -> BeamSettings:
+        """Access global design rules."""
+        return GLOBAL_BEAM_SETTINGS
+    
     @property
-    def width(self) -> PlainQuantity:
-        "Beam width."
-        return self._width.to("cm")
+    def A_x(self) -> Quantity:
 
-    @property
-    def height(self) -> PlainQuantity:
-        "Beam height."
-        return self._height.to("cm")
-
-    @property
-    def A_x(self) -> PlainQuantity:
         "Cross section area."
         return self._A_x.to("cm**2")
 
     @property
-    def I_y(self) -> PlainQuantity:
+    def I_y(self) -> Quantity:
+
         "Moment of inertia about the Y axis."
         return self._I_y.to("cm**4")
 
     @property
-    def I_z(self) -> PlainQuantity:
+    def I_z(self) -> Quantity:
+
         "Moment of inertia about the Z axis."
         return self._I_z.to("cm**4")
 
