@@ -9,17 +9,31 @@ from mento.section import Section
 from mento.results import CUSTOM_COLORS
 from mento.settings import BeamSettings, GLOBAL_BEAM_SETTINGS
 
+
 @dataclass
 class RectangularSection(Section):
-    # Fields unique to RectangularSection
-    width: Quantity
-    height:Quantity
-    label: str = field(default=None)
-    _ax: Optional[plt.Axes] = field(default=None, init=False, repr=False) # Default (and not part of init)
+    """
+    Represents a rectangular cross-section for structural analysis and design.
+    This class extends the generic `Section` class to provide properties and methods specific to rectangular sections,
+    including geometric properties (area, moments of inertia), access to design settings, and plotting capabilities.
+    Attributes:
+        width (Quantity): The width of the rectangular section.
+        height (Quantity): The height of the rectangular section.
+    Properties:
+        settings (BeamSettings): Access to global design rules and settings.
+        A_x (Quantity): Cross-sectional area, returned in cm².
+        I_y (Quantity): Moment of inertia about the Y axis, returned in cm⁴.
+        I_z (Quantity): Moment of inertia about the Z axis, returned in cm⁴.
+    Methods:
+        plot(): Plots the rectangular section with dimensions and stirrup representation, including rounded corners and thickness.
+    """
 
+    # Fields unique to RectangularSection
+    width: Quantity = field(kw_only=True)
+    height: Quantity = field(kw_only=True)
+    _ax: Optional[plt.Axes] = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
-        # Call the parent's __post_init__ first to ensure parent's initialization is done
         super().__post_init__()
 
         self._A_x = self.width * self.height
@@ -27,26 +41,23 @@ class RectangularSection(Section):
         self._I_z = self.height * self.width**3 / 12
         self._stirrup_d_b = self.settings.stirrup_diameter_ini
 
-    @property 
+    @property
     def settings(self) -> BeamSettings:
         """Access global design rules."""
         return GLOBAL_BEAM_SETTINGS
-    
+
     @property
     def A_x(self) -> Quantity:
-
         "Cross section area."
         return self._A_x.to("cm**2")
 
     @property
     def I_y(self) -> Quantity:
-
         "Moment of inertia about the Y axis."
         return self._I_y.to("cm**4")
 
     @property
     def I_z(self) -> Quantity:
-
         "Moment of inertia about the Z axis."
         return self._I_z.to("cm**4")
 

@@ -12,15 +12,34 @@ if TYPE_CHECKING:
 
 @dataclass
 class Section:
-    concrete: Concrete
-    steel_bar: SteelBar
-    c_c: Quantity
+    """
+    Represents a structural section composed of concrete and steel reinforcement.
+    Attributes:
+        concrete (Concrete): The concrete material used in the section.
+        steel_bar (SteelBar): The steel reinforcement used in the section.
+        c_c (Quantity): The concrete cover or another relevant quantity.
+        node (Optional[Node]): The node associated with this section, if any.
+        label (Optional[str]): An optional label for the section.
+    Methods:
+        id: Read-only property to access the section's unique ID.
+        check_shear(forces: List[Forces]): Checks the section for shear under given forces.
+        design_shear(forces: List[Forces]): Designs the section for shear under given forces.
+        check_flexure(forces: List[Forces]): Checks the section for flexure under given forces.
+        design_flexure(forces: List[Forces]): Designs the section for flexure under given forces.
+        shear_results_detailed(force: Optional[Forces] = None): Provides detailed shear results.
+        shear_results_detailed_doc(force: Optional[Forces] = None): Provides detailed shear results for documentation.
+        flexure_results_detailed(force: Optional[Forces] = None): Provides detailed flexure results.
+        flexure_results_detailed_doc(force: Optional[Forces] = None): Provides detailed flexure results for documentation.
+        results: Property to access beam results for Jupyter Notebook.
+    """
+
+    concrete: Concrete = field(kw_only=True)
+    steel_bar: SteelBar = field(kw_only=True)
+    c_c: Quantity = field(kw_only=True)
     _id: int = field(init=False)
-    _last_id: int = field(
-        default=0, init=False, repr=False
-    )
+    _last_id: int = field(default=0, init=False, repr=False)
     node: Optional["Node"] = field(default=None, init=False)
-    label: str = field(default=None)
+    label: Optional[str] = field(default=None, kw_only=True)
 
     def __post_init__(self) -> None:
         Section._last_id += 1
