@@ -1,66 +1,56 @@
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Dict, Any, List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
-from mento.settings import Settings
 from mento.material import Concrete, SteelBar
 from mento.forces import Forces
 
+from pint import Quantity
+
 if TYPE_CHECKING:
-    from pint.facets.plain import PlainQuantity
     from mento.node import Node
 
 
 @dataclass
 class Section:
-    _id: int
-    settings: Settings = field(default_factory=Settings)
-    _last_id: int = field(
-        default=0, init=False, repr=False
-    )  # Class variable to keep track of last assigned ID
-    node: Optional["Node"] = None  # Use forward declaration with Optional["Node"]
-    label: Optional[str] = None
+    """
+    Represents a section composed of concrete and steel reinforcement.
 
-    def __init__(
-        self,
-        label: Optional[str],
-        concrete: Concrete,
-        steel_bar: SteelBar,
-        settings: Optional[Dict[str, Any]] = None,
-    ) -> None:
-        # Initialize the private ID automatically
-        Section._last_id += 1  # Increment the class variable for the next ID
-        self._id = Section._last_id  # Assign the next available ID
-        self.concrete = concrete
-        self.steel_bar = steel_bar
-        self.label = label
+    Attributes:
+        concrete (Concrete): The concrete material used in the section.
+        steel_bar (SteelBar): The steel reinforcement used in the section.
+        c_c (Quantity): The concrete cover or another relevant quantity.
+        node (Optional[Node]): The node associated with this section, if any.
+        label (Optional[str]): An optional label for the section.
 
-        # Initialize with default settings
-        self.settings = Settings(concrete)
-        if settings:
-            self.settings.update(settings)  # Update with any provided settings
-        self.c_c: PlainQuantity = self.settings.get_setting("clear_cover")
-        self._stirrup_d_b: PlainQuantity = self.settings.get_setting(
-            "stirrup_diameter_ini"
-        )
-        self._layers_spacing: PlainQuantity = self.settings.get_setting(
-            "layers_spacing"
-        )
+    Methods:
+        id: Read-only property to access the section's unique ID.
+        check_shear(forces: List[Forces]): Checks the section for shear under given forces.
+        design_shear(forces: List[Forces]): Designs the section for shear under given forces.
+        check_flexure(forces: List[Forces]): Checks the section for flexure under given forces.
+        design_flexure(forces: List[Forces]): Designs the section for flexure under given forces.
+        shear_results_detailed(force: Optional[Forces] = None): Provides detailed shear results.
+        shear_results_detailed_doc(force: Optional[Forces] = None): Provides detailed shear results for documentation.
+        flexure_results_detailed(force: Optional[Forces] = None): Provides detailed flexure results.
+        flexure_results_detailed_doc(force: Optional[Forces] = None): Provides detailed flexure results for documentation.
+        results: Property to access beam results for Jupyter Notebook.
+    """
+
+    concrete: Concrete = field(kw_only=True)
+    steel_bar: SteelBar = field(kw_only=True)
+    c_c: Quantity = field(kw_only=True)
+    _id: int = field(init=False)
+    _last_id: int = field(default=0, init=False, repr=False)
+    node: Optional["Node"] = field(default=None, init=False)
+    label: Optional[str] = field(default=None, kw_only=True)
+
+    def __post_init__(self) -> None:
+        Section._last_id += 1
+        self._id = Section._last_id
 
     @property
     def id(self) -> int:
         """Read-only property to access the private _id."""
         return self._id
-
-    @property
-    def get_settings(self) -> Dict[str, Any]:
-        """Returns the complete current settings as a dictionary."""
-        return (
-            self.settings.settings
-        )  # Access the settings dictionary from the Settings instance
-
-    def update_settings(self, new_settings: Dict[str, Any]) -> None:
-        """Updates settings with new values."""
-        self.settings.update(new_settings)
 
     def check_shear(self, forces: List[Forces]) -> None:
         pass

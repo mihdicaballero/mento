@@ -1,7 +1,7 @@
 from devtools import debug
 
 from mento import cm, MPa, m, kg, kN, kNm, inch, ft, kip, lb, psi, mm, ksi
-from mento.settings import Settings
+from mento.settings import BeamSettings
 from mento.material import (
     Concrete,
     SteelBar,
@@ -30,60 +30,67 @@ def units() -> None:
 
 
 def settings() -> None:
-    settings_test = Settings()
-    # debug(settings_test.default_settings, settings_test.aci_318_19_settings)
-    custom_settings = {"clear_cover": 50 * mm, "longitudinal_diameter_ini": 25 * mm}
-    settings_test.update(custom_settings)
-    # debug(settings_test.default_settings)
-    print(settings_test)
+    # Metric defaults
+    settings = BeamSettings()
+    print(settings, "\n")
+
+    # Metric defaults with override
+    settings = BeamSettings(clear_spacing=35 * mm)
+    print(settings, "\n")
+
+    # Imperial defaults with override
+    settings = BeamSettings(unit_system="imperial", clear_spacing=2 * inch)
+    print(settings, "\n")
+
+    # Create with imperial defaults
+    # settings = BeamSettings(unit_system="imperial")
+
+    # Update settings
+    # settings.update(
+    #     max_bars_per_layer=4
+    # )
 
 
 def section() -> None:
     concrete = Concrete("C25")
     steel_bar = SteelBar(name="B500S", f_y=500 * MPa)
-    section = Section(concrete=concrete, steel_bar=steel_bar)
-    debug(section.get_settings, section.id)
-    custom_settings = {"clear_cover": 20}
-    section.update_settings(custom_settings)
-    debug(section.settings.default_settings_metric)
-    debug(section.get_settings)
-    debug(section)
-    debug(section.get_settings)
-    custom_settings = {"clear_cover": 20}
-    section.update_settings(custom_settings)
-    debug(section.get_settings)
+    section = Section(
+        c_c=25 * mm, concrete=concrete, steel_bar=steel_bar, label="Test Section"
+    )
+    print(section)
 
 
 def rectangular() -> None:
-    concrete = Concrete("C25", f_c=6 * ksi)
-    steel_bar = SteelBar(name="ADN 420", f_y=60 * ksi)
+    concrete = Concrete("C25", f_c=25 * MPa)
+    steel_bar = SteelBar(name="ADN 420", f_y=420 * MPa)
     section = RectangularSection(
-        concrete=concrete, steel_bar=steel_bar, width=12 * inch, height=20 * inch
+        concrete=concrete,
+        steel_bar=steel_bar,
+        c_c=25 * mm,
+        width=20 * cm,
+        height=50 * cm,
+        label="Test Rectangular Section",
     )
-    # debug(section.width, section.height)
+    debug(section)
     section.plot()
-    # debug(section.A_x, section.I_y, section.I_z)
-    # debug(section.get_settings)
+    debug(section.A_x, section.I_y, section.I_z)
 
 
 def material() -> None:
     # Test cases
-    # concrete = Concrete_ACI_318_19(name="H25",f_c=4*ksi)
-    concrete = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
-    debug(concrete.name, concrete.design_code)
-    debug(concrete.get_properties())
+    concrete = Concrete_ACI_318_19(name="H25", f_c=4 * ksi)
+    # concrete = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
     print(concrete)
+    debug(concrete.get_properties())
+    concrete_eurocode = Concrete_EN_1992_2004(name="C25/30", f_c=25 * MPa)
+    print(concrete_eurocode)
+    debug(concrete_eurocode.get_properties())
     steelbar = SteelBar(name="ADN 500", f_y=500 * MPa)
     debug(steelbar.get_properties())
     print(steelbar)
     # steelstrand = SteelStrand(name='Y1860',f_y=1700*MPa)
     # debug(steelstrand.get_properties())
     # print(concrete.f_c.to('MPa'), concrete.f_c.to('MPa').magnitude)
-    # print(concrete.unit_system)
-    # concrete = Concrete_EN_1992_2004(name="H25",f_ck=25*MPa)
-    # debug(concrete.name, concrete.design_code)
-    # debug(concrete.get_properties())
-    # debug(concrete.f_ctm)
 
 
 def shear_EN_1992() -> None:
@@ -117,14 +124,13 @@ def shear_EN_1992() -> None:
 def flexure_ACI_318_19() -> None:
     concrete = Concrete_ACI_318_19(name="C4", f_c=4000 * psi)
     steelBar = SteelBar(name="ADN 420", f_y=60 * ksi)
-    custom_settings = {"clear_cover": 1.5 * inch}
     section = RectangularBeam(
-        label="V-10x16",
         concrete=concrete,
         steel_bar=steelBar,
-        width=10 * inch,
-        height=16 * inch,
-        settings=custom_settings,
+        c_c=1.5 * inch,
+        width=12 * inch,
+        height=24 * inch,
+        label="Test Rectangular Beam",
     )
     section.set_longitudinal_rebar_bot(
         n1=2,
@@ -149,14 +155,17 @@ def flexure_ACI_318_19() -> None:
 
     f = Forces(label="Test_01", M_y=400 * kip * ft)
     node_1 = Node(section=section, forces=f)
+    # section.plot()
     node_1.check_flexure()
+    print(node_1.check_flexure())
+    node_1.flexure_results_detailed()
 
 
 if __name__ == "__main__":
     # units()
     # settings()
+    material()
     # section()
     # rectangular()
-    # material()
     # shear_EN_1992()
-    flexure_ACI_318_19()
+    # flexure_ACI_318_19()

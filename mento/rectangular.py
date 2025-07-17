@@ -1,63 +1,65 @@
-from typing import Optional, Dict, Any
-from dataclasses import dataclass
-from pint.facets.plain import PlainQuantity
+from typing import Optional
+from dataclasses import dataclass, field
+from pint import Quantity
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle, FancyBboxPatch
 
 
 from mento.section import Section
-from mento.material import SteelBar, Concrete
 from mento.results import CUSTOM_COLORS
+from mento.settings import BeamSettings, GLOBAL_BEAM_SETTINGS
 
 
 @dataclass
 class RectangularSection(Section):
-    label: Optional[str] = None
+    """
+    Represents a rectangular cross-section for structural analysis and design.
+    This class extends the generic `Section` class to provide properties and methods specific to rectangular sections,
+    including geometric properties (area, moments of inertia), access to design settings, and plotting capabilities.
 
-    def __init__(
-        self,
-        label: Optional[str],
-        concrete: Concrete,
-        steel_bar: SteelBar,
-        width: PlainQuantity,
-        height: PlainQuantity,
-        settings: Optional[Dict[str, Any]] = None,
-    ) -> None:
-        super().__init__(label, concrete, steel_bar, settings)
+    Attributes:
+        width (Quantity): The width of the rectangular section.
+        height (Quantity): The height of the rectangular section.
 
-        if settings:
-            self.settings.update(settings)  # Update with any provided settings
+    Properties:
+        settings (BeamSettings): Access to global design rules and settings.
+        A_x (Quantity): Cross-sectional area, returned in cm².
+        I_y (Quantity): Moment of inertia about the Y axis, returned in cm⁴.
+        I_z (Quantity): Moment of inertia about the Z axis, returned in cm⁴.
+    Methods:
+        plot(): Plots the rectangular section with dimensions and stirrup representation, including rounded corners and thickness.
+    """
 
-        self._width = width
-        self._height = height
-        self._A_x = self._width * self._height
-        self._I_y = self._width * self._height**3 / 12
-        self._I_z = self._height * self._width**3 / 12
+    # Fields unique to RectangularSection
+    width: Quantity = field(kw_only=True)
+    height: Quantity = field(kw_only=True)
+    _ax: Optional[plt.Axes] = field(default=None, init=False, repr=False)
 
-        self._ax: Optional[plt.Axes] = None
+    def __post_init__(self) -> None:
+        super().__post_init__()
 
-    @property
-    def width(self) -> PlainQuantity:
-        "Beam width."
-        return self._width.to("cm")
-
-    @property
-    def height(self) -> PlainQuantity:
-        "Beam height."
-        return self._height.to("cm")
+        self._A_x = self.width * self.height
+        self._I_y = self.width * self.height**3 / 12
+        self._I_z = self.height * self.width**3 / 12
+        self._stirrup_d_b = self.settings.stirrup_diameter_ini
 
     @property
-    def A_x(self) -> PlainQuantity:
+    def settings(self) -> BeamSettings:
+        """Access global design rules."""
+        return GLOBAL_BEAM_SETTINGS
+
+    @property
+    def A_x(self) -> Quantity:
         "Cross section area."
         return self._A_x.to("cm**2")
 
     @property
-    def I_y(self) -> PlainQuantity:
+    def I_y(self) -> Quantity:
         "Moment of inertia about the Y axis."
         return self._I_y.to("cm**4")
 
     @property
-    def I_z(self) -> PlainQuantity:
+    def I_z(self) -> Quantity:
         "Moment of inertia about the Z axis."
         return self._I_z.to("cm**4")
 
@@ -135,11 +137,12 @@ class RectangularSection(Section):
             },
         )
         if self.concrete.unit_system == "imperial":
-            width = "{:~P}".format(self.width.to("inch"))
-            height = "{:~P}".format(self.height.to("inch"))
+            # Example: format to 2 decimal places, then use pint's compact (~P) format
+            width = "{:.0f~P}".format(self.width.to("inch"))
+            height = "{:.0f~P}".format(self.height.to("inch"))
         else:
-            width = "{:~P}".format(self.width.to("cm"))
-            height = "{:~P}".format(self.height.to("cm"))
+            width = "{:.0f~P}".format(self.width.to("cm"))
+            height = "{:.0f~P}".format(self.height.to("cm"))
         # Add width dimension text below the arrow
         self._ax.text(
             self.width.magnitude / 2,  # Center of the arrow

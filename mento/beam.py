@@ -1,10 +1,10 @@
 import os  # Cleaning console
 from dataclasses import dataclass
 from IPython.display import Markdown, display
-from typing import Optional, Dict, Any
+from typing import Optional, Dict
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
-from pint.facets.plain import PlainQuantity
+from pint import Quantity
 import numpy as np
 import pandas as pd
 from pandas import DataFrame
@@ -14,7 +14,6 @@ from devtools import debug
 
 from mento.rectangular import RectangularSection
 from mento.material import (
-    Concrete,
     SteelBar,
     Concrete_ACI_318_19,
     Concrete_EN_1992_2004,
@@ -23,6 +22,7 @@ from mento.rebar import Rebar
 from mento.units import MPa, psi, mm, inch, kN, m, cm, kNm, dimensionless, kip, ksi, ft
 from mento.results import Formatter, TablePrinter, DocumentBuilder, CUSTOM_COLORS
 from mento.forces import Forces
+from mento.settings import BeamSettings, GLOBAL_BEAM_SETTINGS
 
 from mento.codes.EN_1992_2004_beam import (
     _check_shear_EN_1992_2004,
@@ -40,25 +40,68 @@ from mento.codes.ACI_318_19_beam import (
 
 @dataclass
 class RectangularBeam(RectangularSection):
-    def __init__(
-        self,
-        label: Optional[str],
-        concrete: Concrete,
-        steel_bar: SteelBar,
-        width: PlainQuantity,
-        height: PlainQuantity,
-        settings: Optional[Dict[str, Any]] = None,
-    ):
-        super().__init__(label, concrete, steel_bar, width, height, settings)
-        if settings:
-            self.settings.update(settings)  # Update with any provided settings
+    """
+    Represents a reinforced concrete rectangular beam section with methods for design, checking,
+    and visualization of longitudinal and transverse reinforcement according to various design codes.
 
-        self.layers_spacing = self.settings.get_setting("layers_spacing")
+    Attributes:
+        settings (BeamSettings): Access to global design rules and settings.
 
-        # Centralized attribute initialization
+    Methods:
+        set_transverse_rebar(n_stirrups, d_b, s_l):
+            Sets the transverse (stirrup) rebar configuration for the beam.
+        set_longitudinal_rebar_bot(n1, d_b1, n2, d_b2, n3, d_b3, n4, d_b4):
+            Sets the bottom longitudinal rebar configuration.
+        set_longitudinal_rebar_top(n1, d_b1, n2, d_b2, n3, d_b3, n4, d_b4):
+            Sets the top longitudinal rebar configuration.
+        design_flexure(forces):
+            Designs the flexural reinforcement for the beam based on provided forces and design code.
+        check_flexure(forces):
+            Checks the flexural capacity for all provided forces and stores results.
+        design_shear(forces):
+            Designs the shear reinforcement for the beam based on provided forces and design code.
+        check_shear(forces):
+            Checks the shear capacity for all provided forces and stores results.
+        data:
+            Property. Displays basic beam data in Markdown format.
+        flexure_results:
+            Property. Displays summary of flexural design/check results in Markdown format.
+        shear_results:
+            Property. Displays summary of shear design/check results in Markdown format.
+        results:
+            Property. Displays all available results (properties, flexure, shear) in Markdown format.
+        flexure_results_detailed(force=None):
+            Displays detailed flexure results for a specific force or the limiting case.
+        flexure_results_detailed_doc(force=None):
+            Exports detailed flexure results to a Word document.
+        shear_results_detailed(force=None):
+            Displays detailed shear results for a specific force or the limiting case.
+        shear_results_detailed_doc(force=None):
+            Exports detailed shear results to a Word document.
+        plot():
+            Plots the longitudinal rebar arrangement for the beam section.
+
+    Usage:
+        - Instantiate with required section and material properties.
+        - Use set_longitudinal_rebar_* and set_transverse_rebar to configure reinforcement.
+        - Call design_flexure and design_shear to perform design.
+        - Use flexure_results, shear_results, and results properties for summary output.
+        - Use flexure_results_detailed and shear_results_detailed for detailed output.
+        - Use plot() to visualize the rebar arrangement.
+
+    Note:
+        This class is intended for use in reinforced concrete beam design workflows,
+        supporting multiple design codes and detailed reporting.
+    """
+
+    def __post_init__(self) -> None:
+        super().__post_init__()  # Call parent attributes
         self._initialize_attributes()
 
-        # self.shear_design_results: DataFrame = None
+    @property
+    def settings(self) -> BeamSettings:
+        """Access global design rules."""
+        return GLOBAL_BEAM_SETTINGS
 
     ##########################################################
     # INITIALIZE ATTRIBUTES
@@ -67,26 +110,26 @@ class RectangularBeam(RectangularSection):
     def _initialize_attributes(self) -> None:
         """Initialize all attributes of the beam."""
         # Stirrups and shear attributes
-        self._stirrup_s_l: PlainQuantity = 0 * cm
-        self._stirrup_s_w: PlainQuantity = 0 * cm
-        self._stirrup_s_max_l: PlainQuantity = 0 * cm
-        self._stirrup_s_max_w: PlainQuantity = 0 * cm
+        self._stirrup_s_l: Quantity = 0 * cm
+        self._stirrup_s_w: Quantity = 0 * cm
+        self._stirrup_s_max_l: Quantity = 0 * cm
+        self._stirrup_s_max_w: Quantity = 0 * cm
         self._stirrup_n: int = 0
-        self._A_v_min: PlainQuantity = 0 * cm**2 / m
-        self._A_v: PlainQuantity = 0 * cm**2 / m
-        self._A_s_req_bot: PlainQuantity = 0 * cm**2
-        self._A_s_req_top: PlainQuantity = 0 * cm**2
-        self._A_v_req: PlainQuantity = 0 * cm**2 / m
-        self._A_s_tension: PlainQuantity = 0 * cm**2
+        self._A_v_min: Quantity = 0 * cm**2 / m
+        self._A_v: Quantity = 0 * cm**2 / m
+        self._A_s_req_bot: Quantity = 0 * cm**2
+        self._A_s_req_top: Quantity = 0 * cm**2
+        self._A_v_req: Quantity = 0 * cm**2 / m
+        self._A_s_tension: Quantity = 0 * cm**2
         self._DCRv: float = 0
         self._DCRb_top: float = 0
         self._DCRb_bot: float = 0
         self._alpha: float = math.radians(90)
-        self._V_s_req: PlainQuantity = 0 * kN
+        self._V_s_req: Quantity = 0 * kN
 
         # Design checks and effective heights
-        self._rho_l_bot: PlainQuantity = 0 * dimensionless
-        self._rho_l_top: PlainQuantity = 0 * dimensionless
+        self._rho_l_bot: Quantity = 0 * dimensionless
+        self._rho_l_top: Quantity = 0 * dimensionless
         self._bot_rebar_centroid = 0 * mm
         self._top_rebar_centroid = 0 * mm
         self._c_d_top: float = 0
@@ -149,70 +192,60 @@ class RectangularBeam(RectangularSection):
 
     def _initialize_ACI_318_attributes(self) -> None:
         if isinstance(self.concrete, Concrete_ACI_318_19):
-            self._phi_V_n: PlainQuantity = 0 * kN
-            self._phi_V_s: PlainQuantity = 0 * kN
-            self._phi_V_c: PlainQuantity = 0 * kN
-            self._phi_V_max: PlainQuantity = 0 * kN
-            self._V_u: PlainQuantity = 0 * kN
-            self._M_u: PlainQuantity = 0 * kNm
-            self._M_u_bot: PlainQuantity = 0 * kNm
-            self._M_u_top: PlainQuantity = 0 * kNm
-            self._N_u: PlainQuantity = 0 * kN
-            self._A_cv: PlainQuantity = 0 * cm**2
-            self._k_c_min: PlainQuantity = 0 * MPa
-            self._sigma_Nu: PlainQuantity = 0 * MPa
-            self.V_c: PlainQuantity = 0 * kN
-            self.phi_v: float = 0
-            self.phi_t: float = 0
-            self.lambda_factor = 0
-            self._rho_w: PlainQuantity = 0 * dimensionless
+            self._phi_V_n: Quantity = 0 * kN
+            self._phi_V_s: Quantity = 0 * kN
+            self._phi_V_c: Quantity = 0 * kN
+            self._phi_V_max: Quantity = 0 * kN
+            self._V_u: Quantity = 0 * kN
+            self._M_u: Quantity = 0 * kNm
+            self._M_u_bot: Quantity = 0 * kNm
+            self._M_u_top: Quantity = 0 * kNm
+            self._N_u: Quantity = 0 * kN
+            self._A_cv: Quantity = 0 * cm**2
+            self._k_c_min: Quantity = 0 * MPa
+            self._sigma_Nu: Quantity = 0 * MPa
+            self.V_c: Quantity = 0 * kN
+            self._rho_w: Quantity = 0 * dimensionless
             self._lambda_s: float = 0
-            self.f_yt: PlainQuantity = 0 * MPa
+            self.f_yt: Quantity = 0 * MPa
             self._max_shear_ok: bool = False
-            self._A_s_min_bot: PlainQuantity = 0 * cm**2
-            self._A_s_min_top: PlainQuantity = 0 * cm**2
-            self._A_s_max_bot: PlainQuantity = 0 * cm**2
-            self._A_s_max_top: PlainQuantity = 0 * cm**2
-            self._phi_M_n_bot: PlainQuantity = 0 * kNm
-            self._phi_M_n_top: PlainQuantity = 0 * kNm
-            self._d_b_max_bot: PlainQuantity = 0 * mm
-            self._d_b_max_top: PlainQuantity = 0 * mm
+            self._A_s_min_bot: Quantity = 0 * cm**2
+            self._A_s_min_top: Quantity = 0 * cm**2
+            self._A_s_max_bot: Quantity = 0 * cm**2
+            self._A_s_max_top: Quantity = 0 * cm**2
+            self._phi_M_n_bot: Quantity = 0 * kNm
+            self._phi_M_n_top: Quantity = 0 * kNm
+            self._d_b_max_bot: Quantity = 0 * mm
+            self._d_b_max_top: Quantity = 0 * mm
             self.flexure_design_results_bot: DataFrame = None
             self.flexure_design_results_top: DataFrame = None
 
     def _initialize_EN_1992_2004_attributes(self) -> None:
         if isinstance(self.concrete, Concrete_EN_1992_2004):
-            self._f_yk = self.steel_bar.f_y
-            self._f_ck = self.concrete.f_ck
-            self._f_ctm = self.concrete.f_ctm
-            self._epsilon_cu3 = self.concrete._epsilon_cu3
-            self._E_s = self.steel_bar.E_s
-            self._V_Ed_1: PlainQuantity = 0 * kN
-            self._V_Ed_2: PlainQuantity = 0 * kN
-            self._N_Ed: PlainQuantity = 0 * kN
-            self._M_Ed: PlainQuantity = 0 * kNm
-            self._M_Ed_bot: PlainQuantity = 0 * kNm
-            self._M_Ed_top: PlainQuantity = 0 * kNm
-            self._M_Rd_bot: PlainQuantity = 0 * kNm
-            self._M_Rd_top: PlainQuantity = 0 * kNm
-            self._sigma_cd: PlainQuantity = 0 * MPa
-            self._V_Rd_c: PlainQuantity = 0 * kN
-            self._V_Rd_s: PlainQuantity = 0 * kN
-            self._V_Rd_max: PlainQuantity = 0 * kN
-            self._V_Rd: PlainQuantity = 0 * kN
+            # self._f_yk = self.steel_bar.f_y
+            # self._f_ck = self.concrete.f_ck
+            # self._f_ctm = self.concrete.f_ctm
+            # self._epsilon_cu3 = self.concrete._epsilon_cu3
+            # self._E_s = self.steel_bar.E_s
+            self._V_Ed_1: Quantity = 0 * kN
+            self._V_Ed_2: Quantity = 0 * kN
+            self._N_Ed: Quantity = 0 * kN
+            self._M_Ed: Quantity = 0 * kNm
+            self._sigma_cd: Quantity = 0 * MPa
+            self._V_Rd_c: Quantity = 0 * kN
+            self._V_Rd_s: Quantity = 0 * kN
+            self._V_Rd_max: Quantity = 0 * kN
+            self._V_Rd: Quantity = 0 * kN
             self._k_value: float = 0
-            self._alpha_cc: float = 0
-            self._gamma_c: float = 0
-            self._gamma_s: float = 0
-            self._f_ywk: PlainQuantity = 0 * MPa
-            self._f_ywd: PlainQuantity = 0 * MPa
-            self._f_yd: PlainQuantity = 0 * MPa
-            self._f_cd: PlainQuantity = 0 * MPa
+            self._f_ywk: Quantity = 0 * MPa
+            self._f_ywd: Quantity = 0 * MPa
+            self._f_yd: Quantity = 0 * MPa
+            self._f_cd: Quantity = 0 * MPa
             self._A_p = 0 * cm**2  # No prestressed for now
-            self._sigma_cp: PlainQuantity = 0 * MPa
+            self._sigma_cp: Quantity = 0 * MPa
             self._theta: float = 0
             self._cot_theta: float = 0
-            self._z: PlainQuantity = 0 * cm
+            self._z: Quantity = 0 * cm
 
     ##########################################################
     # SET LONGITUDINAL AND TRANSVERSE REBAR AND UPDATE ATTRIBUTES
@@ -221,8 +254,8 @@ class RectangularBeam(RectangularSection):
     def set_transverse_rebar(
         self,
         n_stirrups: int = 0,
-        d_b: PlainQuantity = 0 * mm,
-        s_l: PlainQuantity = 0 * cm,
+        d_b: Quantity = 0 * mm,
+        s_l: Quantity = 0 * cm,
     ) -> None:
         """Sets the transverse rebar in the beam section."""
         self._stirrup_n = n_stirrups
@@ -239,13 +272,13 @@ class RectangularBeam(RectangularSection):
     def set_longitudinal_rebar_bot(
         self,
         n1: int = 0,
-        d_b1: PlainQuantity = 0 * mm,
+        d_b1: Quantity = 0 * mm,
         n2: int = 0,
-        d_b2: PlainQuantity = 0 * mm,
+        d_b2: Quantity = 0 * mm,
         n3: int = 0,
-        d_b3: PlainQuantity = 0 * mm,
+        d_b3: Quantity = 0 * mm,
         n4: int = 0,
-        d_b4: PlainQuantity = 0 * mm,
+        d_b4: Quantity = 0 * mm,
     ) -> None:
         """Update the bottom rebar configuration and recalculate attributes."""
         self._n1_b = n1 or self._n1_b
@@ -261,13 +294,13 @@ class RectangularBeam(RectangularSection):
     def set_longitudinal_rebar_top(
         self,
         n1: int,
-        d_b1: PlainQuantity,
+        d_b1: Quantity,
         n2: int = 0,
-        d_b2: PlainQuantity = 0 * mm,
+        d_b2: Quantity = 0 * mm,
         n3: int = 0,
-        d_b3: PlainQuantity = 0 * mm,
+        d_b3: Quantity = 0 * mm,
         n4: int = 0,
-        d_b4: PlainQuantity = 0 * mm,
+        d_b4: Quantity = 0 * mm,
     ) -> None:
         """Update the top rebar configuration and recalculate attributes."""
         self._n1_t = n1 or self._n1_t
@@ -304,23 +337,23 @@ class RectangularBeam(RectangularSection):
         Calculates the maximum clear spacing between bars for the bottom rebar layers.
 
         Returns:
-            PlainQuantity: The maximum clear spacing between bars in either the first or second layer.
+            Quantity: The maximum clear spacing between bars in either the first or second layer.
         """
 
         def layer_clear_spacing(
-            n_a: int, d_a: PlainQuantity, n_b: int, d_b: PlainQuantity
-        ) -> PlainQuantity:
+            n_a: int, d_a: Quantity, n_b: int, d_b: Quantity
+        ) -> Quantity:
             """
             Helper function to calculate clear spacing for a given layer.
 
             Parameters:
                 n_a (int): Number of bars in the first group of the layer.
-                d_a (PlainQuantity): Diameter of bars in the first group of the layer.
+                d_a (Quantity): Diameter of bars in the first group of the layer.
                 n_b (int): Number of bars in the second group of the layer.
-                d_b (PlainQuantity): Diameter of bars in the second group of the layer.
+                d_b (Quantity): Diameter of bars in the second group of the layer.
 
             Returns:
-                PlainQuantity: Clear spacing for the given layer.
+                Quantity: Clear spacing for the given layer.
             """
             effective_width = self.width - 2 * (self.c_c + self._stirrup_d_b)
             total_bars = n_a + n_b
@@ -365,8 +398,16 @@ class RectangularBeam(RectangularSection):
         # Calculate the vertical positions of the bar layers
         y1_b = self._d_b1_b / 2
         y2_b = self._d_b2_b / 2
-        y3_b = max(self._d_b1_b, self._d_b2_b) + self.layers_spacing + self._d_b3_b / 2
-        y4_b = max(self._d_b1_b, self._d_b2_b) + self.layers_spacing + self._d_b4_b / 2
+        y3_b = (
+            max(self._d_b1_b, self._d_b2_b)
+            + self.settings.layers_spacing
+            + self._d_b3_b / 2
+        )
+        y4_b = (
+            max(self._d_b1_b, self._d_b2_b)
+            + self.settings.layers_spacing
+            + self._d_b4_b / 2
+        )
         # Calculate the total area of each layer
         area_1_b = (
             self._n1_b * self._d_b1_b**2 * np.pi / 4
@@ -388,8 +429,16 @@ class RectangularBeam(RectangularSection):
         # Calculate the vertical positions of the bar layers
         y1_t = self._d_b1_t / 2
         y2_t = self._d_b2_t / 2
-        y3_t = max(self._d_b1_t, self._d_b2_t) + self.layers_spacing + self._d_b3_t / 2
-        y4_t = max(self._d_b1_t, self._d_b2_t) + self.layers_spacing + self._d_b4_t / 2
+        y3_t = (
+            max(self._d_b1_t, self._d_b2_t)
+            + self.settings.layers_spacing
+            + self._d_b3_t / 2
+        )
+        y4_t = (
+            max(self._d_b1_t, self._d_b2_t)
+            + self.settings.layers_spacing
+            + self._d_b4_t / 2
+        )
 
         # Calculate the total area of each layer
         area_1_t = (
@@ -419,8 +468,8 @@ class RectangularBeam(RectangularSection):
         """Update effective heights and depths for moment and shear calculations."""
         self._c_mec_bot = self.c_c + self._stirrup_d_b + self._bot_rebar_centroid
         self._c_mec_top = self.c_c + self._stirrup_d_b + self._top_rebar_centroid
-        self._d_bot = self._height - self._c_mec_bot
-        self._d_top = self._height - self._c_mec_top
+        self._d_bot = self.height - self._c_mec_bot
+        self._d_top = self.height - self._c_mec_top
         # Use bottom or top effective height
         self._d_shear = min(self._d_bot, self._d_top)
 
@@ -1234,7 +1283,7 @@ class RectangularBeam(RectangularSection):
         doc_builder.save(f"Concrete beam shear check {self.concrete.design_code}.docx")
 
     def _format_longitudinal_rebar_string(
-        self, n1: int, d_b1: PlainQuantity, n2: int = 0, d_b2: PlainQuantity = 0 * mm
+        self, n1: int, d_b1: Quantity, n2: int = 0, d_b2: Quantity = 0 * mm
     ) -> str:
         """
         Returns a formatted string representing the rebars and their diameters.
@@ -1266,7 +1315,7 @@ class RectangularBeam(RectangularSection):
         height_cm: float = self.height.to("cm").magnitude
         c_c_cm: float = self.c_c.to("cm").magnitude
         stirrup_d_b_cm: float = self._stirrup_d_b.to("cm").magnitude
-        layers_spacing_cm: float = self.layers_spacing.to("cm").magnitude
+        layers_spacing_cm: float = self.settings.layers_spacing.to("cm").magnitude
 
         # Calculate rebar positions
         # Bottom rebars
@@ -1338,10 +1387,10 @@ class RectangularBeam(RectangularSection):
         stirrup_d_b_cm: float,
         layers_spacing_cm: float,
         n1: int,
-        d_b1: PlainQuantity,
+        d_b1: Quantity,
         n2: int,
-        d_b2: PlainQuantity,
-        max_db: PlainQuantity,
+        d_b2: Quantity,
+        max_db: Quantity,
         is_bottom: bool = True,
         is_second_layer: bool = False,
     ) -> None:

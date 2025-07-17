@@ -25,7 +25,7 @@ class BeamSummary:
         self.steel_bar: SteelBar = steel_bar
         self.beam_list: DataFrame = beam_list
         self.units_row: List[str] = []
-        self.data: DataFrame = None # type: ignore
+        self.data: DataFrame = None  # type: ignore
         self.nodes: List[Node] = []
         self._beam_summary: List = []
         self.check_and_process_input()
@@ -348,10 +348,12 @@ class BeamSummary:
         results_df = pd.DataFrame(results_list)
 
         # Combine the units row with the results DataFrame
-        final_df = pd.concat([units_row, results_df], ignore_index=True) # type: ignore
+        final_df = pd.concat([units_row, results_df], ignore_index=True)  # type: ignore
         return final_df
 
-    def shear_results(self, index: Optional[int] = None, capacity_check: bool = False) -> DataFrame:
+    def shear_results(
+        self, index: Optional[int] = None, capacity_check: bool = False
+    ) -> DataFrame:
         """
         Get shear results for one or all beams.
         (Existing docstring here...)
@@ -359,18 +361,24 @@ class BeamSummary:
         if index is not None:
             if index - 1 >= len(self.nodes):
                 raise IndexError(f"Index {index} is out of range for the beam list.")
-            return self._process_beam_for_check(self.nodes[max(index - 1, 0)], 
-                                            'shear', 
-                                            capacity_check)
+            return self._process_beam_for_check(
+                self.nodes[max(index - 1, 0)], "shear", capacity_check
+            )
 
-        return pd.concat([self._process_beam_for_check(item, 'shear', capacity_check) 
-                        for item in self.nodes], 
-                        ignore_index=True)
+        return pd.concat(
+            [
+                self._process_beam_for_check(item, "shear", capacity_check)
+                for item in self.nodes
+            ],
+            ignore_index=True,
+        )
 
-    def flexure_results(self, index: Optional[int] = None, capacity_check: bool = False) -> DataFrame:
+    def flexure_results(
+        self, index: Optional[int] = None, capacity_check: bool = False
+    ) -> DataFrame:
         """
         Get flexure results for one or all beams.
-        
+
         :param index: Optional index of the beam in beam_summary list
         :param capacity_check: If True, performs capacity check (resets forces to zero)
         :return: DataFrame with flexure results
@@ -378,18 +386,24 @@ class BeamSummary:
         if index is not None:
             if index - 1 >= len(self.nodes):
                 raise IndexError(f"Index {index} is out of range for the beam list.")
-            return self._process_beam_for_check(self.nodes[max(index - 1, 0)], 
-                                            'flexure', 
-                                            capacity_check)
+            return self._process_beam_for_check(
+                self.nodes[max(index - 1, 0)], "flexure", capacity_check
+            )
 
-        return pd.concat([self._process_beam_for_check(item, 'flexure', capacity_check) 
-                        for item in self.nodes], 
-                        ignore_index=True)
-    
-    def _process_beam_for_check(self, node: Node, check_type: str, capacity_check: bool) -> DataFrame:
+        return pd.concat(
+            [
+                self._process_beam_for_check(item, "flexure", capacity_check)
+                for item in self.nodes
+            ],
+            ignore_index=True,
+        )
+
+    def _process_beam_for_check(
+        self, node: Node, check_type: str, capacity_check: bool
+    ) -> DataFrame:
         """
         Shared method to process beam for either shear or flexure checks.
-        
+
         :param node: Node object to check
         :param check_type: Either 'shear' or 'flexure'
         :param capacity_check: If True, performs capacity check (resets forces)
@@ -402,9 +416,9 @@ class BeamSummary:
             node.add_forces(Forces())  # Add empty force
 
         # Run the appropriate check
-        if check_type == 'shear':
+        if check_type == "shear":
             results = node.check_shear()
-        elif check_type == 'flexure':
+        elif check_type == "flexure":
             results = node.check_flexure()
         else:
             raise ValueError("check_type must be either 'shear' or 'flexure'")

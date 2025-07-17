@@ -1,5 +1,5 @@
 import math
-from pint.facets.plain import PlainQuantity
+from pint import Quantity
 import pandas as pd
 import numpy as np
 from typing import TYPE_CHECKING, Dict, Any, cast
@@ -26,10 +26,6 @@ def _initialize_variables_ACI_318_19(self: "RectangularBeam", force: Forces) -> 
         else:
             self._M_u_bot = 0 * kNm
             self._M_u_top = self._M_u
-        self.settings.load_ACI_318_19_settings()
-        self.phi_v = self.settings.get_setting("phi_v")
-        self.phi_t = self.settings.get_setting("phi_t")
-        self.lambda_factor = self.settings.get_setting("lambda")
         self.f_yt = _calculate_f_yt_aci(self)
         # Consider bottom or top tension reinforcement
         self._A_s_tension = self._A_s_bot if force._M_y >= 0 * kNm else self._A_s_top
@@ -141,7 +137,7 @@ def _calculate_max_shear_capacity_aci(self: "RectangularBeam") -> None:
     self._max_shear_ok = self._V_u < self._phi_V_max
 
 
-def _calculate_A_v_min_ACI(self: "RectangularBeam", f_c: PlainQuantity) -> None:
+def _calculate_A_v_min_ACI(self: "RectangularBeam", f_c: Quantity) -> None:
     """Calculate the minimum shear reinforcement based on unit system."""
     # 'Minimum reinforcement should be placed if the factored shear Vu
     # is greater than half the shear capacity of the concrete,
@@ -161,7 +157,7 @@ def _calculate_A_v_min_ACI(self: "RectangularBeam", f_c: PlainQuantity) -> None:
         )
 
 
-def _calculate_f_yt_aci(self: "RectangularBeam") -> PlainQuantity:
+def _calculate_f_yt_aci(self: "RectangularBeam") -> Quantity:
     """Determine the yield strength of steel based on unit system."""
     if self.concrete.unit_system == "metric":
         return min(self.steel_bar.f_y, 420 * MPa)
@@ -426,8 +422,8 @@ def _maximum_flexural_reinforcement_ratio_ACI_318_19(self: "RectangularBeam") ->
 
 
 def _minimum_flexural_reinforcement_ratio_ACI_318_19(
-    self: "RectangularBeam", M_u: PlainQuantity
-) -> PlainQuantity:
+    self: "RectangularBeam", M_u: Quantity
+) -> Quantity:
     """
     Calculates the minimum flexural reinforcement ratio according to ACI 318-19
     provisions based on the factored moment, M_u.
@@ -444,14 +440,14 @@ def _minimum_flexural_reinforcement_ratio_ACI_318_19(
 
     Parameters
     ----------
-    M_u : PlainQuantity
+    M_u : Quantity
         The factored moment for the section where the minimum flexural
         reinforcement ratio is required. The unit should be consistent with
         the chosen system (e.g., kNm in metric).
 
     Returns
     -------
-    PlainQuantity
+    Quantity
         The minimum flexural reinforcement ratio (dimensionless).
 
     Notes
@@ -486,8 +482,8 @@ def _minimum_flexural_reinforcement_ratio_ACI_318_19(
 
 
 def _calculate_flexural_reinforcement_ACI_318_19(
-    self: "RectangularBeam", M_u: PlainQuantity, d: float, d_prima: float
-) -> tuple[PlainQuantity, PlainQuantity, PlainQuantity, PlainQuantity, float]:
+    self: "RectangularBeam", M_u: Quantity, d: float, d_prima: float
+) -> tuple[Quantity, Quantity, Quantity, Quantity, float]:
     """
     Calculates the flexural reinforcement for a given factored moment according to ACI 318-19.
 
@@ -498,26 +494,22 @@ def _calculate_flexural_reinforcement_ACI_318_19(
     For a negative moment, reverse the roles of 'd' and 'd_prima'.
 
     Parameters:
-        M_u (PlainQuantity): The factored moment (always a positive value).
+        M_u (Quantity): The factored moment (always a positive value).
         d (float): Effective depth of the tensile reinforcement.
         d_prima (float): Effective depth of the compression reinforcement.
 
     Returns:
         tuple: A tuple containing:
-            - A_s_min (PlainQuantity): Minimum reinforcement area required by the code.
-            - A_s_max (PlainQuantity): Maximum reinforcement area allowed by the code.
-            - A_s_final (PlainQuantity): Final reinforcement area adopted for the tensile zone.
-            - A_s_comp (PlainQuantity): Compression reinforcement area (if required).
+            - A_s_min (Quantity): Minimum reinforcement area required by the code.
+            - A_s_max (Quantity): Maximum reinforcement area allowed by the code.
+            - A_s_final (Quantity): Final reinforcement area adopted for the tensile zone.
+            - A_s_comp (Quantity): Compression reinforcement area (if required).
             - c_d (float): Ratio of the calculated neutral axis depth to the effective depth (c/d).
     """
-
+    concrete_aci = cast("Concrete_ACI_318_19", self.concrete)
     # Extract relevant properties and settings
-    setting_flexural_min_reduction = self.settings.get_setting("flexural_min_reduction")
-    beta_1 = self.concrete.get_properties()["beta_1"]
-    b = self._width
-
-    self.settings.load_ACI_318_19_settings()
-    self.phi_t = self.settings.get_setting("phi_t")
+    setting_flexural_min_reduction = concrete_aci._flexural_min_reduction
+    b = self.width
 
     # Determine minimum and maximum reinforcement areas
     rho_min = _minimum_flexural_reinforcement_ratio_ACI_318_19(self, M_u)
@@ -528,7 +520,7 @@ def _calculate_flexural_reinforcement_ACI_318_19(
     A_s_max = rho_max * d * b
 
     # Calculate required reinforcement based on the nominal moment capacity
-    R_n = M_u / (self.phi_t * b * d**2)
+    R_n = M_u / (concrete_aci._phi_t * b * d**2)
     # TODO: REVIEW WHAT TO DO WHEN THE VALUE INSIDE THE SQUARE ROOT IS NEGATIVE.
     # Verify if the value under the square root is negative
     sqrt_value = 1 - 2 * R_n / (0.85 * self.concrete.f_c)
@@ -548,7 +540,11 @@ def _calculate_flexural_reinforcement_ACI_318_19(
         )
 
     # Calculate the neutral axis depth based on equilibrium: 0.85 * f_c * c * beta_1 * b = A_s * f_y
-    c = A_s_calc * self.steel_bar.f_y / (0.85 * self.concrete.f_c * b * beta_1)
+    c = (
+        A_s_calc
+        * self.steel_bar.f_y
+        / (0.85 * self.concrete.f_c * b * concrete_aci._beta_1)
+    )
 
     # Helper function to clean near-zero values
     def clean_zero(value: float, tolerance: float = 1e-6) -> float:
@@ -574,7 +570,7 @@ def _calculate_flexural_reinforcement_ACI_318_19(
     else:
         rho = (
             0.85
-            * beta_1
+            * concrete_aci._beta_1
             * self.concrete.f_c.to(psi).magnitude
             / self.steel_bar.f_y.to(psi).magnitude
             * (0.003 / (self.steel_bar.epsilon_y + 0.006))
@@ -586,7 +582,7 @@ def _calculate_flexural_reinforcement_ACI_318_19(
             * b
             * d
         )
-        M_n_prima = M_u / self.phi_t - M_n_t
+        M_n_prima = M_u / concrete_aci._phi_t - M_n_t
         c_t = 0.003 * d / (self.steel_bar.epsilon_y + 0.006)
         c_d = clean_zero(c_t / d)
         f_s_prima = min(
@@ -598,14 +594,14 @@ def _calculate_flexural_reinforcement_ACI_318_19(
     if sqrt_value < 0:
         # In the case where the quadratic equation fails (negative square root),
         # use an approximate value to provide an estimate.
-        A_s_final = M_u / (self.phi_t * 0.9 * d * self.steel_bar.f_y)
+        A_s_final = M_u / (concrete_aci._phi_t * 0.9 * d * self.steel_bar.f_y)
 
     return A_s_min, A_s_max, A_s_final, A_s_comp, c_d
 
 
 def _determine_nominal_moment_simple_reinf_ACI_318_19(
-    self: "RectangularBeam", A_s: PlainQuantity, d: PlainQuantity
-) -> PlainQuantity:
+    self: "RectangularBeam", A_s: Quantity, d: Quantity
+) -> Quantity:
     """
     Determines the nominal moment for a simply reinforced section according to ACI 318-19.
 
@@ -617,14 +613,14 @@ def _determine_nominal_moment_simple_reinf_ACI_318_19(
         a = (A_s * f_y) / (0.85 * f_c * b)
 
     Parameters:
-        A_s (PlainQuantity): The area of reinforcement.
-        d (PlainQuantity): The effective depth of the section.
+        A_s (Quantity): The area of reinforcement.
+        d (Quantity): The effective depth of the section.
 
     Returns:
-        PlainQuantity: The nominal moment (M_n) calculated as A_s * f_y * (d - a/2).
+        Quantity: The nominal moment (M_n) calculated as A_s * f_y * (d - a/2).
     """
     # Calculate the depth of the equivalent rectangular stress block (a)
-    a = A_s * self.steel_bar.f_y / (0.85 * self.concrete.f_c * self._width)
+    a = A_s * self.steel_bar.f_y / (0.85 * self.concrete.f_c * self.width)
     # Calculate the nominal moment (M_n)
     M_n = A_s * self.steel_bar.f_y * (d - a / 2)
     return M_n
@@ -632,11 +628,11 @@ def _determine_nominal_moment_simple_reinf_ACI_318_19(
 
 def _determine_nominal_moment_double_reinf_ACI_318_19(
     self: "RectangularBeam",
-    A_s: PlainQuantity,
-    d: PlainQuantity,
-    d_prime: PlainQuantity,
-    A_s_prime: PlainQuantity,
-) -> PlainQuantity:
+    A_s: Quantity,
+    d: Quantity,
+    d_prime: Quantity,
+    A_s_prime: Quantity,
+) -> Quantity:
     """
     Determines the nominal moment for a doubly reinforced beam section according to ACI 318-19.
 
@@ -652,13 +648,13 @@ def _determine_nominal_moment_double_reinf_ACI_318_19(
         0.85 * f_c * a * b + A_s_prime * f_y = A_s * f_y
 
     Parameters:
-        A_s (PlainQuantity): Area of the tensile reinforcement.
-        d (PlainQuantity): Effective depth of the beam section.
-        d_prime (PlainQuantity): Effective depth (cover) to the compression reinforcement.
-        A_s_prime (PlainQuantity): Area of the compression reinforcement.
+        A_s (Quantity): Area of the tensile reinforcement.
+        d (Quantity): Effective depth of the beam section.
+        d_prime (Quantity): Effective depth (cover) to the compression reinforcement.
+        A_s_prime (Quantity): Area of the compression reinforcement.
 
     Returns:
-        PlainQuantity: The nominal moment (M_n) of the doubly reinforced section.
+        Quantity: The nominal moment (M_n) of the doubly reinforced section.
     """
     f_c = self.concrete.f_c
     if isinstance(self.concrete, Concrete_ACI_318_19):
@@ -668,7 +664,7 @@ def _determine_nominal_moment_double_reinf_ACI_318_19(
     f_y = self.steel_bar.f_y
     E_s = self.steel_bar._E_s
     epsilon_y = self.steel_bar._epsilon_y
-    b = self._width
+    b = self.width
 
     # -------------------------------------------------------------------------
     # Step 1: Assume that the compression steel is yielding (f_s_prime = f_y)
@@ -754,8 +750,8 @@ def _determine_nominal_moment_ACI_318_19(
         rho_min_bot = 0 * dimensionless
 
     # Calculate minimum and maximum bottom reinforcement areas
-    self._A_s_min_bot = rho_min_bot * self._d_bot * self._width
-    self._A_s_max_bot = rho_max * self._d_bot * self._width
+    self._A_s_min_bot = rho_min_bot * self._d_bot * self.width
+    self._A_s_max_bot = rho_max * self._d_bot * self.width
 
     # Determine the nominal moment for positive moments
     if self._A_s_bot <= self._A_s_max_bot:
@@ -772,8 +768,8 @@ def _determine_nominal_moment_ACI_318_19(
         )
 
     # Determine capacity for negative moment (tension at the top)
-    self._A_s_min_top = rho_min_top * self._d_top * self._width
-    self._A_s_max_top = rho_max * self._d_top * self._width
+    self._A_s_min_top = rho_min_top * self._d_top * self.width
+    self._A_s_max_top = rho_max * self._d_top * self.width
 
     if self._A_s_top == 0 * cm**2:
         M_n_negative = 0 * kNm
@@ -791,8 +787,9 @@ def _determine_nominal_moment_ACI_318_19(
         )
 
     # Calculate the design moment capacities for both bottom and top reinforcement
-    self._phi_M_n_bot = self.phi_t * M_n_positive
-    self._phi_M_n_top = self.phi_t * M_n_negative
+    concrete_aci = cast("Concrete_ACI_318_19", self.concrete)
+    self._phi_M_n_bot = concrete_aci._phi_t * M_n_positive
+    self._phi_M_n_top = concrete_aci._phi_t * M_n_negative
 
     return None
 
@@ -863,8 +860,8 @@ def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.Data
     self._d_b_max_bot = max(self._d_b1_b, self._d_b2_b, self._d_b3_b, self._d_b4_b)
 
     # Calculate the longitudinal reinforcement ratios for both sides.
-    self._rho_l_bot = self._A_s_bot / (self._d_bot * self._width)
-    self._rho_l_top = self._A_s_bot / (self._d_top * self._width)
+    self._rho_l_bot = self._A_s_bot / (self._d_bot * self.width)
+    self._rho_l_top = self._A_s_bot / (self._d_top * self.width)
 
     # Compile the design results into a dictionary.
     results = _compile_results_ACI_flexure_metric(self, force)
@@ -877,7 +874,7 @@ def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.Data
 
 
 def _design_flexure_ACI_318_19(
-    self: "RectangularBeam", max_M_y_bot: PlainQuantity, max_M_y_top: PlainQuantity
+    self: "RectangularBeam", max_M_y_bot: Quantity, max_M_y_top: Quantity
 ) -> Dict[str, Any]:
     """
     Designs the flexural reinforcement for a beam cross-section
@@ -908,8 +905,6 @@ def _design_flexure_ACI_318_19(
         areas and their spacing.
     """
 
-    self.settings.load_ACI_318_19_settings()
-    self.phi_t = self.settings.get_setting("phi_t")
     # Initial assumptions for mechanical cover and compression depth
     rec_mec = self.c_c + self._stirrup_d_b + 1 * cm
     d_prima = self.c_c + self._stirrup_d_b + 1 * cm
@@ -921,7 +916,7 @@ def _design_flexure_ACI_318_19(
     while Err >= tol:
         iteration_count += 1
         # Update the effective depth for bottom tension reinforcement
-        d = self._height - rec_mec
+        d = self.height - rec_mec
 
         # Calculate reinforcement for the positive moment, even if it is 0
         (
@@ -1317,14 +1312,12 @@ def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
             "Unit": ["kNm", "kNm"],
         }
         # Min max lists
-        min_spacing_top: PlainQuantity = max(
-            self.settings.get_setting("clear_spacing"),
-            self.settings.get_setting("vibrator_size"),
+        min_spacing_top: Quantity = max(
+            self.settings.clear_spacing,
+            self.settings.vibrator_size,
             self._d_b_max_top,
         )
-        min_spacing_bot: PlainQuantity = max(
-            self.settings.get_setting("clear_spacing"), self._d_b_max_bot
-        )
+        min_spacing_bot: Quantity = max(self.settings.clear_spacing, self._d_b_max_bot)
         min_values = [
             self._A_s_min_top,
             min_spacing_top,
