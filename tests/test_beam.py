@@ -16,30 +16,28 @@ from mento.codes.ACI_318_19_beam import (
 def beam_example_imperial() -> RectangularBeam:
     concrete = Concrete_ACI_318_19(name="C4", f_c=4000 * psi)
     steelBar = SteelBar(name="ADN 420", f_y=60 * ksi)
-    custom_settings = {"clear_cover": 1.5 * inch}
     section = RectangularBeam(
         label="V101",
         concrete=concrete,
         steel_bar=steelBar,
         width=10 * inch,
         height=16 * inch,
-        settings=custom_settings,
+        c_c = 1.5 * inch,
     )
     return section
 
 
 @pytest.fixture()
 def beam_example_EN_1992_2004() -> RectangularBeam:
-    concrete = Concrete_EN_1992_2004(name="C25", f_ck=25 * MPa)
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
     steelBar = SteelBar(name="B500S", f_y=500 * MPa)
-    custom_settings = {"clear_cover": 2.6 * cm}
     section = RectangularBeam(
         label="101",
         concrete=concrete,
         steel_bar=steelBar,
         width=20 * cm,
         height=60 * cm,
-        settings=custom_settings,
+        c_c = 2.6 * cm,
     )
     return section
 
@@ -47,14 +45,13 @@ def beam_example_EN_1992_2004() -> RectangularBeam:
 def beam_example_EN_1992_2004_2() -> RectangularBeam:
     concrete = Concrete_EN_1992_2004(name="C25", f_ck=25 * MPa)
     steelBar = SteelBar(name="B500S", f_y=500 * MPa)
-    custom_settings = {"clear_cover": 3.8 * cm}
     section = RectangularBeam(
         label="101",
         concrete=concrete,
         steel_bar=steelBar,
         width=30 * cm,
         height=50 * cm,
-        settings=custom_settings,
+        c_c = 3.8 * cm,
     )
     return section
 
@@ -62,14 +59,13 @@ def beam_example_EN_1992_2004_2() -> RectangularBeam:
 def beam_example_EN_1992_2004_3() -> RectangularBeam:
     concrete = Concrete_EN_1992_2004(name="C25", f_ck=30 * MPa)
     steelBar = SteelBar(name="B500S", f_y=500 * MPa)
-    custom_settings = {"clear_cover": 3 * cm}
     section = RectangularBeam(
         label="101",
         concrete=concrete,
         steel_bar=steelBar,
         width=30 * cm,
         height=50 * cm,
-        settings=custom_settings,
+        c_c = 3 * cm,
     )
     return section
 
