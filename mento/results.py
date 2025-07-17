@@ -102,18 +102,22 @@ class Formatter:
         # Determine the color based on DCR value
         if self.mid_value > DCR:
             color = self.green
-        elif self.mid_value <= DCR <= self.max_value: # Use self.max_value here for consistency
+        elif (
+            self.mid_value <= DCR <= self.max_value
+        ):  # Use self.max_value here for consistency
             color = self.yellow
         else:
             color = self.red
 
-        return f"color: {color}" # This is a CSS style string
+        return f"color: {color}"  # This is a CSS style string
 
     def apply_DCR_style(self, value: float) -> str:
         formatted_value = round(value, 2) if isinstance(value, (int, float)) else value
         return self.DCR_value_df(formatted_value)
 
-    def color_DCR_df(self, df: pd.DataFrame, DCR_columns: list) -> Styler: # Use Styler directly now
+    def color_DCR_df(
+        self, df: pd.DataFrame, DCR_columns: list
+    ) -> Styler:  # Use Styler directly now
         """
         Apply color styling to specified DCR-related columns in the DataFrame.
 

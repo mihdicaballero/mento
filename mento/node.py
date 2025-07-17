@@ -4,11 +4,12 @@ import pandas as pd
 from mento.section import Section
 from mento.forces import Forces
 
+
 class Node:
     """
     Node Class
-    The `Node` class represents a structural node that is associated with a section 
-    (e.g., a beam) and can have forces applied to it. It provides methods for managing 
+    The `Node` class represents a structural node that is associated with a section
+    (e.g., a beam) and can have forces applied to it. It provides methods for managing
     forces, performing structural checks, and designing for flexure and shear.
     Attributes:
         section (Section): The section (e.g., beam) associated with the node.

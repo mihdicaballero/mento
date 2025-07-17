@@ -85,7 +85,7 @@ class RectangularBeam(RectangularSection):
         - Use flexure_results, shear_results, and results properties for summary output.
         - Use flexure_results_detailed and shear_results_detailed for detailed output.
         - Use plot() to visualize the rebar arrangement.
-        
+
     Note:
         This class is intended for use in reinforced concrete beam design workflows,
         supporting multiple design codes and detailed reporting.

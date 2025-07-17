@@ -20,7 +20,7 @@ class RectangularSection(Section):
     Attributes:
         width (Quantity): The width of the rectangular section.
         height (Quantity): The height of the rectangular section.
-        
+
     Properties:
         settings (BeamSettings): Access to global design rules and settings.
         A_x (Quantity): Cross-sectional area, returned in cm².

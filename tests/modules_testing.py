@@ -78,7 +78,7 @@ def rectangular() -> None:
 
 def material() -> None:
     # Test cases
-    concrete = Concrete_ACI_318_19(name="H25",f_c=4*ksi)
+    concrete = Concrete_ACI_318_19(name="H25", f_c=4 * ksi)
     # concrete = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
     print(concrete)
     debug(concrete.get_properties())

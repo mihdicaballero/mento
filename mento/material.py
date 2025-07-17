@@ -202,7 +202,7 @@ class Concrete_EN_1992_2004(Concrete):
         alpha_cc (property): Returns the α_cc coefficient.
         Lambda_factor (property): Returns the λ factor.
         Eta_factor (property): Returns the η factor.
-        
+
     Usage:
         This class is intended for use in structural engineering applications where concrete properties must comply with EN 1992-1-1:2004.
         It provides all necessary parameters for design and verification according to the code.
@@ -427,11 +427,11 @@ class SteelStrand(Steel):
     @property
     def E_s(self) -> Quantity:
         return self._E_s
-    
+
     @property
     def epsilon_y(self) -> Quantity:
         return self._epsilon_y
-    
+
     def __str__(self) -> str:
         """Customize the string representation for user-friendly display."""
         properties = self.get_properties()

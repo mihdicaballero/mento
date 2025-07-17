@@ -54,7 +54,12 @@ def test_formatter_color_DCR_df(formatter: Formatter) -> None:
 
 # Tests for TablePrinter class
 def test_table_printer_data_output(table_printer: TablePrinter, capsys: Any) -> None:
-    data = {"Column1": ["Value1", "Value2"], "Column2": ["a", "b"], "Column3": [5.5, 6.7], "Column4": ["cm", "mm"]}
+    data = {
+        "Column1": ["Value1", "Value2"],
+        "Column2": ["a", "b"],
+        "Column3": [5.5, 6.7],
+        "Column4": ["cm", "mm"],
+    }
     headers = ["Column1", "Column2", "Column3", "Column4"]
     table_printer.print_table_data(data, headers)
     captured = capsys.readouterr()
