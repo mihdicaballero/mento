@@ -16,17 +16,24 @@ if TYPE_CHECKING:
     from ..beam import RectangularBeam  # Import Beam for type checking only
 
 
-def _initialize_variables_EN_1992_2004(self: "RectangularBeam") -> None:
+def _initialize_variables_EN_1992_2004(self: "RectangularBeam", force: Forces) -> None:
     """
     Initialize variables for EN 1992-2004 design code.
     """
+    self._M_Ed = force._M_y
+    if self._M_Ed > 0 * kNm:
+        self._M_Ed_bot = self._M_Ed
+        self._M_Ed_top = 0 * kNm
+    else:
+        self._M_Ed_bot = 0 * kNm
+        self._M_Ed_top = self._M_Ed
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         # Load settings for gamma factors
         self.settings.load_EN_1992_2004_settings()
         self._alpha_cc = self.settings.get_setting("alpha_cc")
         self._gamma_c = self.settings.get_setting("gamma_c")
         self._gamma_s = self.settings.get_setting("gamma_s")
-        self._delta = self.settings.get_setting("delta")
+        #self._delta = self.settings.get_setting("delta")
         self._f_ywk = self._f_yk
         self._f_ywd = self._f_ywk / self._gamma_s
         self._f_cd = self._alpha_cc * self._f_ck / self._gamma_c
@@ -193,7 +200,7 @@ def _calculate_required_shear_reinforcement_EN_1992_2004(
 def _check_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> DataFrame:
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         # Initialize all the code related variables
-        _initialize_variables_EN_1992_2004(self)
+        _initialize_variables_EN_1992_2004(self, force)
         _initialize_shear_variables_EN_1992_2004(self, force)
 
         if self._stirrup_n == 0:
@@ -275,7 +282,7 @@ def _check_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> DataFra
 def _design_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> None:
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         # Initialize all the code related variables
-        _initialize_variables_EN_1992_2004(self)
+        _initialize_variables_EN_1992_2004(self, force)
         _initialize_shear_variables_EN_1992_2004(self, force)
         # Calculate maximum shear strength
         _calculate_max_shear_strength_EN_1992_2004(self)
@@ -343,6 +350,7 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
         eta = self.concrete.eta_factor()  # Factor for concrete strength (EN 1992-1-1)
 
     # Design reinforcement yield strain
+    debug(self._f_yd)
     epsilon_yd = (
         (self._f_yd / self._E_s).to("dimensionless").magnitude
     )  # Yield strain in reinforcement
@@ -350,7 +358,9 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
     # Relative depth of compression zone at yielding of bottom reinforcement
     k_1=0.4
     k_2=0.6+0.0014/self._epsilon_cu3
-    xi_eff_lim = lambda_ * ((self._delta - k_1)/ k_2)
+    #TODO EL DELTA HAY QUE TRAERLO DE LOS SETTINGS PERO COMO VA A CAMBIAR LO FORZAMOS 2025/07/16
+    delta=0.85
+    xi_eff_lim = lambda_ * ((delta - k_1)/ k_2)
     #TODO VER SI ESTO NO DEPENDE DEL HORMIGON
 
 
@@ -395,6 +405,10 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
         # Compressive reinforcement is required
 
         # Limit tensile reinforcement area
+        debug(M_lim)
+        debug(d)
+        debug(x_eff_lim)
+        debug(self._f_yd)
         A_s1_lim = (M_lim / ((d - 0.5 * x_eff_lim) * self._f_yd)).to("cm^2")
 
         # Extra moment to take with top reinforcement
@@ -404,7 +418,7 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
         z_2=d - d_prima
 
         #Compression zone depth with plastic limit
-        x_u = d*(self.concrete._delta - 0.4)
+        x_u = d*(delta - 0.4)
 
 
         #Compressive reinforcement strain'
@@ -460,8 +474,9 @@ def _determine_nominal_moment_double_reinf_EN_1992_2004(
         eta = self.concrete.eta_factor()  # Factor for concrete strength (EN 1992-1-1)
     k_1=0.4
     k_2=0.6+0.0014/self._epsilon_cu3 
-    epsilon_eff=(self.concrete._delta-k_1)/k_2
-    epsilon_eff_lim=self.concrete._delta*epsilon_eff
+    delta = 0.85 #TODO ESTO TIENE QUE VENIR DE LOS SETINGS DEL HROMGION
+    epsilon_eff=(delta-k_1)/k_2
+    epsilon_eff_lim=delta*epsilon_eff
     x_eff_lim=d*epsilon_eff_lim
     # Limit moment for compressive reinforcement
     M_lim = eta * self._f_cd * self.width * x_eff_lim * (d - 0.5 * x_eff_lim)
@@ -472,7 +487,7 @@ def _determine_nominal_moment_double_reinf_EN_1992_2004(
     A_s1_lim = (M_lim / ( z* self._f_yd)).to("cm^2")
 
 
-    x_u=d*(self.concrete._delta-0.4) # TODO no entiendo esto. De donde sale?
+    x_u=d*(delta-0.4) # TODO no entiendo esto. De donde sale?
 
     epsilon_s_2=(x_u-d_prime)/x_u
 
@@ -568,7 +583,10 @@ def _design_flexure_EN_1992_2004(
 ) -> Dict[str, Any]:
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         # Initialize all the code related variables
-        _initialize_variables_EN_1992_2004(self)
+        self.settings.load_EN_1992_2004_settings()
+        #_initialize_variables_EN_1992_2004(self) #TODO REVISAR QUE HACIA ESTO. SE TIENE QUE PARECER MAS TODO A ACI
+        #TODO REVISAR QUE HACIA ESTO. SE TIENE QUE PARECER MAS TODO A ACI
+        debug("ENTRAMOS EN _design_flexure_EN_1992_2004")
 
         # Initial assumptions for mechanical cover and compression depth
         rec_mec = self.c_c + self._stirrup_d_b + 1 * cm
@@ -706,13 +724,15 @@ def _design_flexure_EN_1992_2004(
 def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> pd.DataFrame:
     """
     """
-
+    debug("INVOCARON A LA FUNCION _check_flexure_EN_1992_2004")
     # Initialize the design variables according to ACI 318-19 requirements using the provided force.
-    _initialize_variables_EN_1992_2004(self)
+    _initialize_variables_EN_1992_2004(self, force)
 
     # Calculate the nominal moments for both top and bottom reinforcement.
     _determine_nominal_moment_EN_1992_2004(self, force)
-
+    debug(force)
+    debug("EL M_Ed ES:")
+    debug(self._M_Ed)
     if self._M_Ed >= 0:
         # For positive moments, calculate the reinforcement requirements for the bottom tension side.
         (

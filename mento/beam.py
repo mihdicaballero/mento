@@ -461,12 +461,8 @@ class RectangularBeam(RectangularSection):
         ):
             _design_flexure_ACI_318_19(self, max_M_y_bot, max_M_y_top)
         elif (self.concrete.design_code == "EN 1992-2004"):
+            debug("ESTOY POR ENTRAR EN _design_flexure_EN_1992_2004")
             _design_flexure_EN_1992_2004(self, max_M_y_bot, max_M_y_top)
-            #TODO BORRAR ESTE TEST:
-            debug(f"MAX My Bot {max_M_y_bot}, MAX My TOP {max_M_y_top}")
-            TEST=_design_flexure_EN_1992_2004(self, max_M_y_bot, max_M_y_top)
-            debug("TEST")
-            debug(TEST)
         else:
             raise ValueError(
                 f"Longitudinal design method not implemented "
@@ -496,8 +492,12 @@ class RectangularBeam(RectangularSection):
                 self.concrete.design_code == "ACI 318-19"
                 or self.concrete.design_code == "CIRSOC 201-25"
             ):
+                debug("ENTRE POR EL LADO DE _check_flexure_ACI_318_19")
                 result = _check_flexure_ACI_318_19(self, force)
             elif self.concrete.design_code=="EN 1992-2004":
+                 debug("ENTRE POR EL LADO DE _check_flexure_EN_1992_2004")
+                 debug("FUERZA")
+                 debug(force)
                  result =  _check_flexure_EN_1992_2004(self, force)
             else:
                 raise ValueError(
@@ -1530,7 +1530,7 @@ def flexure_design_test_EN() -> None:
     #TODO Sale mal el DCR
     concrete = Concrete_EN_1992_2004(name="H25", f_ck=25 * MPa)
     steelBar = SteelBar(name="fy 60000", f_y=500*MPa)
-    custom_settings = {"clear_cover": 2.6*cm}
+    custom_settings = {"clear_cover": 2.6*cm,"stirrup_diameter_ini": 8 * mm}
     beam = RectangularBeam(
         label="V-20x60",
         concrete=concrete,
@@ -1564,10 +1564,8 @@ def flexure_check_test() -> None:
         height=60 * cm,
     )
 
-    # beam.set_longitudinal_rebar_bot(n1=2,d_b1=20*mm)
-    beam.set_longitudinal_rebar_bot(
-        n1=2, d_b1=12 * mm, n2=1, d_b2=12 * mm, n3=2, d_b3=12 * mm, n4=1, d_b4=10 * mm
-    )
+
+    beam.set_longitudinal_rebar_bot(n1=2, d_b1=12 * mm, n2=1, d_b2=12 * mm)
     beam.set_longitudinal_rebar_top(n1=2, d_b1=16 * mm)
     f1 = Forces(label="D", M_y=0 * kNm, V_z=50 * kN)
     f2 = Forces(label="L", M_y=-100 * kNm)
