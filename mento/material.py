@@ -17,7 +17,7 @@ class Material:
 @dataclass
 class Concrete(Material):
     f_c: Quantity = field(default=25 * MPa)
-    design_code: str = field(default="ACI 318-19")
+    design_code: str = field(default="ACI 318-19", init=False)
     unit_system: str = field(init=False)
     density: Quantity = field(init=False)
 
@@ -47,6 +47,10 @@ class Concrete_ACI_318_19(Concrete):
     This class extends the base `Concrete` class and implements calculation of key material properties
     according to the American Concrete Institute (ACI) 318-19 standard, including modulus of elasticity,
     modulus of rupture, and stress block parameters. It supports both metric and imperial unit systems.
+
+    Inputs:
+        name: Name of the concrete material.
+        f_c: Characteristic compressive strength of concrete.
 
     Methods:
         get_properties() -> Dict[str, Any]: Returns a dictionary of concrete properties.
@@ -189,6 +193,10 @@ class Concrete_EN_1992_2004(Concrete):
     Concrete_EN_1992_2004 represents concrete material properties and design parameters according to Eurocode EN 1992-1-1:2004.
     This class extends the base `Concrete` class, providing Eurocode-specific calculations for characteristic and mean strengths,
     modulus of elasticity, and other design factors. It encapsulates the following key methods:
+
+    Inputs:
+        name: Name of the concrete material.
+        f_c: Characteristic compressive strength of concrete (f_ck for Eurocode).
 
     Methods:
         get_properties() -> Dict[str, Any]: Returns a dictionary of all relevant material properties.
