@@ -7,7 +7,7 @@ from mento.units import mm, inch
 _NOT_SET = object()
 
 
-@dataclass  # Makes it immutable
+@dataclass
 class BeamSettings:
     """Settings for beam design with separate metric and imperial defaults.
     Must input values with units (in metric or imperial)

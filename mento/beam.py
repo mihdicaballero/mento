@@ -40,10 +40,10 @@ class RectangularBeam(RectangularSection):
     """
     Represents a reinforced concrete rectangular beam section with methods for design, checking,
     and visualization of longitudinal and transverse reinforcement according to various design codes.
-    Inherits from:
-        RectangularSection
+
     Attributes:
         settings (BeamSettings): Access to global design rules and settings.
+
     Methods:
         set_transverse_rebar(n_stirrups, d_b, s_l):
             Sets the transverse (stirrup) rebar configuration for the beam.
@@ -77,6 +77,7 @@ class RectangularBeam(RectangularSection):
             Exports detailed shear results to a Word document.
         plot():
             Plots the longitudinal rebar arrangement for the beam section.
+
     Usage:
         - Instantiate with required section and material properties.
         - Use set_longitudinal_rebar_* and set_transverse_rebar to configure reinforcement.
@@ -84,6 +85,7 @@ class RectangularBeam(RectangularSection):
         - Use flexure_results, shear_results, and results properties for summary output.
         - Use flexure_results_detailed and shear_results_detailed for detailed output.
         - Use plot() to visualize the rebar arrangement.
+        
     Note:
         This class is intended for use in reinforced concrete beam design workflows,
         supporting multiple design codes and detailed reporting.

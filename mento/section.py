@@ -13,13 +13,15 @@ if TYPE_CHECKING:
 @dataclass
 class Section:
     """
-    Represents a structural section composed of concrete and steel reinforcement.
+    Represents a section composed of concrete and steel reinforcement.
+
     Attributes:
         concrete (Concrete): The concrete material used in the section.
         steel_bar (SteelBar): The steel reinforcement used in the section.
         c_c (Quantity): The concrete cover or another relevant quantity.
         node (Optional[Node]): The node associated with this section, if any.
         label (Optional[str]): An optional label for the section.
+
     Methods:
         id: Read-only property to access the section's unique ID.
         check_shear(forces: List[Forces]): Checks the section for shear under given forces.

@@ -78,8 +78,8 @@ def rectangular() -> None:
 
 def material() -> None:
     # Test cases
-    # concrete = Concrete_ACI_318_19(name="H25",f_c=4*ksi)
-    concrete = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
+    concrete = Concrete_ACI_318_19(name="H25",f_c=4*ksi)
+    # concrete = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
     print(concrete)
     debug(concrete.get_properties())
     concrete_eurocode = Concrete_EN_1992_2004(name="C25/30", f_c=25 * MPa)
@@ -134,9 +134,13 @@ def flexure_ACI_318_19() -> None:
     )
     section.set_longitudinal_rebar_bot(
         n1=2,
-        d_b1=1.41 * inch,
+        d_b1=1.128 * inch,
+        n2=1,
+        d_b2=1.128 * inch,
         n3=2,
-        d_b3=1.27 * inch,
+        d_b3=1 * inch,
+        n4=1,
+        d_b4=1 * inch,
     )
     section.set_longitudinal_rebar_top(
         n1=2,
@@ -154,13 +158,14 @@ def flexure_ACI_318_19() -> None:
     # section.plot()
     node_1.check_flexure()
     print(node_1.check_flexure())
+    node_1.flexure_results_detailed()
 
 
 if __name__ == "__main__":
     # units()
     # settings()
-    # material()
+    material()
     # section()
     # rectangular()
     # shear_EN_1992()
-    flexure_ACI_318_19()
+    # flexure_ACI_318_19()

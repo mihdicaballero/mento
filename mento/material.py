@@ -116,11 +116,12 @@ class Concrete_ACI_318_19(Concrete):
     def __beta_1(self) -> float:
         # Table 22.2.2.4.3—Values of β1 for equivalent rectangular concrete stress distribution
         # Page 399
-        if 17 <= self.f_c.to("MPa").magnitude <= 28:
+        fc_MPa = self.f_c.to("MPa").magnitude  # Ensure comparison in MPa
+        if 17 <= fc_MPa <= 28:
             return 0.85
-        elif 28 < self.f_c.to("MPa").magnitude <= 55:
-            return 0.85 - 0.05 / 7 * (self.f_c.to("MPa").magnitude - 28)
-        elif self.f_c.to("MPa").magnitude > 55:
+        elif 28 < fc_MPa <= 55:
+            return 0.85 - 0.05 / 7 * (fc_MPa - 28)
+        elif fc_MPa > 55:
             return 0.65
         else:
             # Handle case where f_c / MPa < 17
@@ -188,6 +189,7 @@ class Concrete_EN_1992_2004(Concrete):
     Concrete_EN_1992_2004 represents concrete material properties and design parameters according to Eurocode EN 1992-1-1:2004.
     This class extends the base `Concrete` class, providing Eurocode-specific calculations for characteristic and mean strengths,
     modulus of elasticity, and other design factors. It encapsulates the following key methods:
+
     Methods:
         get_properties() -> Dict[str, Any]: Returns a dictionary of all relevant material properties.
         E_cm (property): Returns the secant modulus of elasticity.
@@ -200,6 +202,7 @@ class Concrete_EN_1992_2004(Concrete):
         alpha_cc (property): Returns the α_cc coefficient.
         Lambda_factor (property): Returns the λ factor.
         Eta_factor (property): Returns the η factor.
+        
     Usage:
         This class is intended for use in structural engineering applications where concrete properties must comply with EN 1992-1-1:2004.
         It provides all necessary parameters for design and verification according to the code.
@@ -401,6 +404,7 @@ class SteelStrand(Steel):
     _f_u: Quantity = field(default=1860 * MPa)
     _E_s: Quantity = field(default=190000 * MPa)
     prestress_stress: Quantity = field(default=0 * MPa)
+    _epsilon_y: Quantity = field(init=False)
 
     def __init__(
         self, name: str, f_y: Quantity, density: Quantity = 7850 * kg / m**3
@@ -423,3 +427,20 @@ class SteelStrand(Steel):
     @property
     def E_s(self) -> Quantity:
         return self._E_s
+    
+    @property
+    def epsilon_y(self) -> Quantity:
+        return self._epsilon_y
+    
+    def __str__(self) -> str:
+        """Customize the string representation for user-friendly display."""
+        properties = self.get_properties()
+        return (
+            f"SteelStrand Properties ({self.name}):\n"
+            f"  f_y: {properties['f_y']}\n"
+            f"  f_u: {properties['f_u']}\n"
+            f"  E_s: {properties['E_s']}\n"
+            f"  epsilon_y: {self.epsilon_y.magnitude:.4f}\n"
+            f"  Prestress Stress: {self.prestress_stress}\n"
+            f"  Density: {self.density}"
+        )

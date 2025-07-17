@@ -1,14 +1,47 @@
 from typing import Union, Optional, List
 import pandas as pd
 
-from mento.beam import RectangularBeam
-from mento.material import SteelBar, Concrete_ACI_318_19, Concrete_EN_1992_2004
 from mento.section import Section
 from mento.forces import Forces
-from mento.units import ksi, psi, kip, inch, ft, MPa, cm, mm, kN
-
 
 class Node:
+    """
+    Node Class
+    The `Node` class represents a structural node that is associated with a section 
+    (e.g., a beam) and can have forces applied to it. It provides methods for managing 
+    forces, performing structural checks, and designing for flexure and shear.
+    Attributes:
+        section (Section): The section (e.g., beam) associated with the node.
+        forces (List[Forces]): A list of forces applied to the node.
+    Methods:
+        add_forces(forces: Union[Forces, List[Forces]]) -> None:
+            Adds one or more forces to the node.
+        get_forces_list() -> List[Forces]:
+            Returns the list of forces applied to this node.
+        clear_forces() -> None:
+            Removes all forces from the node.
+        check_flexure() -> pd.DataFrame:
+            Performs a flexural check on the section using the applied forces.
+        design_flexure() -> pd.DataFrame:
+            Designs the section for flexure based on the applied forces.
+        check_shear() -> pd.DataFrame:
+            Performs a shear check on the section using the applied forces.
+        design_shear() -> pd.DataFrame:
+            Designs the section for shear based on the applied forces.
+        shear_results_detailed(force: Optional[Forces] = None) -> None:
+            Provides detailed shear results for a specific force or all forces.
+        shear_results_detailed_doc(force: Optional[Forces] = None) -> None:
+            Provides detailed shear results documentation for a specific force or all forces.
+        flexure_results_detailed(force: Optional[Forces] = None) -> None:
+            Provides detailed flexure results for a specific force or all forces.
+        flexure_results_detailed_doc(force: Optional[Forces] = None) -> None:
+            Provides detailed flexure results documentation for a specific force or all forces.
+        results -> None:
+            A property that provides beam results for Jupyter Notebook.
+        id -> int:
+            A read-only property to access the private `_id` of the node.
+    """
+
     _id: int
     _last_id: int = 0  # Class variable to keep track of last assigned ID
 
