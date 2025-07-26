@@ -21,7 +21,7 @@ def test_concrete_aci_318_19_properties() -> None:
 
 def test_concrete_EN_1992_2004_properties() -> None:
     f_ck = 25 * MPa
-    concrete = Concrete_EN_1992_2004(name="C25/30", f_ck=f_ck)
+    concrete = Concrete_EN_1992_2004(name="C25/30", f_c=f_ck)
 
     assert concrete.f_ck == f_ck
     assert concrete.design_code == "EN 1992-2004"

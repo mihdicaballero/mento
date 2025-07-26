@@ -149,11 +149,13 @@ def flexure_ACI_318_19() -> None:
         d_b4=1 * inch,
     )
 
-    f = Forces(label="Test_01", M_y=400 * kip * ft)
+    f = Forces(label="Test_01", M_y=400 * kip * ft, V_z=10 * kip)
     node_1 = Node(section=section, forces=f)
     # section.plot()
     node_1.check_flexure()
     print(node_1.check_flexure())
+    node_1.check_shear()
+    print(node_1.check_shear())
 
 
 if __name__ == "__main__":

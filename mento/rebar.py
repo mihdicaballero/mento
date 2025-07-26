@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 
 from mento.units import psi, mm, cm, inch, MPa
+from mento.material import Concrete_ACI_318_19
 
 if TYPE_CHECKING:
     from mento.beam import RectangularBeam
@@ -18,13 +19,6 @@ class Rebar:
         Initializes the Rebar object with the associated beam and settings.
         """
         self.beam = beam
-        self.min_clear_spacing = self.beam.settings.get_setting("clear_spacing")
-        self.vibrator_size = self.beam.settings.get_setting("vibrator_size")
-        self.max_diameter_diff = self.beam.settings.get_setting("max_diameter_diff")
-        self.max_bars_per_layer = self.beam.settings.get_setting("max_bars_per_layer")
-        self.min_long_rebar = self.beam.settings.get_setting(
-            "minimum_longitudinal_diameter"
-        )
         self._long_combos_df: DataFrame = None
         self._trans_combos_df: DataFrame = None
         self._clear_spacing: PlainQuantity = 0 * mm
@@ -90,7 +84,8 @@ class Rebar:
         """
 
         f_c = self.beam.concrete.f_c
-        lambda_factor = self.beam.settings.get_setting("lambda")
+        if isinstance(self.beam.concrete, Concrete_ACI_318_19):
+            lambda_factor = self.beam.concrete.lambda_factor
 
         # Determine maximum spacing based on V_s_req condition
         # Maximum spacing for lower shear demand
@@ -345,12 +340,12 @@ class Rebar:
 
                         # Iterate over possible numbers of bars in each group
                         for n2 in range(
-                            0, self.max_bars_per_layer + 1
+                            0, self.beam.settings.max_bars_per_layer + 1
                         ):  # n2 can be 0 or more
                             # Check spacing for the first set of bars
                             self._check_spacing(n1, n2, d_b1, d_b2, effective_width)
 
-                            if n1 + n2 > self.max_bars_per_layer:
+                            if n1 + n2 > self.beam.settings.max_bars_per_layer:
                                 continue  # Skip if the total bars in layer 1 exceed the limit
 
                             # Calculate area for layer 1
@@ -410,13 +405,15 @@ class Rebar:
 
                             # Now check combinations where bars are added in layer 2 (n3 and n4)
                             for n3 in [0, 2]:  # n3 can be 0 or fixed at 2 if present
-                                for n4 in range(0, self.max_bars_per_layer + 1):
+                                for n4 in range(
+                                    0, self.beam.settings.max_bars_per_layer + 1
+                                ):
                                     # Ensure layer 2 bars are not more than layer 1 bars
                                     if n3 + n4 > n1 + n2:
                                         continue  # Skip if layer 2 bars exceed layer 1 bars
                                     if n3 == 0 and n4 > 0:
                                         continue  # If n3 is 0, n4 must also be 0
-                                    if n3 + n4 > self.max_bars_per_layer:
+                                    if n3 + n4 > self.beam.settings.max_bars_per_layer:
                                         continue  # Skip if the total bars in layer 2 exceed the limit
 
                                     # Layer 2 area calculation handling zero values
@@ -550,7 +547,9 @@ class Rebar:
 
         # Determine the maximum clear spacing limit
         max_clear_spacing = max(
-            self.min_clear_spacing, self.vibrator_size, max(d_b1, d_b2)
+            self.beam.settings.min_clear_spacing,
+            self.beam.settings.vibrator_size,
+            max(d_b1, d_b2),
         )
 
         # Check if the clear spacing is within limits
@@ -563,7 +562,7 @@ class Rebar:
         """
         for i, d1 in enumerate(diameters):
             for d2 in diameters[i + 1 :]:
-                if abs(d1 - d2) > self.max_diameter_diff:
+                if abs(d1 - d2) > self.beam.settings.max_diameter_diff:
                     return False
         return True
 
