@@ -16,9 +16,11 @@ class RectangularSection(Section):
     Represents a rectangular cross-section for structural analysis and design.
     This class extends the generic `Section` class to provide properties and methods specific to rectangular sections,
     including geometric properties (area, moments of inertia), access to design settings, and plotting capabilities.
+
     Attributes:
         width (Quantity): The width of the rectangular section.
         height (Quantity): The height of the rectangular section.
+
     Properties:
         settings (BeamSettings): Access to global design rules and settings.
         A_x (Quantity): Cross-sectional area, returned in cm².
@@ -135,11 +137,12 @@ class RectangularSection(Section):
             },
         )
         if self.concrete.unit_system == "imperial":
-            width = "{:~P}".format(self.width.to("inch"))
-            height = "{:~P}".format(self.height.to("inch"))
+            # Example: format to 2 decimal places, then use pint's compact (~P) format
+            width = "{:.0f~P}".format(self.width.to("inch"))
+            height = "{:.0f~P}".format(self.height.to("inch"))
         else:
-            width = "{:~P}".format(self.width.to("cm"))
-            height = "{:~P}".format(self.height.to("cm"))
+            width = "{:.0f~P}".format(self.width.to("cm"))
+            height = "{:.0f~P}".format(self.height.to("cm"))
         # Add width dimension text below the arrow
         self._ax.text(
             self.width.magnitude / 2,  # Center of the arrow

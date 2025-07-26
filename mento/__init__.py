@@ -78,6 +78,7 @@ if TYPE_CHECKING:
     from mento.results import DocumentBuilder, Formatter, TablePrinter
     from mento.summary import BeamSummary
 
+
 def __getattr__(name: str) -> object:
     # Map class names to their actual module files
     module_mapping = {
@@ -93,11 +94,12 @@ def __getattr__(name: str) -> object:
         "DocumentBuilder": "results",
         "EN_1992_2004_beam": "codes",
         "ACI_318_19_beam": "codes",
-        "BeamSummary": "summary"
+        "BeamSummary": "summary",
     }
-    
+
     if name in module_mapping:
         import importlib
+
         module = importlib.import_module(f".{module_mapping[name]}", __name__)
         return getattr(module, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
