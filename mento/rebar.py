@@ -9,7 +9,7 @@ from mento.material import Concrete_ACI_318_19
 
 if TYPE_CHECKING:
     from mento.beam import RectangularBeam
-    from pint.facets.plain import PlainQuantity
+    from pint import Quantity
     from pandas import DataFrame
 
 
@@ -21,7 +21,7 @@ class Rebar:
         self.beam = beam
         self._long_combos_df: DataFrame = None
         self._trans_combos_df: DataFrame = None
-        self._clear_spacing: PlainQuantity = 0 * mm
+        self._clear_spacing: Quantity = 0 * mm
         # Unit system default rebar
         if self.beam.concrete.unit_system == "metric":
             self.rebar_diameters = [
@@ -109,7 +109,7 @@ class Rebar:
 
     def calculate_max_spacing_EN_1992_2004(
         self, alpha: float
-    ) -> Tuple[PlainQuantity, PlainQuantity]:
+    ) -> Tuple[Quantity, Quantity]:
         """
         Calculate the maximum allowable spacing across the length and width of the beam
         based on design requirements for EN 1992-2004.

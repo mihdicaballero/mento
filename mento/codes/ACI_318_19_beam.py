@@ -38,7 +38,10 @@ def _initialize_variables_ACI_318_19(self: "RectangularBeam", force: Forces) -> 
 
 def _calculate_shear_reinforcement_aci(self: "RectangularBeam") -> None:
     V_s = self._A_v * self.f_yt * self._d_shear  # Shear contribution of reinforcement
-    self._phi_V_s = self.phi_v * V_s  # Reduced shear contribution of reinforcement
+    if isinstance(self.concrete, Concrete_ACI_318_19):
+        self._phi_V_s = (
+            self.concrete.phi_v * V_s
+        )  # Reduced shear contribution of reinforcement
 
 
 def _calculate_effective_shear_area_aci(self: "RectangularBeam") -> None:

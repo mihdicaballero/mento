@@ -57,7 +57,7 @@ def beam_example_EN_1992_2004_2() -> RectangularBeam:
 
 
 def beam_example_EN_1992_2004_3() -> RectangularBeam:
-    concrete = Concrete_EN_1992_2004(name="C25", f_c=30 * MPa)
+    concrete = Concrete_EN_1992_2004(name="C30", f_c=30 * MPa)
     steelBar = SteelBar(name="B500S", f_y=500 * MPa)
     section = RectangularBeam(
         label="101",
