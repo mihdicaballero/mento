@@ -251,34 +251,41 @@ def _check_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> DataFra
                 self._stirrup_s_max_w,
             ) = section_rebar.calculate_max_spacing_EN_1992_2004(self._alpha)
 
-        self._DCRv = round(
-            abs((self._V_Ed_2.to("kN").magnitude / self._V_Rd.to("kN").magnitude)), 3
+        self._DCRv = abs(
+            (self._V_Ed_2.to("kN").magnitude / self._V_Rd.to("kN").magnitude)
         )
         # Design results
         results = {
             "Label": self.label,  # Beam label
+            "Comb.": force.label,
             "Av,min": self._A_v_min.to(
                 "cm ** 2 / m"
-            ),  # Minimum shear reinforcement area
+            ).magnitude,  # Minimum shear reinforcement area
             "Av,req": self._A_v_req.to(
                 "cm ** 2 / m"
-            ),  # Required shear reinforcing area
+            ).magnitude,  # Required shear reinforcing area
             "Av": self._A_v.to(
                 "cm ** 2 / m"
-            ),  # Provided stirrup reinforcement per unit length
-            "VEd,1": self._V_Ed_1.to("kN"),  # Max Vu for the design at the support
+            ).magnitude,  # Provided stirrup reinforcement per unit length
+            "VEd,1": self._V_Ed_1.to(
+                "kN"
+            ).magnitude,  # Max Vu for the design at the support
             "VEd,2": self._V_Ed_2.to(
                 "kN"
-            ),  # Max Vu for the design at d from the support
-            "VRd,c": self._V_Rd_c.to("kN"),  # Concrete contribution to shear capacity
+            ).magnitude,  # Max Vu for the design at d from the support
+            "VRd,c": self._V_Rd_c.to(
+                "kN"
+            ).magnitude,  # Concrete contribution to shear capacity
             "VRd,s": self._V_Rd_s.to(
                 "kN"
-            ),  # Reinforcement contribution to shear capacity
-            "VRd": self._V_Rd.to("kN"),  # Total shear capacity
-            "VRd,max": self._V_Rd_max.to("kN"),  # Maximum shear capacity
+            ).magnitude,  # Reinforcement contribution to shear capacity
+            "VRd": self._V_Rd.to("kN").magnitude,  # Total shear capacity
+            "VRd,max": self._V_Rd_max.to("kN").magnitude,  # Maximum shear capacity
             "VEd,1<VRd,max": self._max_shear_ok,  # Check if applied shear is within max shear capacity
-            "VEd,2<VRd": self._V_Ed_2
-            <= self._V_Rd,  # Check if applied shear is within total capacity
+            "VEd,2<VRd": self._V_Ed_2.to("kN").magnitude
+            <= self._V_Rd.to(
+                "kN"
+            ).magnitude,  # Check if applied shear is within total capacity
             "DCR": self._DCRv,
         }
         _initialize_dicts_EN_1992_2004_shear(self)
@@ -607,7 +614,7 @@ def _initialize_dicts_EN_1992_2004_shear(self: "RectangularBeam") -> None:
                 round(self._V_Rd_max.to("kN").magnitude, 2),
                 round(self._V_Rd.to("kN").magnitude, 2),
                 check_max,
-                round(self._DCRv, 2),
+                self._DCRv,
             ],
             "Unit": ["", "", "MPa", "deg", "kN", "kN", "kN", "", check_DCR],
         }

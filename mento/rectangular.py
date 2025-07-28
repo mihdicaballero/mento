@@ -7,7 +7,6 @@ from matplotlib.patches import Rectangle, FancyBboxPatch
 
 from mento.section import Section
 from mento.results import CUSTOM_COLORS
-from mento.settings import BeamSettings, GLOBAL_BEAM_SETTINGS
 
 
 @dataclass
@@ -37,16 +36,9 @@ class RectangularSection(Section):
 
     def __post_init__(self) -> None:
         super().__post_init__()
-
         self._A_x = self.width * self.height
         self._I_y = self.width * self.height**3 / 12
         self._I_z = self.height * self.width**3 / 12
-        self._stirrup_d_b = self.settings.stirrup_diameter_ini
-
-    @property
-    def settings(self) -> BeamSettings:
-        """Access global design rules."""
-        return GLOBAL_BEAM_SETTINGS
 
     @property
     def A_x(self) -> Quantity:

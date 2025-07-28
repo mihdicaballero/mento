@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 from typing import TYPE_CHECKING, Dict, Any, cast
 import warnings
+from collections import OrderedDict
 
 from mento.material import Concrete_ACI_318_19
 from mento.rebar import Rebar
@@ -264,9 +265,7 @@ def _calculate_total_shear_strength_aci(self: "RectangularBeam") -> None:
             self.V_c + self._A_v * self.f_yt * self._d_shear
         )
         V_d_max = min(self._phi_V_n, self._phi_V_max)
-        self._DCRv = round(
-            abs((self._V_u.to("kN").magnitude / V_d_max.to("kN").magnitude)), 3
-        )
+        self._DCRv = abs((self._V_u.to("kN").magnitude / V_d_max.to("kN").magnitude))
 
 
 def _calculate_rebar_spacing_aci(self: "RectangularBeam") -> None:
@@ -320,7 +319,7 @@ def _check_shear_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.DataFr
         # Check results and return DataFrame
         results = _compile_results_ACI_shear(self, force)
         _initialize_dicts_ACI_318_19_shear(self)
-        return pd.DataFrame([results], index=[0])
+        return results
     else:
         raise ValueError("Concrete type is not compatible with ACI 318-19 shear check.")
 
@@ -346,25 +345,24 @@ def _design_shear_ACI_318_19(self: "RectangularBeam", force: Forces) -> None:
     return None
 
 
-def _compile_results_ACI_shear(
-    self: "RectangularBeam", force: Forces
-) -> Dict[str, Any]:
-    return {
-        "Section Label": self.label,
-        "Load Combo": force.label,
-        "Av,min": self._A_v_min.to("cm ** 2 / m"),
-        "Av,req": self._A_v_req.to("cm ** 2 / m"),
-        "Av": self._A_v.to("cm ** 2 / m"),
-        "Vu": self._V_u.to("kN"),
-        "Nu": self._N_u.to("kN"),
-        "ØVc": self._phi_V_c.to("kN"),
-        "ØVs": self._phi_V_s.to("kN"),
-        "ØVn": self._phi_V_n.to("kN"),
-        "ØVmax": self._phi_V_max.to("kN"),
+def _compile_results_ACI_shear(self: "RectangularBeam", force: Forces) -> pd.DataFrame:
+    results = {
+        "Label": self.label,
+        "Comb.": force.label,
+        "Av,min": self._A_v_min.to("cm²/m").magnitude,
+        "Av,req": self._A_v_req.to("cm²/m").magnitude,
+        "Av": self._A_v.to("cm²/m").magnitude,
+        "Vu": self._V_u.to("kN").magnitude,
+        "Nu": self._N_u.to("kN").magnitude,
+        "ØVc": self._phi_V_c.to("kN").magnitude,
+        "ØVs": self._phi_V_s.to("kN").magnitude,
+        "ØVn": self._phi_V_n.to("kN").magnitude,
+        "ØVmax": self._phi_V_max.to("kN").magnitude,
         "Vu<ØVmax": self._max_shear_ok,
         "Vu<ØVn": self._V_u <= self._phi_V_n,
         "DCR": self._DCRv,
     }
+    return pd.DataFrame([results], index=[0])
 
 
 def _calculate_phi_ACI_318_19(
@@ -862,7 +860,7 @@ def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.Data
         # Calculate the design capacity ratio for the bottom side.
         self._DCRb_bot = round(
             self._M_u_bot.to("kN*m").magnitude / self._phi_M_n_bot.to("kN*m").magnitude,
-            3,
+            2,
         )
         self._DCRb_top = 0
     else:
@@ -881,7 +879,7 @@ def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.Data
         self._DCRb_top = round(
             -self._M_u_top.to("kN*m").magnitude
             / self._phi_M_n_top.to("kN*m").magnitude,
-            3,
+            2,
         )
         self._DCRb_bot = 0
 
@@ -1072,31 +1070,31 @@ def _compile_results_ACI_flexure_metric(
     # Create dictionaries for bottom and top rows
     if self._M_u >= 0:
         result = {
-            "Section Label": self.label,
-            "Load Combo": force.label,
+            "Label": self.label,
+            "Comb.": force.label,
             "Position": "Bottom",
-            "As,min": self._A_s_min_bot.to("cm ** 2"),
-            "As,req top": self._A_s_req_top.to("cm ** 2"),
-            "As,req bot": self._A_s_req_bot.to("cm ** 2"),
-            "As": self._A_s_bot.to("cm ** 2"),
+            "As,min": self._A_s_min_bot.to("cm ** 2").magnitude,
+            "As,req top": self._A_s_req_top.to("cm ** 2").magnitude,
+            "As,req bot": self._A_s_req_bot.to("cm ** 2").magnitude,
+            "As": self._A_s_bot.to("cm ** 2").magnitude,
             # 'c/d': self._c_d_bot,
-            "Mu": self._M_u_bot.to("kN*m"),
-            "ØMn": self._phi_M_n_bot.to("kN*m"),
+            "Mu": self._M_u_bot.to("kN*m").magnitude,
+            "ØMn": self._phi_M_n_bot.to("kN*m").magnitude,
             "Mu<ØMn": self._M_u_bot <= self._phi_M_n_bot,
             "DCR": self._DCRb_bot,
         }
     else:
         result = {
-            "Section Label": self.label,
-            "Load Combo": force.label,
+            "Label": self.label,
+            "Comb.": force.label,
             "Position": "Top",
-            "As,min": self._A_s_min_top.to("cm ** 2"),
-            "As,req top": self._A_s_req_top.to("cm ** 2"),
-            "As,req bot": self._A_s_req_bot.to("cm ** 2"),
-            "As": self._A_s_top.to("cm ** 2"),
+            "As,min": self._A_s_min_top.to("cm ** 2").magnitude,
+            "As,req top": self._A_s_req_top.to("cm ** 2").magnitude,
+            "As,req bot": self._A_s_req_bot.to("cm ** 2").magnitude,
+            "As": self._A_s_top.to("cm ** 2").magnitude,
             # 'c/d': self._c_d_top,
-            "Mu": self._M_u_top.to("kN*m"),
-            "ØMn": self._phi_M_n_top.to("kN*m"),
+            "Mu": self._M_u_top.to("kN*m").magnitude,
+            "ØMn": self._phi_M_n_top.to("kN*m").magnitude,
             "Mu<ØMn": -self._M_u_top <= self._phi_M_n_top,
             "DCR": self._DCRb_top,
         }
@@ -1239,7 +1237,7 @@ def _initialize_dicts_ACI_318_19_shear(self: "RectangularBeam") -> None:
                 self._stirrup_n,
                 self._stirrup_d_b.to("mm").magnitude,
                 self._stirrup_s_l.to("cm").magnitude,
-                self._d_shear.to("cm").magnitude,
+                round(self._d_shear.to("cm").magnitude, 2),
                 round(self._A_v_min.to("cm**2/m").magnitude, 2),
                 round(self._A_v_req.to("cm**2/m").magnitude, 2),
                 round(self._A_v.to("cm**2/m").magnitude, 2),

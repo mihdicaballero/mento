@@ -2,11 +2,12 @@ from typing import List, Dict, Optional
 from pandas import DataFrame
 import pandas as pd
 import copy
+from collections import OrderedDict
 
 from mento.material import (
     Concrete,
     SteelBar,
-    # Concrete_ACI_318_19,
+    Concrete_ACI_318_19,
     Concrete_EN_1992_2004,
 )
 from mento.forces import Forces
@@ -25,7 +26,7 @@ class BeamSummary:
         self.steel_bar: SteelBar = steel_bar
         self.beam_list: DataFrame = beam_list
         self.units_row: List[str] = []
-        self.data: DataFrame = None  # type: ignore
+        self.data: DataFrame = None
         self.nodes: List[Node] = []
         self._beam_summary: List = []
         self.check_and_process_input()
@@ -45,7 +46,7 @@ class BeamSummary:
         self.validate_units(self.units_row)
 
         # Convert NaN to 0 in the data rows
-        data.iloc[:, 1:] = data.iloc[:, 1:].fillna(0).astype(float)
+        data.iloc[:, 2:] = data.iloc[:, 2:].fillna(0).astype(float)
         # Convert specific columns to int and others to float
         columns_to_int = ["ns", "n1", "n2", "n3", "n4"]
         for col in columns_to_int:
@@ -101,13 +102,15 @@ class BeamSummary:
             M_y = row["My"]
             N_x = row["Nx"]  # Positive for compression
             V_z = row["Vz"]
+            comb = row["Comb."]
 
             # Ensure these are pint.Quantity objects with correct units
-            forces = Forces(M_y=M_y, N_x=N_x, V_z=V_z)
+            forces = Forces(label=comb, M_y=M_y, N_x=N_x, V_z=V_z)
 
             # Extract geometric properties of the beam (width and height)
-            width = row["b"]  # Example: width in cm
-            height = row["h"]  # Example: height in cm
+            width = row["b"]
+            height = row["h"]
+            c_c = row["cc"]
 
             # Create a rectangular concrete beam using the extracted values
             beam = RectangularBeam(
@@ -116,6 +119,7 @@ class BeamSummary:
                 steel_bar=self.steel_bar,
                 width=width,
                 height=height,
+                c_c=c_c,
             )
             # Set transverse rebar (stirrups) for the beam
             n_stirrups = row["ns"]  # Number of stirrups
@@ -173,7 +177,7 @@ class BeamSummary:
             rebar_v = (
                 "-"
                 if beam._stirrup_n == 0
-                else f"{int(beam._stirrup_n)}eØ{int(beam._stirrup_d_b.to('mm').magnitude)}/{beam._stirrup_s_l.to('cm').magnitude}"
+                else f"{int(beam._stirrup_n)}eØ{int(beam._stirrup_d_b.to('mm').magnitude)}/{int(beam._stirrup_s_l.to('cm').magnitude)}"
             )  # noqa: E501
             rebar_f_top = (
                 "-"
@@ -217,9 +221,9 @@ class BeamSummary:
                     "As,top": rebar_f_top,
                     "As,bot": rebar_f_bot,
                     "Av": rebar_v,
-                    "As,top,real": round(beam._A_s_top.to("cm**2").magnitude, 2),
-                    "As,bot,real": round(beam._A_s_bot.to("cm**2").magnitude, 2),
-                    "Av,real": round(shear_results["Av"][0].magnitude, 2),
+                    "As,top,real": round(beam._A_s_top.to("cm**2").magnitude, 1),
+                    "As,bot,real": round(beam._A_s_bot.to("cm**2").magnitude, 1),
+                    "Av,real": round(shear_results["Av"][0], 1),
                 }
 
                 common_units = {
@@ -234,12 +238,12 @@ class BeamSummary:
                     "Av,real": "cm²/m",
                 }
 
-                # Code-specific data
+                # Code-specific data #TODO
                 if isinstance(self.concrete, Concrete_EN_1992_2004):
                     code_specific_data = {
-                        "MRd,top": round(beam._M_Rd_top.to("kN*m").magnitude, 2),
-                        "MRd,bot": round(beam._M_Rd_bot.to("kN*m").magnitude, 2),
-                        "VRd": round(shear_results["V_Rd"][0].magnitude, 2),
+                        "MRd,top": round(beam._M_Rd_top.to("kN*m").magnitude, 1),
+                        "MRd,bot": round(beam._M_Rd_bot.to("kN*m").magnitude, 1),
+                        "VRd": shear_results["V_Rd"][0],
                     }
                     code_specific_units = {
                         "MRd,top": "kNm",
@@ -248,9 +252,9 @@ class BeamSummary:
                     }
                 else:  # ACI 318-19 or CIRSOC 201-25 design code
                     code_specific_data = {
-                        "ØMn,top": round(beam._phi_M_n_top.to("kN*m").magnitude, 2),
-                        "ØMn,bot": round(beam._phi_M_n_bot.to("kN*m").magnitude, 2),
-                        "ØVn": round(shear_results["ØVn"][0].magnitude, 2),
+                        "ØMn,top": round(beam._phi_M_n_top.to("kN*m").magnitude, 1),
+                        "ØMn,bot": round(beam._phi_M_n_bot.to("kN*m").magnitude, 1),
+                        "ØVn": shear_results["ØVn"][0],
                     }
                     code_specific_units = {
                         "ØMn,top": "kNm",
@@ -258,28 +262,46 @@ class BeamSummary:
                         "ØVn": "kN",
                     }
 
-                # Combine the data
-                results_dict = {**common_data, **code_specific_data}
-                units_row = pd.DataFrame([{**common_units, **code_specific_units}])
+                # Merge data dictionaries
+                merged_data = {**common_data, **code_specific_data}
+                # Extract DCR values and remove them from the merged dictionary
+                dcr_keys = ["DCRb,top", "DCRb,bot", "DCRv"]
+                dcr_values = {key: merged_data.pop(key) for key in dcr_keys}
+                # Rebuild results_dict with DCR values placed at the end
+                results_dict = OrderedDict({**merged_data, **dcr_values})
+
+                # Merge units dictionaries
+                merged_units = {**common_units, **code_specific_units}
+
+                # Extract and reorder DCR unit keys
+                dcr_units = {key: merged_units.pop(key) for key in dcr_keys}
+
+                # Build the units row with DCRs at the end
+                units_row = pd.DataFrame([OrderedDict({**merged_units, **dcr_units})])
                 # Restore the original forces after capacity check
                 node.clear_forces()
                 node.add_forces(original_forces)
             else:
                 # Perform the shear check
-                shear_results = node.check_shear()
-                flexure_results = node.check_flexure()
+                shear_results = (
+                    node.check_shear().iloc[1:].reset_index(drop=True)
+                )  # Skip the first row (units)
+                flexure_results = (
+                    node.check_flexure().iloc[1:].reset_index(drop=True)
+                )  # Skip the first row (units)
                 # Common data that doesn't change between codes
                 common_data = {
                     "Beam": beam.label,
-                    "b": beam.width.magnitude,
-                    "h": beam.height.magnitude,
+                    "b": int(beam.width.magnitude),
+                    "h": int(beam.height.magnitude),
+                    "cc": int(beam.c_c.magnitude),
                     "As,top": rebar_f_top,
                     "As,bot": rebar_f_bot,
                     "Av": rebar_v,
                     "As,req,top": round(beam._A_s_req_top.to("cm**2").magnitude, 2),
                     "As,req,bot": round(beam._A_s_req_bot.to("cm**2").magnitude, 2),
-                    "Av,req": round(shear_results["Av,req"][0].magnitude, 2),
-                    "Av,real": round(shear_results["Av"][0].magnitude, 2),
+                    "Av,req": round(shear_results["Av,req"][0], 2),
+                    "Av,real": round(shear_results["Av"][0], 2),
                     "DCRb,top": round(beam._DCRb_top, 2),
                     "DCRb,bot": round(beam._DCRb_bot, 2),
                     "DCRv": round(shear_results["DCR"][0], 2),
@@ -289,6 +311,7 @@ class BeamSummary:
                     "Beam": "",
                     "b": "cm",
                     "h": "cm",
+                    "cc": "mm",
                     "As,top": "",
                     "As,bot": "",
                     "Av": "",
@@ -302,14 +325,14 @@ class BeamSummary:
                 }
 
                 # Code-specific data
-                if isinstance(self.concrete, Concrete_EN_1992_2004):
+                if isinstance(self.concrete, Concrete_EN_1992_2004):  # TODO
                     code_specific_data = {
-                        "MEd": round(flexure_results["Mu"][0].magnitude, 2),
-                        "VEd": round(shear_results["Vu"][0].magnitude, 2),
-                        "NEd": round(shear_results["Nu"][0].magnitude, 2),
-                        "MRd,top": round(beam._M_Rd_top.to("kN*m").magnitude, 2),
-                        "MRd,bot": round(beam._M_Rd_bot.to("kN*m").magnitude, 2),
-                        "VRd": round(shear_results["V_Rd"][0].magnitude, 2),
+                        "MEd": round(flexure_results["Mu"][0], 1),
+                        "VEd": round(shear_results["Vu"][0], 1),
+                        "NEd": round(shear_results["Nu"][0], 1),
+                        "MRd,top": round(beam._M_Rd_top.to("kN*m").magnitude, 1),
+                        "MRd,bot": round(beam._M_Rd_bot.to("kN*m").magnitude, 1),
+                        "VRd": round(shear_results["V_Rd"][0], 1),
                     }
                     code_specific_units = {
                         "MEd": "kNm",
@@ -321,12 +344,12 @@ class BeamSummary:
                     }
                 else:  # ACI 318-19 or CIRSOC 201-25 design code
                     code_specific_data = {
-                        "Mu": round(flexure_results["Mu"][0].magnitude, 2),
-                        "Vu": round(shear_results["Vu"][0].magnitude, 2),
-                        "Nu": round(shear_results["Nu"][0].magnitude, 2),
-                        "ØMn,top": round(beam._phi_M_n_top.to("kN*m").magnitude, 2),
-                        "ØMn,bot": round(beam._phi_M_n_bot.to("kN*m").magnitude, 2),
-                        "ØVn": round(shear_results["ØVn"][0].magnitude, 2),
+                        "Mu": round(flexure_results["Mu"][0], 1),
+                        "Vu": round(shear_results["Vu"][0], 1),
+                        "Nu": round(shear_results["Nu"][0], 1),
+                        "ØMn,top": round(beam._phi_M_n_top.to("kN*m").magnitude, 1),
+                        "ØMn,bot": round(beam._phi_M_n_bot.to("kN*m").magnitude, 1),
+                        "ØVn": round(shear_results["ØVn"][0], 1),
                     }
                     code_specific_units = {
                         "Mu": "kNm",
@@ -337,9 +360,22 @@ class BeamSummary:
                         "ØVn": "kN",
                     }
 
-                # Combine the data
-                results_dict = {**common_data, **code_specific_data}
-                units_row = pd.DataFrame([{**common_units, **code_specific_units}])
+                # Merge data dictionaries
+                merged_data = {**common_data, **code_specific_data}
+                # Extract DCR values and remove them from the merged dictionary
+                dcr_keys = ["DCRb,top", "DCRb,bot", "DCRv"]
+                dcr_values = {key: merged_data.pop(key) for key in dcr_keys}
+                # Rebuild results_dict with DCR values placed at the end
+                results_dict = OrderedDict({**merged_data, **dcr_values})
+
+                # Merge units dictionaries
+                merged_units = {**common_units, **code_specific_units}
+
+                # Extract and reorder DCR unit keys
+                dcr_units = {key: merged_units.pop(key) for key in dcr_keys}
+
+                # Build the units row with DCRs at the end
+                units_row = pd.DataFrame([OrderedDict({**merged_units, **dcr_units})])
 
             # Add the results to the list
             results_list.append(results_dict)
@@ -348,7 +384,7 @@ class BeamSummary:
         results_df = pd.DataFrame(results_list)
 
         # Combine the units row with the results DataFrame
-        final_df = pd.concat([units_row, results_df], ignore_index=True)  # type: ignore
+        final_df = pd.concat([units_row, results_df], ignore_index=True)
         return final_df
 
     def shear_results(
@@ -356,47 +392,42 @@ class BeamSummary:
     ) -> DataFrame:
         """
         Get shear results for one or all beams.
-        (Existing docstring here...)
+        Includes a units row only once at the top.
         """
         if index is not None:
             if index - 1 >= len(self.nodes):
                 raise IndexError(f"Index {index} is out of range for the beam list.")
-            return self._process_beam_for_check(
-                self.nodes[max(index - 1, 0)], "shear", capacity_check
-            )
+            node = self.nodes[max(index - 1, 0)]
+            df = self._process_beam_for_check(node, "shear", capacity_check)
+            units_row = node.section._get_units_row_shear()  # type: ignore
+            df_all = pd.concat([units_row, df], ignore_index=True)
+        else:
+            # For all nodes, only include the units row once
+            results = []
+            units_row_added = False
+            for item in self.nodes:
+                df = self._process_beam_for_check(item, "shear", capacity_check)
+                if not units_row_added:
+                    units_row = item.section._get_units_row_shear()  # type: ignore
+                    results.append(units_row)
+                    units_row_added = True
+                results.append(df)
 
-        return pd.concat(
-            [
-                self._process_beam_for_check(item, "shear", capacity_check)
-                for item in self.nodes
-            ],
-            ignore_index=True,
-        )
+            df_all = pd.concat(results, ignore_index=True)
 
-    def flexure_results(
-        self, index: Optional[int] = None, capacity_check: bool = False
-    ) -> DataFrame:
-        """
-        Get flexure results for one or all beams.
+        # Separate the units row (first row) from the data
+        units_row = df_all.iloc[[0]]  # DataFrame with 1 row
+        data_rows = df_all.iloc[1:].copy()
 
-        :param index: Optional index of the beam in beam_summary list
-        :param capacity_check: If True, performs capacity check (resets forces to zero)
-        :return: DataFrame with flexure results
-        """
-        if index is not None:
-            if index - 1 >= len(self.nodes):
-                raise IndexError(f"Index {index} is out of range for the beam list.")
-            return self._process_beam_for_check(
-                self.nodes[max(index - 1, 0)], "flexure", capacity_check
-            )
+        # Try to round numeric columns (even if object dtype), coercing errors
+        for col in data_rows.columns:
+            data_rows[col] = pd.to_numeric(data_rows[col], errors="ignore")
+            if pd.api.types.is_numeric_dtype(data_rows[col]):
+                data_rows[col] = data_rows[col].round(2)
 
-        return pd.concat(
-            [
-                self._process_beam_for_check(item, "flexure", capacity_check)
-                for item in self.nodes
-            ],
-            ignore_index=True,
-        )
+        # Recombine units + data
+        df_final = pd.concat([units_row, data_rows], ignore_index=True)
+        return df_final
 
     def _process_beam_for_check(
         self, node: Node, check_type: str, capacity_check: bool
@@ -417,9 +448,9 @@ class BeamSummary:
 
         # Run the appropriate check
         if check_type == "shear":
-            results = node.check_shear()
+            results = node.check_shear().iloc[1:].reset_index(drop=True)
         elif check_type == "flexure":
-            results = node.check_flexure()
+            results = node.check_flexure().iloc[1:].reset_index(drop=True)
         else:
             raise ValueError("check_type must be either 'shear' or 'flexure'")
 
@@ -432,14 +463,16 @@ class BeamSummary:
 
 
 def main() -> None:
-    # conc = Concrete_ACI_318_19(name="C25", f_c=25*MPa)
-    conc = Concrete_EN_1992_2004(name="C25", f_ck=25 * MPa)
+    conc = Concrete_ACI_318_19(name="C25", f_c=25 * MPa)
+    # conc = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
     steel = SteelBar(name="ADN 500", f_y=500 * MPa)
     # input_df = pd.read_excel(r'.\tests\examples\Mento-Input.xlsx', sheet_name='Beams', usecols='B:R', skiprows=4)
     data = {
         "Label": ["", "V101", "V102", "V103", "V104"],
+        "Comb.": ["", "ELU 1", "ELU 1", "ELU 1", "ELU 1"],
         "b": ["cm", 20, 20, 20, 20],
         "h": ["cm", 50, 50, 50, 50],
+        "cc": ["mm", 25, 25, 25, 25],
         "Nx": ["kN", 0, 0, 0, 0],
         "Vz": ["kN", 20, -50, 100, 100],
         "My": ["kNm", 0, -35, 40, 45],
@@ -458,15 +491,15 @@ def main() -> None:
     input_df = pd.DataFrame(data)
     # print(input_df)
     beam_summary = BeamSummary(concrete=conc, steel_bar=steel, beam_list=input_df)
-    print(beam_summary.data)
-    capacity = beam_summary.check(capacity_check=True)
-    print(capacity)
-    # check = beam_summary.check(capacity_check=False)
-    # print(check)
+    # print(beam_summary.data)
+    # capacity = beam_summary.check(capacity_check=True)
+    # print(capacity)
+    check = beam_summary.check(capacity_check=False)
+    print(check)
     # # beam_summary.check().to_excel('hola.xlsx', index=False)
-    # results = beam_summary.shear_results(capacity_check=False)
+    results = beam_summary.shear_results(capacity_check=False)
     # results = beam_summary.shear_results(capacity_check=True)
-    # print(results)
+    print(results)
     # beam_summary.nodes[2].shear_results_detailed()
 
 

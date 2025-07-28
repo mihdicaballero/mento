@@ -82,20 +82,20 @@ def test_shear_check_EN_1992_2004_rebar_1(
     results = node.check_shear()
 
     # Compare dictionaries with a tolerance for floating-point values, in m
-    assert results.iloc[0]["Av,min"].magnitude == pytest.approx(1.6, rel=1e-3)
-    assert results.iloc[0]["Av,req"].magnitude == pytest.approx(1.825, rel=1e-3)
-    assert results.iloc[0]["Av"].magnitude == pytest.approx(2.262, rel=1e-3)
-    assert results.iloc[0]["VEd,1"].magnitude == pytest.approx(100, rel=1e-3)
-    assert results.iloc[0]["VEd,2"].magnitude == pytest.approx(100, rel=1e-3)
-    assert results.iloc[0]["VRd,c"].magnitude == pytest.approx(0, rel=1e-3)
-    assert results.iloc[0]["VRd,s"].magnitude == pytest.approx(123.924, rel=1e-3)
-    assert results.iloc[0]["VRd"].magnitude == pytest.approx(123.924, rel=1e-3)
-    assert results.iloc[0]["VRd,max"].magnitude == pytest.approx(312.811, rel=1e-3)
-    assert results.iloc[0]["DCR"] == pytest.approx(0.8069, rel=1e-3)
+    assert results.iloc[1]["Av,min"] == pytest.approx(1.6, rel=1e-3)
+    assert results.iloc[1]["Av,req"] == pytest.approx(1.825, rel=1e-3)
+    assert results.iloc[1]["Av"] == pytest.approx(2.262, rel=1e-3)
+    assert results.iloc[1]["VEd,1"] == pytest.approx(100, rel=1e-3)
+    assert results.iloc[1]["VEd,2"] == pytest.approx(100, rel=1e-3)
+    assert results.iloc[1]["VRd,c"] == pytest.approx(0, rel=1e-3)
+    assert results.iloc[1]["VRd,s"] == pytest.approx(123.924, rel=1e-3)
+    assert results.iloc[1]["VRd"] == pytest.approx(123.924, rel=1e-3)
+    assert results.iloc[1]["VRd,max"] == pytest.approx(312.811, rel=1e-3)
+    assert results.iloc[1]["DCR"] == pytest.approx(0.8069, rel=1e-3)
 
     # Assert non-numeric values directly
-    assert results.iloc[0]["VEd,1<VRd,max"] is np.True_
-    assert results.iloc[0]["VEd,2<VRd"] is np.True_
+    assert results.iloc[1]["VEd,1<VRd,max"] is True
+    assert results.iloc[1]["VEd,2<VRd"] is True
 
 
 def test_shear_check_EN_1992_2004_rebar_2(
@@ -110,20 +110,20 @@ def test_shear_check_EN_1992_2004_rebar_2(
     results = node.check_shear()
 
     # Compare dictionaries with a tolerance for floating-point values, in m
-    assert results.iloc[0]["Av,min"].magnitude == pytest.approx(1.6, rel=1e-3)
-    assert results.iloc[0]["Av,req"].magnitude == pytest.approx(7.533, rel=1e-3)
-    assert results.iloc[0]["Av"].magnitude == pytest.approx(2.262, rel=1e-3)
-    assert results.iloc[0]["VEd,1"].magnitude == pytest.approx(350, rel=1e-3)
-    assert results.iloc[0]["VEd,2"].magnitude == pytest.approx(350, rel=1e-3)
-    assert results.iloc[0]["VRd,c"].magnitude == pytest.approx(0, rel=1e-3)
-    assert results.iloc[0]["VRd,s"].magnitude == pytest.approx(105.099, rel=1e-3)
-    assert results.iloc[0]["VRd"].magnitude == pytest.approx(105.099, rel=1e-3)
-    assert results.iloc[0]["VRd,max"].magnitude == pytest.approx(350, rel=1e-3)
-    assert results.iloc[0]["DCR"] == pytest.approx(3.33, rel=1e-3)
+    assert results.iloc[1]["Av,min"] == pytest.approx(1.6, rel=1e-3)
+    assert results.iloc[1]["Av,req"] == pytest.approx(7.533, rel=1e-3)
+    assert results.iloc[1]["Av"] == pytest.approx(2.262, rel=1e-3)
+    assert results.iloc[1]["VEd,1"] == pytest.approx(350, rel=1e-3)
+    assert results.iloc[1]["VEd,2"] == pytest.approx(350, rel=1e-3)
+    assert results.iloc[1]["VRd,c"] == pytest.approx(0, rel=1e-3)
+    assert results.iloc[1]["VRd,s"] == pytest.approx(105.099, rel=1e-3)
+    assert results.iloc[1]["VRd"] == pytest.approx(105.099, rel=1e-3)
+    assert results.iloc[1]["VRd,max"] == pytest.approx(350, rel=1e-3)
+    assert results.iloc[1]["DCR"] == pytest.approx(3.33, rel=1e-3)
 
     # Assert non-numeric values directly
-    assert results.iloc[0]["VEd,1<VRd,max"] is np.True_
-    assert results.iloc[0]["VEd,2<VRd"] is np.False_
+    assert results.iloc[1]["VEd,1<VRd,max"] is True
+    assert results.iloc[1]["VEd,2<VRd"] is False
 
 
 def test_shear_check_EN_1992_2004_rebar_3(
@@ -138,20 +138,20 @@ def test_shear_check_EN_1992_2004_rebar_3(
     results = node.check_shear()
 
     # Compare dictionaries with a tolerance for floating-point values, in m
-    assert results.iloc[0]["Av,min"].magnitude == pytest.approx(1.6, rel=1e-3)
-    assert results.iloc[0]["Av,req"].magnitude == pytest.approx(22.817, rel=1e-3)
-    assert results.iloc[0]["Av"].magnitude == pytest.approx(2.26, rel=1e-3)
-    assert results.iloc[0]["VEd,1"].magnitude == pytest.approx(500, rel=1e-3)
-    assert results.iloc[0]["VEd,2"].magnitude == pytest.approx(500, rel=1e-3)
-    assert results.iloc[0]["VRd,c"].magnitude == pytest.approx(0, rel=1e-3)
-    assert results.iloc[0]["VRd,s"].magnitude == pytest.approx(49.566, rel=1e-3)
-    assert results.iloc[0]["VRd"].magnitude == pytest.approx(49.566, rel=1e-3)
-    assert results.iloc[0]["VRd,max"].magnitude == pytest.approx(453.6, rel=1e-3)
-    assert results.iloc[0]["DCR"] == pytest.approx(10.088, rel=1e-3)
+    assert results.iloc[1]["Av,min"] == pytest.approx(1.6, rel=1e-3)
+    assert results.iloc[1]["Av,req"] == pytest.approx(22.817, rel=1e-3)
+    assert results.iloc[1]["Av"] == pytest.approx(2.26, rel=1e-3)
+    assert results.iloc[1]["VEd,1"] == pytest.approx(500, rel=1e-3)
+    assert results.iloc[1]["VEd,2"] == pytest.approx(500, rel=1e-3)
+    assert results.iloc[1]["VRd,c"] == pytest.approx(0, rel=1e-3)
+    assert results.iloc[1]["VRd,s"] == pytest.approx(49.566, rel=1e-3)
+    assert results.iloc[1]["VRd"] == pytest.approx(49.566, rel=1e-3)
+    assert results.iloc[1]["VRd,max"] == pytest.approx(453.6, rel=1e-3)
+    assert results.iloc[1]["DCR"] == pytest.approx(10.088, rel=1e-3)
 
     # Assert non-numeric values directly
-    assert results.iloc[0]["VEd,1<VRd,max"] is np.False_
-    assert results.iloc[0]["VEd,2<VRd"] is np.False_
+    assert results.iloc[1]["VEd,1<VRd,max"] is False
+    assert results.iloc[1]["VEd,2<VRd"] is False
 
 
 def test_shear_check_EN_1992_2004_no_rebar_1(
@@ -163,20 +163,20 @@ def test_shear_check_EN_1992_2004_no_rebar_1(
     results = node.check_shear()
 
     # Compare dictionaries with a tolerance for floating-point values, in m
-    assert results.iloc[0]["Av,min"].magnitude == pytest.approx(1.6, rel=1e-3)
-    assert results.iloc[0]["Av,req"].magnitude == pytest.approx(1.6, rel=1e-3)
-    assert results.iloc[0]["Av"].magnitude == pytest.approx(0, rel=1e-3)
-    assert results.iloc[0]["VEd,1"].magnitude == pytest.approx(30, rel=1e-3)
-    assert results.iloc[0]["VEd,2"].magnitude == pytest.approx(30, rel=1e-3)
-    assert results.iloc[0]["VRd,c"].magnitude == pytest.approx(56.126, rel=1e-3)
-    assert results.iloc[0]["VRd,s"].magnitude == pytest.approx(0, rel=1e-3)
-    assert results.iloc[0]["VRd"].magnitude == pytest.approx(56.126, rel=1e-3)
-    assert results.iloc[0]["VRd,max"].magnitude == pytest.approx(56.126, rel=1e-3)
-    assert results.iloc[0]["DCR"] == pytest.approx(0.5345, rel=1e-3)
+    assert results.iloc[1]["Av,min"] == pytest.approx(1.6, rel=1e-3)
+    assert results.iloc[1]["Av,req"] == pytest.approx(1.6, rel=1e-3)
+    assert results.iloc[1]["Av"] == pytest.approx(0, rel=1e-3)
+    assert results.iloc[1]["VEd,1"] == pytest.approx(30, rel=1e-3)
+    assert results.iloc[1]["VEd,2"] == pytest.approx(30, rel=1e-3)
+    assert results.iloc[1]["VRd,c"] == pytest.approx(56.126, rel=1e-3)
+    assert results.iloc[1]["VRd,s"] == pytest.approx(0, rel=1e-3)
+    assert results.iloc[1]["VRd"] == pytest.approx(56.126, rel=1e-3)
+    assert results.iloc[1]["VRd,max"] == pytest.approx(56.126, rel=1e-3)
+    assert results.iloc[1]["DCR"] == pytest.approx(0.5345, rel=1e-3)
 
     # Assert non-numeric values directly
-    assert results.iloc[0]["VEd,1<VRd,max"] is np.True_
-    assert results.iloc[0]["VEd,2<VRd"] is np.True_
+    assert results.iloc[1]["VEd,1<VRd,max"] is True
+    assert results.iloc[1]["VEd,2<VRd"] is True
 
 
 def test_shear_check_EN_1992_2004_no_rebar_2(
@@ -187,20 +187,20 @@ def test_shear_check_EN_1992_2004_no_rebar_2(
     results = node.check_shear()
 
     # Compare dictionaries with a tolerance for floating-point values, in m
-    assert results.iloc[0]["Av,min"].magnitude == pytest.approx(1.6, rel=1e-3)
-    assert results.iloc[0]["Av,req"].magnitude == pytest.approx(1.6, rel=1e-3)
-    assert results.iloc[0]["Av"].magnitude == pytest.approx(0, rel=1e-3)
-    assert results.iloc[0]["VEd,1"].magnitude == pytest.approx(30, rel=1e-3)
-    assert results.iloc[0]["VEd,2"].magnitude == pytest.approx(30, rel=1e-3)
-    assert results.iloc[0]["VRd,c"].magnitude == pytest.approx(39.681, rel=1e-3)
-    assert results.iloc[0]["VRd,s"].magnitude == pytest.approx(0, rel=1e-3)
-    assert results.iloc[0]["VRd"].magnitude == pytest.approx(39.681, rel=1e-3)
-    assert results.iloc[0]["VRd,max"].magnitude == pytest.approx(39.681, rel=1e-3)
-    assert results.iloc[0]["DCR"] == pytest.approx(0.756, rel=1e-3)
+    assert results.iloc[1]["Av,min"] == pytest.approx(1.6, rel=1e-3)
+    assert results.iloc[1]["Av,req"] == pytest.approx(1.6, rel=1e-3)
+    assert results.iloc[1]["Av"] == pytest.approx(0, rel=1e-3)
+    assert results.iloc[1]["VEd,1"] == pytest.approx(30, rel=1e-3)
+    assert results.iloc[1]["VEd,2"] == pytest.approx(30, rel=1e-3)
+    assert results.iloc[1]["VRd,c"] == pytest.approx(39.681, rel=1e-3)
+    assert results.iloc[1]["VRd,s"] == pytest.approx(0, rel=1e-3)
+    assert results.iloc[1]["VRd"] == pytest.approx(39.681, rel=1e-3)
+    assert results.iloc[1]["VRd,max"] == pytest.approx(39.681, rel=1e-3)
+    assert results.iloc[1]["DCR"] == pytest.approx(0.756, rel=1e-3)
 
     # Assert non-numeric values directly
-    assert results.iloc[0]["VEd,1<VRd,max"] is np.True_
-    assert results.iloc[0]["VEd,2<VRd"] is np.True_
+    assert results.iloc[1]["VEd,1<VRd,max"] is True
+    assert results.iloc[1]["VEd,2<VRd"] is True
 
 
 def test_shear_check_EN_1992_2004_no_rebar_3(
@@ -212,20 +212,20 @@ def test_shear_check_EN_1992_2004_no_rebar_3(
     results = node.check_shear()
 
     # Compare dictionaries with a tolerance for floating-point values, in m
-    assert results.iloc[0]["Av,min"].magnitude == pytest.approx(1.6, rel=1e-3)
-    assert results.iloc[0]["Av,req"].magnitude == pytest.approx(1.6, rel=1e-3)
-    assert results.iloc[0]["Av"].magnitude == pytest.approx(0, rel=1e-3)
-    assert results.iloc[0]["VEd,1"].magnitude == pytest.approx(30, rel=1e-3)
-    assert results.iloc[0]["VEd,2"].magnitude == pytest.approx(30, rel=1e-3)
-    assert results.iloc[0]["VRd,c"].magnitude == pytest.approx(63.101, rel=1e-3)
-    assert results.iloc[0]["VRd,s"].magnitude == pytest.approx(0, rel=1e-3)
-    assert results.iloc[0]["VRd"].magnitude == pytest.approx(63.101, rel=1e-3)
-    assert results.iloc[0]["VRd,max"].magnitude == pytest.approx(63.101, rel=1e-3)
-    assert results.iloc[0]["DCR"] == pytest.approx(0.4754, rel=1e-3)
+    assert results.iloc[1]["Av,min"] == pytest.approx(1.6, rel=1e-3)
+    assert results.iloc[1]["Av,req"] == pytest.approx(1.6, rel=1e-3)
+    assert results.iloc[1]["Av"] == pytest.approx(0, rel=1e-3)
+    assert results.iloc[1]["VEd,1"] == pytest.approx(30, rel=1e-3)
+    assert results.iloc[1]["VEd,2"] == pytest.approx(30, rel=1e-3)
+    assert results.iloc[1]["VRd,c"] == pytest.approx(63.101, rel=1e-3)
+    assert results.iloc[1]["VRd,s"] == pytest.approx(0, rel=1e-3)
+    assert results.iloc[1]["VRd"] == pytest.approx(63.101, rel=1e-3)
+    assert results.iloc[1]["VRd,max"] == pytest.approx(63.101, rel=1e-3)
+    assert results.iloc[1]["DCR"] == pytest.approx(0.4754, rel=1e-3)
 
     # Assert non-numeric values directly
-    assert results.iloc[0]["VEd,1<VRd,max"] is np.True_
-    assert results.iloc[0]["VEd,2<VRd"] is np.True_
+    assert results.iloc[1]["VEd,1<VRd,max"] is True
+    assert results.iloc[1]["VEd,2<VRd"] is True
 
 
 def test_shear_design_EN_1992_2004_1(
@@ -237,20 +237,20 @@ def test_shear_design_EN_1992_2004_1(
     results = node.design_shear()
 
     # Compare dictionaries with a tolerance for floating-point values, in m
-    assert results.iloc[0]["Av,min"].magnitude == pytest.approx(1.6, rel=1e-3)
-    assert results.iloc[0]["Av,req"].magnitude == pytest.approx(1.6, rel=1e-3)
-    assert results.iloc[0]["Av"].magnitude == pytest.approx(1.616, rel=1e-3)
-    assert results.iloc[0]["VEd,1"].magnitude == pytest.approx(30, rel=1e-3)
-    assert results.iloc[0]["VEd,2"].magnitude == pytest.approx(30, rel=1e-3)
-    assert results.iloc[0]["VRd,c"].magnitude == pytest.approx(0, rel=1e-3)
-    assert results.iloc[0]["VRd,s"].magnitude == pytest.approx(88.52, rel=1e-3)
-    assert results.iloc[0]["VRd"].magnitude == pytest.approx(88.52, rel=1e-3)
-    assert results.iloc[0]["VRd,max"].magnitude == pytest.approx(312.81, rel=1e-3)
-    assert results.iloc[0]["DCR"] == pytest.approx(0.339, rel=1e-3)
+    assert results.iloc[1]["Av,min"] == pytest.approx(1.6, rel=1e-3)
+    assert results.iloc[1]["Av,req"] == pytest.approx(1.6, rel=1e-3)
+    assert results.iloc[1]["Av"] == pytest.approx(1.616, rel=1e-3)
+    assert results.iloc[1]["VEd,1"] == pytest.approx(30, rel=1e-3)
+    assert results.iloc[1]["VEd,2"] == pytest.approx(30, rel=1e-3)
+    assert results.iloc[1]["VRd,c"] == pytest.approx(0, rel=1e-3)
+    assert results.iloc[1]["VRd,s"] == pytest.approx(88.52, rel=1e-3)
+    assert results.iloc[1]["VRd"] == pytest.approx(88.52, rel=1e-3)
+    assert results.iloc[1]["VRd,max"] == pytest.approx(312.81, rel=1e-3)
+    assert results.iloc[1]["DCR"] == pytest.approx(0.339, rel=1e-3)
 
     # Assert non-numeric values directly
-    assert results.iloc[0]["VEd,1<VRd,max"] is np.True_
-    assert results.iloc[0]["VEd,2<VRd"] is np.True_
+    assert results.iloc[1]["VEd,1<VRd,max"] is True
+    assert results.iloc[1]["VEd,2<VRd"] is True
 
 
 def test_shear_check_ACI_318_19_1(beam_example_imperial: RectangularBeam) -> None:
@@ -262,18 +262,18 @@ def test_shear_check_ACI_318_19_1(beam_example_imperial: RectangularBeam) -> Non
     results = node.check_shear()
 
     # Compare dictionaries with a tolerance for floating-point values, in m
-    assert results.iloc[0]["Av,min"].magnitude == pytest.approx(2.117, rel=1e-3)
-    assert results.iloc[0]["Av,req"].magnitude == pytest.approx(10.0623, rel=1e-3)
-    assert results.iloc[0]["Av"].magnitude == pytest.approx(16.624, rel=1e-3)
-    assert results.iloc[0]["ØVc"].magnitude == pytest.approx(58.288, rel=1e-3)
-    assert results.iloc[0]["ØVs"].magnitude == pytest.approx(180.956, rel=1e-3)
-    assert results.iloc[0]["ØVn"].magnitude == pytest.approx(239.247, rel=1e-3)
-    assert results.iloc[0]["ØVmax"].magnitude == pytest.approx(291.44, rel=1e-3)
-    assert results.iloc[0]["DCR"] == pytest.approx(0.70144, rel=1e-3)
+    assert results.iloc[1]["Av,min"] == pytest.approx(2.117, rel=1e-3)
+    assert results.iloc[1]["Av,req"] == pytest.approx(10.0623, rel=1e-3)
+    assert results.iloc[1]["Av"] == pytest.approx(16.624, rel=1e-3)
+    assert results.iloc[1]["ØVc"] == pytest.approx(58.288, rel=1e-3)
+    assert results.iloc[1]["ØVs"] == pytest.approx(180.956, rel=1e-3)
+    assert results.iloc[1]["ØVn"] == pytest.approx(239.247, rel=1e-3)
+    assert results.iloc[1]["ØVmax"] == pytest.approx(291.44, rel=1e-3)
+    assert results.iloc[1]["DCR"] == pytest.approx(0.70144, rel=1e-3)
 
     # Assert non-numeric values directly
-    assert results.iloc[0]["Vu<ØVmax"] is np.True_
-    assert results.iloc[0]["Vu<ØVn"] is np.True_
+    assert results.iloc[1]["Vu<ØVmax"] is True
+    assert results.iloc[1]["Vu<ØVn"] is True
 
 
 def test_shear_check_ACI_318_19_2(beam_example_imperial: RectangularBeam) -> None:
@@ -285,18 +285,18 @@ def test_shear_check_ACI_318_19_2(beam_example_imperial: RectangularBeam) -> Non
     results = node.check_shear()
 
     # Compare dictionaries with a tolerance for floating-point values, in m
-    assert results.iloc[0]["Av,min"].magnitude == pytest.approx(2.117, rel=1e-3)
-    assert results.iloc[0]["Av,req"].magnitude == pytest.approx(9.1803, rel=1e-3)
-    assert results.iloc[0]["Av"].magnitude == pytest.approx(16.624, rel=1e-3)
-    assert results.iloc[0]["ØVc"].magnitude == pytest.approx(67.888, rel=1e-3)
-    assert results.iloc[0]["ØVs"].magnitude == pytest.approx(180.959, rel=1e-3)
-    assert results.iloc[0]["ØVn"].magnitude == pytest.approx(248.847, rel=1e-3)
-    assert results.iloc[0]["ØVmax"].magnitude == pytest.approx(301.041, rel=1e-3)
-    assert results.iloc[0]["DCR"] == pytest.approx(0.6743, rel=1e-3)
+    assert results.iloc[1]["Av,min"] == pytest.approx(2.117, rel=1e-3)
+    assert results.iloc[1]["Av,req"] == pytest.approx(9.1803, rel=1e-3)
+    assert results.iloc[1]["Av"] == pytest.approx(16.624, rel=1e-3)
+    assert results.iloc[1]["ØVc"] == pytest.approx(67.888, rel=1e-3)
+    assert results.iloc[1]["ØVs"] == pytest.approx(180.959, rel=1e-3)
+    assert results.iloc[1]["ØVn"] == pytest.approx(248.847, rel=1e-3)
+    assert results.iloc[1]["ØVmax"] == pytest.approx(301.041, rel=1e-3)
+    assert results.iloc[1]["DCR"] == pytest.approx(0.6743, rel=1e-3)
 
     # Assert non-numeric values directly
-    assert results.iloc[0]["Vu<ØVmax"] is np.True_
-    assert results.iloc[0]["Vu<ØVn"] is np.True_
+    assert results.iloc[1]["Vu<ØVmax"] is True
+    assert results.iloc[1]["Vu<ØVn"] is True
 
 
 def test_shear_check_ACI_318_19_no_rebar_1(
@@ -308,18 +308,21 @@ def test_shear_check_ACI_318_19_no_rebar_1(
     results = node.check_shear()
 
     # Compare dictionaries with a tolerance for floating-point values, in m
-    assert results.iloc[0]["Av,min"].magnitude == pytest.approx(2.117, rel=1e-3)
-    assert results.iloc[0]["Av,req"].magnitude == pytest.approx(2.117, rel=1e-3)
-    assert results.iloc[0]["Av"].magnitude == pytest.approx(0, rel=1e-3)
-    assert results.iloc[0]["ØVc"].magnitude == pytest.approx(35.1253, rel=1e-3)
-    assert results.iloc[0]["ØVs"].magnitude == pytest.approx(0, rel=1e-3)
-    assert results.iloc[0]["ØVn"].magnitude == pytest.approx(35.125, rel=1e-3)
-    assert results.iloc[0]["ØVmax"].magnitude == pytest.approx(268.278, rel=1e-3)
-    assert results.iloc[0]["DCR"] == pytest.approx(1.013, rel=1e-3)
+    assert results.iloc[1]["Av,min"] == pytest.approx(2.117, rel=1e-3)
+    assert results.iloc[1]["Av,req"] == pytest.approx(2.117, rel=1e-3)
+    assert results.iloc[1]["Av"] == pytest.approx(0, rel=1e-3)
+    assert beam_example_imperial._d_shear.to("cm").magnitude == pytest.approx(
+        35.08, rel=1e-3
+    )
+    assert results.iloc[1]["ØVc"] == pytest.approx(35.1253, rel=1e-3)
+    assert results.iloc[1]["ØVs"] == pytest.approx(0, rel=1e-3)
+    assert results.iloc[1]["ØVn"] == pytest.approx(35.125, rel=1e-3)
+    assert results.iloc[1]["ØVmax"] == pytest.approx(268.278, rel=1e-3)
+    assert results.iloc[1]["DCR"] == pytest.approx(1.013, rel=1e-3)
 
     # Assert non-numeric values directly
-    assert results.iloc[0]["Vu<ØVmax"] is np.True_
-    assert results.iloc[0]["Vu<ØVn"] is np.False_
+    assert results.iloc[1]["Vu<ØVmax"] is True
+    assert results.iloc[1]["Vu<ØVn"] is False
 
 
 def test_shear_check_ACI_318_19_no_rebar_2(
@@ -331,18 +334,18 @@ def test_shear_check_ACI_318_19_no_rebar_2(
     results = node.check_shear()
 
     # Compare dictionaries with a tolerance for floating-point values, in m
-    assert results.iloc[0]["Av,min"].magnitude == pytest.approx(0, rel=1e-3)
-    assert results.iloc[0]["Av,req"].magnitude == pytest.approx(0, rel=1e-3)
-    assert results.iloc[0]["Av"].magnitude == pytest.approx(0, rel=1e-3)
-    assert results.iloc[0]["ØVc"].magnitude == pytest.approx(58.288, rel=1e-3)
-    assert results.iloc[0]["ØVs"].magnitude == pytest.approx(0, rel=1e-3)
-    assert results.iloc[0]["ØVn"].magnitude == pytest.approx(58.288, rel=1e-3)
-    assert results.iloc[0]["ØVmax"].magnitude == pytest.approx(291.441, rel=1e-3)
-    assert results.iloc[0]["DCR"] == pytest.approx(0.4579, rel=1e-3)
+    assert results.iloc[1]["Av,min"] == pytest.approx(0, rel=1e-3)
+    assert results.iloc[1]["Av,req"] == pytest.approx(0, rel=1e-3)
+    assert results.iloc[1]["Av"] == pytest.approx(0, rel=1e-3)
+    assert results.iloc[1]["ØVc"] == pytest.approx(58.288, rel=1e-3)
+    assert results.iloc[1]["ØVs"] == pytest.approx(0, rel=1e-3)
+    assert results.iloc[1]["ØVn"] == pytest.approx(58.288, rel=1e-3)
+    assert results.iloc[1]["ØVmax"] == pytest.approx(291.441, rel=1e-3)
+    assert results.iloc[1]["DCR"] == pytest.approx(0.4579, rel=1e-3)
 
     # Assert non-numeric values directly
-    assert results.iloc[0]["Vu<ØVmax"] is np.True_
-    assert results.iloc[0]["Vu<ØVn"] is np.True_
+    assert results.iloc[1]["Vu<ØVmax"] is True
+    assert results.iloc[1]["Vu<ØVn"] is True
 
 
 def test_shear_design_ACI_318_19(beam_example_imperial: RectangularBeam) -> None:
@@ -352,18 +355,18 @@ def test_shear_design_ACI_318_19(beam_example_imperial: RectangularBeam) -> None
     results = node.design_shear()
 
     # Compare dictionaries with a tolerance for floating-point values, in m
-    assert results.iloc[0]["Av,min"].magnitude == pytest.approx(2.117, rel=1e-3)
-    assert results.iloc[0]["Av,req"].magnitude == pytest.approx(10.06, rel=1e-3)
-    assert results.iloc[0]["Av"].magnitude == pytest.approx(11.22, rel=1e-3)
-    assert results.iloc[0]["ØVc"].magnitude == pytest.approx(58.29, rel=1e-3)
-    assert results.iloc[0]["ØVs"].magnitude == pytest.approx(122.15, rel=1e-3)
-    assert results.iloc[0]["ØVn"].magnitude == pytest.approx(180.44, rel=1e-3)
-    assert results.iloc[0]["ØVmax"].magnitude == pytest.approx(291.44, rel=1e-3)
-    assert results.iloc[0]["DCR"] == pytest.approx(0.93, rel=1e-3)
+    assert results.iloc[1]["Av,min"] == pytest.approx(2.117, rel=1e-3)
+    assert results.iloc[1]["Av,req"] == pytest.approx(10.06, rel=1e-3)
+    assert results.iloc[1]["Av"] == pytest.approx(11.22, rel=1e-3)
+    assert results.iloc[1]["ØVc"] == pytest.approx(58.29, rel=1e-3)
+    assert results.iloc[1]["ØVs"] == pytest.approx(122.15, rel=1e-3)
+    assert results.iloc[1]["ØVn"] == pytest.approx(180.44, rel=1e-3)
+    assert results.iloc[1]["ØVmax"] == pytest.approx(291.44, rel=1e-3)
+    assert results.iloc[1]["DCR"] == pytest.approx(0.93, rel=1e-3)
 
     # Assert non-numeric values directly
-    assert results.iloc[0]["Vu<ØVmax"] is np.True_
-    assert results.iloc[0]["Vu<ØVn"] is np.True_
+    assert results.iloc[1]["Vu<ØVmax"] is True
+    assert results.iloc[1]["Vu<ØVn"] is True
 
 
 # # ------- FLEXURE TEST --------------
