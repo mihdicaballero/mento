@@ -9,3 +9,4 @@ python-docx
 matplotlib
 openpyxl
 devtools
+types-tabulate

@@ -44,9 +44,7 @@ disable = [
 max-line-length = 120
 
 [tool.ruff]
-lint.extend-select = ["C4", "SIM", "TCH"]
 extend-exclude = ["build/", "dist/"]
-lint.ignore = []
 show-fixes = true
 line-length = 120
 

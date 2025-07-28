@@ -69,7 +69,7 @@ class Forces:
         return self._id
 
     @property
-    def N_x(self) -> PlainQuantity:
+    def N_x(self) -> Quantity:
         """Axial force along the x-axis (default is 0 kN)."""
         if self.unit_system == "metric":
             return self._N_x.to("kN")
@@ -77,7 +77,7 @@ class Forces:
             return self._N_x.to("kip")
 
     @property
-    def V_z(self) -> PlainQuantity:
+    def V_z(self) -> Quantity:
         """Shear force along the z-axis (default is 0 kN)."""
         if self.unit_system == "metric":
             return self._V_z.to("kN")
@@ -85,14 +85,14 @@ class Forces:
             return self._V_z.to("kip")
 
     @property
-    def M_y(self) -> PlainQuantity:
+    def M_y(self) -> Quantity:
         """Bending moment about the y-axis (default is 0 kN*m)."""
         if self.unit_system == "metric":
             return self._M_y.to("kN*m")
         else:
             return self._M_y.to("ft*kip")
 
-    def get_forces(self) -> Dict[str, PlainQuantity]:
+    def get_forces(self) -> Dict[str, Quantity]:
         """Returns the forces as a dictionary with keys 'N_x', 'V_z', and 'M_y'."""
         if self.unit_system == "metric":
             return {

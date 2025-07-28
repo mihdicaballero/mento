@@ -1,10 +1,10 @@
 import os  # Cleaning console
 from dataclasses import dataclass
 from IPython.display import Markdown, display
-from typing import Optional, Dict, Any
+from typing import Optional, Dict
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
-from pint.facets.plain import PlainQuantity
+from pint import Quantity
 import numpy as np
 import pandas as pd
 from pandas import DataFrame
@@ -13,7 +13,6 @@ import warnings
 
 from mento.rectangular import RectangularSection
 from mento.material import (
-    Concrete,
     SteelBar,
     Concrete_ACI_318_19,
     Concrete_EN_1992_2004,
@@ -22,6 +21,7 @@ from mento.rebar import Rebar
 from mento.units import MPa, psi, mm, inch, kN, m, cm, kNm, dimensionless, kip, ksi, ft
 from mento.results import Formatter, TablePrinter, DocumentBuilder, CUSTOM_COLORS
 from mento.forces import Forces
+from mento.settings import BeamSettings
 
 from mento.codes.EN_1992_2004_beam import (
     _check_shear_EN_1992_2004,
@@ -37,25 +37,69 @@ from mento.codes.ACI_318_19_beam import (
 
 @dataclass
 class RectangularBeam(RectangularSection):
-    def __init__(
-        self,
-        label: Optional[str],
-        concrete: Concrete,
-        steel_bar: SteelBar,
-        width: PlainQuantity,
-        height: PlainQuantity,
-        settings: Optional[Dict[str, Any]] = None,
-    ):
-        super().__init__(label, concrete, steel_bar, width, height, settings)
-        if settings:
-            self.settings.update(settings)  # Update with any provided settings
+    """
+    Represents a reinforced concrete rectangular beam section with methods for design, checking,
+    and visualization of longitudinal and transverse reinforcement according to various design codes.
 
-        self.layers_spacing = self.settings.get_setting("layers_spacing")
+    Attributes:
+        settings (BeamSettings): Access to global design rules and settings.
 
-        # Centralized attribute initialization
+    Methods:
+        set_transverse_rebar(n_stirrups, d_b, s_l):
+            Sets the transverse (stirrup) rebar configuration for the beam.
+        set_longitudinal_rebar_bot(n1, d_b1, n2, d_b2, n3, d_b3, n4, d_b4):
+            Sets the bottom longitudinal rebar configuration.
+        set_longitudinal_rebar_top(n1, d_b1, n2, d_b2, n3, d_b3, n4, d_b4):
+            Sets the top longitudinal rebar configuration.
+        design_flexure(forces):
+            Designs the flexural reinforcement for the beam based on provided forces and design code.
+        check_flexure(forces):
+            Checks the flexural capacity for all provided forces and stores results.
+        design_shear(forces):
+            Designs the shear reinforcement for the beam based on provided forces and design code.
+        check_shear(forces):
+            Checks the shear capacity for all provided forces and stores results.
+        data:
+            Property. Displays basic beam data in Markdown format.
+        flexure_results:
+            Property. Displays summary of flexural design/check results in Markdown format.
+        shear_results:
+            Property. Displays summary of shear design/check results in Markdown format.
+        results:
+            Property. Displays all available results (properties, flexure, shear) in Markdown format.
+        flexure_results_detailed(force=None):
+            Displays detailed flexure results for a specific force or the limiting case.
+        flexure_results_detailed_doc(force=None):
+            Exports detailed flexure results to a Word document.
+        shear_results_detailed(force=None):
+            Displays detailed shear results for a specific force or the limiting case.
+        shear_results_detailed_doc(force=None):
+            Exports detailed shear results to a Word document.
+        plot():
+            Plots the longitudinal rebar arrangement for the beam section.
+
+    Usage:
+        - Instantiate with required section and material properties.
+        - Use set_longitudinal_rebar_* and set_transverse_rebar to configure reinforcement.
+        - Call design_flexure and design_shear to perform design.
+        - Use flexure_results, shear_results, and results properties for summary output.
+        - Use flexure_results_detailed and shear_results_detailed for detailed output.
+        - Use plot() to visualize the rebar arrangement.
+
+    Note:
+        This class is intended for use in reinforced concrete beam design workflows,
+        supporting multiple design codes and detailed reporting.
+    """
+
+    def __post_init__(self) -> None:
+        super().__post_init__()  # Call parent attributes
+        self.settings = BeamSettings(unit_system=self.concrete.unit_system)
         self._initialize_attributes()
 
-        # self.shear_design_results: DataFrame = None
+    # @property
+    # def settings(self) -> BeamSettings:
+    #     """Access global design rules."""
+    #     return GLOBAL_BEAM_SETTINGS
 
     ##########################################################
     # INITIALIZE ATTRIBUTES
@@ -64,26 +108,27 @@ class RectangularBeam(RectangularSection):
     def _initialize_attributes(self) -> None:
         """Initialize all attributes of the beam."""
         # Stirrups and shear attributes
-        self._stirrup_s_l: PlainQuantity = 0 * cm
-        self._stirrup_s_w: PlainQuantity = 0 * cm
-        self._stirrup_s_max_l: PlainQuantity = 0 * cm
-        self._stirrup_s_max_w: PlainQuantity = 0 * cm
+        self._stirrup_d_b = self.settings.stirrup_diameter_ini
+        self._stirrup_s_l: Quantity = 0 * cm
+        self._stirrup_s_w: Quantity = 0 * cm
+        self._stirrup_s_max_l: Quantity = 0 * cm
+        self._stirrup_s_max_w: Quantity = 0 * cm
         self._stirrup_n: int = 0
-        self._A_v_min: PlainQuantity = 0 * cm**2 / m
-        self._A_v: PlainQuantity = 0 * cm**2 / m
-        self._A_s_req_bot: PlainQuantity = 0 * cm**2
-        self._A_s_req_top: PlainQuantity = 0 * cm**2
-        self._A_v_req: PlainQuantity = 0 * cm**2 / m
-        self._A_s_tension: PlainQuantity = 0 * cm**2
+        self._A_v_min: Quantity = 0 * cm**2 / m
+        self._A_v: Quantity = 0 * cm**2 / m
+        self._A_s_req_bot: Quantity = 0 * cm**2
+        self._A_s_req_top: Quantity = 0 * cm**2
+        self._A_v_req: Quantity = 0 * cm**2 / m
+        self._A_s_tension: Quantity = 0 * cm**2
         self._DCRv: float = 0
         self._DCRb_top: float = 0
         self._DCRb_bot: float = 0
         self._alpha: float = math.radians(90)
-        self._V_s_req: PlainQuantity = 0 * kN
+        self._V_s_req: Quantity = 0 * kN
 
         # Design checks and effective heights
-        self._rho_l_bot: PlainQuantity = 0 * dimensionless
-        self._rho_l_top: PlainQuantity = 0 * dimensionless
+        self._rho_l_bot: Quantity = 0 * dimensionless
+        self._rho_l_top: Quantity = 0 * dimensionless
         self._bot_rebar_centroid = 0 * mm
         self._top_rebar_centroid = 0 * mm
         self._c_d_top: float = 0
@@ -146,66 +191,60 @@ class RectangularBeam(RectangularSection):
 
     def _initialize_ACI_318_attributes(self) -> None:
         if isinstance(self.concrete, Concrete_ACI_318_19):
-            self._phi_V_n: PlainQuantity = 0 * kN
-            self._phi_V_s: PlainQuantity = 0 * kN
-            self._phi_V_c: PlainQuantity = 0 * kN
-            self._phi_V_max: PlainQuantity = 0 * kN
-            self._V_u: PlainQuantity = 0 * kN
-            self._M_u: PlainQuantity = 0 * kNm
-            self._M_u_bot: PlainQuantity = 0 * kNm
-            self._M_u_top: PlainQuantity = 0 * kNm
-            self._N_u: PlainQuantity = 0 * kN
-            self._A_cv: PlainQuantity = 0 * cm**2
-            self._k_c_min: PlainQuantity = 0 * MPa
-            self._sigma_Nu: PlainQuantity = 0 * MPa
-            self.V_c: PlainQuantity = 0 * kN
-            self.phi_v: float = 0
-            self.phi_t: float = 0
-            self.lambda_factor = 0
-            self._rho_w: PlainQuantity = 0 * dimensionless
+            self._phi_V_n: Quantity = 0 * kN
+            self._phi_V_s: Quantity = 0 * kN
+            self._phi_V_c: Quantity = 0 * kN
+            self._phi_V_max: Quantity = 0 * kN
+            self._V_u: Quantity = 0 * kN
+            self._M_u: Quantity = 0 * kNm
+            self._M_u_bot: Quantity = 0 * kNm
+            self._M_u_top: Quantity = 0 * kNm
+            self._N_u: Quantity = 0 * kN
+            self._A_cv: Quantity = 0 * cm**2
+            self._k_c_min: Quantity = 0 * MPa
+            self._sigma_Nu: Quantity = 0 * MPa
+            self.V_c: Quantity = 0 * kN
+            self._rho_w: Quantity = 0 * dimensionless
             self._lambda_s: float = 0
-            self.f_yt: PlainQuantity = 0 * MPa
+            self.f_yt: Quantity = 0 * MPa
             self._max_shear_ok: bool = False
-            self._A_s_min_bot: PlainQuantity = 0 * cm**2
-            self._A_s_min_top: PlainQuantity = 0 * cm**2
-            self._A_s_max_bot: PlainQuantity = 0 * cm**2
-            self._A_s_max_top: PlainQuantity = 0 * cm**2
-            self._phi_M_n_bot: PlainQuantity = 0 * kNm
-            self._phi_M_n_top: PlainQuantity = 0 * kNm
-            self._d_b_max_bot: PlainQuantity = 0 * mm
-            self._d_b_max_top: PlainQuantity = 0 * mm
+            self._A_s_min_bot: Quantity = 0 * cm**2
+            self._A_s_min_top: Quantity = 0 * cm**2
+            self._A_s_max_bot: Quantity = 0 * cm**2
+            self._A_s_max_top: Quantity = 0 * cm**2
+            self._phi_M_n_bot: Quantity = 0 * kNm
+            self._phi_M_n_top: Quantity = 0 * kNm
+            self._d_b_max_bot: Quantity = 0 * mm
+            self._d_b_max_top: Quantity = 0 * mm
             self.flexure_design_results_bot: DataFrame = None
             self.flexure_design_results_top: DataFrame = None
 
     def _initialize_EN_1992_2004_attributes(self) -> None:
         if isinstance(self.concrete, Concrete_EN_1992_2004):
-            self._f_yk = self.steel_bar.f_y
-            self._f_ck = self.concrete.f_ck
-            self._f_ctm = self.concrete.f_ctm
-            self._epsilon_cu3 = self.concrete._epsilon_cu3
-            self._E_s = self.steel_bar.E_s
-            self._V_Ed_1: PlainQuantity = 0 * kN
-            self._V_Ed_2: PlainQuantity = 0 * kN
-            self._N_Ed: PlainQuantity = 0 * kN
-            self._M_Ed: PlainQuantity = 0 * kNm
-            self._sigma_cd: PlainQuantity = 0 * MPa
-            self._V_Rd_c: PlainQuantity = 0 * kN
-            self._V_Rd_s: PlainQuantity = 0 * kN
-            self._V_Rd_max: PlainQuantity = 0 * kN
-            self._V_Rd: PlainQuantity = 0 * kN
+            # self._f_yk = self.steel_bar.f_y
+            # self._f_ck = self.concrete.f_ck
+            # self._f_ctm = self.concrete.f_ctm
+            # self._epsilon_cu3 = self.concrete._epsilon_cu3
+            # self._E_s = self.steel_bar.E_s
+            self._V_Ed_1: Quantity = 0 * kN
+            self._V_Ed_2: Quantity = 0 * kN
+            self._N_Ed: Quantity = 0 * kN
+            self._M_Ed: Quantity = 0 * kNm
+            self._sigma_cd: Quantity = 0 * MPa
+            self._V_Rd_c: Quantity = 0 * kN
+            self._V_Rd_s: Quantity = 0 * kN
+            self._V_Rd_max: Quantity = 0 * kN
+            self._V_Rd: Quantity = 0 * kN
             self._k_value: float = 0
-            self._alpha_cc: float = 0
-            self._gamma_c: float = 0
-            self._gamma_s: float = 0
-            self._f_ywk: PlainQuantity = 0 * MPa
-            self._f_ywd: PlainQuantity = 0 * MPa
-            self._f_yd: PlainQuantity = 0 * MPa
-            self._f_cd: PlainQuantity = 0 * MPa
+            self._f_ywk: Quantity = 0 * MPa
+            self._f_ywd: Quantity = 0 * MPa
+            self._f_yd: Quantity = 0 * MPa
+            self._f_cd: Quantity = 0 * MPa
             self._A_p = 0 * cm**2  # No prestressed for now
-            self._sigma_cp: PlainQuantity = 0 * MPa
+            self._sigma_cp: Quantity = 0 * MPa
             self._theta: float = 0
             self._cot_theta: float = 0
-            self._z: PlainQuantity = 0 * cm
+            self._z: Quantity = 0 * cm
 
     ##########################################################
     # SET LONGITUDINAL AND TRANSVERSE REBAR AND UPDATE ATTRIBUTES
@@ -214,8 +253,8 @@ class RectangularBeam(RectangularSection):
     def set_transverse_rebar(
         self,
         n_stirrups: int = 0,
-        d_b: PlainQuantity = 0 * mm,
-        s_l: PlainQuantity = 0 * cm,
+        d_b: Quantity = 0 * mm,
+        s_l: Quantity = 0 * cm,
     ) -> None:
         """Sets the transverse rebar in the beam section."""
         self._stirrup_n = n_stirrups
@@ -232,13 +271,13 @@ class RectangularBeam(RectangularSection):
     def set_longitudinal_rebar_bot(
         self,
         n1: int = 0,
-        d_b1: PlainQuantity = 0 * mm,
+        d_b1: Quantity = 0 * mm,
         n2: int = 0,
-        d_b2: PlainQuantity = 0 * mm,
+        d_b2: Quantity = 0 * mm,
         n3: int = 0,
-        d_b3: PlainQuantity = 0 * mm,
+        d_b3: Quantity = 0 * mm,
         n4: int = 0,
-        d_b4: PlainQuantity = 0 * mm,
+        d_b4: Quantity = 0 * mm,
     ) -> None:
         """Update the bottom rebar configuration and recalculate attributes."""
         self._n1_b = n1 or self._n1_b
@@ -254,13 +293,13 @@ class RectangularBeam(RectangularSection):
     def set_longitudinal_rebar_top(
         self,
         n1: int,
-        d_b1: PlainQuantity,
+        d_b1: Quantity,
         n2: int = 0,
-        d_b2: PlainQuantity = 0 * mm,
+        d_b2: Quantity = 0 * mm,
         n3: int = 0,
-        d_b3: PlainQuantity = 0 * mm,
+        d_b3: Quantity = 0 * mm,
         n4: int = 0,
-        d_b4: PlainQuantity = 0 * mm,
+        d_b4: Quantity = 0 * mm,
     ) -> None:
         """Update the top rebar configuration and recalculate attributes."""
         self._n1_t = n1 or self._n1_t
@@ -297,23 +336,23 @@ class RectangularBeam(RectangularSection):
         Calculates the maximum clear spacing between bars for the bottom rebar layers.
 
         Returns:
-            PlainQuantity: The maximum clear spacing between bars in either the first or second layer.
+            Quantity: The maximum clear spacing between bars in either the first or second layer.
         """
 
         def layer_clear_spacing(
-            n_a: int, d_a: PlainQuantity, n_b: int, d_b: PlainQuantity
-        ) -> PlainQuantity:
+            n_a: int, d_a: Quantity, n_b: int, d_b: Quantity
+        ) -> Quantity:
             """
             Helper function to calculate clear spacing for a given layer.
 
             Parameters:
                 n_a (int): Number of bars in the first group of the layer.
-                d_a (PlainQuantity): Diameter of bars in the first group of the layer.
+                d_a (Quantity): Diameter of bars in the first group of the layer.
                 n_b (int): Number of bars in the second group of the layer.
-                d_b (PlainQuantity): Diameter of bars in the second group of the layer.
+                d_b (Quantity): Diameter of bars in the second group of the layer.
 
             Returns:
-                PlainQuantity: Clear spacing for the given layer.
+                Quantity: Clear spacing for the given layer.
             """
             effective_width = self.width - 2 * (self.c_c + self._stirrup_d_b)
             total_bars = n_a + n_b
@@ -358,8 +397,16 @@ class RectangularBeam(RectangularSection):
         # Calculate the vertical positions of the bar layers
         y1_b = self._d_b1_b / 2
         y2_b = self._d_b2_b / 2
-        y3_b = max(self._d_b1_b, self._d_b2_b) + self.layers_spacing + self._d_b3_b / 2
-        y4_b = max(self._d_b1_b, self._d_b2_b) + self.layers_spacing + self._d_b4_b / 2
+        y3_b = (
+            max(self._d_b1_b, self._d_b2_b)
+            + self.settings.layers_spacing
+            + self._d_b3_b / 2
+        )
+        y4_b = (
+            max(self._d_b1_b, self._d_b2_b)
+            + self.settings.layers_spacing
+            + self._d_b4_b / 2
+        )
         # Calculate the total area of each layer
         area_1_b = (
             self._n1_b * self._d_b1_b**2 * np.pi / 4
@@ -381,8 +428,16 @@ class RectangularBeam(RectangularSection):
         # Calculate the vertical positions of the bar layers
         y1_t = self._d_b1_t / 2
         y2_t = self._d_b2_t / 2
-        y3_t = max(self._d_b1_t, self._d_b2_t) + self.layers_spacing + self._d_b3_t / 2
-        y4_t = max(self._d_b1_t, self._d_b2_t) + self.layers_spacing + self._d_b4_t / 2
+        y3_t = (
+            max(self._d_b1_t, self._d_b2_t)
+            + self.settings.layers_spacing
+            + self._d_b3_t / 2
+        )
+        y4_t = (
+            max(self._d_b1_t, self._d_b2_t)
+            + self.settings.layers_spacing
+            + self._d_b4_t / 2
+        )
 
         # Calculate the total area of each layer
         area_1_t = (
@@ -412,8 +467,8 @@ class RectangularBeam(RectangularSection):
         """Update effective heights and depths for moment and shear calculations."""
         self._c_mec_bot = self.c_c + self._stirrup_d_b + self._bot_rebar_centroid
         self._c_mec_top = self.c_c + self._stirrup_d_b + self._top_rebar_centroid
-        self._d_bot = self._height - self._c_mec_bot
-        self._d_top = self._height - self._c_mec_top
+        self._d_bot = self.height - self._c_mec_bot
+        self._d_top = self.height - self._c_mec_top
         # Use bottom or top effective height
         self._d_shear = min(self._d_bot, self._d_top)
 
@@ -521,7 +576,9 @@ class RectangularBeam(RectangularSection):
                 ]
 
         # Compile all results into a single DataFrame
-        all_results = pd.concat(self._flexure_results_list, ignore_index=True)
+        all_data = pd.concat(self._flexure_results_list, ignore_index=True)
+        units_row = self._get_units_row_flexure()
+        all_results = pd.concat([units_row, all_data], ignore_index=True)
 
         # Store limiting cases
         self._limiting_case_flexure_top = limiting_case_top
@@ -606,7 +663,9 @@ class RectangularBeam(RectangularSection):
                 raise ValueError(
                     f"Shear design method not implemented for concrete type: {type(self.concrete).__name__}"
                 )  # noqa: E501
+
             self._shear_results_list.append(result)
+
             self._shear_results_detailed_list[force.id] = {
                 "forces": self._forces_shear.copy(),
                 "shear_reinforcement": self._shear_reinforcement.copy(),
@@ -625,15 +684,81 @@ class RectangularBeam(RectangularSection):
                 ]
 
         # Compile all results into a single DataFrame
-        all_results = pd.concat(self._shear_results_list, ignore_index=True)
+        all_data = pd.concat(self._shear_results_list, ignore_index=True)
+        units_row = self._get_units_row_shear()
+        all_results = pd.concat([units_row, all_data], ignore_index=True)
 
         # Identify the most limiting case by Demand-to-Capacity Ratio (DCR) or other criteria
-        self.limiting_case_shear = all_results.loc[
-            all_results["DCR"].idxmax()
+        self.limiting_case_shear = all_data.loc[
+            all_data["DCR"].idxmax()
         ]  # Select row with highest DCR
 
         self._shear_checked = True  # Mark shear as checked
         return all_results
+
+    def _get_units_row_shear(self) -> pd.DataFrame:
+        if isinstance(self.concrete, Concrete_EN_1992_2004):
+            # Orden exacto de columnas para EN 1992
+            return pd.DataFrame(
+                [
+                    {
+                        "Label": "",
+                        "Av,min": "cm²/m",
+                        "Av,req": "cm²/m",
+                        "Av": "cm²/m",
+                        "VEd,1": "kN",
+                        "VEd,2": "kN",
+                        "VRd,c": "kN",
+                        "VRd,s": "kN",
+                        "VRd": "kN",
+                        "VRd,max": "kN",
+                        "VEd,1<VRd,max": "",
+                        "VEd,2<VRd": "",
+                        "DCR": "",
+                    }
+                ]
+            )
+        else:
+            return pd.DataFrame(
+                [
+                    {
+                        "Label": "",
+                        "Comb.": "",
+                        "Av,min": "cm²/m",
+                        "Av,req": "cm²/m",
+                        "Av": "cm²/m",
+                        "Vu": "kN",
+                        "Nu": "kN",
+                        "ØVc": "kN",
+                        "ØVs": "kN",
+                        "ØVn": "kN",
+                        "ØVmax": "kN",
+                        "Vu<ØVmax": "",
+                        "Vu<ØVn": "",
+                        "DCR": "",
+                    }
+                ]
+            )
+
+    def _get_units_row_flexure(self) -> pd.DataFrame:
+        return pd.DataFrame(
+            [
+                {
+                    "Label": "",
+                    "Comb.": "",
+                    "Position": "",
+                    "As,min": "cm²",
+                    "As,req top": "cm²",
+                    "As,req bot": "cm²",
+                    "As": "cm²",
+                    # "c/d": "",  # Uncomment if you include this field later
+                    "Mu": "kNm",
+                    "ØMn": "kNm",
+                    "Mu<ØMn": "",
+                    "DCR": "",
+                }
+            ]
+        )
 
     ##########################################################
     # RESULTS
@@ -1220,7 +1345,7 @@ class RectangularBeam(RectangularSection):
         doc_builder.save(f"Concrete beam shear check {self.concrete.design_code}.docx")
 
     def _format_longitudinal_rebar_string(
-        self, n1: int, d_b1: PlainQuantity, n2: int = 0, d_b2: PlainQuantity = 0 * mm
+        self, n1: int, d_b1: Quantity, n2: int = 0, d_b2: Quantity = 0 * mm
     ) -> str:
         """
         Returns a formatted string representing the rebars and their diameters.
@@ -1252,7 +1377,7 @@ class RectangularBeam(RectangularSection):
         height_cm: float = self.height.to("cm").magnitude
         c_c_cm: float = self.c_c.to("cm").magnitude
         stirrup_d_b_cm: float = self._stirrup_d_b.to("cm").magnitude
-        layers_spacing_cm: float = self.layers_spacing.to("cm").magnitude
+        layers_spacing_cm: float = self.settings.layers_spacing.to("cm").magnitude
 
         # Calculate rebar positions
         # Bottom rebars
@@ -1324,10 +1449,10 @@ class RectangularBeam(RectangularSection):
         stirrup_d_b_cm: float,
         layers_spacing_cm: float,
         n1: int,
-        d_b1: PlainQuantity,
+        d_b1: Quantity,
         n2: int,
-        d_b2: PlainQuantity,
-        max_db: PlainQuantity,
+        d_b2: Quantity,
+        max_db: Quantity,
         is_bottom: bool = True,
         is_second_layer: bool = False,
     ) -> None:
@@ -1397,253 +1522,3 @@ class RectangularBeam(RectangularSection):
                     fill=True,
                 )
                 self._ax.add_patch(circle)
-
-
-##########################################################################################################
-
-
-def clear_console() -> None:
-    """
-    Clears the console based on the operating system.
-    """
-    if os.name == "nt":  # For Windows
-        os.system("cls")
-    else:  # For macOS and Linux
-        os.system("clear")
-
-
-def test_on_determine_nominal_moment_ACI_318_19() -> None:
-    concrete = Concrete_ACI_318_19(name="fc 4000", f_c=4000 * psi)
-    steelBar = SteelBar(name="fy 60000", f_y=60 * ksi)
-    custom_settings = {"clear_cover": 1.5 * inch}
-    beam = RectangularBeam(
-        label="B-12x24",
-        concrete=concrete,
-        steel_bar=steelBar,
-        width=12 * inch,
-        height=24 * inch,
-        settings=custom_settings,
-    )
-
-    beam.set_longitudinal_rebar_bot(
-        n1=2,
-        d_b1=1.128 * inch,
-        n2=1,
-        d_b2=1.128 * inch,
-        n3=2,
-        d_b3=1 * inch,
-        n4=1,
-        d_b4=1 * inch,
-    )
-    beam.set_longitudinal_rebar_top(
-        n1=2,
-        d_b1=1.128 * inch,
-        n2=1,
-        d_b2=1.128 * inch,
-        n3=2,
-        d_b3=1 * inch,
-        n4=1,
-        d_b4=1 * inch,
-    )
-
-    f = Forces(label="Test_01", M_y=400 * kip * ft)
-    beam._determine_nominal_moment_ACI_318_19(f)
-
-
-def flexure_design_test() -> None:
-    # clear_console()
-    concrete = Concrete_ACI_318_19(name="C25", f_c=25 * MPa)
-    steelBar = SteelBar(name="ADN 420", f_y=420 * MPa)
-    custom_settings = {"clear_cover": 2.5 * cm}
-    beam = RectangularBeam(
-        label="101",
-        concrete=concrete,
-        steel_bar=steelBar,
-        width=15 * cm,
-        height=50 * cm,
-        settings=custom_settings,
-    )
-    f1 = Forces(label="C1", M_y=20 * kNm)
-    f2 = Forces(label="C2", M_y=-20 * kNm)
-    forces = [f1, f2]
-    results = beam.design_flexure(forces)
-    # print(beam.flexure_design_results_bot,'\n', beam.flexure_design_results_top)
-    print(results)
-    # beam.flexure_results_detailed()
-
-
-def flexure_design_test_calcpad_example() -> None:
-    concrete = Concrete_ACI_318_19(name="fc 4000", f_c=4000 * psi)
-    steelBar = SteelBar(name="fy 60000", f_y=60 * ksi)
-    custom_settings = {"clear_cover": 1.5 * inch}
-    beam = RectangularBeam(
-        label="B-12x24",
-        concrete=concrete,
-        steel_bar=steelBar,
-        width=12 * inch,
-        height=24 * inch,
-        settings=custom_settings,
-    )
-
-    # beam.set_longitudinal_rebar_bot(n1=2,d_b1=1.375*inch, n3=2,d_b3=1.27*inch)
-    # beam.set_longitudinal_rebar_top(n1=2,d_b1=1.375*inch, n3=2,d_b3=1.27*inch)
-
-    f = Forces(label="Test_01", V_z=40 * kip, M_y=400 * kip * ft)
-    f2 = Forces(label="Test_01", V_z=100 * kip, M_y=-400 * kip * ft)
-    forces = [f, f2]
-
-    flexure_results = beam._design_flexure(forces)
-    print(flexure_results)
-
-
-def flexure_check_test() -> None:
-    clear_console()
-    concrete = Concrete_ACI_318_19(name="H-25", f_c=25 * MPa)
-    steelBar = SteelBar(name="420", f_y=420 * MPa)
-
-    beam = RectangularBeam(
-        label="101",
-        concrete=concrete,
-        steel_bar=steelBar,
-        width=20 * cm,
-        height=60 * cm,
-    )
-
-    # beam.set_longitudinal_rebar_bot(n1=2,d_b1=20*mm)
-    beam.set_longitudinal_rebar_bot(
-        n1=2, d_b1=12 * mm, n2=1, d_b2=12 * mm, n3=2, d_b3=12 * mm, n4=1, d_b4=10 * mm
-    )
-    beam.set_longitudinal_rebar_top(n1=2, d_b1=16 * mm)
-    f1 = Forces(label="D", M_y=0 * kNm, V_z=50 * kN)
-    f2 = Forces(label="L", M_y=-100 * kNm)
-    f3 = Forces(label="W", M_y=-50 * kNm)
-    f4 = Forces(label="S", M_y=110 * kNm)
-    forces = [f1, f2, f3, f4]
-    beam.check_flexure(forces)
-
-    # beam.check_shear()
-    beam.flexure_results_detailed()
-    # beam.flexure_results_detailed_doc()
-    # beam.shear_results_detailed_doc()
-
-
-def shear_ACI_metric() -> None:
-    concrete = Concrete_ACI_318_19(name="C30", f_c=30 * MPa)
-    steelBar = SteelBar(name="ADN 420", f_y=420 * MPa)
-    custom_settings = {"clear_cover": 30 * mm}
-    beam = RectangularBeam(
-        label="101",
-        concrete=concrete,
-        steel_bar=steelBar,
-        width=20 * cm,
-        height=50 * cm,
-        settings=custom_settings,
-    )
-    f1 = Forces(label="1.4D", V_z=100 * kN)
-    f2 = Forces(label="1.2D+1.6L", V_z=1.55 * kN)
-    f3 = Forces(label="W", V_z=2.20 * kN)
-    f4 = Forces(label="S", V_z=8.0 * kN)
-    f5 = Forces(label="E", V_z=1.0 * kN)
-    forces = [f1, f2, f3, f4, f5]
-    beam.set_longitudinal_rebar_bot(n1=2, d_b1=16 * mm)
-    # beam.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=20*cm)
-    # results = beam.check_shear()
-    results = beam._design_shear(forces)
-    print(results)
-    print(beam.shear_design_results)
-    # beam.shear_results_detailed()
-    # print(beam.shear_design_results)
-    # print(beam.results)
-    # beam.shear_results_detailed_doc()
-
-
-def shear_ACI_imperial() -> None:
-    concrete = Concrete_ACI_318_19(name="C4", f_c=4000 * psi)
-    steelBar = SteelBar(name="ADN 420", f_y=60 * ksi)
-    custom_settings = {"clear_cover": 1.5 * inch}
-    beam = RectangularBeam(
-        label="102",
-        concrete=concrete,
-        steel_bar=steelBar,
-        width=10 * inch,
-        height=16 * inch,
-        settings=custom_settings,
-    )
-
-    # f1 = Forces(label='D', V_z=37.727*kip, N_x=20*kip)
-    f1 = Forces(label="D", V_z=37.727 * kip)
-    # f1 = Forces(label='D', V_z=8*kip)
-    # f2 = Forces(label='L', V_z=6*kip) # No shear reinforcing
-    forces = [f1]
-    beam.set_transverse_rebar(n_stirrups=1, d_b=0.5 * inch, s_l=6 * inch)
-
-    # beam.set_longitudinal_rebar_bot(n1=2, d_b1=0.625*inch)
-    print(beam._A_v)
-    results = beam._check_shear(forces)
-    # results = beam.design_shear()
-    print(results)
-    # section.design_shear(f, A_s=0.847*inch**2)
-    beam.shear_results_detailed()
-    # section.shear_results_detailed_doc()
-
-
-def rebar() -> None:
-    concrete = Concrete_ACI_318_19(name="H30", f_c=30 * MPa)
-    steelBar = SteelBar(name="ADN 420", f_y=420 * MPa)
-    custom_settings = {"clear_cover": 30 * mm, "stirrup_diameter_ini": 8 * mm}
-    section = RectangularBeam(
-        label="V 20x50",
-        concrete=concrete,
-        steel_bar=steelBar,
-        width=20 * cm,
-        height=50 * cm,
-        settings=custom_settings,
-    )
-    as_req = 7 * cm**2
-
-    beam_rebar = Rebar(section)
-    long_rebar_df = beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=as_req)
-    best_design = beam_rebar.longitudinal_rebar_design
-    print(long_rebar_df, best_design)
-
-
-def rebar_df() -> None:
-    concrete = Concrete_ACI_318_19(name="H30", f_c=30 * MPa)
-    steelBar = SteelBar(name="ADN 420", f_y=420 * MPa)
-    custom_settings = {"clear_cover": 30 * mm, "stirrup_diameter_ini": 8 * mm}
-    section = RectangularBeam(
-        label="V 20x50",
-        concrete=concrete,
-        steel_bar=steelBar,
-        width=20 * cm,
-        height=50 * cm,
-        settings=custom_settings,
-    )
-    beam_rebar = Rebar(section)
-    # Create a list of required steel areas from 0.5 to 10 with a step of 0.5 cm²
-    as_req_list = np.arange(0.5, 10.5, 0.5) * cm**2
-    # Initialize an empty DataFrame to store the results
-    results_df = pd.DataFrame()
-
-    # Loop through each required steel area
-    for as_req in as_req_list:
-        # Run the longitudinal_rebar_ACI_19 method
-        long_rebar_df = beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=as_req)
-
-        # Extract the first row of the resulting DataFrame
-        first_row = long_rebar_df.iloc[0:1].copy()
-
-        # Add a column to store the required steel area
-        first_row[
-            "as_req"
-        ] = as_req.magnitude  # Store the magnitude (value without units)
-
-        # Append the first row to the results DataFrame
-        results_df = pd.concat([results_df, first_row], ignore_index=True)
-
-    # Display the results DataFrame
-    print(results_df)
-
-
-if __name__ == "__main__":
-    flexure_check_test()

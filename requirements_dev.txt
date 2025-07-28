@@ -18,3 +18,8 @@ sphinx_design
 sphinx-copybutton
 pre-commit
 black
+python-docx
+matplotlib
+openpyxl
+devtools
+types-tabulate
