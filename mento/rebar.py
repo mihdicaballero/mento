@@ -5,10 +5,11 @@ import pandas as pd
 import numpy as np
 
 from mento.units import psi, mm, cm, inch, MPa
+from mento.material import Concrete_ACI_318_19
 
 if TYPE_CHECKING:
     from mento.beam import RectangularBeam
-    from pint.facets.plain import PlainQuantity
+    from pint import Quantity
     from pandas import DataFrame
 
 
@@ -18,16 +19,9 @@ class Rebar:
         Initializes the Rebar object with the associated beam and settings.
         """
         self.beam = beam
-        self.min_clear_spacing = self.beam.settings.get_setting("clear_spacing")
-        self.vibrator_size = self.beam.settings.get_setting("vibrator_size")
-        self.max_diameter_diff = self.beam.settings.get_setting("max_diameter_diff")
-        self.max_bars_per_layer = self.beam.settings.get_setting("max_bars_per_layer")
-        self.min_long_rebar = self.beam.settings.get_setting(
-            "minimum_longitudinal_diameter"
-        )
         self._long_combos_df: DataFrame = None
         self._trans_combos_df: DataFrame = None
-        self._clear_spacing: PlainQuantity = 0 * mm
+        self._clear_spacing: Quantity = 0 * mm
         # Unit system default rebar
         if self.beam.concrete.unit_system == "metric":
             self.rebar_diameters = [
@@ -70,8 +64,8 @@ class Rebar:
     ##########################################################
 
     def calculate_max_spacing_ACI_318_19(
-        self, V_s_req: PlainQuantity, A_cv: PlainQuantity
-    ) -> Tuple[PlainQuantity, PlainQuantity]:
+        self, V_s_req: Quantity, A_cv: Quantity
+    ) -> Tuple[Quantity, Quantity]:
         """
         Calculate the maximum allowable spacing across the length and width of the beam
         based on design requirements.
@@ -90,7 +84,8 @@ class Rebar:
         """
 
         f_c = self.beam.concrete.f_c
-        lambda_factor = self.beam.settings.get_setting("lambda")
+        if isinstance(self.beam.concrete, Concrete_ACI_318_19):
+            lambda_factor = self.beam.concrete.lambda_factor
 
         # Determine maximum spacing based on V_s_req condition
         # Maximum spacing for lower shear demand
@@ -114,7 +109,7 @@ class Rebar:
 
     def calculate_max_spacing_EN_1992_2004(
         self, alpha: float
-    ) -> Tuple[PlainQuantity, PlainQuantity]:
+    ) -> Tuple[Quantity, Quantity]:
         """
         Calculate the maximum allowable spacing across the length and width of the beam
         based on design requirements for EN 1992-2004.
@@ -133,7 +128,7 @@ class Rebar:
 
         return s_max_l, s_max_w
 
-    def transverse_rebar_ACI_318_19(self, V_s_req: PlainQuantity) -> Any:
+    def transverse_rebar_ACI_318_19(self, V_s_req: Quantity) -> Any:
         if self.beam.concrete.unit_system == "metric":
             valid_diameters = self.rebar_diameters[2:5]  # Minimum 10 mm
         else:
@@ -144,7 +139,7 @@ class Rebar:
 
         return valid_diameters, s_max_l, s_max_w
 
-    def transverse_rebar_CIRSOC_201_25(self, V_s_req: PlainQuantity) -> Any:
+    def transverse_rebar_CIRSOC_201_25(self, V_s_req: Quantity) -> Any:
         valid_diameters = self.rebar_diameters[0:5]  # Minimum 6 mm
 
         A_cv = self.beam.width * self.beam._d_shear
@@ -160,7 +155,7 @@ class Rebar:
         return valid_diameters, s_max_l, s_max_w
 
     def transverse_rebar(
-        self, A_v_req: PlainQuantity, V_s_req: PlainQuantity, alpha: float
+        self, A_v_req: Quantity, V_s_req: Quantity, alpha: float
     ) -> DataFrame:
         """
         Computes the required transverse reinforcement based on ACI 318-19.
@@ -200,7 +195,7 @@ class Rebar:
 
             # Start with maximum allowed spacing s_max_l
             if self.beam.concrete.unit_system == "metric":
-                s_l: PlainQuantity = math.floor(s_max_l.to("cm").magnitude) * cm
+                s_l: Quantity = math.floor(s_max_l.to("cm").magnitude) * cm
             else:
                 s_l = math.floor(s_max_l.to("inch").magnitude) * inch
 
@@ -217,9 +212,7 @@ class Rebar:
 
                 A_db = self.rebar_areas[d_b]  # Area of a stirrup bar
                 A_vs = n_legs_actual * A_db  # Area of vertical stirrups
-                A_v: PlainQuantity = (
-                    A_vs / s_l
-                )  # Area of vertical stirrups per unit length
+                A_v: Quantity = A_vs / s_l  # Area of vertical stirrups per unit length
 
                 # Store the valid combination if spacing is also valid
                 if self.beam.concrete.unit_system == "metric":
@@ -295,7 +288,7 @@ class Rebar:
     # LONGITUDINAL REBAR DESIGN
     ##########################################################
 
-    def longitudinal_rebar_ACI_318_19(self, A_s_req: PlainQuantity) -> DataFrame:
+    def longitudinal_rebar_ACI_318_19(self, A_s_req: Quantity) -> DataFrame:
         """
         Computes the required longitudinal reinforcement based on ACI 318-19.
 
@@ -345,12 +338,12 @@ class Rebar:
 
                         # Iterate over possible numbers of bars in each group
                         for n2 in range(
-                            0, self.max_bars_per_layer + 1
+                            0, self.beam.settings.max_bars_per_layer + 1
                         ):  # n2 can be 0 or more
                             # Check spacing for the first set of bars
                             self._check_spacing(n1, n2, d_b1, d_b2, effective_width)
 
-                            if n1 + n2 > self.max_bars_per_layer:
+                            if n1 + n2 > self.beam.settings.max_bars_per_layer:
                                 continue  # Skip if the total bars in layer 1 exceed the limit
 
                             # Calculate area for layer 1
@@ -410,13 +403,15 @@ class Rebar:
 
                             # Now check combinations where bars are added in layer 2 (n3 and n4)
                             for n3 in [0, 2]:  # n3 can be 0 or fixed at 2 if present
-                                for n4 in range(0, self.max_bars_per_layer + 1):
+                                for n4 in range(
+                                    0, self.beam.settings.max_bars_per_layer + 1
+                                ):
                                     # Ensure layer 2 bars are not more than layer 1 bars
                                     if n3 + n4 > n1 + n2:
                                         continue  # Skip if layer 2 bars exceed layer 1 bars
                                     if n3 == 0 and n4 > 0:
                                         continue  # If n3 is 0, n4 must also be 0
-                                    if n3 + n4 > self.max_bars_per_layer:
+                                    if n3 + n4 > self.beam.settings.max_bars_per_layer:
                                         continue  # Skip if the total bars in layer 2 exceed the limit
 
                                     # Layer 2 area calculation handling zero values
@@ -499,16 +494,16 @@ class Rebar:
 
         return modified_df.head(10)
 
-    def longitudinal_rebar_EN_1992_2004(self, A_s_req: PlainQuantity) -> None:
+    def longitudinal_rebar_EN_1992_2004(self, A_s_req: Quantity) -> None:
         pass
 
     def _check_spacing(
         self,
         n1: int,
         n2: int,
-        d_b1: PlainQuantity,
-        d_b2: PlainQuantity,
-        effective_width: PlainQuantity,
+        d_b1: Quantity,
+        d_b2: Quantity,
+        effective_width: Quantity,
     ) -> bool:
         """
         Checks the clear spacing between rebars in a layer.
@@ -516,28 +511,28 @@ class Rebar:
         Parameters:
             n1 (int): Number of bars in the first group of the layer.
             n2 (int): Number of bars in the second group of the layer.
-            d_b1 (PlainQuantity): Diameter of bars in the first group of the layer.
-            d_b2 (PlainQuantity): Diameter of bars in the second group of the layer.
-            effective_width (PlainQuantity): The effective width available for bar placement.
+            d_b1 (Quantity): Diameter of bars in the first group of the layer.
+            d_b2 (Quantity): Diameter of bars in the second group of the layer.
+            effective_width (Quantity): The effective width available for bar placement.
 
         Returns:
             bool: True if the clear spacing satisfies the design limits, False otherwise.
         """
 
         def layer_clear_spacing(
-            n_a: int, d_a: PlainQuantity, n_b: int, d_b: PlainQuantity
-        ) -> PlainQuantity:
+            n_a: int, d_a: Quantity, n_b: int, d_b: Quantity
+        ) -> Quantity:
             """
             Helper function to calculate clear spacing for a given layer.
 
             Parameters:
                 n_a (int): Number of bars in the first group of the layer.
-                d_a (PlainQuantity): Diameter of bars in the first group of the layer.
+                d_a (Quantity): Diameter of bars in the first group of the layer.
                 n_b (int): Number of bars in the second group of the layer.
-                d_b (PlainQuantity): Diameter of bars in the second group of the layer.
+                d_b (Quantity): Diameter of bars in the second group of the layer.
 
             Returns:
-                PlainQuantity: Clear spacing for the given layer.
+                Quantity: Clear spacing for the given layer.
             """
             total_bars = n_a + n_b
             if total_bars <= 1:
@@ -550,7 +545,9 @@ class Rebar:
 
         # Determine the maximum clear spacing limit
         max_clear_spacing = max(
-            self.min_clear_spacing, self.vibrator_size, max(d_b1, d_b2)
+            self.beam.settings.min_clear_spacing,
+            self.beam.settings.vibrator_size,
+            max(d_b1, d_b2),
         )
 
         # Check if the clear spacing is within limits
@@ -563,7 +560,7 @@ class Rebar:
         """
         for i, d1 in enumerate(diameters):
             for d2 in diameters[i + 1 :]:
-                if abs(d1 - d2) > self.max_diameter_diff:
+                if abs(d1 - d2) > self.beam.settings.max_diameter_diff:
                     return False
         return True
 
@@ -651,7 +648,7 @@ class Rebar:
 
         return df
 
-    def longitudinal_rebar(self, A_s_req: PlainQuantity) -> Dict[str, Any]:
+    def longitudinal_rebar(self, A_s_req: Quantity) -> Dict[str, Any]:
         """
         Selects the appropriate longitudinal rebar method based on the design code.
         """
@@ -671,7 +668,7 @@ class Rebar:
             )
 
     # Factory method to select the longitudinal rebar method
-    # def transverse_rebar(self, A_v_req: PlainQuantity, V_s_req: PlainQuantity) -> DataFrame:
+    # def transverse_rebar(self, A_v_req: Quantity, V_s_req: Quantity) -> DataFrame:
     #     """
     #     Selects the appropriate transverse rebar method based on the design code.
     #     """

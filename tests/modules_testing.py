@@ -94,31 +94,50 @@ def material() -> None:
 
 
 def shear_EN_1992() -> None:
-    concrete = Concrete_EN_1992_2004(name="C25", f_ck=25 * MPa)
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
     steelBar = SteelBar(name="B500S", f_y=500 * MPa)
-    custom_settings = {"clear_cover": 2.5 * cm}
     beam = RectangularBeam(
         label="101",
         concrete=concrete,
         steel_bar=steelBar,
-        width=30 * cm,
+        width=20 * cm,
         height=60 * cm,
-        settings=custom_settings,
+        c_c=2.6 * cm,
     )
     # f = Forces(V_z=100*kN, M_y=100*kNm)
-    f = Forces(V_z=30 * kN, N_x=0 * kN)
+    f = Forces(V_z=100 * kN, N_x=0 * kN)
     beam.set_transverse_rebar(n_stirrups=1, d_b=6 * mm, s_l=25 * cm)
-    beam.set_longitudinal_rebar_bot(
-        n1=2, d_b1=32 * mm, n2=3, d_b2=20 * mm, n3=2, d_b3=16 * mm, n4=2, d_b4=12 * mm
-    )
-    beam.set_longitudinal_rebar_top(
-        n1=2, d_b1=25 * mm, n2=3, d_b2=16 * mm, n3=2, d_b3=10 * mm, n4=1, d_b4=8 * mm
-    )
+    beam.set_longitudinal_rebar_bot(n1=4, d_b1=16 * mm)
     node = Node(section=beam, forces=f)
     results = node.check_shear()
     # results = node.design_shear()
     print(results)
-    beam.plot()
+    print(node.shear_results_detailed())
+    # beam.plot()
+
+
+def shear_ACI_318_19() -> None:
+    concrete = Concrete_ACI_318_19(name="C4", f_c=4000 * psi)
+    steelBar = SteelBar(name="ADN 420", f_y=60 * ksi)
+    section = RectangularBeam(
+        concrete=concrete,
+        steel_bar=steelBar,
+        c_c=1.5 * inch,
+        width=10 * inch,
+        height=16 * inch,
+        label="Test",
+    )
+    # section.set_transverse_rebar(
+    #     n_stirrups=0, d_b=0.375 * inch, s_l=6 * inch
+    # )
+    section.set_longitudinal_rebar_bot(n1=2, d_b1=0.625 * inch)
+
+    f = Forces(label="ELU_01", V_z=30 * kip)
+    node_1 = Node(section=section, forces=f)
+    # section.plot()
+    node_1.check_shear()
+    print(node_1.check_shear())
+    print(node_1.shear_results_detailed())
 
 
 def flexure_ACI_318_19() -> None:
@@ -153,19 +172,79 @@ def flexure_ACI_318_19() -> None:
         d_b4=1 * inch,
     )
 
-    f = Forces(label="Test_01", M_y=400 * kip * ft)
+    f = Forces(label="Test_01", M_y=400 * kip * ft, V_z=10 * kip)
     node_1 = Node(section=section, forces=f)
     # section.plot()
     node_1.check_flexure()
     print(node_1.check_flexure())
-    node_1.flexure_results_detailed()
+    node_1.check_shear()
+    print(node_1.check_shear())
+
+
+def rebar() -> None:
+    concrete = Concrete_ACI_318_19(name="H30", f_c=30 * MPa)
+    steelBar = SteelBar(name="ADN 420", f_y=420 * MPa)
+    custom_settings = {"clear_cover": 30 * mm, "stirrup_diameter_ini": 8 * mm}
+    section = RectangularBeam(
+        label="V 20x50",
+        concrete=concrete,
+        steel_bar=steelBar,
+        width=20 * cm,
+        height=50 * cm,
+        settings=custom_settings,
+    )
+    as_req = 7 * cm**2
+
+    beam_rebar = Rebar(section)
+    long_rebar_df = beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=as_req)
+    best_design = beam_rebar.longitudinal_rebar_design
+    print(long_rebar_df, best_design)
+
+
+def rebar_df() -> None:
+    concrete = Concrete_ACI_318_19(name="H30", f_c=30 * MPa)
+    steelBar = SteelBar(name="ADN 420", f_y=420 * MPa)
+    custom_settings = {"clear_cover": 30 * mm, "stirrup_diameter_ini": 8 * mm}
+    section = RectangularBeam(
+        label="V 20x50",
+        concrete=concrete,
+        steel_bar=steelBar,
+        width=20 * cm,
+        height=50 * cm,
+        settings=custom_settings,
+    )
+    beam_rebar = Rebar(section)
+    # Create a list of required steel areas from 0.5 to 10 with a step of 0.5 cm²
+    as_req_list = np.arange(0.5, 10.5, 0.5) * cm**2
+    # Initialize an empty DataFrame to store the results
+    results_df = pd.DataFrame()
+
+    # Loop through each required steel area
+    for as_req in as_req_list:
+        # Run the longitudinal_rebar_ACI_19 method
+        long_rebar_df = beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=as_req)
+
+        # Extract the first row of the resulting DataFrame
+        first_row = long_rebar_df.iloc[0:1].copy()
+
+        # Add a column to store the required steel area
+        first_row[
+            "as_req"
+        ] = as_req.magnitude  # Store the magnitude (value without units)
+
+        # Append the first row to the results DataFrame
+        results_df = pd.concat([results_df, first_row], ignore_index=True)
+
+    # Display the results DataFrame
+    print(results_df)
 
 
 if __name__ == "__main__":
     # units()
     # settings()
-    material()
+    # material()
     # section()
     # rectangular()
     # shear_EN_1992()
+    shear_ACI_318_19()
     # flexure_ACI_318_19()

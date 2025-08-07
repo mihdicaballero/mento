@@ -76,6 +76,9 @@ class Section:
     def flexure_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
         pass
 
+    def _get_units_row_shear(self) -> None:
+        pass
+
     # Beam results for Jupyter Notebook
     @property
     def results(self) -> None:

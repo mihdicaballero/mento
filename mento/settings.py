@@ -9,8 +9,9 @@ _NOT_SET = object()
 
 @dataclass
 class BeamSettings:
-    """Settings for beam design with separate metric and imperial defaults.
-    Must input values with units (in metric or imperial)
+    """
+    Settings for beam design with separate metric and imperial defaults.
+    Can optionally be initialized with a `Concrete` material to determine the unit system.
 
     Available Parameters with Default Values:
     --------------------------------------

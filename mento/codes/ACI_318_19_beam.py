@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 from typing import TYPE_CHECKING, Dict, Any, cast
 import warnings
+from collections import OrderedDict
 
 from mento.material import Concrete_ACI_318_19
 from mento.rebar import Rebar
@@ -38,7 +39,10 @@ def _initialize_variables_ACI_318_19(self: "RectangularBeam", force: Forces) -> 
 
 def _calculate_shear_reinforcement_aci(self: "RectangularBeam") -> None:
     V_s = self._A_v * self.f_yt * self._d_shear  # Shear contribution of reinforcement
-    self._phi_V_s = self.phi_v * V_s  # Reduced shear contribution of reinforcement
+    if isinstance(self.concrete, Concrete_ACI_318_19):
+        self._phi_V_s = (
+            self.concrete.phi_v * V_s
+        )  # Reduced shear contribution of reinforcement
 
 
 def _calculate_effective_shear_area_aci(self: "RectangularBeam") -> None:
@@ -57,84 +61,105 @@ def _calculate_concrete_shear_strength_aci(self: "RectangularBeam") -> None:
     self._sigma_Nu = min(
         self._N_u / (6 * self.A_x), 0.05 * f_c
     )  # Axial stress influence
-    if self.concrete.unit_system == "metric":
-        V_cmin = 0 * kN
-        if self._A_v < self._A_v_min:
-            if self._A_s_tension == 0 * cm**2:
-                warnings.warn(
-                    "Longitudinal rebar As cannot be zero if A_v is less than A_v_min.",
-                    UserWarning,
+    if isinstance(self.concrete, Concrete_ACI_318_19):
+        if self.concrete.unit_system == "metric":
+            V_cmin = 0 * kN
+
+            if self._A_v < self._A_v_min:
+                if self._A_s_tension == 0 * cm**2:
+                    warnings.warn(
+                        "Longitudinal rebar As cannot be zero if A_v is less than A_v_min.",
+                        UserWarning,
+                    )
+                self._k_c_min = (
+                    0.66
+                    * self._lambda_s
+                    * self.concrete.lambda_factor
+                    * self._rho_w ** (1 / 3)
+                    * math.sqrt(f_c / MPa)
+                    * MPa
+                    + self._sigma_Nu
                 )
-            self._k_c_min = (
-                0.66
-                * self._lambda_s
-                * self.lambda_factor
-                * self._rho_w ** (1 / 3)
-                * math.sqrt(f_c / MPa)
-                * MPa
-                + self._sigma_Nu
-            )
+            else:
+                self._k_c_min = max(
+                    0.17 * self.concrete.lambda_factor * math.sqrt(f_c / MPa) * MPa
+                    + self._sigma_Nu,
+                    0.66
+                    * self.concrete.lambda_factor
+                    * self._rho_w ** (1 / 3)
+                    * math.sqrt(f_c / MPa)
+                    * MPa
+                    + self._sigma_Nu,
+                )
         else:
-            self._k_c_min = max(
-                0.17 * self.lambda_factor * math.sqrt(f_c / MPa) * MPa + self._sigma_Nu,
-                0.66
-                * self.lambda_factor
-                * self._rho_w ** (1 / 3)
-                * math.sqrt(f_c / MPa)
+            V_cmin = 0 * kip
+            if self._A_v < self._A_v_min:
+                self._k_c_min = (
+                    8
+                    * self._lambda_s
+                    * self.concrete.lambda_factor
+                    * self._rho_w ** (1 / 3)
+                    * math.sqrt(f_c / psi)
+                    * psi
+                    + self._sigma_Nu
+                )
+            else:
+                self._k_c_min = max(
+                    2 * self.concrete.lambda_factor * math.sqrt(f_c / psi) * psi
+                    + self._sigma_Nu,
+                    8
+                    * self.concrete.lambda_factor
+                    * self._rho_w ** (1 / 3)
+                    * math.sqrt(f_c / psi)
+                    * psi
+                    + self._sigma_Nu,
+                )
+        # Maximum concrete shear strength
+        if self.concrete.unit_system == "metric":
+            V_cmax = (
+                0.42
+                * self.concrete.lambda_factor
+                * math.sqrt(self.concrete.f_c / MPa)
                 * MPa
-                + self._sigma_Nu,
-            )
-    else:
-        V_cmin = 0 * kip
-        if self._A_v < self._A_v_min:
-            self._k_c_min = (
-                8
-                * self._lambda_s
-                * self.lambda_factor
-                * self._rho_w ** (1 / 3)
-                * math.sqrt(f_c / psi)
-                * psi
-                + self._sigma_Nu
-            )
+            ) * self._A_cv
         else:
-            self._k_c_min = max(
-                2 * self.lambda_factor * math.sqrt(f_c / psi) * psi + self._sigma_Nu,
-                8
-                * self.lambda_factor
-                * self._rho_w ** (1 / 3)
-                * math.sqrt(f_c / psi)
+            V_cmax = (
+                5
+                * self.concrete.lambda_factor
+                * math.sqrt(self.concrete.f_c / psi)
                 * psi
-                + self._sigma_Nu,
-            )
-    # Maximum concrete shear strength
-    if self.concrete.unit_system == "metric":
-        V_cmax = (
-            0.42 * self.lambda_factor * math.sqrt(self.concrete.f_c / MPa) * MPa
-        ) * self._A_cv
-    else:
-        V_cmax = (
-            5 * self.lambda_factor * math.sqrt(self.concrete.f_c / psi) * psi
-        ) * self._A_cv
-    self.V_c = min(V_cmax, max(V_cmin, self._k_c_min * self._A_cv))
-    self._phi_V_c = self.phi_v * self.V_c
+            ) * self._A_cv
+        self.V_c = min(V_cmax, max(V_cmin, self._k_c_min * self._A_cv))
+        self._phi_V_c = self.concrete.phi_v * self.V_c
 
 
 def _calculate_max_shear_capacity_aci(self: "RectangularBeam") -> None:
     "Formula for maximum total shear capacity (V_max)"
-    if self.concrete.unit_system == "metric":
-        V_max = (
-            self.V_c
-            + (0.66 * self.lambda_factor * math.sqrt(self.concrete.f_c / MPa) * MPa)
-            * self._A_cv
-        )
-    else:
-        V_max = (
-            self.V_c
-            + (8 * self.lambda_factor * math.sqrt(self.concrete.f_c / psi) * psi)
-            * self._A_cv
-        )
-    self._phi_V_max = self.phi_v * V_max
-    self._max_shear_ok = self._V_u < self._phi_V_max
+    if isinstance(self.concrete, Concrete_ACI_318_19):
+        if self.concrete.unit_system == "metric":
+            V_max = (
+                self.V_c
+                + (
+                    0.66
+                    * self.concrete.lambda_factor
+                    * math.sqrt(self.concrete.f_c / MPa)
+                    * MPa
+                )
+                * self._A_cv
+            )
+        else:
+            V_max = (
+                self.V_c
+                + (
+                    8
+                    * self.concrete.lambda_factor
+                    * math.sqrt(self.concrete.f_c / psi)
+                    * psi
+                )
+                * self._A_cv
+            )
+        self._phi_V_max = self.concrete.phi_v * V_max
+        self._max_shear_ok = self._V_u < self._phi_V_max
 
 
 def _calculate_A_v_min_ACI(self: "RectangularBeam", f_c: Quantity) -> None:
@@ -166,77 +191,81 @@ def _calculate_f_yt_aci(self: "RectangularBeam") -> Quantity:
 
 
 def _check_minimum_reinforcement_requirement_aci(self: "RectangularBeam") -> None:
-    if self.concrete.unit_system == "metric":
-        if (
-            self._V_u
-            < 0.083
-            * self.phi_v
-            * self.lambda_factor
-            * math.sqrt(self.concrete.f_c / MPa)
-            * MPa
-            * self._A_cv
-        ):
-            self._A_v_req = 0 * cm**2 / m
-            self._A_v_min = 0 * cm**2 / m
-            self._max_shear_ok = True
-        elif (
-            0.083
-            * self.phi_v
-            * self.lambda_factor
-            * math.sqrt(self.concrete.f_c / MPa)
-            * MPa
-            * self._A_cv
-            < self._V_u
-            < self._phi_V_max
-        ):
-            _calculate_A_v_min_ACI(self, self.concrete.f_c)
-            self._max_shear_ok = True
+    if isinstance(self.concrete, Concrete_ACI_318_19):
+        if self.concrete.unit_system == "metric":
+            if (
+                self._V_u
+                < 0.083
+                * self.concrete.phi_v
+                * self.concrete.lambda_factor
+                * math.sqrt(self.concrete.f_c / MPa)
+                * MPa
+                * self._A_cv
+            ):
+                self._A_v_req = 0 * cm**2 / m
+                self._A_v_min = 0 * cm**2 / m
+                self._max_shear_ok = True
+            elif (
+                0.083
+                * self.concrete.phi_v
+                * self.concrete.lambda_factor
+                * math.sqrt(self.concrete.f_c / MPa)
+                * MPa
+                * self._A_cv
+                < self._V_u
+                < self._phi_V_max
+            ):
+                _calculate_A_v_min_ACI(self, self.concrete.f_c)
+                self._max_shear_ok = True
+            else:
+                _calculate_A_v_min_ACI(self, self.concrete.f_c)
+                self._max_shear_ok = False
         else:
-            _calculate_A_v_min_ACI(self, self.concrete.f_c)
-            self._max_shear_ok = False
-    else:
-        if (
-            self._V_u
-            < self.phi_v
-            * self.lambda_factor
-            * math.sqrt(self.concrete.f_c / psi)
-            * psi
-            * self._A_cv
-        ):
-            self._A_v_req = 0 * inch**2 / ft
-            self._A_v_min = 0 * inch**2 / ft
-            self._max_shear_ok = True
-            # if self._V_u != 0*kN:
-            #     self._stirrup_d_b = 0*inch
-        elif (
-            self.phi_v
-            * self.lambda_factor
-            * math.sqrt(self.concrete.f_c / psi)
-            * psi
-            * self._A_cv
-            < self._V_u
-            < self._phi_V_max
-        ):
-            _calculate_A_v_min_ACI(self, self.concrete.f_c)
-            self._max_shear_ok = True
-        else:
-            _calculate_A_v_min_ACI(self, self.concrete.f_c)
-            self._max_shear_ok = False
+            if (
+                self._V_u
+                < self.concrete.phi_v
+                * self.concrete.lambda_factor
+                * math.sqrt(self.concrete.f_c / psi)
+                * psi
+                * self._A_cv
+            ):
+                self._A_v_req = 0 * inch**2 / ft
+                self._A_v_min = 0 * inch**2 / ft
+                self._max_shear_ok = True
+                # if self._V_u != 0*kN:
+                #     self._stirrup_d_b = 0*inch
+            elif (
+                self.concrete.phi_v
+                * self.concrete.lambda_factor
+                * math.sqrt(self.concrete.f_c / psi)
+                * psi
+                * self._A_cv
+                < self._V_u
+                < self._phi_V_max
+            ):
+                _calculate_A_v_min_ACI(self, self.concrete.f_c)
+                self._max_shear_ok = True
+            else:
+                _calculate_A_v_min_ACI(self, self.concrete.f_c)
+                self._max_shear_ok = False
 
 
 def _calculate_V_s_req(self: "RectangularBeam") -> None:
-    self._V_s_req = self._V_u - self._phi_V_c
-    self._A_v_req = max(
-        self._V_s_req / (self.phi_v * self.f_yt * self._d_shear), self._A_v_min
-    ).to("cm ** 2 / m")
+    if isinstance(self.concrete, Concrete_ACI_318_19):
+        self._V_s_req = self._V_u - self._phi_V_c
+        self._A_v_req = max(
+            self._V_s_req / (self.concrete.phi_v * self.f_yt * self._d_shear),
+            self._A_v_min,
+        ).to("cm ** 2 / m")
 
 
 def _calculate_total_shear_strength_aci(self: "RectangularBeam") -> None:
-    self._phi_V_n = self.phi_v * (self.V_c + self._A_v * self.f_yt * self._d_shear)
-    V_d_max = min(self._phi_V_n, self._phi_V_max)
-    self._DCRv = round(
-        abs((self._V_u.to("kN").magnitude / V_d_max.to("kN").magnitude)), 3
-    )
+    if isinstance(self.concrete, Concrete_ACI_318_19):
+        self._phi_V_n = self.concrete.phi_v * (
+            self.V_c + self._A_v * self.f_yt * self._d_shear
+        )
+        V_d_max = min(self._phi_V_n, self._phi_V_max)
+        self._DCRv = abs((self._V_u.to("kN").magnitude / V_d_max.to("kN").magnitude))
 
 
 def _calculate_rebar_spacing_aci(self: "RectangularBeam") -> None:
@@ -290,7 +319,7 @@ def _check_shear_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.DataFr
         # Check results and return DataFrame
         results = _compile_results_ACI_shear(self, force)
         _initialize_dicts_ACI_318_19_shear(self)
-        return pd.DataFrame([results], index=[0])
+        return results
     else:
         raise ValueError("Concrete type is not compatible with ACI 318-19 shear check.")
 
@@ -316,25 +345,24 @@ def _design_shear_ACI_318_19(self: "RectangularBeam", force: Forces) -> None:
     return None
 
 
-def _compile_results_ACI_shear(
-    self: "RectangularBeam", force: Forces
-) -> Dict[str, Any]:
-    return {
-        "Section Label": self.label,
-        "Load Combo": force.label,
-        "Av,min": self._A_v_min.to("cm ** 2 / m"),
-        "Av,req": self._A_v_req.to("cm ** 2 / m"),
-        "Av": self._A_v.to("cm ** 2 / m"),
-        "Vu": self._V_u.to("kN"),
-        "Nu": self._N_u.to("kN"),
-        "ØVc": self._phi_V_c.to("kN"),
-        "ØVs": self._phi_V_s.to("kN"),
-        "ØVn": self._phi_V_n.to("kN"),
-        "ØVmax": self._phi_V_max.to("kN"),
+def _compile_results_ACI_shear(self: "RectangularBeam", force: Forces) -> pd.DataFrame:
+    results = {
+        "Label": self.label,
+        "Comb.": force.label,
+        "Av,min": self._A_v_min.to("cm²/m").magnitude,
+        "Av,req": self._A_v_req.to("cm²/m").magnitude,
+        "Av": self._A_v.to("cm²/m").magnitude,
+        "Vu": self._V_u.to("kN").magnitude,
+        "Nu": self._N_u.to("kN").magnitude,
+        "ØVc": self._phi_V_c.to("kN").magnitude,
+        "ØVs": self._phi_V_s.to("kN").magnitude,
+        "ØVn": self._phi_V_n.to("kN").magnitude,
+        "ØVmax": self._phi_V_max.to("kN").magnitude,
         "Vu<ØVmax": self._max_shear_ok,
         "Vu<ØVn": self._V_u <= self._phi_V_n,
         "DCR": self._DCRv,
     }
+    return pd.DataFrame([results], index=[0])
 
 
 def _calculate_phi_ACI_318_19(
@@ -832,7 +860,7 @@ def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.Data
         # Calculate the design capacity ratio for the bottom side.
         self._DCRb_bot = round(
             self._M_u_bot.to("kN*m").magnitude / self._phi_M_n_bot.to("kN*m").magnitude,
-            3,
+            2,
         )
         self._DCRb_top = 0
     else:
@@ -851,7 +879,7 @@ def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.Data
         self._DCRb_top = round(
             -self._M_u_top.to("kN*m").magnitude
             / self._phi_M_n_top.to("kN*m").magnitude,
-            3,
+            2,
         )
         self._DCRb_bot = 0
 
@@ -1042,31 +1070,31 @@ def _compile_results_ACI_flexure_metric(
     # Create dictionaries for bottom and top rows
     if self._M_u >= 0:
         result = {
-            "Section Label": self.label,
-            "Load Combo": force.label,
+            "Label": self.label,
+            "Comb.": force.label,
             "Position": "Bottom",
-            "As,min": self._A_s_min_bot.to("cm ** 2"),
-            "As,req top": self._A_s_req_top.to("cm ** 2"),
-            "As,req bot": self._A_s_req_bot.to("cm ** 2"),
-            "As": self._A_s_bot.to("cm ** 2"),
+            "As,min": self._A_s_min_bot.to("cm ** 2").magnitude,
+            "As,req top": self._A_s_req_top.to("cm ** 2").magnitude,
+            "As,req bot": self._A_s_req_bot.to("cm ** 2").magnitude,
+            "As": self._A_s_bot.to("cm ** 2").magnitude,
             # 'c/d': self._c_d_bot,
-            "Mu": self._M_u_bot.to("kN*m"),
-            "ØMn": self._phi_M_n_bot.to("kN*m"),
+            "Mu": self._M_u_bot.to("kN*m").magnitude,
+            "ØMn": self._phi_M_n_bot.to("kN*m").magnitude,
             "Mu<ØMn": self._M_u_bot <= self._phi_M_n_bot,
             "DCR": self._DCRb_bot,
         }
     else:
         result = {
-            "Section Label": self.label,
-            "Load Combo": force.label,
+            "Label": self.label,
+            "Comb.": force.label,
             "Position": "Top",
-            "As,min": self._A_s_min_top.to("cm ** 2"),
-            "As,req top": self._A_s_req_top.to("cm ** 2"),
-            "As,req bot": self._A_s_req_bot.to("cm ** 2"),
-            "As": self._A_s_top.to("cm ** 2"),
+            "As,min": self._A_s_min_top.to("cm ** 2").magnitude,
+            "As,req top": self._A_s_req_top.to("cm ** 2").magnitude,
+            "As,req bot": self._A_s_req_bot.to("cm ** 2").magnitude,
+            "As": self._A_s_top.to("cm ** 2").magnitude,
             # 'c/d': self._c_d_top,
-            "Mu": self._M_u_top.to("kN*m"),
-            "ØMn": self._phi_M_n_top.to("kN*m"),
+            "Mu": self._M_u_top.to("kN*m").magnitude,
+            "ØMn": self._phi_M_n_top.to("kN*m").magnitude,
             "Mu<ØMn": -self._M_u_top <= self._phi_M_n_top,
             "DCR": self._DCRb_top,
         }
@@ -1096,8 +1124,8 @@ def _initialize_dicts_ACI_318_19_shear(self: "RectangularBeam") -> None:
                 round(self.concrete.f_c.to("MPa").magnitude, 2),
                 round(self.steel_bar.f_y.to("MPa").magnitude, 2),
                 round(self.concrete.density.to("kg/m**3").magnitude, 1),
-                self.settings.get_setting("lambda"),
-                self.settings.get_setting("phi_v"),
+                self.concrete.lambda_factor,
+                self.concrete.phi_v,
             ],
             "Unit": ["", "MPa", "MPa", "kg/m³", "", ""],
         }
@@ -1209,7 +1237,7 @@ def _initialize_dicts_ACI_318_19_shear(self: "RectangularBeam") -> None:
                 self._stirrup_n,
                 self._stirrup_d_b.to("mm").magnitude,
                 self._stirrup_s_l.to("cm").magnitude,
-                self._d_shear.to("cm").magnitude,
+                round(self._d_shear.to("cm").magnitude, 2),
                 round(self._A_v_min.to("cm**2/m").magnitude, 2),
                 round(self._A_v_req.to("cm**2/m").magnitude, 2),
                 round(self._A_v.to("cm**2/m").magnitude, 2),

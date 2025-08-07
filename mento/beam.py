@@ -22,7 +22,7 @@ from mento.rebar import Rebar
 from mento.units import MPa, psi, mm, inch, kN, m, cm, kNm, dimensionless, kip, ksi, ft
 from mento.results import Formatter, TablePrinter, DocumentBuilder, CUSTOM_COLORS
 from mento.forces import Forces
-from mento.settings import BeamSettings, GLOBAL_BEAM_SETTINGS
+from mento.settings import BeamSettings
 
 from mento.codes.EN_1992_2004_beam import (
     _check_shear_EN_1992_2004,
@@ -96,12 +96,13 @@ class RectangularBeam(RectangularSection):
 
     def __post_init__(self) -> None:
         super().__post_init__()  # Call parent attributes
+        self.settings = BeamSettings(unit_system=self.concrete.unit_system)
         self._initialize_attributes()
 
-    @property
-    def settings(self) -> BeamSettings:
-        """Access global design rules."""
-        return GLOBAL_BEAM_SETTINGS
+    # @property
+    # def settings(self) -> BeamSettings:
+    #     """Access global design rules."""
+    #     return GLOBAL_BEAM_SETTINGS
 
     ##########################################################
     # INITIALIZE ATTRIBUTES
@@ -110,6 +111,7 @@ class RectangularBeam(RectangularSection):
     def _initialize_attributes(self) -> None:
         """Initialize all attributes of the beam."""
         # Stirrups and shear attributes
+        self._stirrup_d_b = self.settings.stirrup_diameter_ini
         self._stirrup_s_l: Quantity = 0 * cm
         self._stirrup_s_w: Quantity = 0 * cm
         self._stirrup_s_max_l: Quantity = 0 * cm
@@ -584,7 +586,9 @@ class RectangularBeam(RectangularSection):
                 ]
 
         # Compile all results into a single DataFrame
-        all_results = pd.concat(self._flexure_results_list, ignore_index=True)
+        all_data = pd.concat(self._flexure_results_list, ignore_index=True)
+        units_row = self._get_units_row_flexure()
+        all_results = pd.concat([units_row, all_data], ignore_index=True)
 
         # Store limiting cases
         self._limiting_case_flexure_top = limiting_case_top
@@ -669,7 +673,9 @@ class RectangularBeam(RectangularSection):
                 raise ValueError(
                     f"Shear design method not implemented for concrete type: {type(self.concrete).__name__}"
                 )  # noqa: E501
+
             self._shear_results_list.append(result)
+
             self._shear_results_detailed_list[force.id] = {
                 "forces": self._forces_shear.copy(),
                 "shear_reinforcement": self._shear_reinforcement.copy(),
@@ -688,15 +694,81 @@ class RectangularBeam(RectangularSection):
                 ]
 
         # Compile all results into a single DataFrame
-        all_results = pd.concat(self._shear_results_list, ignore_index=True)
+        all_data = pd.concat(self._shear_results_list, ignore_index=True)
+        units_row = self._get_units_row_shear()
+        all_results = pd.concat([units_row, all_data], ignore_index=True)
 
         # Identify the most limiting case by Demand-to-Capacity Ratio (DCR) or other criteria
-        self.limiting_case_shear = all_results.loc[
-            all_results["DCR"].idxmax()
+        self.limiting_case_shear = all_data.loc[
+            all_data["DCR"].idxmax()
         ]  # Select row with highest DCR
 
         self._shear_checked = True  # Mark shear as checked
         return all_results
+
+    def _get_units_row_shear(self) -> pd.DataFrame:
+        if isinstance(self.concrete, Concrete_EN_1992_2004):
+            # Orden exacto de columnas para EN 1992
+            return pd.DataFrame(
+                [
+                    {
+                        "Label": "",
+                        "Av,min": "cm²/m",
+                        "Av,req": "cm²/m",
+                        "Av": "cm²/m",
+                        "VEd,1": "kN",
+                        "VEd,2": "kN",
+                        "VRd,c": "kN",
+                        "VRd,s": "kN",
+                        "VRd": "kN",
+                        "VRd,max": "kN",
+                        "VEd,1<VRd,max": "",
+                        "VEd,2<VRd": "",
+                        "DCR": "",
+                    }
+                ]
+            )
+        else:
+            return pd.DataFrame(
+                [
+                    {
+                        "Label": "",
+                        "Comb.": "",
+                        "Av,min": "cm²/m",
+                        "Av,req": "cm²/m",
+                        "Av": "cm²/m",
+                        "Vu": "kN",
+                        "Nu": "kN",
+                        "ØVc": "kN",
+                        "ØVs": "kN",
+                        "ØVn": "kN",
+                        "ØVmax": "kN",
+                        "Vu<ØVmax": "",
+                        "Vu<ØVn": "",
+                        "DCR": "",
+                    }
+                ]
+            )
+
+    def _get_units_row_flexure(self) -> pd.DataFrame:
+        return pd.DataFrame(
+            [
+                {
+                    "Label": "",
+                    "Comb.": "",
+                    "Position": "",
+                    "As,min": "cm²",
+                    "As,req top": "cm²",
+                    "As,req bot": "cm²",
+                    "As": "cm²",
+                    # "c/d": "",  # Uncomment if you include this field later
+                    "Mu": "kNm",
+                    "ØMn": "kNm",
+                    "Mu<ØMn": "",
+                    "DCR": "",
+                }
+            ]
+        )
 
     ##########################################################
     # RESULTS
