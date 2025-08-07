@@ -1,9 +1,10 @@
 import math
 from pint import Quantity
-from typing import TYPE_CHECKING, Dict, Any, Tuple
+from typing import TYPE_CHECKING, Dict, Any, Tuple, cast
 import pandas as pd
 from pandas import DataFrame
 from devtools import debug
+
 
 from mento.material import Concrete_EN_1992_2004
 from mento.rebar import Rebar
@@ -359,7 +360,7 @@ def _min_max_flexural_reinforcement_ratio_EN_1992_2004(
 
 def _calculate_flexural_reinforcement_EN_1992_2004(
     self: "RectangularBeam", M_Ed: Quantity, d: Quantity, d_prima: float
-) -> None:
+) -> tuple[Quantity, Quantity, Quantity, Quantity]:
     """
     Calculate the required top and bottom reinforcement areas for bending.
     """
@@ -380,12 +381,15 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
     # Design reinforcement yield strain
     debug(self._f_yd)
     epsilon_yd = (
-        (self._f_yd / self._E_s).to("dimensionless").magnitude
+        (self._f_yd / self.steel_bar._E_s).to("dimensionless").magnitude
     )  # Yield strain in reinforcement
+    
 
     # Relative depth of compression zone at yielding of bottom reinforcement
     k_1=0.4
-    k_2=0.6+0.0014/self._epsilon_cu3
+    concrete_en = cast("Concrete_EN_1992_2004", self.concrete)
+    k_2=0.6+0.0014/concrete_en._epsilon_cu3
+
     #TODO EL DELTA HAY QUE TRAERLO DE LOS SETTINGS PERO COMO VA A CAMBIAR LO FORZAMOS 2025/07/16
     delta=0.85
     xi_eff_lim = lambda_ * ((delta - k_1)/ k_2)
@@ -433,14 +437,10 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
         # Compressive reinforcement is required
 
         # Limit tensile reinforcement area
-        debug(M_lim)
-        debug(d)
-        debug(x_eff_lim)
-        debug(self._f_yd)
         A_s1_lim = (M_lim / ((d - 0.5 * x_eff_lim) * self._f_yd)).to("cm^2")
 
-            # No compressive reinforcement required
-            A_s2 = 0 * cm**2
+        # No compressive reinforcement required
+        A_s2 = 0 * cm**2
 
         # Lever arm of internal forces for compressive reinforcement
         z_2=d - d_prima
@@ -450,25 +450,26 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
 
 
         #Compressive reinforcement strain'
-        epsilon_s2 = (x_u - d_prima)/x_u*self._epsilon_cu3
+        epsilon_s2 = (x_u - d_prima)/x_u*concrete_en._epsilon_cu3
 
         # Compressive reinforcement stress'
-        f_sd = min(epsilon_s2*self._E_s, self._f_yd)
-        #TODO VER QUE ACA FALTA ALGO
+        f_sd = min(epsilon_s2*self.steel_bar._E_s, self._f_yd)
+        #TODO REVISAR ESTO
+
+
+
+        # Limit tensile reinforcement area
+        A_s1_lim = (M_lim / ((d - 0.5 * x_eff_lim) * self._f_yd)).to("cm^2")
+
+        # Extra moment to take with top reinforcement
+        delta_M = M_Ed - M_lim
+
         # Required compressive reinforcement area
         A_s2 = (delta_M / ((z_2) * self._f_yd)).to("cm^2")
 
-            # Limit tensile reinforcement area
-            A_s1_lim = (M_lim / ((d - 0.5 * x_eff_lim) * self._f_yd)).to("cm^2")
 
-            # Extra moment to take with top reinforcement
-            delta_M = M_Ed - M_lim
-
-            # Required compressive reinforcement area
-            A_s2 = (delta_M / ((d - d_prima) * self._f_yd)).to("cm^2")
-
-            # Required tensile reinforcement area
-            A_s1 = max(A_s1_lim + A_s2, A_s_min)
+        # Required tensile reinforcement area
+        A_s1 = max(A_s1_lim + A_s2, A_s_min)
 
     return A_s_min, A_s_max, A_s1, A_s2
 
@@ -480,11 +481,11 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
 
 
 def _determine_nominal_moment_simple_reinf_EN_1992_2004(
-    self: "RectangularBeam", A_s: PlainQuantity, d: PlainQuantity
-) -> PlainQuantity:
+    self: "RectangularBeam", A_s: Quantity, d: Quantity
+) -> Quantity:
 
     # Steel force:
-    steel_force=self.steel_bar.f_yd*A_s
+    steel_force=self.steel_bar.f_y*A_s
     # Constants and material properties
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         eta = self.concrete.eta_factor()  # Factor for concrete strength (EN 1992-1-1)
@@ -499,9 +500,9 @@ def _determine_nominal_moment_simple_reinf_EN_1992_2004(
 
 
 def _determine_nominal_moment_double_reinf_EN_1992_2004(
-    self: "RectangularBeam", A_s: PlainQuantity, d: PlainQuantity,
-    d_prime: PlainQuantity, A_s_prime: PlainQuantity
-) -> PlainQuantity:
+    self: "RectangularBeam", A_s: Quantity, d: Quantity,
+    d_prime: Quantity, A_s_prime: Quantity
+) -> Quantity:
     
     # Constants and material properties
     if isinstance(self.concrete, Concrete_EN_1992_2004):
@@ -620,7 +621,7 @@ def _design_flexure_EN_1992_2004(
 ) -> Dict[str, Any]:
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         # Initialize all the code related variables
-        self.settings.load_EN_1992_2004_settings()
+        #self.settings.load_EN_1992_2004_settings()
         #_initialize_variables_EN_1992_2004(self) #TODO REVISAR QUE HACIA ESTO. SE TIENE QUE PARECER MAS TODO A ACI
         #TODO REVISAR QUE HACIA ESTO. SE TIENE QUE PARECER MAS TODO A ACI
         debug("ENTRAMOS EN _design_flexure_EN_1992_2004")
@@ -637,7 +638,7 @@ def _design_flexure_EN_1992_2004(
         while Err >= tol:
             iteration_count += 1
             # Update the effective depth for bottom tension reinforcement
-            d = self._height - rec_mec
+            d = self.height - rec_mec
                 # Calculate reinforcement for the positive moment, even if it is 0
             (
                 self._A_s_min_bot,

@@ -1649,7 +1649,7 @@ def test_design_flexure_EN_1992_2004() -> None:
 
 def flexure_design_test_EN() -> None:
     #TODO Sale mal el DCR
-    concrete = Concrete_EN_1992_2004(name="H25", f_ck=25 * MPa)
+    concrete = Concrete_EN_1992_2004(name="H25", f_c=25 * MPa)
     steelBar = SteelBar(name="fy 60000", f_y=500*MPa)
     custom_settings = {"clear_cover": 2.6*cm,"stirrup_diameter_ini": 8 * mm}
     beam = RectangularBeam(
