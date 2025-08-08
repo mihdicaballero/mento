@@ -495,7 +495,7 @@ class Rebar:
         return modified_df.head(10)
 
     def longitudinal_rebar_EN_1992_2004(self, A_s_req: Quantity) -> None:
-        pass
+        self.longitudinal_rebar_ACI_318_19(A_s_req) #TODO WE HAVE TO CHANGE THIS
 
     def _check_spacing(
         self,
@@ -545,7 +545,7 @@ class Rebar:
 
         # Determine the maximum clear spacing limit
         max_clear_spacing = max(
-            self.beam.settings.min_clear_spacing,
+            self.beam.settings.clear_spacing,
             self.beam.settings.vibrator_size,
             max(d_b1, d_b2),
         )

@@ -29,11 +29,9 @@ def _initialize_variables_EN_1992_2004(self: "RectangularBeam", force: Forces) -
         self._M_Ed_bot = 0 * kNm
         self._M_Ed_top = self._M_Ed
     if isinstance(self.concrete, Concrete_EN_1992_2004):
-        self._f_ywk = self.steel_bar.f_y
         self._f_ywd = self._f_ywk / self.concrete.gamma_s
         alpha_cc_shear = 1  # Take this as 1.00 for shear design and not 0.85, as in Eurocode Applied.
         self._f_cd = alpha_cc_shear * self.concrete.f_ck / self.concrete.gamma_c
-        self._f_yd = self._f_ywk / self.concrete.gamma_s
 
 
 ##########################################################
@@ -86,6 +84,7 @@ def _initialize_shear_variables_EN_1992_2004(
         self._k_value = min(1 + math.sqrt(200 / self._d_shear.to("mm").magnitude), 2)
 
         # Positive of compression
+        self._f_cd = self.concrete.alpha_cc_shear * self.concrete.f_ck / self.concrete.gamma_c
         self._sigma_cp = min(self._N_Ed / self.A_x, 0.2 * self._f_cd)
 
 
@@ -137,7 +136,7 @@ def _calculate_max_shear_strength_EN_1992_2004(self: "RectangularBeam") -> None:
         # Check the minimum strut angle θ = 21.8° (cot(θ) = 2.5)
         theta_min: float = math.radians(21.8)
         cot_theta_min: float = 1 / math.tan(theta_min)
-
+        self._f_cd = self.concrete.alpha_cc_shear * self.concrete.f_ck / self.concrete.gamma_c
         V_Rd_max_min_angle = (
             alpha_cw
             * self.width
@@ -371,105 +370,107 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
     A_s_min = rho_min * d * self.width
     A_s_max = rho_max * d * self.width  # noqa: F841
 
+
+
     # Constants and material properties
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         lambda_ = (
             self.concrete._lambda_factor()
         )  # Factor for effective compression zone depth (EN 1992-1-1)
         eta = self.concrete._eta_factor()  # Factor for concrete strength (EN 1992-1-1)
+        # Define f_yd
+        f_yd=self.steel_bar.f_y/self.concrete.gamma_s
 
-    # Design reinforcement yield strain
-    debug(self._f_yd)
-    epsilon_yd = (
-        (self._f_yd / self.steel_bar._E_s).to("dimensionless").magnitude
-    )  # Yield strain in reinforcement
-    
+        # Relative depth of compression zone at yielding of bottom reinforcement
+        k_1=0.4
+        concrete_en = cast("Concrete_EN_1992_2004", self.concrete)
+        k_2=0.6+0.0014/concrete_en._epsilon_cu3
 
-    # Relative depth of compression zone at yielding of bottom reinforcement
-    k_1=0.4
-    concrete_en = cast("Concrete_EN_1992_2004", self.concrete)
-    k_2=0.6+0.0014/concrete_en._epsilon_cu3
+        xi_eff_lim = lambda_ * ((self.concrete._delta - k_1)/ k_2)
 
-    #TODO EL DELTA HAY QUE TRAERLO DE LOS SETTINGS PERO COMO VA A CAMBIAR LO FORZAMOS 2025/07/16
-    delta=0.85
-    xi_eff_lim = lambda_ * ((delta - k_1)/ k_2)
-    #TODO VER SI ESTO NO DEPENDE DEL HORMIGON
+        # Compression zone depth limit
+        x_eff_lim = xi_eff_lim * d
 
+        # Limit moment for compressive reinforcement
+        self._f_cd = self.concrete._alpha_cc * self.concrete.f_ck / self.concrete.gamma_c
+        debug(x_eff_lim.to(cm))
+        debug(d.to(cm))
+        debug(self.width.to(cm))        
+        debug(self._f_cd.to(MPa))
+        debug(eta)
 
-    # Compression zone depth limit
-    x_eff_lim = xi_eff_lim * d
+        M_lim = eta * self._f_cd * self.width * x_eff_lim * (d - 0.5 * x_eff_lim)
+        debug(M_lim.to(kNm))
 
-    # Limit moment for compressive reinforcement
-    M_lim = eta * self._f_cd * self.width * x_eff_lim * (d - 0.5 * x_eff_lim)
+        # Check if compressive reinforcement is required
+        if M_Ed <= M_lim:
+            debug("M_Ed<=M_lim")
+            debug("NO SE REQUIERE ARMADO DE COMPRESION")
+            # No compressive reinforcement required
+            # Relative design bending moment
+            K = (
+                (M_Ed / (self.width * d**2 * eta * self._f_cd))
+                .to("dimensionless")
+                .magnitude
+            )
+            debug("d: ",d)
+            debug("f_cd: " , self._f_cd)
+            debug("K: " , K)
+            # Compression zone depth
+            x_eff = d * (1 - math.sqrt(1 - 2 * K))
+            debug("x_eff: " , x_eff)
 
-    # Check if compressive reinforcement is required
-    if M_Ed <= M_lim:
-        debug("M_Ed<=M_lim")
-        # No compressive reinforcement required
-        # Relative design bending moment
-        K = (
-            (M_Ed / (self.width * d**2 * eta * self._f_cd))
-            .to("dimensionless")
-            .magnitude
-        )
-        debug("d: ",d)
-        debug("f_cd: " , self._f_cd)
-        debug("K: " , K)
-        # Compression zone depth
-        x_eff = d * (1 - math.sqrt(1 - 2 * K))
-        debug("x_eff: " , x_eff)
+            # Area of required tensile reinforcement
+            # TODO ACA NO SE BIEN QUE ES EL ETA, VER QUE EL CALCPAD LO HACE DISTINTO ,CON EL BRAZO DE PALANCA.
+            z=d-0.5*lambda_*x_eff
+            debug("z: ",z)
+            A_s1=M_Ed/(z*f_yd)
+            debug("A_s1:", A_s1.to(cm**2))
+            # Ensure the area meets the minimum requirement
+            A_s1 = max(A_s1, A_s_min)
+            debug("A_s1:", A_s1.to(cm**2))
+            # No compressive reinforcement required
+            A_s2 = 0 * cm**2
 
-        # Area of required tensile reinforcement
-        # TODO ACA NO SE BIEN QUE ES EL ETA, VER QUE EL CALCPAD LO HACE DISTINTO ,CON EL BRAZO DE PALANCA.
-        #A_s1 = (self.width * x_eff * eta * self._f_cd / self._f_yd).to("cm^2")
-        z=d-0.5*lambda_*x_eff
-        debug("z: ",z)
-        A_s1=M_Ed/(z*self._f_yd)
-        debug("A_s1:", A_s1.to(cm**2))
-        # Ensure the area meets the minimum requirement
-        A_s1 = max(A_s1, A_s_min)
-        debug("A_s1:", A_s1.to(cm**2))
-        # No compressive reinforcement required
-        A_s2 = 0 * cm**2
+        else:
+            debug("SE REQUIERE ARMADO DE COMPRESION")
+            # Compressive reinforcement is required
 
-    else:
-        debug("SE REQUIERE ARMADO DE COMPRESION")
-        # Compressive reinforcement is required
+            # Limit tensile reinforcement area
+            A_s1_lim = (M_lim / ((d - 0.5 * x_eff_lim) * f_yd)).to("cm^2")
+            debug(A_s1_lim)
 
-        # Limit tensile reinforcement area
-        A_s1_lim = (M_lim / ((d - 0.5 * x_eff_lim) * self._f_yd)).to("cm^2")
+            # No compressive reinforcement required
+            A_s2 = 0 * cm**2
 
-        # No compressive reinforcement required
-        A_s2 = 0 * cm**2
+            # Lever arm of internal forces for compressive reinforcement
+            z_2=d - d_prima
 
-        # Lever arm of internal forces for compressive reinforcement
-        z_2=d - d_prima
-
-        #Compression zone depth with plastic limit
-        x_u = d*(delta - 0.4)
-
-
-        #Compressive reinforcement strain'
-        epsilon_s2 = (x_u - d_prima)/x_u*concrete_en._epsilon_cu3
-
-        # Compressive reinforcement stress'
-        f_sd = min(epsilon_s2*self.steel_bar._E_s, self._f_yd)
-        #TODO REVISAR ESTO
+            #Compression zone depth with plastic limit
+            x_u = d*(self.concrete._delta - 0.4)
 
 
+            #Compressive reinforcement strain'
+            epsilon_s2 = (x_u - d_prima)/x_u*concrete_en._epsilon_cu3
 
-        # Limit tensile reinforcement area
-        A_s1_lim = (M_lim / ((d - 0.5 * x_eff_lim) * self._f_yd)).to("cm^2")
-
-        # Extra moment to take with top reinforcement
-        delta_M = M_Ed - M_lim
-
-        # Required compressive reinforcement area
-        A_s2 = (delta_M / ((z_2) * self._f_yd)).to("cm^2")
+            # Compressive reinforcement stress'
+            f_sd = min(epsilon_s2*self.steel_bar._E_s, f_yd)
+            #TODO REVISAR ESTO
 
 
-        # Required tensile reinforcement area
-        A_s1 = max(A_s1_lim + A_s2, A_s_min)
+
+            # Limit tensile reinforcement area
+            A_s1_lim = (M_lim / ((d - 0.5 * x_eff_lim) * f_yd)).to("cm^2")
+
+            # Extra moment to take with top reinforcement
+            delta_M = M_Ed - M_lim
+
+            # Required compressive reinforcement area
+            A_s2 = (delta_M / ((z_2) * f_yd)).to("cm^2")
+
+
+            # Required tensile reinforcement area
+            A_s1 = max(A_s1_lim + A_s2, A_s_min)
 
     return A_s_min, A_s_max, A_s1, A_s2
 
@@ -488,14 +489,15 @@ def _determine_nominal_moment_simple_reinf_EN_1992_2004(
     steel_force=self.steel_bar.f_y*A_s
     # Constants and material properties
     if isinstance(self.concrete, Concrete_EN_1992_2004):
-        eta = self.concrete.eta_factor()  # Factor for concrete strength (EN 1992-1-1)
-    # Concrete force shall be same as steel force, so we can obtain the compression block height:
-    lambda_x_eff=steel_force/(self._width *self._f_cd*eta)
-    # Now we can get the momentum arm 
-    z=d-0.5*lambda_x_eff
-    # And calculate the resistance
-    M_Rd=steel_force*z
-    return M_Rd
+        eta = self.concrete._eta_factor()  # Factor for concrete strength (EN 1992-1-1)
+        self._f_cd = self.concrete._alpha_cc * self.concrete.f_ck / self.concrete.gamma_c
+        # Concrete force shall be same as steel force, so we can obtain the compression block height:
+        lambda_x_eff=steel_force/(self.width *self._f_cd*eta)
+        # Now we can get the momentum arm 
+        z=d-0.5*lambda_x_eff
+        # And calculate the resistance
+        M_Rd=steel_force*z
+        return M_Rd
 
 
 
@@ -507,35 +509,36 @@ def _determine_nominal_moment_double_reinf_EN_1992_2004(
     # Constants and material properties
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         lambda_ = (
-            self.concrete.lambda_factor()
+            self.concrete._lambda_factor()
         )  # Factor for effective compression zone depth (EN 1992-1-1)
-        eta = self.concrete.eta_factor()  # Factor for concrete strength (EN 1992-1-1)
-    k_1=0.4
-    k_2=0.6+0.0014/self._epsilon_cu3 
-    delta = 0.85 #TODO ESTO TIENE QUE VENIR DE LOS SETINGS DEL HROMGION
-    epsilon_eff=(delta-k_1)/k_2
-    epsilon_eff_lim=delta*epsilon_eff
-    x_eff_lim=d*epsilon_eff_lim
-    # Limit moment for compressive reinforcement
-    M_lim = eta * self._f_cd * self.width * x_eff_lim * (d - 0.5 * x_eff_lim)
+        f_yd=self.steel_bar.f_y/self.concrete.gamma_s
+        eta = self.concrete._eta_factor()  # Factor for concrete strength (EN 1992-1-1)
+        k_1=0.4
+        k_2=0.6+0.0014/self.concrete.epsilon_cu3
+        epsilon_eff=(self.concrete._delta-k_1)/k_2
+        epsilon_eff_lim=self.concrete._delta*epsilon_eff
+        x_eff_lim=d*epsilon_eff_lim
+        # Limit moment for compressive reinforcement
+        self._f_cd = self.concrete._alpha_cc * self.concrete.f_ck / self.concrete.gamma_c
+        M_lim = eta * self._f_cd * self.width * x_eff_lim * (d - 0.5 * x_eff_lim)
     
-    z=(d - 0.5 * x_eff_lim)
+        z=(d - 0.5 * x_eff_lim)
     
-    # Limit tensile reinforcement area
-    A_s1_lim = (M_lim / ( z* self._f_yd)).to("cm^2")
+        # Limit tensile reinforcement area
+        A_s1_lim = (M_lim / ( z* f_yd)).to("cm^2")
 
 
-    x_u=d*(delta-0.4) # TODO no entiendo esto. De donde sale?
+        x_u=d*(self.concrete._delta-0.4) # TODO no entiendo esto. De donde sale?
 
-    epsilon_s_2=(x_u-d_prime)/x_u
+        epsilon_s_2=(x_u-d_prime)/x_u
 
-    z_2=d-d_prime
+        z_2=d-d_prime
 
-    f_sd=epsilon_s_2*self.steel_bar.E_s # NO ESTA DEPENDIENDO DE LA CANTIDA DE A_s_prime QUE LE METO. OSEA QUE NO LO PUEDO MULTIPLICAR DIRECTO
-    # ESTA PENSADO PARA DISEÑAR Y ENCONTRAR EL A_s_prime requerido, no para verificar. Me parece
+        f_sd=epsilon_s_2*self.steel_bar.E_s # NO ESTA DEPENDIENDO DE LA CANTIDA DE A_s_prime QUE LE METO. OSEA QUE NO LO PUEDO MULTIPLICAR DIRECTO
+        # ESTA PENSADO PARA DISEÑAR Y ENCONTRAR EL A_s_prime requerido, no para verificar. Me parece
 
-    M_Rd=A_s1_lim *z*self._f_yd+ min(f_sd*A_s_prime,self._f_yd*(A_s-A_s1_lim))*z_2
-    #TODO, la deformacion del acero de arriba queda limitada por el limite del hormigon. Entonces lo que aporta el acero comprimido no puede superar la capcadidad del acero traccionado extra (el que no trabaja en conjunto con el hormigon. Para aumentar la capacidad de la viga hay que aumentar simultaneamente los dos aceros, uno solo no cambia nada)
+        M_Rd=A_s1_lim *z*f_yd+ min(f_sd*A_s_prime,f_yd*(A_s-A_s1_lim))*z_2
+        #TODO, la deformacion del acero de arriba queda limitada por el limite del hormigon. Entonces lo que aporta el acero comprimido no puede superar la capcadidad del acero traccionado extra (el que no trabaja en conjunto con el hormigon. Para aumentar la capacidad de la viga hay que aumentar simultaneamente los dos aceros, uno solo no cambia nada)
     return M_Rd
 
 
@@ -570,8 +573,8 @@ def _determine_nominal_moment_EN_1992_2004(
         rho_min_bot = 0 * dimensionless
 
     # Calculate minimum and maximum bottom reinforcement areas
-    self._A_s_min_bot = rho_min_bot * self._d_bot * self._width
-    self._A_s_max_bot = rho_max * self._d_bot * self._width
+    self._A_s_min_bot = rho_min_bot * self._d_bot * self.width
+    self._A_s_max_bot = rho_max * self._d_bot * self.width
 
     # Determine the nominal moment for positive moments
     if self._A_s_top == 0 * cm**2:
@@ -584,8 +587,8 @@ def _determine_nominal_moment_EN_1992_2004(
         )
 
     # Determine capacity for negative moment (tension at the top)
-    self._A_s_min_top = rho_min_top * self._d_top * self._width
-    self._A_s_max_top = rho_max * self._d_top * self._width
+    self._A_s_min_top = rho_min_top * self._d_top * self.width
+    self._A_s_max_top = rho_max * self._d_top * self.width
 
     if self._A_s_top == 0 * cm**2:
         M_Rd_negative = 0 * kNm
@@ -621,11 +624,6 @@ def _design_flexure_EN_1992_2004(
 ) -> Dict[str, Any]:
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         # Initialize all the code related variables
-        #self.settings.load_EN_1992_2004_settings()
-        #_initialize_variables_EN_1992_2004(self) #TODO REVISAR QUE HACIA ESTO. SE TIENE QUE PARECER MAS TODO A ACI
-        #TODO REVISAR QUE HACIA ESTO. SE TIENE QUE PARECER MAS TODO A ACI
-        debug("ENTRAMOS EN _design_flexure_EN_1992_2004")
-
         # Initial assumptions for mechanical cover and compression depth
         rec_mec = self.c_c + self._stirrup_d_b + 1 * cm
         d_prima = self.c_c + self._stirrup_d_b + 1 * cm
@@ -656,7 +654,7 @@ def _design_flexure_EN_1992_2004(
                     self._A_s_max_top,
                     A_s_final_top_Negative_M,
                     A_s_comp_bot
-                ) = _calculate_flexural_reinforcement_EN_1992_2004(self, abs(max_M_y_top), d, d_prima)
+                ) = _calculate_flexural_reinforcement_EN_1992_2004(self, abs(max_M_y_top/kNm)*kNm, d, d_prima)
 
                 # Adjust reinforcement areas based on positive and negative moments
                 self._A_s_bot = max(A_s_final_bot_Positive_M, A_s_comp_bot)
@@ -796,7 +794,7 @@ def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> pd.Da
             self._A_s_req_top,
             self._A_s_req_bot
         ) = _calculate_flexural_reinforcement_EN_1992_2004(
-            self, abs(self._M_Ed_top), self._d_top, self._c_mec_bot
+            self, abs(self._M_Ed_top/kNm)*kNm, self._d_top, self._c_mec_bot
         )
         self._c_d_bot = 0
         # Calculate the design capacity ratio for the top side.
@@ -812,8 +810,8 @@ def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> pd.Da
     self._d_b_max_bot = max(self._d_b1_b, self._d_b2_b, self._d_b3_b, self._d_b4_b)
 
     # Calculate the longitudinal reinforcement ratios for both sides.
-    self._rho_l_bot = self._A_s_bot / (self._d_bot * self._width)
-    self._rho_l_top = self._A_s_bot / (self._d_top * self._width)
+    self._rho_l_bot = self._A_s_bot / (self._d_bot * self.width)
+    self._rho_l_top = self._A_s_bot / (self._d_top * self.width)
 
     # Compile the design results into a dictionary.
     #TODO HAY QUE ARMAR EL COMPILE RESULTS DE EN

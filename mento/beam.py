@@ -241,13 +241,16 @@ class RectangularBeam(RectangularSection):
             self._k_value: float = 0
             self._f_ywk: Quantity = 0 * MPa
             self._f_ywd: Quantity = 0 * MPa
-            self._f_yd: Quantity = 0 * MPa
             self._f_cd: Quantity = 0 * MPa
             self._A_p = 0 * cm**2  # No prestressed for now
             self._sigma_cp: Quantity = 0 * MPa
             self._theta: float = 0
             self._cot_theta: float = 0
             self._z: Quantity = 0 * cm
+            self._M_Rd_bot: Quantity = 0 * kNm
+            self._M_Rd_top: Quantity = 0 * kNm
+            self._M_Ed_bot: Quantity = 0 * kNm
+            self._M_Ed_top: Quantity = 0 * kNm
 
     ##########################################################
     # SET LONGITUDINAL AND TRANSVERSE REBAR AND UPDATE ATTRIBUTES
@@ -490,7 +493,6 @@ class RectangularBeam(RectangularSection):
         DataFrame
             A DataFrame summarizing the flexural design results for all forces.
         """
-        debug("Invocaron a la funcion design_flexure")
         # Initialize limiting cases
         max_M_y_top = 0 * kN * m  # For negative M_y (top reinforcement design)
         max_M_y_bot = 0 * kN * m  # For positive M_y (bottom reinforcement design)
@@ -1534,6 +1536,14 @@ class RectangularBeam(RectangularSection):
                 self._ax.add_patch(circle)
 
 
+
+
+##########################################################################################################
+##########################################################################################################
+##########################################################################################################
+##########################################################################################################
+##########################################################################################################
+##########################################################################################################
 ##########################################################################################################
 
 
@@ -1547,56 +1557,18 @@ def clear_console() -> None:
         os.system("clear")
 
 
-def test_on_determine_nominal_moment_ACI_318_19() -> None:
-    concrete = Concrete_ACI_318_19(name="fc 4000", f_c=4000 * psi)
-    steelBar = SteelBar(name="fy 60000", f_y=60 * ksi)
-    custom_settings = {"clear_cover": 1.5 * inch}
-    beam = RectangularBeam(
-        label="B-12x24",
-        concrete=concrete,
-        steel_bar=steelBar,
-        width=12 * inch,
-        height=24 * inch,
-        settings=custom_settings,
-    )
-
-    beam.set_longitudinal_rebar_bot(
-        n1=2,
-        d_b1=1.128 * inch,
-        n2=1,
-        d_b2=1.128 * inch,
-        n3=2,
-        d_b3=1 * inch,
-        n4=1,
-        d_b4=1 * inch,
-    )
-    beam.set_longitudinal_rebar_top(
-        n1=2,
-        d_b1=1.128 * inch,
-        n2=1,
-        d_b2=1.128 * inch,
-        n3=2,
-        d_b3=1 * inch,
-        n4=1,
-        d_b4=1 * inch,
-    )
-
-    f = Forces(label="Test_01", M_y=400 * kip * ft)
-    beam._determine_nominal_moment_ACI_318_19(f)
-
 
 def flexure_design_test() -> None:
     # clear_console()
     concrete = Concrete_ACI_318_19(name="C25", f_c=25 * MPa)
     steelBar = SteelBar(name="ADN 420", f_y=420 * MPa)
-    custom_settings = {"clear_cover": 2.5 * cm}
     beam = RectangularBeam(
         label="101",
         concrete=concrete,
         steel_bar=steelBar,
+        c_c=2.5*cm,
         width=15 * cm,
-        height=50 * cm,
-        settings=custom_settings,
+        height=50 * cm
     )
     f1 = Forces(label="C1", M_y=20 * kNm)
     f2 = Forces(label="C2", M_y=-20 * kNm)
@@ -1610,14 +1582,13 @@ def flexure_design_test() -> None:
 def flexure_design_test_calcpad_example() -> None:
     concrete = Concrete_ACI_318_19(name="fc 4000", f_c=4000 * psi)
     steelBar = SteelBar(name="fy 60000", f_y=60 * ksi)
-    custom_settings = {"clear_cover": 1.5 * inch}
     beam = RectangularBeam(
         label="B-12x24",
         concrete=concrete,
         steel_bar=steelBar,
+        c_c=1.5*inch,
         width=12 * inch,
-        height=24 * inch,
-        settings=custom_settings,
+        height=24 * inch
     )
 
     # beam.set_longitudinal_rebar_bot(n1=2,d_b1=1.375*inch, n3=2,d_b3=1.27*inch)
@@ -1633,16 +1604,15 @@ def flexure_design_test_calcpad_example() -> None:
 
 
 def test_design_flexure_EN_1992_2004() -> None:
-    concrete = Concrete_EN_1992_2004(name="H25", f_ck=25 * MPa)
+    concrete = Concrete_EN_1992_2004(name="H25", f_c=25 * MPa)
     steelBar = SteelBar(name="fy 60000", f_y=420*MPa)
-    custom_settings = {"clear_cover": 2.6*cm}
     beam = RectangularBeam(
         label="V-20x60",
         concrete=concrete,
         steel_bar=steelBar,
+        c_c=2.6*cm, 
         width=20 * cm,
-        height=60 * cm,
-        settings=custom_settings,
+        height=60 * cm
     )
     
 
@@ -1651,18 +1621,15 @@ def flexure_design_test_EN() -> None:
     #TODO Sale mal el DCR
     concrete = Concrete_EN_1992_2004(name="H25", f_c=25 * MPa)
     steelBar = SteelBar(name="fy 60000", f_y=500*MPa)
-    custom_settings = {"clear_cover": 2.6*cm,"stirrup_diameter_ini": 8 * mm}
     beam = RectangularBeam(
         label="V-20x60",
         concrete=concrete,
         steel_bar=steelBar,
+        c_c=2.6*cm,
         width=20 * cm,
-        height=60 * cm,
-        settings=custom_settings,
+        height=60 * cm
     )
-
-    # beam.set_longitudinal_rebar_bot(n1=2,d_b1=1.375*inch, n3=2,d_b3=1.27*inch)
-    # beam.set_longitudinal_rebar_top(n1=2,d_b1=1.375*inch, n3=2,d_b3=1.27*inch)
+    beam._stirrup_d_b = 6*mm
 
     f = Forces(label="Test_01", M_y=100 * kNm)
     forces = [f]
@@ -1681,8 +1648,9 @@ def flexure_check_test() -> None:
         label="101",
         concrete=concrete,
         steel_bar=steelBar,
+        c_c=2.5*cm,
         width=20 * cm,
-        height=60 * cm,
+        height=60 * cm
     )
 
 
@@ -1704,14 +1672,13 @@ def flexure_check_test() -> None:
 def shear_ACI_metric() -> None:
     concrete = Concrete_ACI_318_19(name="C30", f_c=30 * MPa)
     steelBar = SteelBar(name="ADN 420", f_y=420 * MPa)
-    custom_settings = {"clear_cover": 30 * mm}
     beam = RectangularBeam(
         label="101",
         concrete=concrete,
         steel_bar=steelBar,
+        c_c=30*mm,
         width=20 * cm,
-        height=50 * cm,
-        settings=custom_settings,
+        height=50 * cm
     )
     f1 = Forces(label="1.4D", V_z=100 * kN)
     f2 = Forces(label="1.2D+1.6L", V_z=1.55 * kN)
@@ -1722,7 +1689,7 @@ def shear_ACI_metric() -> None:
     beam.set_longitudinal_rebar_bot(n1=2, d_b1=16 * mm)
     # beam.set_transverse_rebar(n_stirrups=1, d_b=6*mm, s_l=20*cm)
     # results = beam.check_shear()
-    results = beam._design_shear(forces)
+    results = beam.design_shear(forces)
     print(results)
     print(beam.shear_design_results)
     # beam.shear_results_detailed()
@@ -1731,94 +1698,6 @@ def shear_ACI_metric() -> None:
     # beam.shear_results_detailed_doc()
 
 
-def shear_ACI_imperial() -> None:
-    concrete = Concrete_ACI_318_19(name="C4", f_c=4000 * psi)
-    steelBar = SteelBar(name="ADN 420", f_y=60 * ksi)
-    custom_settings = {"clear_cover": 1.5 * inch}
-    beam = RectangularBeam(
-        label="102",
-        concrete=concrete,
-        steel_bar=steelBar,
-        width=10 * inch,
-        height=16 * inch,
-        settings=custom_settings,
-    )
-
-    # f1 = Forces(label='D', V_z=37.727*kip, N_x=20*kip)
-    f1 = Forces(label="D", V_z=37.727 * kip)
-    # f1 = Forces(label='D', V_z=8*kip)
-    # f2 = Forces(label='L', V_z=6*kip) # No shear reinforcing
-    forces = [f1]
-    beam.set_transverse_rebar(n_stirrups=1, d_b=0.5 * inch, s_l=6 * inch)
-
-    # beam.set_longitudinal_rebar_bot(n1=2, d_b1=0.625*inch)
-    print(beam._A_v)
-    results = beam._check_shear(forces)
-    # results = beam.design_shear()
-    print(results)
-    # section.design_shear(f, A_s=0.847*inch**2)
-    beam.shear_results_detailed()
-    # section.shear_results_detailed_doc()
-
-
-def rebar() -> None:
-    concrete = Concrete_ACI_318_19(name="H30", f_c=30 * MPa)
-    steelBar = SteelBar(name="ADN 420", f_y=420 * MPa)
-    custom_settings = {"clear_cover": 30 * mm, "stirrup_diameter_ini": 8 * mm}
-    section = RectangularBeam(
-        label="V 20x50",
-        concrete=concrete,
-        steel_bar=steelBar,
-        width=20 * cm,
-        height=50 * cm,
-        settings=custom_settings,
-    )
-    as_req = 7 * cm**2
-
-    beam_rebar = Rebar(section)
-    long_rebar_df = beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=as_req)
-    best_design = beam_rebar.longitudinal_rebar_design
-    print(long_rebar_df, best_design)
-
-
-def rebar_df() -> None:
-    concrete = Concrete_ACI_318_19(name="H30", f_c=30 * MPa)
-    steelBar = SteelBar(name="ADN 420", f_y=420 * MPa)
-    custom_settings = {"clear_cover": 30 * mm, "stirrup_diameter_ini": 8 * mm}
-    section = RectangularBeam(
-        label="V 20x50",
-        concrete=concrete,
-        steel_bar=steelBar,
-        width=20 * cm,
-        height=50 * cm,
-        settings=custom_settings,
-    )
-    beam_rebar = Rebar(section)
-    # Create a list of required steel areas from 0.5 to 10 with a step of 0.5 cm²
-    as_req_list = np.arange(0.5, 10.5, 0.5) * cm**2
-    # Initialize an empty DataFrame to store the results
-    results_df = pd.DataFrame()
-
-    # Loop through each required steel area
-    for as_req in as_req_list:
-        # Run the longitudinal_rebar_ACI_19 method
-        long_rebar_df = beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=as_req)
-
-        # Extract the first row of the resulting DataFrame
-        first_row = long_rebar_df.iloc[0:1].copy()
-
-        # Add a column to store the required steel area
-        first_row[
-            "as_req"
-        ] = as_req.magnitude  # Store the magnitude (value without units)
-
-        # Append the first row to the results DataFrame
-        results_df = pd.concat([results_df, first_row], ignore_index=True)
-
-    # Display the results DataFrame
-    print(results_df)
-
 
 if __name__ == "__main__":
-    #flexure_check_test()
     flexure_design_test_EN()
