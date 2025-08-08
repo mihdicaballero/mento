@@ -545,7 +545,7 @@ class Rebar:
 
         # Determine the maximum clear spacing limit
         max_clear_spacing = max(
-            self.beam.settings.min_clear_spacing,
+            self.beam.settings.clear_spacing,
             self.beam.settings.vibrator_size,
             max(d_b1, d_b2),
         )

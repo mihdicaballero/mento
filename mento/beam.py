@@ -1,9 +1,8 @@
-import os  # Cleaning console
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from IPython.display import Markdown, display
 from typing import Optional, Dict
 import matplotlib.pyplot as plt
-from matplotlib.patches import Circle
+from matplotlib.patches import Circle, Rectangle, FancyBboxPatch
 from pint import Quantity
 import numpy as np
 import pandas as pd
@@ -13,12 +12,11 @@ import warnings
 
 from mento.rectangular import RectangularSection
 from mento.material import (
-    SteelBar,
     Concrete_ACI_318_19,
     Concrete_EN_1992_2004,
 )
 from mento.rebar import Rebar
-from mento.units import MPa, psi, mm, inch, kN, m, cm, kNm, dimensionless, kip, ksi, ft
+from mento.units import MPa, mm, inch, kN, m, cm, kNm, dimensionless
 from mento.results import Formatter, TablePrinter, DocumentBuilder, CUSTOM_COLORS
 from mento.forces import Forces
 from mento.settings import BeamSettings
@@ -76,7 +74,7 @@ class RectangularBeam(RectangularSection):
         shear_results_detailed_doc(force=None):
             Exports detailed shear results to a Word document.
         plot():
-            Plots the longitudinal rebar arrangement for the beam section.
+            Plots the beam section with its rebar.
 
     Usage:
         - Instantiate with required section and material properties.
@@ -91,15 +89,21 @@ class RectangularBeam(RectangularSection):
         supporting multiple design codes and detailed reporting.
     """
 
+    settings: BeamSettings = field(
+        default_factory=BeamSettings
+    )  # allow user to pass settings
+
     def __post_init__(self) -> None:
         super().__post_init__()  # Call parent attributes
-        self.settings = BeamSettings(unit_system=self.concrete.unit_system)
+        if not self.settings:
+            # create defaults based on concrete's unit system
+            self.settings = BeamSettings(unit_system=self.concrete.unit_system)
+        else:
+            # Fill missing fields with defaults from the given unit system
+            # (ensures your partial BeamSettings still gets the rest of defaults)
+            self.settings.unit_system = self.concrete.unit_system
+            self.settings.__post_init__()  # recompute missing fields
         self._initialize_attributes()
-
-    # @property
-    # def settings(self) -> BeamSettings:
-    #     """Access global design rules."""
-    #     return GLOBAL_BEAM_SETTINGS
 
     ##########################################################
     # INITIALIZE ATTRIBUTES
@@ -1363,83 +1367,8 @@ class RectangularBeam(RectangularSection):
         return rebar_string
 
     ##########################################################
-    # PLOT LONGIDTUINAL REBAR
+    # PLOT BEAM SECTION WITH REBAR
     ##########################################################
-
-    def plot(self) -> None:
-        """
-        Plots the longitudinal rebars for the beam or column.
-        """
-        # Call parent class to plot geometry
-        super().plot()
-        # Convert dimensions to consistent units (cm)
-        width_cm: float = self.width.to("cm").magnitude
-        height_cm: float = self.height.to("cm").magnitude
-        c_c_cm: float = self.c_c.to("cm").magnitude
-        stirrup_d_b_cm: float = self._stirrup_d_b.to("cm").magnitude
-        layers_spacing_cm: float = self.settings.layers_spacing.to("cm").magnitude
-
-        # Calculate rebar positions
-        # Bottom rebars
-        self._plot_rebar_layer(
-            width_cm,
-            height_cm,
-            c_c_cm,
-            stirrup_d_b_cm,
-            layers_spacing_cm,
-            self._n1_b,
-            self._d_b1_b,
-            self._n2_b,
-            self._d_b2_b,
-            max_db=self._d_b1_b,
-            is_bottom=True,
-        )
-        self._plot_rebar_layer(
-            width_cm,
-            height_cm,
-            c_c_cm,
-            stirrup_d_b_cm,
-            layers_spacing_cm,
-            self._n3_b,
-            self._d_b3_b,
-            self._n4_b,
-            self._d_b4_b,
-            max_db=self._d_b1_b,
-            is_bottom=True,
-            is_second_layer=True,
-        )
-
-        # Top rebars
-        self._plot_rebar_layer(
-            width_cm,
-            height_cm,
-            c_c_cm,
-            stirrup_d_b_cm,
-            layers_spacing_cm,
-            self._n1_t,
-            self._d_b1_t,
-            self._n2_t,
-            self._d_b2_t,
-            max_db=self._d_b1_t,
-            is_bottom=False,
-        )
-        self._plot_rebar_layer(
-            width_cm,
-            height_cm,
-            c_c_cm,
-            stirrup_d_b_cm,
-            layers_spacing_cm,
-            self._n3_t,
-            self._d_b3_t,
-            self._n4_t,
-            self._d_b4_t,
-            max_db=self._d_b1_t,
-            is_bottom=False,
-            is_second_layer=True,
-        )
-
-        # Show plot
-        plt.show()
 
     def _plot_rebar_layer(
         self,
@@ -1522,3 +1451,189 @@ class RectangularBeam(RectangularSection):
                     fill=True,
                 )
                 self._ax.add_patch(circle)
+
+    def plot(self) -> None:
+        """
+        Plots the rectangular section with a dark gray border, light gray hatch, and dimensions.
+        Also plots the stirrup with rounded corners and thickness.
+        """
+
+        # Convert dimensions to consistent units (cm)
+        width_cm: float = self.width.to("cm").magnitude
+        height_cm: float = self.height.to("cm").magnitude
+        c_c_cm: float = self.c_c.to("cm").magnitude
+        stirrup_d_b_cm: float = self._stirrup_d_b.to("cm").magnitude
+        layers_spacing_cm: float = self.settings.layers_spacing.to("cm").magnitude
+
+        # Create figure and axis
+        fig, self._ax = plt.subplots()
+
+        # Create a rectangle patch for the section
+        rect = Rectangle(
+            (0, 0),
+            self.width.magnitude,
+            self.height.magnitude,
+            linewidth=1.3,
+            edgecolor=CUSTOM_COLORS["dark_gray"],
+            facecolor=CUSTOM_COLORS["light_gray"],
+        )
+        self._ax.add_patch(rect)
+
+        # Calculate stirrup dimensions
+        c_c = self.c_c.to("cm").magnitude
+        stirrup_width = self.width.to("cm").magnitude - 2 * c_c
+        stirrup_height = self.height.to("cm").magnitude - 2 * c_c
+        stirrup_thickness = self._stirrup_d_b.to("cm").magnitude
+
+        # Create rounded corners for the stirrup
+        inner_radius = stirrup_thickness * 2
+        outer_radius = stirrup_thickness * 3
+
+        # Create the outer rounded rectangle for the stirrup
+        outer_rounded_rect = FancyBboxPatch(
+            (c_c, c_c),  # Bottom-left corner
+            stirrup_width,  # Width
+            stirrup_height,  # Height
+            boxstyle=f"Round, pad=0, rounding_size={outer_radius}",  # Rounded corners
+            edgecolor=CUSTOM_COLORS["dark_blue"],
+            facecolor="white",
+            linewidth=1,
+        )
+        self._ax.add_patch(outer_rounded_rect)
+
+        # Create the inner rounded rectangle for the stirrup (offset by thickness)
+        inner_rounded_rect = FancyBboxPatch(
+            (c_c + stirrup_thickness, c_c + stirrup_thickness),  # Bottom-left corner
+            stirrup_width - 2 * stirrup_thickness,  # Width
+            stirrup_height - 2 * stirrup_thickness,  # Height
+            boxstyle=f"Round, pad=0, rounding_size={inner_radius}",  # Rounded corners
+            edgecolor=CUSTOM_COLORS["dark_blue"],
+            facecolor=CUSTOM_COLORS["light_gray"],
+            linewidth=1,
+        )
+        self._ax.add_patch(inner_rounded_rect)
+
+        # Set plot limits with some padding
+        padding = max(self.width.magnitude, self.height.magnitude) * 0.2
+        self._ax.set_xlim(-padding, self.width.magnitude + padding)
+        self._ax.set_ylim(-padding, self.height.magnitude + padding)
+
+        # Text and dimension offsets
+        dim_offset = 2.5
+        text_offset = dim_offset + 2
+        # Add width dimension
+        self._ax.annotate(
+            "",  # No text here, text is added separately
+            xy=(0, -dim_offset),  # Start of arrow (left side)
+            xytext=(self.width.magnitude, -dim_offset),  # End of arrow (right side)
+            arrowprops={
+                "arrowstyle": "<->",
+                "lw": 1,
+                "color": CUSTOM_COLORS["dark_blue"],
+            },
+        )
+        if self.concrete.unit_system == "imperial":
+            # Example: format to 2 decimal places, then use pint's compact (~P) format
+            width = "{:.0f~P}".format(self.width.to("inch"))
+            height = "{:.0f~P}".format(self.height.to("inch"))
+        else:
+            width = "{:.0f~P}".format(self.width.to("cm"))
+            height = "{:.0f~P}".format(self.height.to("cm"))
+        # Add width dimension text below the arrow
+        self._ax.text(
+            self.width.magnitude / 2,  # Center of the arrow
+            -text_offset,  # Slightly below the arrow
+            width,
+            ha="center",
+            va="top",
+            color=CUSTOM_COLORS["dark_gray"],
+        )
+
+        # Add height dimension
+        self._ax.annotate(
+            "",  # No text here, text is added separately
+            xy=(-dim_offset, 0),  # Start of arrow (bottom)
+            xytext=(-dim_offset, self.height.magnitude),  # End of arrow (top)
+            arrowprops={
+                "arrowstyle": "<->",
+                "lw": 1,
+                "color": CUSTOM_COLORS["dark_blue"],
+            },
+        )
+        # Add height dimension text to the left of the arrow
+        self._ax.text(
+            -text_offset,  # Slightly to the left of the arrow
+            self.height.magnitude / 2,  # Center of the arrow
+            height,
+            ha="right",
+            va="center",
+            color=CUSTOM_COLORS["dark_gray"],
+            rotation=90,  # Rotate text vertically
+        )
+
+        # Set aspect of the plot to be equal
+        self._ax.set_aspect("equal")
+        # Remove axes for better visualization
+        self._ax.axis("off")
+
+        # Calculate rebar positions
+        # Bottom rebars
+        self._plot_rebar_layer(
+            width_cm,
+            height_cm,
+            c_c_cm,
+            stirrup_d_b_cm,
+            layers_spacing_cm,
+            self._n1_b,
+            self._d_b1_b,
+            self._n2_b,
+            self._d_b2_b,
+            max_db=self._d_b1_b,
+            is_bottom=True,
+        )
+        self._plot_rebar_layer(
+            width_cm,
+            height_cm,
+            c_c_cm,
+            stirrup_d_b_cm,
+            layers_spacing_cm,
+            self._n3_b,
+            self._d_b3_b,
+            self._n4_b,
+            self._d_b4_b,
+            max_db=self._d_b1_b,
+            is_bottom=True,
+            is_second_layer=True,
+        )
+
+        # Top rebars
+        self._plot_rebar_layer(
+            width_cm,
+            height_cm,
+            c_c_cm,
+            stirrup_d_b_cm,
+            layers_spacing_cm,
+            self._n1_t,
+            self._d_b1_t,
+            self._n2_t,
+            self._d_b2_t,
+            max_db=self._d_b1_t,
+            is_bottom=False,
+        )
+        self._plot_rebar_layer(
+            width_cm,
+            height_cm,
+            c_c_cm,
+            stirrup_d_b_cm,
+            layers_spacing_cm,
+            self._n3_t,
+            self._d_b3_t,
+            self._n4_t,
+            self._d_b4_t,
+            max_db=self._d_b1_t,
+            is_bottom=False,
+            is_second_layer=True,
+        )
+
+        # Show plot
+        plt.show()
