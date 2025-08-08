@@ -1,4 +1,6 @@
 from devtools import debug
+import numpy as np
+import pandas as pd
 
 from mento import cm, MPa, m, kg, kN, kNm, inch, ft, kip, lb, psi, mm, ksi
 from mento.settings import BeamSettings
@@ -11,6 +13,7 @@ from mento.material import (
 from mento.section import Section
 from mento.rectangular import RectangularSection
 from mento import Forces, RectangularBeam, Node
+from mento.rebar import Rebar
 
 
 def units() -> None:
@@ -72,7 +75,6 @@ def rectangular() -> None:
         label="Test Rectangular Section",
     )
     debug(section)
-    section.plot()
     debug(section.A_x, section.I_y, section.I_z)
 
 
@@ -153,22 +155,22 @@ def flexure_ACI_318_19() -> None:
     )
     section.set_longitudinal_rebar_bot(
         n1=2,
-        d_b1=1.128 * inch,
-        n2=1,
+        d_b1=1.41 * inch,
+        n2=0,
         d_b2=1.128 * inch,
         n3=2,
-        d_b3=1 * inch,
-        n4=1,
+        d_b3=1.27 * inch,
+        n4=0,
         d_b4=1 * inch,
     )
     section.set_longitudinal_rebar_top(
         n1=2,
-        d_b1=1.128 * inch,
-        n2=1,
+        d_b1=0.75 * inch,
+        n2=0,
         d_b2=1.128 * inch,
-        n3=2,
+        n3=0,
         d_b3=1 * inch,
-        n4=1,
+        n4=0,
         d_b4=1 * inch,
     )
 
@@ -177,25 +179,26 @@ def flexure_ACI_318_19() -> None:
     # section.plot()
     node_1.check_flexure()
     print(node_1.check_flexure())
-    node_1.check_shear()
-    print(node_1.check_shear())
+    # node_1.check_shear()
+    # print(node_1.check_shear())
 
 
 def rebar() -> None:
     concrete = Concrete_ACI_318_19(name="H30", f_c=30 * MPa)
     steelBar = SteelBar(name="ADN 420", f_y=420 * MPa)
-    custom_settings = {"clear_cover": 30 * mm, "stirrup_diameter_ini": 8 * mm}
-    section = RectangularBeam(
+    beam_settings = BeamSettings(stirrup_diameter_ini=8 * mm)
+    beam = RectangularBeam(
         label="V 20x50",
         concrete=concrete,
         steel_bar=steelBar,
         width=20 * cm,
         height=50 * cm,
-        settings=custom_settings,
+        c_c=30 * mm,
+        settings=beam_settings,
     )
     as_req = 7 * cm**2
 
-    beam_rebar = Rebar(section)
+    beam_rebar = Rebar(beam)
     long_rebar_df = beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=as_req)
     best_design = beam_rebar.longitudinal_rebar_design
     print(long_rebar_df, best_design)
@@ -204,16 +207,16 @@ def rebar() -> None:
 def rebar_df() -> None:
     concrete = Concrete_ACI_318_19(name="H30", f_c=30 * MPa)
     steelBar = SteelBar(name="ADN 420", f_y=420 * MPa)
-    custom_settings = {"clear_cover": 30 * mm, "stirrup_diameter_ini": 8 * mm}
-    section = RectangularBeam(
+    beam_settings = BeamSettings(stirrup_diameter_ini=8 * mm)
+    beam = RectangularBeam(
         label="V 20x50",
         concrete=concrete,
         steel_bar=steelBar,
         width=20 * cm,
         height=50 * cm,
-        settings=custom_settings,
+        c_c=30 * mm,
     )
-    beam_rebar = Rebar(section)
+    beam_rebar = Rebar(beam)
     # Create a list of required steel areas from 0.5 to 10 with a step of 0.5 cm²
     as_req_list = np.arange(0.5, 10.5, 0.5) * cm**2
     # Initialize an empty DataFrame to store the results
@@ -243,13 +246,6 @@ def rebar_df() -> None:
 
 
 ##########################################################################################################
-##########################################################################################################
-##########################################################################################################
-##########################################################################################################
-##########################################################################################################
-##########################################################################################################
-##########################################################################################################
-
 
 def clear_console() -> None:
     """
@@ -384,3 +380,4 @@ if __name__ == "__main__":
     # shear_ACI_318_19()
     # flexure_ACI_318_19()
     flexure_design_test_EN()
+    rebar()
