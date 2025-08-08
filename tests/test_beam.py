@@ -1,5 +1,8 @@
 import pytest
 import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.colors import to_rgba
+from matplotlib.patches import Rectangle, FancyBboxPatch
 
 from mento.node import Node
 from mento.beam import RectangularBeam
@@ -10,6 +13,7 @@ from mento.codes.ACI_318_19_beam import (
     _determine_nominal_moment_simple_reinf_ACI_318_19,
     _determine_nominal_moment_double_reinf_ACI_318_19,
 )
+from mento.results import CUSTOM_COLORS
 
 
 @pytest.fixture()
@@ -381,23 +385,23 @@ def test_flexure_check_EN_1992_2004_1(
     node = Node(section=beam_example_EN_1992_2004, forces=f)
     results = node.check_flexure()
 
-    assert results.iloc[0]["Position"] == "Bottom"
-    assert results.iloc[0]["As,min"].to(cm**2).magnitude == pytest.approx(
+    assert results.iloc[1]["Position"] == "Bottom"
+    assert results.iloc[1]["As,min"].to(cm**2).magnitude == pytest.approx(
         1.49, rel=1e-2
     )
-    assert results.iloc[0]["As,req bot"].to(cm**2).magnitude == pytest.approx(
+    assert results.iloc[1]["As,req bot"].to(cm**2).magnitude == pytest.approx(
         6.68, rel=1e-3
     )
-    assert results.iloc[0]["As,req top"].to(cm**2).magnitude == pytest.approx(
+    assert results.iloc[1]["As,req top"].to(cm**2).magnitude == pytest.approx(
         0, rel=1e-3
     )
-    assert results.iloc[0]["As"].to(inch**2).magnitude == pytest.approx(
+    assert results.iloc[1]["As"].to(inch**2).magnitude == pytest.approx(
         8.04, rel=1e-2
     )
-    assert results.iloc[0]["MRd"].to(kip * ft).magnitude == pytest.approx(
+    assert results.iloc[1]["MRd"].to(kip * ft).magnitude == pytest.approx(
         180.47, rel=1e-5
     )
-    assert results.iloc[0]["DCR"] == pytest.approx(0.831, rel=1e-5)
+    assert results.iloc[1]["DCR"] == pytest.approx(0.831, rel=1e-5)
 
 
 def test_flexure_check_EN_1992_2004_2(
@@ -409,23 +413,23 @@ def test_flexure_check_EN_1992_2004_2(
     node = Node(section=beam_example_EN_1992_2004, forces=f)
     results = node.check_flexure()
 
-    assert results.iloc[0]["Position"] == "Bottom"
-    assert results.iloc[0]["As,min"].to(cm**2).magnitude == pytest.approx(
+    assert results.iloc[1]["Position"] == "Bottom"
+    assert results.iloc[1]["As,min"].to(cm**2).magnitude == pytest.approx(
         1.48, rel=1e-3
     )
-    assert results.iloc[0]["As,req bot"].to(cm**2).magnitude == pytest.approx(
+    assert results.iloc[1]["As,req bot"].to(cm**2).magnitude == pytest.approx(
         21.07, rel=1e-3
     )
-    assert results.iloc[0]["As,req top"].to(cm**2).magnitude == pytest.approx(
+    assert results.iloc[1]["As,req top"].to(cm**2).magnitude == pytest.approx(
         8.64, rel=1e-3
     )
-    assert results.iloc[0]["As"].to(inch**2).magnitude == pytest.approx(
+    assert results.iloc[1]["As"].to(inch**2).magnitude == pytest.approx(
         24.54, rel=1e-3
     )
-    assert results.iloc[0]["MRd"].to(kip * ft).magnitude == pytest.approx(
+    assert results.iloc[1]["MRd"].to(kip * ft).magnitude == pytest.approx(
         505.6, rel=1e-3
     )
-    assert results.iloc[0]["DCR"] == pytest.approx(0.89, rel=1e-5)
+    assert results.iloc[1]["DCR"] == pytest.approx(0.89, rel=1e-5)
 
 
 def test_flexure_check_EN_1992_2004_3(
@@ -436,14 +440,14 @@ def test_flexure_check_EN_1992_2004_3(
     node = Node(section=beam_example_EN_1992_2004_2, forces=f)
     results = node.check_flexure()
 
-    assert results.iloc[0]["Position"] == "Bottom"
-    assert results.iloc[0]["As,min"].to(cm**2).magnitude == pytest.approx(
+    assert results.iloc[1]["Position"] == "Bottom"
+    assert results.iloc[1]["As,min"].to(cm**2).magnitude == pytest.approx(
         1.8, rel=1e-2
     )
-    assert results.iloc[0]["As,req bot"].to(cm**2).magnitude == pytest.approx(
+    assert results.iloc[1]["As,req bot"].to(cm**2).magnitude == pytest.approx(
         6.63, rel=1e-3
     )
-    assert results.iloc[0]["As,req top"].to(cm**2).magnitude == pytest.approx(
+    assert results.iloc[1]["As,req top"].to(cm**2).magnitude == pytest.approx(
         0, rel=1e-3
     )
 
@@ -461,14 +465,14 @@ def test_flexure_check_EN_1992_2004_4(
     node = Node(section=beam_example_EN_1992_2004_3, forces=f)
     results = node.check_flexure()
 
-    assert results.iloc[0]["Position"] == "Bottom"
-    assert results.iloc[0]["As,min"].to(cm**2).magnitude == pytest.approx(
+    assert results.iloc[1]["Position"] == "Bottom"
+    assert results.iloc[1]["As,min"].to(cm**2).magnitude == pytest.approx(
         2.01, rel=1e-3
     )
-    assert results.iloc[0]["As,req bot"].to(cm**2).magnitude == pytest.approx(
+    assert results.iloc[1]["As,req bot"].to(cm**2).magnitude == pytest.approx(
         23.07, rel=1e-3  # 23.07 in Example
     )
-    assert results.iloc[0]["As,req top"].to(cm**2).magnitude == pytest.approx(
+    assert results.iloc[1]["As,req top"].to(cm**2).magnitude == pytest.approx(
         4.27, rel=1e-3  # 4.27 in Example
     )
 
@@ -529,12 +533,12 @@ def beam_example_flexure_ACI() -> RectangularBeam:
     concrete = Concrete_ACI_318_19(name="fc 4000", f_c=4000 * psi)
     steelBar = SteelBar(name="fy 60000", f_y=60 * ksi)
     section = RectangularBeam(
-        label="B-12x24",
         concrete=concrete,
         steel_bar=steelBar,
         width=12 * inch,
         height=24 * inch,
         c_c=1.5 * inch,
+        label="B-12x24",
     )
     return section
 
@@ -550,22 +554,15 @@ def test_check_flexure_ACI_318_19_1(beam_example_flexure_ACI: RectangularBeam) -
     node = Node(section=beam_example_flexure_ACI, forces=f)
     results = node.check_flexure()
 
-    assert results.iloc[0]["Section Label"] == "B-12x24"
-    assert results.iloc[0]["Load Combo"] == "Test_01"
-    assert results.iloc[0]["Position"] == "Bottom"
-    assert results.iloc[0]["As,min"].to(cm**2).magnitude == pytest.approx(
-        5.26, rel=1e-2
-    )
-    assert results.iloc[0]["As,req bot"].to(cm**2).magnitude == pytest.approx(
-        33.1712108, rel=1e-3
-    )
-    assert results.iloc[0]["As,req top"].to(cm**2).magnitude == pytest.approx(
-        4.9250577, rel=1e-3
-    )
-    assert results.iloc[0]["As"].to(inch**2).magnitude == pytest.approx(
-        5.66, rel=1e-2
-    )
-    assert results.iloc[0]["Mu"].to(kip * ft).magnitude == pytest.approx(400, rel=1e-5)
+    assert results.iloc[1]["Label"] == "B-12x24"
+    assert results.iloc[1]["Comb."] == "Test_01"
+    assert results.iloc[1]["Position"] == "Bottom"
+    assert results.iloc[1]["As,min"] == pytest.approx(5.257, rel=1e-2)
+    assert results.iloc[1]["As,req bot"] == pytest.approx(33.17, rel=1e-3)
+    assert results.iloc[1]["As,req top"] == pytest.approx(4.93, rel=1e-3)
+    assert results.iloc[1]["As"] == pytest.approx(36.49, rel=1e-2)
+    assert results.iloc[1]["Mu"] == pytest.approx(542.33, rel=1e-3)
+    assert results.iloc[1]["ØMn"] == pytest.approx(588.73, rel=1e-3)
 
 
 def test_check_flexure_ACI_318_19_2(beam_example_flexure_ACI: RectangularBeam) -> None:
@@ -580,22 +577,34 @@ def test_check_flexure_ACI_318_19_2(beam_example_flexure_ACI: RectangularBeam) -
     node = Node(section=beam_example_flexure_ACI, forces=f)
     results = node.check_flexure()
 
-    assert results.iloc[0]["Section Label"] == "B-12x24"
-    assert results.iloc[0]["Load Combo"] == "Test_02"
-    assert results.iloc[0]["Position"] == "Top"
-    assert results.iloc[0]["As,min"].to(cm**2).magnitude == pytest.approx(
-        5.26, rel=1e-2
-    )
-    assert results.iloc[0]["As,req bot"].to(cm**2).magnitude == pytest.approx(
-        4.9250577, rel=1e-3
-    )
-    assert results.iloc[0]["As,req top"].to(cm**2).magnitude == pytest.approx(
-        33.1712108, rel=1e-3
-    )
-    assert results.iloc[0]["As"].to(inch**2).magnitude == pytest.approx(
-        5.66, rel=1e-2
-    )
-    assert results.iloc[0]["Mu"].to(kip * ft).magnitude == pytest.approx(-400, rel=1e-5)
+    assert results.iloc[1]["Label"] == "B-12x24"
+    assert results.iloc[1]["Comb."] == "Test_02"
+    assert results.iloc[1]["Position"] == "Top"
+    assert results.iloc[1]["As,min"] == pytest.approx(5.26, rel=1e-3)
+    assert results.iloc[1]["As,req bot"] == pytest.approx(4.93, rel=1e-3)
+    assert results.iloc[1]["As,req top"] == pytest.approx(33.17, rel=1e-3)
+    assert results.iloc[1]["As"] == pytest.approx(36.49, rel=1e-3)
+    assert results.iloc[1]["Mu"] == pytest.approx(-542.33, rel=1e-5)
+    assert results.iloc[1]["ØMn"] == pytest.approx(588.73, rel=1e-3)
+
+
+def test_check_flexure_ACI_318_19_3(beam_example_flexure_ACI: RectangularBeam) -> None:
+    # Simple bending check
+    # Ver calcpad: ACI 318-19 Beam Flexure 03.cpd
+    f = Forces(label="Test_03", M_y=200 * kip * ft)
+    beam_example_flexure_ACI.set_longitudinal_rebar_bot(n1=2, d_b1=1.41 * inch)
+    beam_example_flexure_ACI.set_longitudinal_rebar_top(n1=2, d_b1=0.75 * inch)
+    node = Node(section=beam_example_flexure_ACI, forces=f)
+    results = node.check_flexure()
+
+    assert results.iloc[1]["Label"] == "B-12x24"
+    assert results.iloc[1]["Comb."] == "Test_03"
+    assert results.iloc[1]["Position"] == "Bottom"
+    assert results.iloc[1]["As,min"] == pytest.approx(5.53, rel=1e-3)
+    assert results.iloc[1]["As,req bot"] == pytest.approx(14.51, rel=1e-3)
+    assert results.iloc[1]["As,req top"] == pytest.approx(0, rel=1e-3)
+    assert results.iloc[1]["As"] == pytest.approx(20.15, rel=1e-3)
+    assert results.iloc[1]["ØMn"] == pytest.approx(364.37, rel=1e-3)
 
 
 # def test_design_flexure_ACI_318_19_1(beam_example_flexure_ACI: RectangularBeam) -> None:
@@ -645,6 +654,106 @@ def testing_determine_nominal_moment_ACI_318_19(
     assert beam_example_flexure_ACI._phi_M_n_top.to(kNm).magnitude == pytest.approx(
         587.0589108678, rel=1e-2
     )
+
+
+def test_rectangular_section_plot_components(
+    beam_example_flexure_ACI: RectangularBeam,
+) -> None:
+    """
+    Test that the plot method adds the expected matplotlib components
+    (main rectangle, stirrup rectangles, annotations).
+    """
+    beam_example_flexure_ACI.plot()
+    ax = beam_example_flexure_ACI._ax  # Access the private _ax created by plot
+
+    assert ax is not None, "Plot method should create and assign an Axes object."
+
+    # Check for patches (rectangles, FancyBboxPatch)
+    # Expecting: 1 main Rectangle, 2 FancyBboxPatches for stirrup
+    # + potentially other internal patches depending on matplotlib's rendering
+    # It's safer to check for specific types and properties if possible.
+
+    # Filter for Rectangle and FancyBboxPatch
+    rectangles = [p for p in ax.patches if isinstance(p, Rectangle)]
+    fancy_bboxes = [p for p in ax.patches if isinstance(p, FancyBboxPatch)]
+
+    assert (
+        len(rectangles) >= 1
+    ), "Expected at least one Rectangle patch (the main section)."
+    assert (
+        len(fancy_bboxes) == 2
+    ), "Expected exactly two FancyBboxPatch objects for the stirrup."
+
+    # Check for annotations (dimensions)
+    # Annotations are stored in ax.texts for text, ax.lines or ax.artists for arrows
+    # matplotlib.axes.Axes.annotate returns an Annotation object.
+    # Text labels are found in ax.texts
+    assert (
+        len(ax.texts) == 4
+    ), "Expected 4 text annotations for dimensions (width, height)."
+
+    # You could add more specific checks, e.g.:
+    # - Check the coordinates of the main rectangle:
+    main_rect = next((p for p in rectangles if p.get_x() == 0 and p.get_y() == 0), None)
+    assert main_rect is not None
+    assert np.isclose(main_rect.get_width(), beam_example_flexure_ACI.width.magnitude)
+    assert np.isclose(main_rect.get_height(), beam_example_flexure_ACI.height.magnitude)
+    assert main_rect.get_edgecolor() == to_rgba(CUSTOM_COLORS["dark_gray"])
+
+    # - Check stirrup patch properties (example, will need exact dimensions based on calculation)
+    #   This gets more complex quickly, focusing on existence and basic properties is often enough.
+
+    plt.close()  # Close the figure created by the plot method
+
+
+def test_rectangular_section_plot_imperial_units_text(
+    beam_example_imperial: RectangularBeam,
+) -> None:
+    """
+    Test that the plot method displays dimensions in imperial units
+    when the concrete's unit system is set to 'imperial'.
+    """
+    beam_example_imperial.plot()
+    ax = beam_example_imperial._ax
+    assert ax is not None, "The plot method did not assign an Axes object to _ax."
+
+    # Extract text labels
+    text_labels = [t.get_text() for t in ax.texts]
+
+    # Check if the labels contain "inch" (represented by "in" in pint's compact format)
+    # Adjust based on how pint formats "inch" in your setup (e.g., "in", "inch", etc.)
+    # "{:~P}" often uses common abbreviations.
+    assert any(
+        "in" in label for label in text_labels
+    ), "Expected imperial unit 'in' in dimension text."
+    assert "{:.0f~P}".format(beam_example_imperial.width.to("inch")) in text_labels
+    assert "{:.0f~P}".format(beam_example_imperial.height.to("inch")) in text_labels
+
+    plt.close()
+
+
+def test_rectangular_section_plot_metric_units_text(
+    beam_example_EN_1992_2004: RectangularBeam,
+) -> None:
+    """
+    Test that the plot method displays dimensions in metric units (cm)
+    when the concrete's unit system is not 'imperial'.
+    """
+    beam_example_EN_1992_2004.plot()  # Ensure the plot method is called
+    ax = beam_example_EN_1992_2004._ax
+    assert ax is not None, "The plot method did not assign an Axes object to _ax."
+
+    # Extract text labels
+    text_labels = [t.get_text() for t in ax.texts]
+
+    # Check if the labels contain "cm"
+    assert any(
+        "cm" in label for label in text_labels
+    ), "Expected metric unit 'cm' in dimension text."
+    assert "{:.0f~P}".format(beam_example_EN_1992_2004.width.to("cm")) in text_labels
+    assert "{:.0f~P}".format(beam_example_EN_1992_2004.height.to("cm")) in text_labels
+
+    plt.close()
 
 
 # This is where pytest will collect the tests and run them

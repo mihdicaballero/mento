@@ -103,4 +103,4 @@ class BeamSettings:
         return "\n".join(settings_list)
 
 
-GLOBAL_BEAM_SETTINGS = BeamSettings()
+# GLOBAL_BEAM_SETTINGS = BeamSettings()

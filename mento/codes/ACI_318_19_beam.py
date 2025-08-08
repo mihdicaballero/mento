@@ -858,9 +858,8 @@ def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.Data
         )
         self._c_d_top = 0
         # Calculate the design capacity ratio for the bottom side.
-        self._DCRb_bot = round(
-            self._M_u_bot.to("kN*m").magnitude / self._phi_M_n_bot.to("kN*m").magnitude,
-            2,
+        self._DCRb_bot = (
+            self._M_u_bot.to("kN*m").magnitude / self._phi_M_n_bot.to("kN*m").magnitude
         )
         self._DCRb_top = 0
     else:
@@ -876,10 +875,8 @@ def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.Data
         )
         self._c_d_bot = 0
         # Calculate the design capacity ratio for the top side.
-        self._DCRb_top = round(
-            -self._M_u_top.to("kN*m").magnitude
-            / self._phi_M_n_top.to("kN*m").magnitude,
-            2,
+        self._DCRb_top = (
+            -self._M_u_top.to("kN*m").magnitude / self._phi_M_n_top.to("kN*m").magnitude
         )
         self._DCRb_bot = 0
 
@@ -1073,30 +1070,30 @@ def _compile_results_ACI_flexure_metric(
             "Label": self.label,
             "Comb.": force.label,
             "Position": "Bottom",
-            "As,min": self._A_s_min_bot.to("cm ** 2").magnitude,
-            "As,req top": self._A_s_req_top.to("cm ** 2").magnitude,
-            "As,req bot": self._A_s_req_bot.to("cm ** 2").magnitude,
-            "As": self._A_s_bot.to("cm ** 2").magnitude,
+            "As,min": round(self._A_s_min_bot.to("cm ** 2").magnitude, 2),
+            "As,req top": round(self._A_s_req_top.to("cm ** 2").magnitude, 2),
+            "As,req bot": round(self._A_s_req_bot.to("cm ** 2").magnitude, 2),
+            "As": round(self._A_s_bot.to("cm ** 2").magnitude, 2),
             # 'c/d': self._c_d_bot,
-            "Mu": self._M_u_bot.to("kN*m").magnitude,
-            "ØMn": self._phi_M_n_bot.to("kN*m").magnitude,
+            "Mu": round(self._M_u_bot.to("kN*m").magnitude, 2),
+            "ØMn": round(self._phi_M_n_bot.to("kN*m").magnitude, 2),
             "Mu<ØMn": self._M_u_bot <= self._phi_M_n_bot,
-            "DCR": self._DCRb_bot,
+            "DCR": round(self._DCRb_bot, 3),
         }
     else:
         result = {
             "Label": self.label,
             "Comb.": force.label,
             "Position": "Top",
-            "As,min": self._A_s_min_top.to("cm ** 2").magnitude,
-            "As,req top": self._A_s_req_top.to("cm ** 2").magnitude,
-            "As,req bot": self._A_s_req_bot.to("cm ** 2").magnitude,
-            "As": self._A_s_top.to("cm ** 2").magnitude,
+            "As,min": round(self._A_s_min_top.to("cm ** 2").magnitude, 2),
+            "As,req top": round(self._A_s_req_top.to("cm ** 2").magnitude, 2),
+            "As,req bot": round(self._A_s_req_bot.to("cm ** 2").magnitude, 2),
+            "As": round(self._A_s_top.to("cm ** 2").magnitude, 2),
             # 'c/d': self._c_d_top,
-            "Mu": self._M_u_top.to("kN*m").magnitude,
-            "ØMn": self._phi_M_n_top.to("kN*m").magnitude,
+            "Mu": round(self._M_u_top.to("kN*m").magnitude, 2),
+            "ØMn": round(self._phi_M_n_top.to("kN*m").magnitude, 2),
             "Mu<ØMn": -self._M_u_top <= self._phi_M_n_top,
-            "DCR": self._DCRb_top,
+            "DCR": round(self._DCRb_top, 3),
         }
     return result
 
