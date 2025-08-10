@@ -20,7 +20,7 @@ Below is a step-by-step guide on how to use the `Beam` class in your structural 
 1. Creating a Beam Object
 *************************
 
-To define a beam, you need to specify its geometry, material properties, and reinforcement.
+To define a beam, you need to specify its geometry, material properties, and clear cover.
 The `RectangularBeam` class is used for this purpose. If no custom settings are passed to the *Beam* object, it will take the default values.
 
 .. image:: ../_static/beam/beam.png
@@ -37,7 +37,7 @@ The `RectangularBeam` class is used for this purpose. If no custom settings are 
     steel = SteelBar(name="ADN 420", f_y=420*MPa)
 
     # Define beam geometry
-    beam = RectangularBeam(label="101", concrete=concrete, steel_bar=steel, width=20*cm, height=50*cm)
+    beam = RectangularBeam(label="101", concrete=concrete, steel_bar=steel, width=20*cm, height=50*cm, c_c = 2.5*cm)
 
 2. Setting Reinforcement
 ************************
@@ -143,7 +143,7 @@ The first line provides the beam's geometry and material properties:
 - **Beam 101**: Beam identifier.
 - :math:`b = 20.00 \, \textsf{cm}`: Beam width.
 - :math:`h = 60.00 \, \textsf{cm}`: Beam height.
-- :math:`c_{\text{c}} = 2.50 \, \textsf{cm}`: Concrete cover.
+- :math:`c_{\text{c}} = 2.50 \, \textsf{cm}`: Concrete clear cover.
 - **Concrete C25**: Concrete grade.
 - **Rebar ADN 420**: Rebar grade.
 

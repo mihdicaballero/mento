@@ -32,7 +32,7 @@ To create a `Node` you must define the concrete and steel materials, the concret
     # Defines materials and beam section
     conc  = Concrete_ACI_318_19(name="C25",f_c=25*MPa)
     steel = SteelBar(name="ADN 420", f_y=420*MPa)
-    beam  = RectangularBeam(label="101",concrete=conc,steel_bar=steel,width=20*cm, height=60*cm)
+    beam  = RectangularBeam(label="101",concrete=conc,steel_bar=steel,width=20*cm, height=60*cm, c_c=2.5*cm)
 
     # Define forces
     f1 = Forces(label='1.4D', V_z=50*kN, M_y=90*kNm)

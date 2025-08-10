@@ -18,16 +18,11 @@ and methods for managing materials, settings, and unique identification for each
 - **id** (*int*): A unique identifier automatically assigned to each section instance.
 - **concrete** (*Concrete*): The concrete material used in the section.
 - **steel_bar** (*SteelBar*): The steel reinforcement used in the section.
+- **c_c** (*Quantity*): The clear cover of the section.
 - **settings** (*Settings*): A dictionary-like object containing default and user-defined settings.
   - Includes settings like:
-    - `clear_cover`: Clear cover for reinforcement.
     - `stirrup_diameter_ini`: Initial diameter of stirrups.
     - `longitudinal_diameter_ini`: Initial diameter of longitudinal reinforcement.
-
-**Key Methods:**
-
-- **update_settings(new_settings)**: Updates the section settings with a new dictionary of values.
-- **get_settings**: Returns the current settings as a dictionary.
 
 RectangularSection
 ------------------
@@ -50,12 +45,9 @@ as beams or columns. It adds specific geometric properties and methods relevant 
 Usage Notes
 -----------
 
-- **Settings Initialization**:
-  The `Section` class uses default settings unless explicitly updated. Ensure that any custom settings are
-  provided as a dictionary during initialization or by calling `update_settings`.
 - **Section and RectangularSection Usage**:
   Since these are base classes, you won't be using them to create objects per se but to access its atrributes
-  which other classes inherit, like RectangularBeam, RectangularColumn or CircularColumn.
+  which other classes inherit, like RectangularBeam.
 
 You can access the section properties directly in a `RectangularBeam` object.
 
@@ -64,8 +56,9 @@ You can access the section properties directly in a `RectangularBeam` object.
       label="101",
       concrete=concrete,
       steel_bar=steel,
-      width=20*cm,
-      height=50*cm
+      width=20 * cm,
+      height=50 * cm,
+      c_c = 2.5 * cm
   )
   print('b =', section.width)
   print('h =', section.height)
@@ -74,11 +67,6 @@ You can access the section properties directly in a `RectangularBeam` object.
   print('I_z =', section.I_z)
 
 
-Future Extensions
------------------
-
 The `Section` class is a foundational building block in the `mento` package. It can serve as the base for specialized structural elements such as:
 
 - **Rectangular Beams**: See the `RectangularBeam` documentation for its extended features like shear and flexural checks.
-- **Rectangular Columns**: Planned extension to handle axial and biaxial bending interactions for rectangular sections.
-- **Circular Columns**: Planned extension to handle axial and biaxial bending interactions for circular sections.
