@@ -353,18 +353,18 @@ def _compile_results_ACI_shear(self: "RectangularBeam", force: Forces) -> pd.Dat
     results = {
         "Label": self.label,
         "Comb.": force.label,
-        "Av,min": self._A_v_min.to("cm²/m").magnitude,
-        "Av,req": self._A_v_req.to("cm²/m").magnitude,
-        "Av": self._A_v.to("cm²/m").magnitude,
+        "Av,min": round(self._A_v_min.to("cm²/m").magnitude, 2),
+        "Av,req": round(self._A_v_req.to("cm²/m").magnitude, 2),
+        "Av": round(self._A_v.to("cm²/m").magnitude, 2),
         "Vu": self._V_u.to("kN").magnitude,
         "Nu": self._N_u.to("kN").magnitude,
-        "ØVc": self._phi_V_c.to("kN").magnitude,
-        "ØVs": self._phi_V_s.to("kN").magnitude,
-        "ØVn": self._phi_V_n.to("kN").magnitude,
-        "ØVmax": self._phi_V_max.to("kN").magnitude,
-        "Vu<ØVmax": self._max_shear_ok,
-        "Vu<ØVn": self._V_u <= self._phi_V_n,
-        "DCR": self._DCRv,
+        "ØVc": round(self._phi_V_c.to("kN").magnitude, 2),
+        "ØVs": round(self._phi_V_s.to("kN").magnitude, 2),
+        "ØVn": round(self._phi_V_n.to("kN").magnitude, 2),
+        "ØVmax": round(self._phi_V_max.to("kN").magnitude, 2),
+        "Vu≤ØVmax": self._max_shear_ok,
+        "Vu≤ØVn": self._V_u <= self._phi_V_n,
+        "DCR": round(self._DCRv, 3),
     }
     return pd.DataFrame([results], index=[0])
 
@@ -1081,7 +1081,7 @@ def _compile_results_ACI_flexure_metric(
             # 'c/d': self._c_d_bot,
             "Mu": round(self._M_u_bot.to("kN*m").magnitude, 2),
             "ØMn": round(self._phi_M_n_bot.to("kN*m").magnitude, 2),
-            "Mu<ØMn": self._M_u_bot <= self._phi_M_n_bot,
+            "Mu≤ØMn": self._M_u_bot <= self._phi_M_n_bot,
             "DCR": round(self._DCRb_bot, 3),
         }
     else:
@@ -1096,7 +1096,7 @@ def _compile_results_ACI_flexure_metric(
             # 'c/d': self._c_d_top,
             "Mu": round(self._M_u_top.to("kN*m").magnitude, 2),
             "ØMn": round(self._phi_M_n_top.to("kN*m").magnitude, 2),
-            "Mu<ØMn": -self._M_u_top <= self._phi_M_n_top,
+            "Mu≤ØMn": -self._M_u_top <= self._phi_M_n_top,
             "DCR": round(self._DCRb_top, 3),
         }
     return result
@@ -1165,7 +1165,12 @@ def _initialize_dicts_ACI_318_19_shear(self: "RectangularBeam") -> None:
                 0 * mm if self.concrete.unit_system == "metric" else 0 * inch
             )
         else:
-            db_min = 10 * mm if self.concrete.unit_system == "metric" else 3 / 8 * inch
+            if self.concrete.design_code == "ACI 318-19":
+                db_min = (
+                    10 * mm if self.concrete.unit_system == "metric" else 3 / 8 * inch
+                )
+            else:
+                db_min = 6 * mm
         min_values = [
             None,
             None,
@@ -1184,7 +1189,6 @@ def _initialize_dicts_ACI_318_19_shear(self: "RectangularBeam") -> None:
             self._A_v,
             self._stirrup_d_b,
         ]  # Current values to check
-
         # Generate check marks based on the range conditions
         checks = [
             "✔️"
@@ -1206,13 +1210,13 @@ def _initialize_dicts_ACI_318_19_shear(self: "RectangularBeam") -> None:
                 round(self._stirrup_s_l.to("cm").magnitude, 2),
                 round(self._stirrup_s_w.to("cm").magnitude, 2),
                 round(self._A_v.to("cm**2/m").magnitude, 2),
-                round(self._stirrup_d_b.magnitude, 0),
+                round(self._stirrup_d_b.to("mm").magnitude, 0),
             ],
             "Min.": [
                 "",
                 "",
                 round(self._A_v_min.to("cm**2/m").magnitude, 2),
-                round(db_min.magnitude, 0),
+                round(db_min.to("mm").magnitude, 0),
             ],
             "Max.": [
                 round(self._stirrup_s_max_l.to("cm").magnitude, 2),
@@ -1236,8 +1240,8 @@ def _initialize_dicts_ACI_318_19_shear(self: "RectangularBeam") -> None:
             "Variable": ["ns", "db", "s", "d", "Av,min", "Av,req", "Av", "ØVs"],
             "Value": [
                 self._stirrup_n,
-                self._stirrup_d_b.to("mm").magnitude,
-                self._stirrup_s_l.to("cm").magnitude,
+                round(self._stirrup_d_b.to("mm").magnitude, 3),
+                round(self._stirrup_s_l.to("cm").magnitude, 3),
                 round(self._d_shear.to("cm").magnitude, 2),
                 round(self._A_v_min.to("cm**2/m").magnitude, 2),
                 round(self._A_v_req.to("cm**2/m").magnitude, 2),

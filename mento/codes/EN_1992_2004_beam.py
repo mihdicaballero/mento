@@ -58,7 +58,6 @@ def _initialize_shear_variables_EN_1992_2004(
 
         # Consider bottom or top tension reinforcement
         self._A_s_tension = self._A_s_bot if force._M_y >= 0 * kNm else self._A_s_top
-        print("d=", self._d_shear.to("cm"))
         # Compression stress, positive
         if force._M_y >= 0 * kNm:
             self._rho_l_bot = min(
@@ -136,16 +135,6 @@ def _calculate_max_shear_strength_EN_1992_2004(self: "RectangularBeam") -> None:
             * self._f_cd
             / (cot_theta_min + math.tan(theta_min))
         ).to("kN")
-        print(
-            V_Rd_max_min_angle,
-            alpha_cw,
-            self.width,
-            self._z,
-            v_1,
-            self._f_cd,
-            cot_theta_min,
-            math.tan(theta_min),
-        )
 
         if self._V_Ed_1 <= V_Rd_max_min_angle:
             # If within the minimum angle
@@ -263,35 +252,37 @@ def _check_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> DataFra
         results = {
             "Label": self.label,  # Beam label
             "Comb.": force.label,
-            "Av,min": self._A_v_min.to(
-                "cm ** 2 / m"
-            ).magnitude,  # Minimum shear reinforcement area
-            "Av,req": self._A_v_req.to(
-                "cm ** 2 / m"
-            ).magnitude,  # Required shear reinforcing area
-            "Av": self._A_v.to(
-                "cm ** 2 / m"
-            ).magnitude,  # Provided stirrup reinforcement per unit length
+            "Av,min": round(
+                self._A_v_min.to("cm ** 2 / m").magnitude, 2
+            ),  # Minimum shear reinforcement area
+            "Av,req": round(
+                self._A_v_req.to("cm ** 2 / m").magnitude, 2
+            ),  # Required shear reinforcing area
+            "Av": round(
+                self._A_v.to("cm ** 2 / m").magnitude, 2
+            ),  # Provided stirrup reinforcement per unit length
             "VEd,1": self._V_Ed_1.to(
                 "kN"
             ).magnitude,  # Max Vu for the design at the support
             "VEd,2": self._V_Ed_2.to(
                 "kN"
             ).magnitude,  # Max Vu for the design at d from the support
-            "VRd,c": self._V_Rd_c.to(
-                "kN"
-            ).magnitude,  # Concrete contribution to shear capacity
-            "VRd,s": self._V_Rd_s.to(
-                "kN"
-            ).magnitude,  # Reinforcement contribution to shear capacity
-            "VRd": self._V_Rd.to("kN").magnitude,  # Total shear capacity
-            "VRd,max": self._V_Rd_max.to("kN").magnitude,  # Maximum shear capacity
-            "VEd,1<VRd,max": self._max_shear_ok,  # Check if applied shear is within max shear capacity
-            "VEd,2<VRd": self._V_Ed_2.to("kN").magnitude
+            "VRd,c": round(
+                self._V_Rd_c.to("kN").magnitude, 2
+            ),  # Concrete contribution to shear capacity
+            "VRd,s": round(
+                self._V_Rd_s.to("kN").magnitude, 2
+            ),  # Reinforcement contribution to shear capacity
+            "VRd": round(self._V_Rd.to("kN").magnitude, 2),  # Total shear capacity
+            "VRd,max": round(
+                self._V_Rd_max.to("kN").magnitude, 2
+            ),  # Maximum shear capacity
+            "VEd,1≤VRd,max": self._max_shear_ok,  # Check if applied shear is within max shear capacity
+            "VEd,2≤VRd": self._V_Ed_2.to("kN").magnitude
             <= self._V_Rd.to(
                 "kN"
             ).magnitude,  # Check if applied shear is within total capacity
-            "DCR": self._DCRv,
+            "DCR": round(self._DCRv, 3),
         }
         _initialize_dicts_EN_1992_2004_shear(self)
         return pd.DataFrame([results], index=[0])
@@ -619,7 +610,7 @@ def _initialize_dicts_EN_1992_2004_shear(self: "RectangularBeam") -> None:
                 round(self._V_Rd_max.to("kN").magnitude, 2),
                 round(self._V_Rd.to("kN").magnitude, 2),
                 check_max,
-                self._DCRv,
+                round(self._DCRv, 3),
             ],
             "Unit": ["", "", "MPa", "deg", "kN", "kN", "kN", "", check_DCR],
         }

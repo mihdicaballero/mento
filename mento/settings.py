@@ -101,6 +101,3 @@ class BeamSettings:
                 else:
                     settings_list.append(f"{name}: {value}")
         return "\n".join(settings_list)
-
-
-# GLOBAL_BEAM_SETTINGS = BeamSettings()

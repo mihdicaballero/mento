@@ -9,6 +9,7 @@ import pandas as pd
 from pandas import DataFrame
 import math
 import warnings
+from importlib.metadata import version
 
 from mento.rectangular import RectangularSection
 from mento.material import (
@@ -31,6 +32,8 @@ from mento.codes.ACI_318_19_beam import (
     _check_flexure_ACI_318_19,
     _design_flexure_ACI_318_19,
 )
+
+MENTO_VERSION = version("mento")
 
 
 @dataclass
@@ -707,6 +710,7 @@ class RectangularBeam(RectangularSection):
                 [
                     {
                         "Label": "",
+                        "Comb.": "",
                         "Av,min": "cm²/m",
                         "Av,req": "cm²/m",
                         "Av": "cm²/m",
@@ -716,8 +720,8 @@ class RectangularBeam(RectangularSection):
                         "VRd,s": "kN",
                         "VRd": "kN",
                         "VRd,max": "kN",
-                        "VEd,1<VRd,max": "",
-                        "VEd,2<VRd": "",
+                        "VEd,1≤VRd,max": "",
+                        "VEd,2≤VRd": "",
                         "DCR": "",
                     }
                 ]
@@ -737,8 +741,8 @@ class RectangularBeam(RectangularSection):
                         "ØVs": "kN",
                         "ØVn": "kN",
                         "ØVmax": "kN",
-                        "Vu<ØVmax": "",
-                        "Vu<ØVn": "",
+                        "Vu≤ØVmax": "",
+                        "Vu≤ØVn": "",
                         "DCR": "",
                     }
                 ]
@@ -758,7 +762,7 @@ class RectangularBeam(RectangularSection):
                     # "c/d": "",  # Uncomment if you include this field later
                     "Mu": "kNm",
                     "ØMn": "kNm",
-                    "Mu<ØMn": "",
+                    "Mu≤ØMn": "",
                     "DCR": "",
                 }
             ]
@@ -1219,8 +1223,10 @@ class RectangularBeam(RectangularSection):
         doc_builder = DocumentBuilder(title="Concrete beam flexure check")
 
         # Add first section and table
-        doc_builder.add_heading("Concrete beam flexure check", level=1)
-        doc_builder.add_text(f"Design code: {self.concrete.design_code}")
+        doc_builder.add_heading(f"Beam {self.label} flexure check", level=1)
+        doc_builder.add_text(
+            f"Made with mento {MENTO_VERSION}. Design code: {self.concrete.design_code}"
+        )
         doc_builder.add_heading("Materials", level=2)
         doc_builder.add_table_data(df_materials)
         doc_builder.add_table_data(df_geometry)
@@ -1238,7 +1244,7 @@ class RectangularBeam(RectangularSection):
 
         # Save the Word doc
         doc_builder.save(
-            f"Concrete beam flexure check {self.concrete.design_code}.docx"
+            f"Beam {self.label} flexure check {self.concrete.design_code}.docx"
         )
 
     def shear_results_detailed(self, force: Optional[Forces] = None) -> None:
@@ -1331,8 +1337,10 @@ class RectangularBeam(RectangularSection):
         doc_builder = DocumentBuilder(title="Concrete beam shear check")
 
         # Add first section and table
-        doc_builder.add_heading("Concrete beam shear check", level=1)
-        doc_builder.add_text(f"Design code: {self.concrete.design_code}")
+        doc_builder.add_heading(f"Beam {self.label} shear check", level=1)
+        doc_builder.add_text(
+            f"Made with mento {MENTO_VERSION}. Design code: {self.concrete.design_code}"
+        )
         doc_builder.add_heading("Materials", level=2)
         doc_builder.add_table_data(df_materials)
         doc_builder.add_table_data(df_geometry)
@@ -1346,7 +1354,9 @@ class RectangularBeam(RectangularSection):
         doc_builder.add_table_dcr(df_shear_concrete)
 
         # Save the Word doc
-        doc_builder.save(f"Concrete beam shear check {self.concrete.design_code}.docx")
+        doc_builder.save(
+            f"Beam {self.label} shear check {self.concrete.design_code}.docx"
+        )
 
     def _format_longitudinal_rebar_string(
         self, n1: int, d_b1: Quantity, n2: int = 0, d_b2: Quantity = 0 * mm
