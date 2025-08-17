@@ -294,6 +294,10 @@ def _check_shear_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.DataFr
         if self._stirrup_n > 0:
             # Shear reinforcement calculations
             _calculate_shear_reinforcement_aci(self)
+        else:
+            # Set current stirrup diameter to zero
+            self._stirrup_d_b = 0 * mm
+            self._update_effective_heights()
 
         # Effective shear area and longitudinal reinforcement ratio
         _calculate_effective_shear_area_aci(self)

@@ -107,15 +107,16 @@ def shear_EN_1992() -> None:
         c_c=2.6 * cm,
     )
     # f = Forces(V_z=100*kN, M_y=100*kNm)
-    f = Forces(V_z=100 * kN, N_x=0 * kN)
-    beam.set_transverse_rebar(n_stirrups=1, d_b=6 * mm, s_l=25 * cm)
+    # f = Forces(V_z=100 * kN, N_x=0 * kN)
+    f = Forces(V_z=30 * kN, N_x=0 * kN)
+    # beam.set_transverse_rebar(n_stirrups=1, d_b=6 * mm, s_l=25 * cm)
     beam.set_longitudinal_rebar_bot(n1=4, d_b1=16 * mm)
     node = Node(section=beam, forces=f)
     results = node.check_shear()
     # results = node.design_shear()
     print(results)
     print(node.shear_results_detailed())
-    # beam.plot()
+    beam.plot()
 
 
 def shear_ACI_318_19() -> None:
@@ -136,10 +137,11 @@ def shear_ACI_318_19() -> None:
 
     f = Forces(label="ELU_01", V_z=30 * kip)
     node_1 = Node(section=section, forces=f)
-    # section.plot()
+    section.plot()
     node_1.check_shear()
+    print(section._d_shear.to("cm"))
     print(node_1.check_shear())
-    print(node_1.shear_results_detailed())
+    # print(node_1.shear_results_detailed())
 
 
 def flexure_ACI_318_19() -> None:
@@ -248,7 +250,7 @@ if __name__ == "__main__":
     # material()
     # section()
     # rectangular()
-    # shear_EN_1992()
-    # shear_ACI_318_19()
+    shear_EN_1992()
+    shear_ACI_318_19()
     # flexure_ACI_318_19()
-    rebar()
+    # rebar()

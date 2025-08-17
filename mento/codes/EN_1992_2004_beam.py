@@ -58,7 +58,7 @@ def _initialize_shear_variables_EN_1992_2004(
 
         # Consider bottom or top tension reinforcement
         self._A_s_tension = self._A_s_bot if force._M_y >= 0 * kNm else self._A_s_top
-
+        print("d=", self._d_shear.to("cm"))
         # Compression stress, positive
         if force._M_y >= 0 * kNm:
             self._rho_l_bot = min(
@@ -207,11 +207,13 @@ def _calculate_required_shear_reinforcement_EN_1992_2004(
 
 def _check_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> DataFrame:
     if isinstance(self.concrete, Concrete_EN_1992_2004):
-        # Initialize all the code related variables
-        _initialize_variables_EN_1992_2004(self)
-        _initialize_shear_variables_EN_1992_2004(self, force)
-
         if self._stirrup_n == 0:
+            # Set current stirrup diameter to zero
+            self._stirrup_d_b = 0 * mm
+            self._update_effective_heights()
+            # Initialize all the code related variables
+            _initialize_variables_EN_1992_2004(self)
+            _initialize_shear_variables_EN_1992_2004(self, force)
             # Calculate V_Rd_c
             self._V_Rd_c = _shear_without_rebar_EN_1992_2004(self)
             # According to EN1992-1-1 §6.2.1(4) minimum shear reinforcement should nevertheless be provided
@@ -225,6 +227,9 @@ def _check_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> DataFra
             self._max_shear_ok = self._V_Ed_1 <= self._V_Rd_max
 
         else:
+            # Initialize all the code related variables
+            _initialize_variables_EN_1992_2004(self)
+            _initialize_shear_variables_EN_1992_2004(self, force)
             # Shear reinforcement calculations
             d_bs = self._stirrup_d_b
             s_l = self._stirrup_s_l

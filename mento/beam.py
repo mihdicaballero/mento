@@ -1471,8 +1471,8 @@ class RectangularBeam(RectangularSection):
         # Create a rectangle patch for the section
         rect = Rectangle(
             (0, 0),
-            self.width.magnitude,
-            self.height.magnitude,
+            width_cm,
+            height_cm,
             linewidth=1.3,
             edgecolor=CUSTOM_COLORS["dark_gray"],
             facecolor=CUSTOM_COLORS["light_gray"],
@@ -1514,9 +1514,9 @@ class RectangularBeam(RectangularSection):
         self._ax.add_patch(inner_rounded_rect)
 
         # Set plot limits with some padding
-        padding = max(self.width.magnitude, self.height.magnitude) * 0.2
-        self._ax.set_xlim(-padding, self.width.magnitude + padding)
-        self._ax.set_ylim(-padding, self.height.magnitude + padding)
+        padding = max(width_cm, height_cm) * 0.2
+        self._ax.set_xlim(-padding, width_cm + padding)
+        self._ax.set_ylim(-padding, height_cm + padding)
 
         # Text and dimension offsets
         dim_offset = 2.5
@@ -1525,7 +1525,7 @@ class RectangularBeam(RectangularSection):
         self._ax.annotate(
             "",  # No text here, text is added separately
             xy=(0, -dim_offset),  # Start of arrow (left side)
-            xytext=(self.width.magnitude, -dim_offset),  # End of arrow (right side)
+            xytext=(width_cm, -dim_offset),  # End of arrow (right side)
             arrowprops={
                 "arrowstyle": "<->",
                 "lw": 1,
@@ -1541,7 +1541,7 @@ class RectangularBeam(RectangularSection):
             height = "{:.0f~P}".format(self.height.to("cm"))
         # Add width dimension text below the arrow
         self._ax.text(
-            self.width.magnitude / 2,  # Center of the arrow
+            width_cm / 2,  # Center of the arrow
             -text_offset,  # Slightly below the arrow
             width,
             ha="center",
@@ -1553,7 +1553,7 @@ class RectangularBeam(RectangularSection):
         self._ax.annotate(
             "",  # No text here, text is added separately
             xy=(-dim_offset, 0),  # Start of arrow (bottom)
-            xytext=(-dim_offset, self.height.magnitude),  # End of arrow (top)
+            xytext=(-dim_offset, height_cm),  # End of arrow (top)
             arrowprops={
                 "arrowstyle": "<->",
                 "lw": 1,
@@ -1563,7 +1563,7 @@ class RectangularBeam(RectangularSection):
         # Add height dimension text to the left of the arrow
         self._ax.text(
             -text_offset,  # Slightly to the left of the arrow
-            self.height.magnitude / 2,  # Center of the arrow
+            height_cm / 2,  # Center of the arrow
             height,
             ha="right",
             va="center",
