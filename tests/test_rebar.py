@@ -112,8 +112,14 @@ def test_beam_longitudinal_rebar_max_bars_per_layer(
     best_design = beam_rebar.longitudinal_rebar_design
 
     assert best_design is not None
-    assert best_design["n_1"] + best_design["n_2"] <= beam_rebar.max_bars_per_layer
-    assert best_design["n_3"] + best_design["n_4"] <= beam_rebar.max_bars_per_layer
+    assert (
+        best_design["n_1"] + best_design["n_2"]
+        <= beam_example_metric.settings.max_bars_per_layer
+    )
+    assert (
+        best_design["n_3"] + best_design["n_4"]
+        <= beam_example_metric.settings.max_bars_per_layer
+    )
 
 
 def test_beam_longitudinal_rebar_CIRSOC_201_25(

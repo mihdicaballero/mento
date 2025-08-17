@@ -123,7 +123,8 @@ class Rebar:
         tuple
             (s_max_l, s_max_w): The maximum spacing along the length and width of the beam.
         """
-        s_max_l = 0.75 * self.beam._d_shear * (1 + 1 / math.tan(alpha))
+        # Maximum of 40 cm for stirrup spacing
+        s_max_l = min(0.75 * self.beam._d_shear * (1 + 1 / math.tan(alpha)), 40 * cm)
         s_max_w = min(0.75 * self.beam._d_shear, 60 * cm)
 
         return s_max_l, s_max_w
@@ -311,8 +312,12 @@ class Rebar:
             self.min_long_rebar = 10 * mm
         else:
             self.min_long_rebar = 3 * inch / 8
+        # Filter valid rebar diameters based on the minimum longitudinal diameter per design code and beam settings
         valid_rebar_diameters = [
-            d for d in self.rebar_diameters if d >= self.min_long_rebar
+            d
+            for d in self.rebar_diameters
+            if d >= self.min_long_rebar
+            and d >= self.beam.settings.minimum_longitudinal_diameter
         ]
 
         for d_b1 in valid_rebar_diameters:  # Without taking Ø6 as a possible solution
