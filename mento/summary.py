@@ -7,7 +7,6 @@ from collections import OrderedDict
 from mento.material import (
     Concrete,
     SteelBar,
-    Concrete_ACI_318_19,
     Concrete_EN_1992_2004,
 )
 from mento.forces import Forces
@@ -298,13 +297,13 @@ class BeamSummary:
                     "As,top": rebar_f_top,
                     "As,bot": rebar_f_bot,
                     "Av": rebar_v,
-                    "As,req,top": round(beam._A_s_req_top.to("cm**2").magnitude, 2),
-                    "As,req,bot": round(beam._A_s_req_bot.to("cm**2").magnitude, 2),
+                    "As,req,top": round(beam._A_s_req_top.to("cm**2").magnitude, 1),
+                    "As,req,bot": round(beam._A_s_req_bot.to("cm**2").magnitude, 1),
                     "Av,req": round(shear_results["Av,req"][0], 2),
                     "Av,real": round(shear_results["Av"][0], 2),
-                    "DCRb,top": round(beam._DCRb_top, 2),
-                    "DCRb,bot": round(beam._DCRb_bot, 2),
-                    "DCRv": round(shear_results["DCR"][0], 2),
+                    "DCRb,top": round(beam._DCRb_top, 3),
+                    "DCRb,bot": round(beam._DCRb_bot, 3),
+                    "DCRv": shear_results["DCR"][0],
                 }
 
                 common_units = {
@@ -419,11 +418,41 @@ class BeamSummary:
         units_row = df_all.iloc[[0]]  # DataFrame with 1 row
         data_rows = df_all.iloc[1:].copy()
 
-        # Try to round numeric columns (even if object dtype), coercing errors
-        for col in data_rows.columns:
-            data_rows[col] = pd.to_numeric(data_rows[col], errors="ignore")
-            if pd.api.types.is_numeric_dtype(data_rows[col]):
-                data_rows[col] = data_rows[col].round(2)
+        # Recombine units + data
+        df_final = pd.concat([units_row, data_rows], ignore_index=True)
+        return df_final
+
+    def flexure_results(
+        self, index: Optional[int] = None, capacity_check: bool = False
+    ) -> DataFrame:
+        """
+        Get flexure results for one or all beams.
+        Includes a units row only once at the top.
+        """
+        if index is not None:
+            if index - 1 >= len(self.nodes):
+                raise IndexError(f"Index {index} is out of range for the beam list.")
+            node = self.nodes[max(index - 1, 0)]
+            df = self._process_beam_for_check(node, "flexure", capacity_check)
+            units_row = node.section._get_units_row_flexure()  # type: ignore
+            df_all = pd.concat([units_row, df], ignore_index=True)
+        else:
+            # For all nodes, only include the units row once
+            results = []
+            units_row_added = False
+            for item in self.nodes:
+                df = self._process_beam_for_check(item, "flexure", capacity_check)
+                if not units_row_added:
+                    units_row = item.section._get_units_row_flexure()  # type: ignore
+                    results.append(units_row)
+                    units_row_added = True
+                results.append(df)
+
+            df_all = pd.concat(results, ignore_index=True)
+
+        # Separate the units row (first row) from the data
+        units_row = df_all.iloc[[0]]  # DataFrame with 1 row
+        data_rows = df_all.iloc[1:].copy()
 
         # Recombine units + data
         df_final = pd.concat([units_row, data_rows], ignore_index=True)
@@ -458,50 +487,4 @@ class BeamSummary:
         if capacity_check:
             node.clear_forces()
             node.add_forces(original_forces)
-
         return results
-
-
-def main() -> None:
-    conc = Concrete_ACI_318_19(name="C25", f_c=25 * MPa)
-    # conc = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
-    steel = SteelBar(name="ADN 500", f_y=500 * MPa)
-    # input_df = pd.read_excel(r'.\tests\examples\Mento-Input.xlsx', sheet_name='Beams', usecols='B:R', skiprows=4)
-    data = {
-        "Label": ["", "V101", "V102", "V103", "V104"],
-        "Comb.": ["", "ELU 1", "ELU 1", "ELU 1", "ELU 1"],
-        "b": ["cm", 20, 20, 20, 20],
-        "h": ["cm", 50, 50, 50, 50],
-        "cc": ["mm", 25, 25, 25, 25],
-        "Nx": ["kN", 0, 0, 0, 0],
-        "Vz": ["kN", 20, -50, 100, 100],
-        "My": ["kNm", 0, -35, 40, 45],
-        "ns": ["", 0, 1.0, 1.0, 1.0],
-        "dbs": ["mm", 0, 6, 6, 6],
-        "sl": ["cm", 0, 20, 20, 20],
-        "n1": ["", 2.0, 2, 2.0, 2.0],
-        "db1": ["mm", 12, 12, 12, 12],
-        "n2": ["", 1.0, 1, 1.0, 0.0],
-        "db2": ["mm", 10, 16, 10, 0],
-        "n3": ["", 2.0, 0.0, 2.0, 0.0],
-        "db3": ["mm", 12, 0, 16, 0],
-        "n4": ["", 0, 0.0, 0, 0.0],
-        "db4": ["mm", 0, 0, 0, 0],
-    }
-    input_df = pd.DataFrame(data)
-    # print(input_df)
-    beam_summary = BeamSummary(concrete=conc, steel_bar=steel, beam_list=input_df)
-    # print(beam_summary.data)
-    # capacity = beam_summary.check(capacity_check=True)
-    # print(capacity)
-    check = beam_summary.check(capacity_check=False)
-    print(check)
-    # # beam_summary.check().to_excel('hola.xlsx', index=False)
-    results = beam_summary.shear_results(capacity_check=False)
-    # results = beam_summary.shear_results(capacity_check=True)
-    print(results)
-    # beam_summary.nodes[2].shear_results_detailed()
-
-
-if __name__ == "__main__":
-    main()

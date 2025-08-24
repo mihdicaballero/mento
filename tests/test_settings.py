@@ -2,7 +2,7 @@ import pytest
 from dataclasses import fields
 from pint import Quantity
 
-from mento.settings import BeamSettings, GLOBAL_BEAM_SETTINGS
+from mento.settings import BeamSettings
 from mento.units import mm, inch
 
 
@@ -185,24 +185,3 @@ def test_str_with_custom_values() -> None:
     # Check that other defaults are still present
     assert "stirrup_diameter_ini: 8.00 mm" in s
     assert "unit_system" not in s
-
-
-# --- Tests for GLOBAL_BEAM_SETTINGS ---
-
-
-def test_global_beam_settings_exists() -> None:
-    """Test that GLOBAL_BEAM_SETTINGS is an instance of BeamSettings."""
-    assert isinstance(GLOBAL_BEAM_SETTINGS, BeamSettings)
-
-
-def test_global_beam_settings_is_metric_by_default(
-    metric_settings: BeamSettings,
-) -> None:
-    """Test that GLOBAL_BEAM_SETTINGS uses metric defaults."""
-    # Compare with a fresh default metric settings instance
-    assert GLOBAL_BEAM_SETTINGS == metric_settings
-    # Note: Dataclass equality works by comparing all fields.
-    # If any internal _id or _last_id logic affects equality, this might need adjustment.
-    # Given your BeamSettings is immutable and no _id logic, direct comparison is fine.
-    assert GLOBAL_BEAM_SETTINGS.unit_system == "metric"
-    assert_quantity_equal(GLOBAL_BEAM_SETTINGS.clear_spacing, 25 * mm)
