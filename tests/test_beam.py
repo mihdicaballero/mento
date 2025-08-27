@@ -19,7 +19,7 @@ from mento.codes.ACI_318_19_beam import (
     _determine_nominal_moment_double_reinf_ACI_318_19,
 )
 from mento.results import CUSTOM_COLORS
-
+from devtools import debug
 
 @pytest.fixture()
 def beam_example_imperial() -> RectangularBeam:
@@ -38,6 +38,7 @@ def beam_example_imperial() -> RectangularBeam:
 
 @pytest.fixture()
 def beam_example_EN_1992_2004() -> RectangularBeam:
+    # Example from Calcpad EN 1992-1-1_2004 Beam Flexure 01 - Metric v2
     concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
     steelBar = SteelBar(name="B500S", f_y=500 * MPa)
     section = RectangularBeam(
@@ -452,9 +453,11 @@ def test_shear_design_CIRSOC_201_2025(
 def test_flexure_check_EN_1992_2004_1(
     beam_example_EN_1992_2004: RectangularBeam,
 ) -> None:
-    # Example from Calcpad Validation
+    # Example from Calcpad EN 1992-1-1_2004 Beam Flexure 01 - Metric v2
     f = Forces(M_y=150 * kNm)
+    beam_example_EN_1992_2004.set_transverse_rebar(n_stirrups=1, d_b=6 * mm, s_l=15 * cm)
     beam_example_EN_1992_2004.set_longitudinal_rebar_bot(n1=4, d_b1=16 * mm)
+    assert beam_example_EN_1992_2004._A_s_bot.to(cm**2).magnitude == pytest.approx(8.042, rel=1e-2)
     node = Node(section=beam_example_EN_1992_2004, forces=f)
     results = node.check_flexure()
 
@@ -463,18 +466,18 @@ def test_flexure_check_EN_1992_2004_1(
         1.49, rel=1e-2
     )
     assert results.iloc[1]["As,req bot"].to(cm**2).magnitude == pytest.approx(
-        6.68, rel=1e-3
+        6.656, rel=1e-3
     )
     assert results.iloc[1]["As,req top"].to(cm**2).magnitude == pytest.approx(
         0, rel=1e-3
     )
-    assert results.iloc[1]["As"].to(inch**2).magnitude == pytest.approx(
-        8.04, rel=1e-2
+    assert results.iloc[1]["As"].to(cm**2).magnitude == pytest.approx(
+        8.042, rel=1e-2
     )
-    assert results.iloc[1]["MRd"].to(kip * ft).magnitude == pytest.approx(
-        180.47, rel=1e-5
+    assert results.iloc[1]["M_Rd"].to(kNm).magnitude == pytest.approx(
+        181.237, rel=1e-5
     )
-    assert results.iloc[1]["DCR"] == pytest.approx(0.831, rel=1e-5)
+    assert results.iloc[1]["DCR"] == pytest.approx(0.8276, rel=1e-5)
 
 
 def test_flexure_check_EN_1992_2004_2(
@@ -483,6 +486,7 @@ def test_flexure_check_EN_1992_2004_2(
     # Example from Calcpad Validation
     f = Forces(M_y=450 * kNm)
     beam_example_EN_1992_2004.set_longitudinal_rebar_bot(n1=5, d_b1=25 * mm)
+    beam_example_EN_1992_2004.set_longitudinal_rebar_top(n1=5, d_b1=12 * mm)
     node = Node(section=beam_example_EN_1992_2004, forces=f)
     results = node.check_flexure()
 
@@ -496,7 +500,7 @@ def test_flexure_check_EN_1992_2004_2(
     assert results.iloc[1]["As,req top"].to(cm**2).magnitude == pytest.approx(
         8.64, rel=1e-3
     )
-    assert results.iloc[1]["As"].to(inch**2).magnitude == pytest.approx(
+    assert results.iloc[1]["As"].to(cm**2).magnitude == pytest.approx(
         24.54, rel=1e-3
     )
     assert results.iloc[1]["MRd"].to(kip * ft).magnitude == pytest.approx(

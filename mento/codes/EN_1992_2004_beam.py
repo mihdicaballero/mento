@@ -795,8 +795,8 @@ def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> pd.Da
         self._c_d_bot = 0
         # Calculate the design capacity ratio for the top side.
         self._DCRb_top = round(
-            -self._M_u_top.to("kN*m").magnitude
-            / self._phi_M_n_top.to("kN*m").magnitude,
+            -self._M_Ed_top.to("kN*m").magnitude
+            / self._phi_M_Rd_top.to("kN*m").magnitude,
             3,
         )
         self._DCRb_bot = 0
