@@ -404,16 +404,16 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
             debug("NO SE REQUIERE ARMADO DE COMPRESION")
             # No compressive reinforcement required
             # Relative design bending moment
-            K = (
+            K_value = (
                 (M_Ed / (self.width * d**2 * eta * self._f_cd))
                 .to("dimensionless")
                 .magnitude
             )
             debug("d: ",d)
             debug("f_cd: " , self._f_cd)
-            debug("K: " , K)
+            debug("K: " , K_value)
             # Compression zone depth
-            x_eff = d * (1 - math.sqrt(1 - 2 * K))
+            x_eff = d * (1 - math.sqrt(1 - 2 * K_value))
             debug("x_eff: " , x_eff)
 
             # Area of required tensile reinforcement
@@ -493,7 +493,9 @@ def _determine_nominal_moment_simple_reinf_EN_1992_2004(
         z=d-0.5*lambda_x_eff
         # And calculate the resistance
         M_Rd=steel_force*z
-        return M_Rd
+    return M_Rd
+
+    
 
 
 
