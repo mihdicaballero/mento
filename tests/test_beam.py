@@ -23,8 +23,8 @@ from devtools import debug
 
 @pytest.fixture()
 def beam_example_imperial() -> RectangularBeam:
-    concrete = Concrete_ACI_318_19(name="C4", f_c=4000 * psi)
-    steelBar = SteelBar(name="ADN 420", f_y=60 * ksi)
+    concrete = Concrete_ACI_318_19(name = "C4", f_c = 4000 * psi)
+    steelBar = SteelBar(name = "ADN 420", f_y = 60 * ksi)
     section = RectangularBeam(
         label="V101",
         concrete=concrete,

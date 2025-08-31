@@ -875,7 +875,7 @@ def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.Data
             self._A_s_req_bot,
             self._c_d_top,
         ) = _calculate_flexural_reinforcement_ACI_318_19(
-            self, abs(self._M_u_top), self._d_top, self._c_mec_bot
+            self, abs(self._M_u_top.to("kN*m").magnitude)*kNm, self._d_top, self._c_mec_bot
         )
         self._c_d_bot = 0
         # Calculate the design capacity ratio for the top side.
@@ -967,7 +967,7 @@ def _design_flexure_ACI_318_19(
                 A_s_comp_bot,
                 self._c_d_top,
             ) = _calculate_flexural_reinforcement_ACI_318_19(
-                self, abs(max_M_y_top), self.height - d_prima, rec_mec
+                self, abs(max_M_y_top.to("kN*m").magnitude)*kNm, self.height - d_prima, rec_mec
             )
 
             # Adjust reinforcement areas based on positive and negative moments

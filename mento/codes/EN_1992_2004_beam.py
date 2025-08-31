@@ -506,9 +506,6 @@ def _determine_nominal_moment_double_reinf_EN_1992_2004(
     
     # Constants and material properties
     if isinstance(self.concrete, Concrete_EN_1992_2004):
-        lambda_ = (
-            self.concrete._lambda_factor()
-        )  # Factor for effective compression zone depth (EN 1992-1-1)
         f_yd=self.steel_bar.f_y/self.concrete.gamma_s
         eta = self.concrete._eta_factor()  # Factor for concrete strength (EN 1992-1-1)
         k_1=0.4
@@ -520,10 +517,10 @@ def _determine_nominal_moment_double_reinf_EN_1992_2004(
         self._f_cd = self.concrete._alpha_cc * self.concrete.f_ck / self.concrete.gamma_c
         M_lim = eta * self._f_cd * self.width * x_eff_lim * (d - 0.5 * x_eff_lim)
     
-        z=(d - 0.5 * x_eff_lim)
+        z=(d - 0.5 *self.concrete._lambda_factor()*x_eff_lim)
     
         # Limit tensile reinforcement area
-        A_s1_lim = (M_lim / ( z* f_yd)).to("cm^2")
+        A_s1_lim = M_lim / ( z* f_yd)
 
 
         x_u=d*(self.concrete._delta-0.4) # TODO no entiendo esto. De donde sale?
@@ -532,8 +529,7 @@ def _determine_nominal_moment_double_reinf_EN_1992_2004(
 
         z_2=d-d_prime
 
-        f_sd=epsilon_s_2*self.steel_bar.E_s # NO ESTA DEPENDIENDO DE LA CANTIDA DE A_s_prime QUE LE METO. OSEA QUE NO LO PUEDO MULTIPLICAR DIRECTO
-        # ESTA PENSADO PARA DISEÑAR Y ENCONTRAR EL A_s_prime requerido, no para verificar. Me parece
+        f_sd=min(epsilon_s_2*self.steel_bar.E_s,f_yd)
 
         M_Rd=A_s1_lim *z*f_yd+ min(f_sd*A_s_prime,f_yd*(A_s-A_s1_lim))*z_2
         #TODO, la deformacion del acero de arriba queda limitada por el limite del hormigon. Entonces lo que aporta el acero comprimido no puede superar la capcadidad del acero traccionado extra (el que no trabaja en conjunto con el hormigon. Para aumentar la capacidad de la viga hay que aumentar simultaneamente los dos aceros, uno solo no cambia nada)
@@ -575,11 +571,14 @@ def _determine_nominal_moment_EN_1992_2004(
     self._A_s_max_bot = rho_max * self._d_bot * self.width
 
     # Determine the nominal moment for positive moments
+    #Falta el caso de que el armado sea tal que no requiere compresion
     if self._A_s_top == 0 * cm**2:
+        debug("ENTRAMOS A DETERMINAR EL MOMENTO NOMINAL EN EL PARA SIMPLEMENTE REFORZADA")
         M_Rd_positive = _determine_nominal_moment_simple_reinf_EN_1992_2004(
             self, self._A_s_max_bot, self._d_bot
         )
     else:
+        debug("ENTRAMOS A DETERMINAR EL MOMENTO NOMINAL EN EL PARA DOBLEMENTE REFORZADA")
         M_Rd_positive = _determine_nominal_moment_double_reinf_EN_1992_2004(
             self, self._A_s_bot, self._d_bot, self._c_mec_top, self._A_s_top
         )
@@ -590,6 +589,7 @@ def _determine_nominal_moment_EN_1992_2004(
 
     if self._A_s_top == 0 * cm**2:
         M_Rd_negative = 0 * kNm
+        #Falta el caso de que el armado sea tal que no requiere compresion
     elif self._A_s_bot == 0 * cm**2:
         M_Rd_negative = _determine_nominal_moment_simple_reinf_EN_1992_2004(
             self, self._A_s_max_top, self._d_top
