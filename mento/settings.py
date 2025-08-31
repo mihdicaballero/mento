@@ -1,111 +1,103 @@
-from typing import Optional, Dict, Any
+from dataclasses import dataclass, field, fields
+from typing import Any, ClassVar, Dict
 
 from mento.units import mm, inch
-from mento.material import Concrete
+
+# Sentinel to detect if user passed a value
+_NOT_SET = object()
 
 
-class Settings:
-    default_settings_metric: Dict[str, Any] = {
-        # Beam design settings
-        "clear_cover": 25 * mm,
+@dataclass
+class BeamSettings:
+    """
+    Settings for beam design with separate metric and imperial defaults.
+    Can optionally be initialized with a `Concrete` material to determine the unit system.
+
+    Available Parameters with Default Values:
+    --------------------------------------
+    Unit system: "metric" or "imperial"
+
+    Metric Defaults:
+      - clear_spacing: 25 mm
+      - stirrup_diameter_ini: 8 mm
+      - vibrator_size: 30 mm
+      - layers_spacing: 25 mm
+      - max_diameter_diff: 5 mm
+      - minimum_longitudinal_diameter: 8 mm
+      - max_bars_per_layer: 5
+
+    Imperial Defaults:
+      - clear_spacing: 1 inch
+      - stirrup_diameter_ini: 3/8 inch
+      - vibrator_size: 1.25 inch
+      - layers_spacing: 1 inch
+      - max_diameter_diff: 0.25 inch
+      - minimum_longitudinal_diameter: 3/8 inch
+      - max_bars_per_layer: 5
+    """
+
+    # Class-level default values (documented but not shown in hover)
+    _metric_defaults: ClassVar[Dict[str, Any]] = {
         "clear_spacing": 25 * mm,
         "stirrup_diameter_ini": 8 * mm,
         "vibrator_size": 30 * mm,
         "layers_spacing": 25 * mm,
         "max_diameter_diff": 5 * mm,
-        "max_bars_per_layer": 5,
         "minimum_longitudinal_diameter": 8 * mm,
+        "max_bars_per_layer": 5,
     }
-    default_settings_imperial: Dict[str, Any] = {
-        # Beam design settings
-        "clear_cover": 1 * inch,
+
+    _imperial_defaults: ClassVar[Dict[str, Any]] = {
         "clear_spacing": 1 * inch,
         "stirrup_diameter_ini": 3 / 8 * inch,
         "vibrator_size": 1.25 * inch,
         "layers_spacing": 1 * inch,
-        "max_diameter_diff": 2 / 8 * inch,
-        "max_bars_per_layer": 5,
+        "max_diameter_diff": 0.25 * inch,
         "minimum_longitudinal_diameter": 3 / 8 * inch,
+        "max_bars_per_layer": 5,
     }
 
-    def __init__(
-        self,
-        concrete: Optional[Concrete] = None,
-        settings: Optional[Dict[str, Any]] = None,
-    ):
-        """
-        Initialize the Settings class with defaults based on unit system.
+    unit_system: str = "metric"
 
-        Parameters
-        ----------
-        concrete : Concrete, optional
-            A Concrete object to determine the unit system.
-        settings : dict, optional
-            Custom settings to override defaults.
-        """
-        # Select default settings based on the concrete's unit system
-        if concrete and concrete.unit_system == "imperial":
-            self.settings = self.default_settings_imperial.copy()
-        else:  # Default to metric
-            self.settings = self.default_settings_metric.copy()
+    clear_spacing: Any = field(default=_NOT_SET)
+    stirrup_diameter_ini: Any = field(default=_NOT_SET)
+    vibrator_size: Any = field(default=_NOT_SET)
+    layers_spacing: Any = field(default=_NOT_SET)
+    max_diameter_diff: Any = field(default=_NOT_SET)
+    minimum_longitudinal_diameter: Any = field(default=_NOT_SET)
+    max_bars_per_layer: Any = field(default=_NOT_SET)
 
-        # Update defaults with provided settings if any
-        if settings:
-            self.update(settings)
+    def __post_init__(self) -> None:
+        defaults = (
+            self._imperial_defaults
+            if self.unit_system == "imperial"
+            else self._metric_defaults
+        )
 
-        self.ACI_318_19_settings: Dict[str, Any] = {
-            "lambda": 1,  # Normalweight concrete
-            "phi_v": 0.75,  # Shear strength reduction factor
-            "phi_c": 0.65,  # Compression controlled strength reduction factor
-            "phi_t": 0.90,  # Tension controlled strength reduction factor
-            "flexural_min_reduction": "False",  # True selects 4/3 of calculated steel if it's less than minimum
-        }
-        self.EN_1992_2004_settings: Dict[str, Any] = {
-            "gamma_c": 1.5,
-            "gamma_s": 1.15,
-            "alpha_cc": 1.00,
-        }
+        for f in fields(self):
+            if not f.init or f.name == "unit_system":
+                continue
 
-    def load_ACI_318_19_settings(self) -> None:
-        """
-        Load settings specific to ACI 318-19.
-        This will override only the settings that are different in ACI 318-19.
-        """
-        # Update current settings with ACI 318-19 specific settings
-        self.add_settings(self.ACI_318_19_settings)
+            current_value = getattr(self, f.name)
 
-    def load_EN_1992_2004_settings(self) -> None:
-        """
-        Load settings specific to ACI 318-19.
-        This will override only the settings that are different in ACI 318-19.
-        """
-        # Update current settings with ACI 318-19 specific settings
-        self.add_settings(self.EN_1992_2004_settings)
+            if current_value is _NOT_SET:
+                setattr(self, f.name, defaults[f.name])
 
-    def get_setting(self, key: str) -> Any:
-        if key in self.settings:
-            return self.settings.get(key)
-        else:
-            raise KeyError(f"Setting '{key}' does not exist.")
-
-    def set_setting(self, key: str, value: Any) -> None:
-        if key in self.settings:
-            self.settings[key] = value
-        else:
-            raise KeyError(f"Setting '{key}' does not exist.")
-
-    def add_settings(self, new_settings: Dict[str, Any]) -> None:
-        """Adds the settings dictionary to the current settings."""
-        for key, value in new_settings.items():
-            self.settings[key] = value
-
-    def update(self, new_settings: Dict[str, Any]) -> None:
-        """Updates the settings dictionary with new values."""
-        self.add_settings(new_settings)
+        if self.max_bars_per_layer < 1:
+            raise ValueError("max_bars_per_layer must be at least 1")
 
     def __str__(self) -> str:
-        """Customize the string representation for user-friendly display."""
-        output = "Settings:\n"
-        for key, value in self.settings.items():
-            output += f"  {key}: {value}\n"
-        return output.strip()
+        """Returns only the current settings, excluding class defaults."""
+        settings_list = []
+        for name, value in vars(self).items():
+            # Skip private and special attributes, and the unit_system field
+            if not name.startswith("_") and name != "unit_system":
+                if hasattr(value, "magnitude") and hasattr(
+                    value, "units"
+                ):  # It's a Quantity
+                    settings_list.append(
+                        f"{name}: {value.magnitude:.2f} {value.units:~}"
+                    )
+                else:
+                    settings_list.append(f"{name}: {value}")
+        return "\n".join(settings_list)

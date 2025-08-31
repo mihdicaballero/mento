@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mento"
-version = "0.2.5"
+version = "0.2.7"
 description = "An intuitive tool for structural engineers to design concrete elements efficiently."
 readme = "README.md"
 authors = [
@@ -44,9 +44,7 @@ disable = [
 max-line-length = 120
 
 [tool.ruff]
-lint.extend-select = ["C4", "SIM", "TCH"]
 extend-exclude = ["build/", "dist/"]
-lint.ignore = []
 show-fixes = true
 line-length = 120
 
