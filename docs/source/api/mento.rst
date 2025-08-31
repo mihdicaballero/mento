@@ -1,3 +1,5 @@
+.. _api-reference:
+
 mento package
 =============
 
@@ -16,14 +18,6 @@ mento.beam module
 -----------------
 
 .. automodule:: mento.beam
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-mento.column module
--------------------
-
-.. automodule:: mento.column
    :members:
    :undoc-members:
    :show-inheritance:
@@ -104,14 +98,6 @@ mento.units module
 ------------------
 
 .. automodule:: mento.units
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-Module contents
----------------
-
-.. automodule:: mento
    :members:
    :undoc-members:
    :show-inheritance:
