@@ -10,6 +10,7 @@ m = ureg.meter
 cm = ureg.centimeter
 mm = ureg.millimeter
 kN = ureg.kilonewton
+kgf = ureg.kilogram_force
 kNm = kN * m
 Pa = ureg.pascal
 kPa = ureg.kilopascal

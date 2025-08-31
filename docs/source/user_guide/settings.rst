@@ -11,8 +11,7 @@ the default settings or customized values provided by the user.
 Overview
 --------
 
-When designing concrete elements, certain design parameters (e.g., clear
-cover, stirrup diameter) are commonly required. The `BeamSettings` class
+When designing concrete elements, certain design parameters (e.g., maximum clear spacing) are commonly required. The `BeamSettings` class
 provides a structured way to define these parameters, ensuring consistency
 across sections while allowing flexibility for customization.
 
@@ -31,8 +30,9 @@ Usage Scenarios
 1. **Using Default Settings**:
 
    If no custom settings are provided, a section will use default settings.
-   These settings are suitable for common design cases and ensure
+   These settings are suitable for common design cases and ensure design
    calculations can proceed without requiring additional input from the user.
+   All these settings are used when designing the reinforcement of beams.
 
    Defaut settings change based on the metric system selected.
 
@@ -59,7 +59,7 @@ Usage Scenarios
 .. note::
     The default values are used to calculate effective heights when designing a concrete section,
     before knowing which diameters bars will be final. Also for designing user-tailored rebar layouts in beams.
-
+    The metric or imperial initial settings are selected based on the unit of the concrete resistance `f_c` provided when defining the concrete material.
 
 2. **Customizing Settings**:
 
@@ -75,7 +75,7 @@ In this example, we create a section using the default settings:
 .. code-block:: python
 
   from mento import Concrete_ACI_318_19, SteelBar, RectangularBeam
-  from mento import psi, inch, ksi
+  from mento import psi, inch, ksi, mm
 
   # Define concrete and steel materials
   concrete = Concrete_ACI_318_19(name="C4", f_c=4000 * psi)
@@ -88,12 +88,11 @@ In this example, we create a section using the default settings:
       steel_bar=steel,
       width=10 * inch,
       height=16 * inch,
-      c_c = 1 * inch
+      c_c = 25 * mm
   )
 
   # Check default settings
-  print(section.settings.default_settings_imperial)
-  print(section.settings.default_settings_metric)
+  print(section.settings)
 
 This section will automatically use the default settings for
 spacing, stirrup diameters, etc. for the corresponding unit system depending on the unit of the concrete resistance.
@@ -103,24 +102,24 @@ Pa or MPa, it will be `metric`.
 Example 2: Custom Settings
 --------------------------
 
-You can customize specific settings by passing a dictionary of values during
-section initialization. In this example, we increase the clear cover and
-modify the minimum longitudinal bar diameter. You must call the properties by their
-name correctly for this to work.
+You can customize specific settings by defining specific attributes during
+BeamSettings class initialization. In this example, we increase the clear spacing and
+modify the minimum longitudinal bar diameter.
 
 .. code-block:: python
 
-  custom_settings = BeamSettings(minimum_longitudinal_diameter = 12 * mm)
+  from mento import BeamSettings
+  settings = BeamSettings(clear_spacing= 40 * mm, minimum_longitudinal_diameter = 12 * mm)
 
   # Create section with custom settings
   section = RectangularBeam(
       label="101",
       concrete=concrete,
       steel_bar=steel,
-      width=12 * inch,
-      height=18 * inch,
-      c_c = 1 * inch,
-      settings=custom_settings
+      width = 20 * cm,
+      height = 60 * cm,
+      c_c = 25 * mm,
+      settings=settings
   )
 
   # Print the updated settings
@@ -129,15 +128,11 @@ name correctly for this to work.
 Attributes
 ----------
 
-- **default_settings_imperial**: Contains default design parameters such
-  as clear cover, spacing, stirrup diameter, etc. for imperial units.
-- **default_settings_metric**: Contains default design parameters such
-  as clear cover, spacing, stirrup diameter, etc. for metric units.
-- **settings**: Current instance settings, which can be a mix of
-  defaults and user-defined values.
-
-Methods
--------
-
-- **get_setting(key)**: Retrieves the value of a specific setting.
-- **set_setting(key, value)**: Sets the value of a specific setting.
+The attributes of the settings class are as follows:
+  - clear_spacing
+  - stirrup_diameter_ini
+  - vibrator_size
+  - layers_spacing
+  - max_diameter_diff
+  - minimum_longitudinal_diameter
+  - max_bars_per_layer

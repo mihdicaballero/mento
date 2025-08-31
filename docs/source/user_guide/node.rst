@@ -45,6 +45,9 @@ To create a `Node` you must define the concrete and steel materials, the concret
     # Create node and assign beam section and list of forces
     node_1 = Node(section=beam, forces=[f1, f2])
 
+    # Plot the beam section
+    beam.plot()
+
 2. Performing Checks
 ********************
 
@@ -55,15 +58,46 @@ Once the `Section` is defined and forces are assigned in a `Node` object, you ca
 created for all the forces assigned and store the limiting case for shear and top and bottom bending moment.
 
 - **Shear Check**: Use `check_shear()`.
+
+.. code-block:: python
+
+    # Perform shear checks and show DataFrame with results
+    shear_results = node_1.check_shear()
+    shear_results
+
 - **Flexure Check**: Use `check_flexure()`.
 
 .. code-block:: python
 
-    # Perform shear and flexure checks in the Node section
-    node_1.check_shear()
-    node_1.check_flexure()
+    # Perform flexure checks and show DataFrame with results
+    flexure_results = node_1.check_flexure()
+    flexure_results
 
-3. Design the section
+Each method will return a Pandas DataFrame with all the check results for each Load Case in the Force object assigned to the Node, both for shear and flexure analysis.
+
+3. Jupyter Notebook Results
+******************
+
+After performing the checks, you can view the results in a formatted way in a Notebook.
+
+When you run `node.results`:
+.. code-block:: python
+
+    beam.results
+
+The output includes for a `Beam` object:
+
+- **Top and bottom longitudinal reinforcement**.
+- **Shear reinforcement**.
+- **Applied moments and shear forces**.
+- **Design capacity ratios (DCR)**.
+- **Warnings** (if any).
+
+The output is formatted using LaTeX math notation for clarity and precision.
+See the `Beam` section for more information on how to display results.
+The results are presented in a user-friendly format, with color-coded Demand-Capacity Ratios (DCR) for quick assessment.
+
+4. Design the section
 ********************
 
 If you don't assign transverse or longitudinal rebar, you can ask *Mento* to design for shear and flexure.
@@ -75,42 +109,30 @@ considering all the longitudinal positions in the beam. This optimizations takes
 for longitudinal rebar limitation (vibrator size, maximum rebar diameter difference) and engineering criteria to suggest
 the best rebar configuration balancing the amount of rebars, layers and different diameters.
 
-- **Shear Design**: Use `design_shear()`.
-- **Flexure Design**: Use `design_flexure()`.
-
-.. code-block:: python
-
-    # Perform shear and flexure checks
-    node_1.design_shear()
-    node_1.design_flexure()
-
 *Mento* will also create a Pandas DataFrame with all the check results for each Load Case in the Force object assigned to the Node, both for shear and flexure analysis.
 You can print those results from the previous method.
 
+- **Shear Design**: Use `design_shear()`.
+
 .. code-block:: python
 
-    # Perform shear and flexure checks
-    shear_results = node_1.design_shear()
+    # Perform shear design and show DataFrame with results
+    node_1.design_shear()
     shear_results
+
+- **Flexure Design**: Use `design_flexure()`.
+
+.. code-block:: python
+    # Perform flexure design and show DataFrame with results
     flexure_results = node_1.design_flexure()
     flexure_results
 
-4. Jupyter Notebook Results
-******************
+You can see the best rebar configuration designed by *Mento* when you print `beam.results` un a Jupyter Notebook.
 
-After performing the checks, you can view the results in a formatted way in a Notebook.
+.. code-block:: python
 
-When you run `node.results`, the output includes for a `Beam` object:
+    beam.results
 
-- **Top and bottom longitudinal reinforcement**.
-- **Shear reinforcement**.
-- **Applied moments and shear forces**.
-- **Design capacity ratios (DCR)**.
-- **Warnings** (if any).
-
-The output is formatted using LaTeX math notation for clarity and precision.
-See the `Beam` or `Column` section for more information on how to display results.
-The results are presented in a user-friendly format, with color-coded Demand-Capacity Ratios (DCR) for quick assessment.
 
 5. Detailed Results
 *******************

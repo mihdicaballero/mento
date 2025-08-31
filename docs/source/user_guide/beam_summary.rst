@@ -48,6 +48,33 @@ The Excel file should contain the following columns:
 
 Consider that bottom reinforcement will be checked against positive bending moments and top reinforcement against negative bending moments.
 
+FOr a simple test, you can create a DataFrame manually like this:
+.. code-block:: python
+    import pandas as pd
+    data = {
+        "Label": ["", "V101", "V102", "V103", "V104"],
+        "Comb.": ["", "ELU 1", "ELU 2", "ELU 3", "ELU 4"],
+        "b": ["cm", 20, 20, 20, 20],
+        "h": ["cm", 50, 50, 50, 50],
+        "cc": ["mm", 25, 25, 25, 25],
+        "Nx": ["kN", 0, 0, 0, 0],
+        "Vz": ["kN", 20, -50, 100, 100],
+        "My": ["kNm", 0, -35, 40, 45],
+        "ns": ["", 0, 1.0, 1.0, 1.0],
+        "dbs": ["mm", 0, 6, 6, 6],
+        "sl": ["cm", 0, 20, 20, 20],
+        "n1": ["", 2.0, 2, 2.0, 2.0],
+        "db1": ["mm", 12, 12, 12, 12],
+        "n2": ["", 1.0, 1, 1.0, 0.0],
+        "db2": ["mm", 10, 16, 10, 0],
+        "n3": ["", 2.0, 0.0, 2.0, 0.0],
+        "db3": ["mm", 12, 0, 16, 0],
+        "n4": ["", 0, 0.0, 0, 0.0],
+        "db4": ["mm", 0, 0, 0, 0],
+    }
+    input_df = pd.DataFrame(data)
+    input_df
+
 Creating the BeamSummary Object
 -------------------------------
 
@@ -57,7 +84,7 @@ Once the input data is loaded, you can create a `BeamSummary` object:
 
     beam_summary = BeamSummary(concrete=conc, steel_bar=steel, beam_list=input_df)
 
-To verify that the data was imported correctly, you can inspect the `data` attribute:
+To verify that the data was imported correctly with units, you can inspect the `data` attribute:
 
 .. code-block:: python
 

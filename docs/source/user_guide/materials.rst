@@ -46,9 +46,11 @@ To create concrete compliant with the ACI 318-19 standard with a
 
 .. code-block:: python
 
-    from mento import Concrete_ACI_318_19, MPa
+    from mento import Concrete_ACI_318_19, Concrete_EN_1992_2004, MPa
 
     concrete = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
+    print(concrete)
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
     print(concrete)
 
 Steel Models

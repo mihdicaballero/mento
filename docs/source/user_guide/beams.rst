@@ -10,7 +10,7 @@ Key Concepts
 - **Beam Geometry**: Defined by `width` and `height`.
 - **Material Properties**: Requires a `Concrete` object (e.g., `Concrete_ACI_318_19`) and a `SteelBar` object for reinforcement.
 - **Reinforcement**: Longitudinal and transverse reinforcement can be defined using `set_longitudinal_rebar_bot`, `set_longitudinal_rebar_top`, and `set_transverse_rebar`.
-- **Custom settings**: A `Beam` object can havce custom settings overriding the default settings of `mento.
+- **Custom settings**: A `Beam` object can have custom settings overriding the default settings of `mento.
 
 Usage
 -----
@@ -56,7 +56,7 @@ You can define the longitudinal and transverse reinforcement for the beam using 
     - Skin rebar is not considered for the check or design of the beam.
 
 **Transverse reinforcement**
-This is set indicating amount of stirrups, the diameter of the stirrups and the spacing of the legs along the beam.
+This is set indicating amount of stirrups, the diameter of the stirrups and the spacing of the stirrups along the beam.
 
 **Longitudinal reinforcement**
 This is set indicating rebar for two layers, differentiating between border bars and inner bars.

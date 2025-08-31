@@ -16,27 +16,27 @@ and methods for managing materials, settings, and unique identification for each
 **Key Attributes:**
 
 - **id** (*int*): A unique identifier automatically assigned to each section instance.
+- **label** (*String*): The label of the section.
 - **concrete** (*Concrete*): The concrete material used in the section.
 - **steel_bar** (*SteelBar*): The steel reinforcement used in the section.
 - **c_c** (*Quantity*): The clear cover of the section.
-- **settings** (*Settings*): A dictionary-like object containing default and user-defined settings.
-  - Includes settings like:
-    - `stirrup_diameter_ini`: Initial diameter of stirrups.
-    - `longitudinal_diameter_ini`: Initial diameter of longitudinal reinforcement.
 
 RectangularSection
 ------------------
 
 The `RectangularSection` class extends `Section` to represent rectangular-shaped structural elements, such
-as beams or columns. It adds specific geometric properties and methods relevant to rectangular sections.
+as beams or columns. It adds specific geometric attributes and properties relevant to rectangular sections.
 
-**Key Attributes:**
+**Attributes:**
 
-- **width** (*PlainQuantity*): The width of the section.
-- **height** (*PlainQuantity*): The height of the section.
-- **A_x** (*PlainQuantity*): Cross-sectional area.
-- **I_y** (*PlainQuantity*): Moment of inertia about the Y-axis.
-- **I_z** (*PlainQuantity*): Moment of inertia about the Z-axis.
+- **width** (*Quantity*): The width of the section.
+- **height** (*Quantity*): The height of the section.
+
+**Properties:**
+
+- **A_x** (*Quantity*): Cross-sectional area.
+- **I_y** (*Quantity*): Moment of inertia about the Y-axis.
+- **I_z** (*Quantity*): Moment of inertia about the Z-axis.
 
 **Hierarchy:**
 
