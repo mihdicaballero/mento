@@ -434,7 +434,6 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
 
             # Limit tensile reinforcement area
             A_s1_lim = (M_lim / ((d - 0.5 * x_eff_lim) * f_yd)).to("cm^2")
-            debug(A_s1_lim)
 
             # No compressive reinforcement required
             A_s2 = 0 * cm**2
@@ -537,7 +536,33 @@ def _determine_nominal_moment_double_reinf_EN_1992_2004(
 
 
 
-def _determine_nominal_moment_EN_1992_2004(
+def _new_determine_nominal_moment_EN_1992_2004(
+    self: "RectangularBeam", A_s: Quantity, d: Quantity,
+    A_s_prime: Quantity, d_prime: Quantity
+) -> Quantity:
+    
+    # Constants and material properties
+    if isinstance(self.concrete, Concrete_EN_1992_2004):
+        # For reference see Jimenez Montoya 16 Ed. P 213
+        f_yd=self.steel_bar.f_y/self.concrete.gamma_s
+        f_cd=self.concrete.f_c
+        b=self.width
+        omega_1=A_s/(b*d) # Cuantia traccionada
+        omega_2=A_s_prime/(b*d) # Cuantia comprimida
+        if (A_s_prime.to(cm**2).magnitude>A_s.to(cm**2).magnitude):
+            M_Rd=A_s*f_yd*(d-d_prime)
+        elif (omega_1-omega_2 < 0.36):
+            A_tensioned=A_s-A_s_prime
+            M_omega_1_omega_2=A_tensioned*f_yd*(d-0.5*A_tensioned*f_yd/(f_cd*b))
+            M_Rd=M_omega_1_omega_2+A_s_prime*f_yd*(d-d_prime)
+        else:
+            M_Rd=0.295*f_cd*b*d**2+A_s_prime*f_yd*(d-d_prime)
+    return M_Rd
+
+
+
+
+def _determine_nominal_moment_EN_1992_2004_deprecated(
     self: "RectangularBeam", force: Forces
 ) -> None:
     """
@@ -573,12 +598,10 @@ def _determine_nominal_moment_EN_1992_2004(
     # Determine the nominal moment for positive moments
     #Falta el caso de que el armado sea tal que no requiere compresion
     if self._A_s_top == 0 * cm**2:
-        debug("ENTRAMOS A DETERMINAR EL MOMENTO NOMINAL EN EL PARA SIMPLEMENTE REFORZADA")
         M_Rd_positive = _determine_nominal_moment_simple_reinf_EN_1992_2004(
             self, self._A_s_max_bot, self._d_bot
         )
     else:
-        debug("ENTRAMOS A DETERMINAR EL MOMENTO NOMINAL EN EL PARA DOBLEMENTE REFORZADA")
         M_Rd_positive = _determine_nominal_moment_double_reinf_EN_1992_2004(
             self, self._A_s_bot, self._d_bot, self._c_mec_top, self._A_s_top
         )
@@ -606,6 +629,45 @@ def _determine_nominal_moment_EN_1992_2004(
     return None
 
 
+def _determine_nominal_moment_EN_1992_2004(
+    self: "RectangularBeam", force: Forces
+) -> None:
+    """
+    Determines the nominal moment for a given section with both top and bottom reinforcement,
+    calculating the nominal moment for both positive and negative moment scenarios.
+
+    For positive moments, the tension is in the bottom reinforcement.
+    For negative moments, the tension is in the top reinforcement.
+
+    Parameters:
+        force (Forces): An object containing the forces acting on the section, including the moment M_y.
+
+    Returns:
+        None
+    """
+    # Calculate minimum and maximum reinforcement ratios
+    [rho_min, rho_max] = _min_max_flexural_reinforcement_ratio_EN_1992_2004(self)
+    
+    # For positive moments (tension in the bottom), set minimum reinforcement accordingly.
+    if force._M_y > 0 * kNm:
+        rho_min_top = 0 * dimensionless
+        rho_min_bot = rho_min
+    else:
+        rho_min_top = rho_min
+        rho_min_bot = 0 * dimensionless
+
+    # Calculate minimum and maximum bottom reinforcement areas
+    self._A_s_min_bot = rho_min_bot * self._d_bot * self.width
+    self._A_s_max_bot = rho_max * self._d_bot * self.width
+    # Determine the nominal moment for positive moments
+    self._M_Rd_bot = _new_determine_nominal_moment_EN_1992_2004(self, self._A_s_bot, self._d_bot, self._A_s_top, self._c_mec_top)
+    # Determine capacity for negative moment (tension at the top)
+    self._A_s_min_top = rho_min_top * self._d_top * self.width
+    self._A_s_max_top = rho_max * self._d_top * self.width
+    self._M_Rd_top =_new_determine_nominal_moment_EN_1992_2004(self, self._A_s_top, self._d_top, self._A_s_bot, self._c_mec_bot)
+
+
+    return None
 
 
 
@@ -758,15 +820,12 @@ def _design_flexure_EN_1992_2004(
 def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> pd.DataFrame:
     """
     """
-    debug("INVOCARON A LA FUNCION _check_flexure_EN_1992_2004")
     # Initialize the design variables according to ACI 318-19 requirements using the provided force.
     _initialize_variables_EN_1992_2004(self, force)
 
     # Calculate the nominal moments for both top and bottom reinforcement.
+
     _determine_nominal_moment_EN_1992_2004(self, force)
-    debug(force)
-    debug("EL M_Ed ES:")
-    debug(self._M_Ed)
     if self._M_Ed >= 0:
         # For positive moments, calculate the reinforcement requirements for the bottom tension side.
         (
@@ -798,7 +857,7 @@ def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> pd.Da
         # Calculate the design capacity ratio for the top side.
         self._DCRb_top = round(
             -self._M_Ed_top.to("kN*m").magnitude
-            / self._phi_M_Rd_top.to("kN*m").magnitude,
+            / self._M_Rd_top.to("kN*m").magnitude,
             3,
         )
         self._DCRb_bot = 0
