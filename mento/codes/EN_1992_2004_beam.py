@@ -547,8 +547,8 @@ def _new_determine_nominal_moment_EN_1992_2004(
         f_yd=self.steel_bar.f_y/self.concrete.gamma_s
         f_cd=self.concrete.f_c
         b=self.width
-        omega_1=A_s/(b*d) # Cuantia traccionada
-        omega_2=A_s_prime/(b*d) # Cuantia comprimida
+        omega_1=A_s/(b*d)*f_yd/f_cd # Cuantia traccionada
+        omega_2=A_s_prime/(b*d)*f_yd/f_cd # Cuantia comprimida
         if (A_s_prime.to(cm**2).magnitude>A_s.to(cm**2).magnitude):
             M_Rd=A_s*f_yd*(d-d_prime)
         elif (omega_1-omega_2 < 0.36):
