@@ -257,7 +257,6 @@ def rebar() -> None:
 def rebar_df() -> None:
     concrete = Concrete_ACI_318_19(name="H30", f_c=30 * MPa)
     steelBar = SteelBar(name="ADN 420", f_y=420 * MPa)
-    beam_settings = BeamSettings(stirrup_diameter_ini=8 * mm)
     beam = RectangularBeam(
         label="V 20x50",
         concrete=concrete,

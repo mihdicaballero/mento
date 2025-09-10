@@ -4,7 +4,6 @@ import pandas as pd
 import numpy as np
 from typing import TYPE_CHECKING, Dict, Any, cast
 import warnings
-from collections import OrderedDict
 
 from mento.material import Concrete_ACI_318_19
 from mento.rebar import Rebar

@@ -5,7 +5,6 @@ import pandas as pd
 import numpy as np
 
 from mento.units import psi, mm, cm, inch, MPa
-from mento.material import Concrete_ACI_318_19
 
 if TYPE_CHECKING:
     from mento.beam import RectangularBeam
@@ -84,8 +83,8 @@ class Rebar:
         """
 
         f_c = self.beam.concrete.f_c
-        if isinstance(self.beam.concrete, Concrete_ACI_318_19):
-            lambda_factor = self.beam.concrete.lambda_factor
+
+        lambda_factor = self.beam.concrete.lambda_factor
 
         # Determine maximum spacing based on V_s_req condition
         # Maximum spacing for lower shear demand

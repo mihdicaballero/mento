@@ -6,6 +6,7 @@ IPython
 ipykernel
 tabulate
 python-docx
+jinja2
 matplotlib
 openpyxl
 devtools
