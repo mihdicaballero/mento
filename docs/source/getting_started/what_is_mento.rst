@@ -12,16 +12,14 @@ Mento can handle the design and analysis of:
 
 - **Rectangular concrete beams** for flexure and shear.
 
-In the future Mento will support:
-
-- **Circular and rectangular concrete columns** for different structural needs.
+In the future Mento will support other concrete elements checks, as punching in slabs or one-way slabs.
 
 Some key features of Mento include:
 
 - **Unit-sensitive design**: Variables can be input with their respective units for accurate calculations.
 - **Interactive usage**: Mento integrates seamlessly with Jupyter Notebooks, allowing engineers to build custom workflows using its modules.
 - **Results in Markdown and DataFrames**: Results are provided in markdown format and as Pandas DataFrames, facilitating the handling and presentation of multiple design checks.
-- **Report generation**: Mento can generate detailed reports in LaTeX format, making it easy to document the results of the analysis.
+- **Report generation**: Mento can generate detailed reports in Microsoft Word and Excel, making it easy to document the results of the analysis.
 
 Mento is thoroughly tested for compliance with major design codes such as **ACI 318-19**, **EN 1992**, and **CIRSOC 201-2005**, ensuring reliable results that meet industry standards.
 
@@ -30,14 +28,14 @@ Using Mento is easy and intuitive:
 .. code-block:: python
 
     from mento import Concrete_ACI_318_19, SteelBar, RectangularBeam
-    from mento import cm, MPa
+    from mento import mm, cm, MPa
 
     # Define concrete and steel properties
     conc= Concrete_ACI_318_19(name="C25",f_c=25*MPa)
     steel= SteelBar(name="ADN 420", f_y=420*MPa)
     # Define beam section
     section = RectangularBeam(
-            label="101",concrete=conc,steel_bar=steel,width=20*cm, height=40*cm)
+            label="101",concrete=conc,steel_bar=steel,width=20*cm, height=40*cm, c_c=25*mm)
     # Display data with LaTeX formatting in a Jupyter Notebook
     section.results
 

@@ -222,7 +222,7 @@ class BeamSummary:
                     "Av": rebar_v,
                     "As,top,real": round(beam._A_s_top.to("cm**2").magnitude, 1),
                     "As,bot,real": round(beam._A_s_bot.to("cm**2").magnitude, 1),
-                    "Av,real": round(shear_results["Av"][0], 1),
+                    "Av,real": round(shear_results["Av"][1], 1),
                 }
 
                 common_units = {
@@ -242,7 +242,7 @@ class BeamSummary:
                     code_specific_data = {
                         "MRd,top": round(beam._M_Rd_top.to("kN*m").magnitude, 1),
                         "MRd,bot": round(beam._M_Rd_bot.to("kN*m").magnitude, 1),
-                        "VRd": shear_results["V_Rd"][0],
+                        "VRd": shear_results["V_Rd"][1],
                     }
                     code_specific_units = {
                         "MRd,top": "kNm",
@@ -253,7 +253,7 @@ class BeamSummary:
                     code_specific_data = {
                         "ØMn,top": round(beam._phi_M_n_top.to("kN*m").magnitude, 1),
                         "ØMn,bot": round(beam._phi_M_n_bot.to("kN*m").magnitude, 1),
-                        "ØVn": shear_results["ØVn"][0],
+                        "ØVn": shear_results["ØVn"][1],
                     }
                     code_specific_units = {
                         "ØMn,top": "kNm",
@@ -263,20 +263,12 @@ class BeamSummary:
 
                 # Merge data dictionaries
                 merged_data = {**common_data, **code_specific_data}
-                # Extract DCR values and remove them from the merged dictionary
-                dcr_keys = ["DCRb,top", "DCRb,bot", "DCRv"]
-                dcr_values = {key: merged_data.pop(key) for key in dcr_keys}
-                # Rebuild results_dict with DCR values placed at the end
-                results_dict = OrderedDict({**merged_data, **dcr_values})
+                results_dict = merged_data
 
                 # Merge units dictionaries
                 merged_units = {**common_units, **code_specific_units}
+                units_row = pd.DataFrame([OrderedDict({**merged_units})])
 
-                # Extract and reorder DCR unit keys
-                dcr_units = {key: merged_units.pop(key) for key in dcr_keys}
-
-                # Build the units row with DCRs at the end
-                units_row = pd.DataFrame([OrderedDict({**merged_units, **dcr_units})])
                 # Restore the original forces after capacity check
                 node.clear_forces()
                 node.add_forces(original_forces)

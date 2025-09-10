@@ -35,6 +35,8 @@ from mento and then changes it to feet.
     print(a, b, c)
     d = c.to('ft')
     print(d)
+    f=10*kN
+    f.to('kgf')
 
 Available Units
 ---------------
@@ -44,9 +46,9 @@ The following units are available in `mento`:
 * **Metric (SI)**:
 
   * Length: `m`, `cm`, `mm`
-  * Force: `kN`
+  * Force: `kgf`, `kN`
   * Moment: `kNm`
-  * Stress: `MPa`, `GPa`
+  * Stress: `Pa`, `kPa`, `MPa`, `GPa`
   * Mass: `kg`
   * Time: `sec`
 

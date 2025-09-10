@@ -451,7 +451,7 @@ def summary() -> None:
     # print(beam_summary.data)
     # capacity = beam_summary.check(capacity_check=True)
     # print(capacity)
-    check = beam_summary.check(capacity_check=False)
+    check = beam_summary.check(capacity_check=True)
     print(check)
     # # beam_summary.check().to_excel('hola.xlsx', index=False)
     results_shear = beam_summary.shear_results(capacity_check=False)

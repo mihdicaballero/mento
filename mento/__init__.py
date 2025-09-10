@@ -12,6 +12,7 @@ from .units import (
     GPa,
     MPa,
     kPa,
+    kgf,
     kN,
     kNm,
     kg,
@@ -35,6 +36,7 @@ __all__ = [
     "m",
     "cm",
     "mm",
+    "kgf",
     "kN",
     "kNm",
     "kPa",
@@ -61,6 +63,7 @@ __all__ = [
     "DocumentBuilder",
     "EN_1992_2004_beam",
     "ACI_318_19_beam",
+    "BeamSettings",
     "BeamSummary",
 ]
 
@@ -74,6 +77,7 @@ if TYPE_CHECKING:
         Concrete_EN_1992_2004,
         SteelBar,
     )
+    from mento.settings import BeamSettings
     from mento.node import Node
     from mento.results import DocumentBuilder, Formatter, TablePrinter
     from mento.summary import BeamSummary
@@ -84,6 +88,7 @@ def __getattr__(name: str) -> object:
     module_mapping = {
         "RectangularBeam": "beam",
         "Node": "node",
+        "BeamSettings": "settings",
         "Forces": "forces",
         "Concrete_ACI_318_19": "material",
         "SteelBar": "material",
