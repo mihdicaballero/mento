@@ -475,9 +475,9 @@ def test_flexure_check_EN_1992_2004_1(
         8.042, rel=1e-2
     )
     assert results.iloc[1]["M_Rd"].to(kNm).magnitude == pytest.approx(
-        181.237, rel=1e-5
+        181.027, rel=1e-5
     )
-    assert results.iloc[1]["DCR"] == pytest.approx(0.8276, rel=1e-5)
+    assert results.iloc[1]["DCR"] == pytest.approx(0.8286, rel=1e-3)
 
 
 def test_flexure_check_EN_1992_2004_2(

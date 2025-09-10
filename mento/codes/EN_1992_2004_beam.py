@@ -83,7 +83,8 @@ def _initialize_shear_variables_EN_1992_2004(
         self._k_value = min(1 + math.sqrt(200 / self._d_shear.to("mm").magnitude), 2)
 
         # Positive of compression
-        self._f_cd = self.concrete.alpha_cc_shear * self.concrete.f_ck / self.concrete.gamma_c
+        self._f_cd = self.concrete.alpha_cc * self.concrete.f_ck / self.concrete.gamma_c
+        #TODO REVISAR SI EL ALPHA QUE VA ACA ES EL DEL CONCRETE O EL DE CORTE. YO MODIFIQUE PORQUE HABIA UN ERROR EN ROJO
         self._sigma_cp = min(self._N_Ed / self.A_x, 0.2 * self._f_cd)
 
 
@@ -135,7 +136,8 @@ def _calculate_max_shear_strength_EN_1992_2004(self: "RectangularBeam") -> None:
         # Check the minimum strut angle θ = 21.8° (cot(θ) = 2.5)
         theta_min: float = math.radians(21.8)
         cot_theta_min: float = 1 / math.tan(theta_min)
-        self._f_cd = self.concrete.alpha_cc_shear * self.concrete.f_ck / self.concrete.gamma_c
+        self._f_cd = self.concrete.alpha_cc * self.concrete.f_ck / self.concrete.gamma_c
+        #TODO REVISAR SI EL ALPHA QUE VA ACA ES EL DEL CONCRETE O EL DE CORTE. YO MODIFIQUE PORQUE HABIA UN ERROR EN ROJO
         V_Rd_max_min_angle = (
             alpha_cw
             * self.width
@@ -210,7 +212,7 @@ def _check_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> DataFra
             self._stirrup_d_b = 0 * mm
             self._update_effective_heights()
             # Initialize all the code related variables
-            _initialize_variables_EN_1992_2004(self)
+            _initialize_variables_EN_1992_2004(self, force)
             _initialize_shear_variables_EN_1992_2004(self, force)
             # Calculate V_Rd_c
             self._V_Rd_c = _shear_without_rebar_EN_1992_2004(self)
@@ -226,7 +228,7 @@ def _check_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> DataFra
 
         else:
             # Initialize all the code related variables
-            _initialize_variables_EN_1992_2004(self)
+            _initialize_variables_EN_1992_2004(self, force)
             _initialize_shear_variables_EN_1992_2004(self, force)
             # Shear reinforcement calculations
             d_bs = self._stirrup_d_b
@@ -471,72 +473,7 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
 
 
 
-
-
-
-
-
-def _determine_nominal_moment_simple_reinf_EN_1992_2004(
-    self: "RectangularBeam", A_s: Quantity, d: Quantity
-) -> Quantity:
-
-    # Steel force:
-    steel_force=self.steel_bar.f_y*A_s
-    # Constants and material properties
-    if isinstance(self.concrete, Concrete_EN_1992_2004):
-        eta = self.concrete._eta_factor()  # Factor for concrete strength (EN 1992-1-1)
-        self._f_cd = self.concrete._alpha_cc * self.concrete.f_ck / self.concrete.gamma_c
-        # Concrete force shall be same as steel force, so we can obtain the compression block height:
-        lambda_x_eff=steel_force/(self.width *self._f_cd*eta)
-        # Now we can get the momentum arm 
-        z=d-0.5*lambda_x_eff
-        # And calculate the resistance
-        M_Rd=steel_force*z
-    return M_Rd
-
-    
-
-
-
-def _determine_nominal_moment_double_reinf_EN_1992_2004(
-    self: "RectangularBeam", A_s: Quantity, d: Quantity,
-    d_prime: Quantity, A_s_prime: Quantity
-) -> Quantity:
-    
-    # Constants and material properties
-    if isinstance(self.concrete, Concrete_EN_1992_2004):
-        f_yd=self.steel_bar.f_y/self.concrete.gamma_s
-        eta = self.concrete._eta_factor()  # Factor for concrete strength (EN 1992-1-1)
-        k_1=0.4
-        k_2=0.6+0.0014/self.concrete.epsilon_cu3
-        epsilon_eff=(self.concrete._delta-k_1)/k_2
-        epsilon_eff_lim=self.concrete._delta*epsilon_eff
-        x_eff_lim=d*epsilon_eff_lim
-        # Limit moment for compressive reinforcement
-        self._f_cd = self.concrete._alpha_cc * self.concrete.f_ck / self.concrete.gamma_c
-        M_lim = eta * self._f_cd * self.width * x_eff_lim * (d - 0.5 * x_eff_lim)
-    
-        z=(d - 0.5 *self.concrete._lambda_factor()*x_eff_lim)
-    
-        # Limit tensile reinforcement area
-        A_s1_lim = M_lim / ( z* f_yd)
-
-
-        x_u=d*(self.concrete._delta-0.4) # TODO no entiendo esto. De donde sale?
-
-        epsilon_s_2=(x_u-d_prime)/x_u
-
-        z_2=d-d_prime
-
-        f_sd=min(epsilon_s_2*self.steel_bar.E_s,f_yd)
-
-        M_Rd=A_s1_lim *z*f_yd+ min(f_sd*A_s_prime,f_yd*(A_s-A_s1_lim))*z_2
-        #TODO, la deformacion del acero de arriba queda limitada por el limite del hormigon. Entonces lo que aporta el acero comprimido no puede superar la capcadidad del acero traccionado extra (el que no trabaja en conjunto con el hormigon. Para aumentar la capacidad de la viga hay que aumentar simultaneamente los dos aceros, uno solo no cambia nada)
-    return M_Rd
-
-
-
-def _new_determine_nominal_moment_EN_1992_2004(
+def _simple_determine_nominal_moment_EN_1992_2004(
     self: "RectangularBeam", A_s: Quantity, d: Quantity,
     A_s_prime: Quantity, d_prime: Quantity
 ) -> Quantity:
@@ -545,89 +482,21 @@ def _new_determine_nominal_moment_EN_1992_2004(
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         # For reference see Jimenez Montoya 16 Ed. P 213
         f_yd=self.steel_bar.f_y/self.concrete.gamma_s
-        f_cd=self.concrete.f_c
+        f_cd=self.concrete._alpha_cc * self.concrete.f_ck / self.concrete.gamma_c
         b=self.width
         omega_1=A_s/(b*d)*f_yd/f_cd # Cuantia traccionada
         omega_2=A_s_prime/(b*d)*f_yd/f_cd # Cuantia comprimida
         if (A_s_prime.to(cm**2).magnitude>A_s.to(cm**2).magnitude):
-            M_Rd=A_s*f_yd*(d-d_prime)
-        elif (omega_1-omega_2 < 0.36):
+            z=d-d_prime # Lever arm of internal forces
+            M_Rd=A_s*f_yd*z
+        elif (omega_1-omega_2 <= 0.36):
             A_tensioned=A_s-A_s_prime
-            M_omega_1_omega_2=A_tensioned*f_yd*(d-0.5*A_tensioned*f_yd/(f_cd*b))
+            M_omega_1_omega_2=A_tensioned*f_yd*(d-0.5*self.concrete._lambda_factor()*A_tensioned*f_yd/(f_cd*b))
             M_Rd=M_omega_1_omega_2+A_s_prime*f_yd*(d-d_prime)
         else:
             M_Rd=0.295*f_cd*b*d**2+A_s_prime*f_yd*(d-d_prime)
+    debug(M_Rd.to(kNm))
     return M_Rd
-
-
-
-
-def _determine_nominal_moment_EN_1992_2004_deprecated(
-    self: "RectangularBeam", force: Forces
-) -> None:
-    """
-    Determines the nominal moment for a given section with both top and bottom reinforcement,
-    calculating the nominal moment for both positive and negative moment scenarios.
-
-    For positive moments, the tension is in the bottom reinforcement.
-    For negative moments, the tension is in the top reinforcement.
-
-    Parameters:
-        force (Forces): An object containing the forces acting on the section, including the moment M_y.
-
-    Returns:
-        None
-    """
-
-    # Calculate minimum and maximum reinforcement ratios
-    [rho_min, rho_max] = _min_max_flexural_reinforcement_ratio_EN_1992_2004(self)
-    
-
-    # For positive moments (tension in the bottom), set minimum reinforcement accordingly.
-    if force._M_y > 0 * kNm:
-        rho_min_top = 0 * dimensionless
-        rho_min_bot = rho_min
-    else:
-        rho_min_top = rho_min
-        rho_min_bot = 0 * dimensionless
-
-    # Calculate minimum and maximum bottom reinforcement areas
-    self._A_s_min_bot = rho_min_bot * self._d_bot * self.width
-    self._A_s_max_bot = rho_max * self._d_bot * self.width
-
-    # Determine the nominal moment for positive moments
-    #Falta el caso de que el armado sea tal que no requiere compresion
-    if self._A_s_top == 0 * cm**2:
-        M_Rd_positive = _determine_nominal_moment_simple_reinf_EN_1992_2004(
-            self, self._A_s_max_bot, self._d_bot
-        )
-    else:
-        M_Rd_positive = _determine_nominal_moment_double_reinf_EN_1992_2004(
-            self, self._A_s_bot, self._d_bot, self._c_mec_top, self._A_s_top
-        )
-
-    # Determine capacity for negative moment (tension at the top)
-    self._A_s_min_top = rho_min_top * self._d_top * self.width
-    self._A_s_max_top = rho_max * self._d_top * self.width
-
-    if self._A_s_top == 0 * cm**2:
-        M_Rd_negative = 0 * kNm
-        #Falta el caso de que el armado sea tal que no requiere compresion
-    elif self._A_s_bot == 0 * cm**2:
-        M_Rd_negative = _determine_nominal_moment_simple_reinf_EN_1992_2004(
-            self, self._A_s_max_top, self._d_top
-        )
-    else:
-        M_Rd_negative = _determine_nominal_moment_double_reinf_EN_1992_2004(
-            self, self._A_s_top, self._d_top, self._c_mec_bot, self._A_s_bot
-        )
-
-    # Calculate the design moment capacities for both bottom and top reinforcement
-    self._M_Rd_bot = M_Rd_positive
-    self._M_Rd_top = M_Rd_negative
-
-    return None
-
 
 def _determine_nominal_moment_EN_1992_2004(
     self: "RectangularBeam", force: Forces
@@ -660,11 +529,11 @@ def _determine_nominal_moment_EN_1992_2004(
     self._A_s_min_bot = rho_min_bot * self._d_bot * self.width
     self._A_s_max_bot = rho_max * self._d_bot * self.width
     # Determine the nominal moment for positive moments
-    self._M_Rd_bot = _new_determine_nominal_moment_EN_1992_2004(self, self._A_s_bot, self._d_bot, self._A_s_top, self._c_mec_top)
+    self._M_Rd_bot = _simple_determine_nominal_moment_EN_1992_2004(self, self._A_s_bot, self._d_bot, self._A_s_top, self._c_mec_top)
     # Determine capacity for negative moment (tension at the top)
     self._A_s_min_top = rho_min_top * self._d_top * self.width
     self._A_s_max_top = rho_max * self._d_top * self.width
-    self._M_Rd_top =_new_determine_nominal_moment_EN_1992_2004(self, self._A_s_top, self._d_top, self._A_s_bot, self._c_mec_bot)
+    self._M_Rd_top =_simple_determine_nominal_moment_EN_1992_2004(self, self._A_s_top, self._d_top, self._A_s_bot, self._c_mec_bot)
 
 
     return None
