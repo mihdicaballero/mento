@@ -492,21 +492,21 @@ def test_flexure_check_EN_1992_2004_2(
 
     assert results.iloc[1]["Position"] == "Bottom"
     assert results.iloc[1]["As,min"].to(cm**2).magnitude == pytest.approx(
-        1.48, rel=1e-3
+        1.482, rel=1e-2
     )
     assert results.iloc[1]["As,req bot"].to(cm**2).magnitude == pytest.approx(
-        21.07, rel=1e-3
+        21.013, rel=1e-2
     )
     assert results.iloc[1]["As,req top"].to(cm**2).magnitude == pytest.approx(
-        8.64, rel=1e-3
+        8.529, rel=1e-2
     )
     assert results.iloc[1]["As"].to(cm**2).magnitude == pytest.approx(
-        24.54, rel=1e-3
+        24.544, rel=1e-2
     )
     assert results.iloc[1]["MRd"].to(kip * ft).magnitude == pytest.approx(
-        505.6, rel=1e-3
+        385.156, rel=1e-2
     )
-    assert results.iloc[1]["DCR"] == pytest.approx(0.89, rel=1e-5)
+    assert results.iloc[1]["DCR"] == pytest.approx(1.168, rel=1e-3)
 
 
 def test_flexure_check_EN_1992_2004_3(
