@@ -289,16 +289,21 @@ class Rebar:
     # LONGITUDINAL REBAR DESIGN
     ##########################################################
 
-    def longitudinal_rebar_ACI_318_19(self, A_s_req: Quantity) -> DataFrame:
+    def longitudinal_rebar_ACI_318_19(
+        self, A_s_req: Quantity, A_s_max: Quantity | None = None
+    ) -> DataFrame:
         """
         Computes the required longitudinal reinforcement based on ACI 318-19.
 
         Args:
             A_s_req: Required longitudinal rebar area.
+            A_s_max: Optional maximum allowable longitudinal rebar area. If not
+                provided, the limit defaults to ``10 * A_s_req``.
 
         Returns:
-            A DataFrame containing the best combinations of rebar details.
-            If no combination satisfies A_s_req, returns the combination with the maximum possible area.
+            A DataFrame containing the best combinations of rebar details. If no
+            combination satisfies ``A_s_req``, returns the combination with the
+            maximum possible area.
         """
         self.A_s_req = A_s_req
         effective_width = self.beam.width - 2 * (self.beam.c_c + self.beam._stirrup_d_b)
@@ -362,13 +367,16 @@ class Rebar:
                             ):
                                 continue
 
-                            A_s_max = max(
-                                10 * A_s_req, n1 * self.rebar_areas[self.min_long_rebar]
+                            max_limit = 10 * A_s_req
+                            if A_s_max is not None:
+                                max_limit = min(max_limit, A_s_max)
+                            max_limit = max(
+                                max_limit, n1 * self.rebar_areas[self.min_long_rebar]
                             )
+
                             # Check if total area from layer 1 is enough for required A_s
-                            # And also less than A_s_max
-                            if A_s_layer_1 >= A_s_req and A_s_layer_1 <= A_s_max:
-                                # if A_s_layer_1 >= A_s_req:
+                            # And also less than the maximum limit
+                            if A_s_layer_1 >= A_s_req and A_s_layer_1 <= max_limit:
                                 total_as = A_s_layer_1  # Only consider layer 1
                                 total_bars = n1 + n2  # Total bars only in layer 1
                                 valid_combinations.append(
@@ -437,8 +445,7 @@ class Rebar:
 
                                     # Check if total area is enough for required A_s
                                     total_as = A_s_layer_1 + A_s_layer_2
-                                    if total_as >= A_s_req and total_as <= A_s_max:
-                                        # if total_as >= A_s_req:
+                                    if total_as >= A_s_req and total_as <= max_limit:
                                         total_bars = (
                                             n1 + n2 + n3 + n4
                                         )  # Count the total number of bars
@@ -653,15 +660,22 @@ class Rebar:
 
         return df
 
-    def longitudinal_rebar(self, A_s_req: Quantity) -> Dict[str, Any]:
+    def longitudinal_rebar(
+        self, A_s_req: Quantity, A_s_max: Quantity | None = None
+    ) -> Dict[str, Any]:
         """
-        Selects the appropriate longitudinal rebar method based on the design code.
+        Selects the appropriate longitudinal rebar method based on the design
+        code.
+
+        Args:
+            A_s_req: Required longitudinal rebar area.
+            A_s_max: Optional maximum allowable longitudinal rebar area.
         """
         if (
             self.beam.concrete.design_code == "ACI 318-19"
             or self.beam.concrete.design_code == "CIRSOC 201-25"
         ):
-            return self.longitudinal_rebar_ACI_318_19(A_s_req)
+            return self.longitudinal_rebar_ACI_318_19(A_s_req, A_s_max)
         # elif self.beam.concrete.design_code=="EN 1992":
         #     return self.beam_longitudinal_rebar_EN_1992(A_s_req)
         # elif self.beam.concrete.design_code=="EHE-08":

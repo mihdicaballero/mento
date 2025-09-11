@@ -977,7 +977,9 @@ def _design_flexure_ACI_318_19(
         # Design bottom reinforcement
         section_rebar_bot = Rebar(self)
         self.flexure_design_results_bot = (
-            section_rebar_bot.longitudinal_rebar_ACI_318_19(self._A_s_bot)
+            section_rebar_bot.longitudinal_rebar_ACI_318_19(
+                self._A_s_bot, self._A_s_max_bot
+            )
         )
         best_design = section_rebar_bot.longitudinal_rebar_design
         # Extract bar information
@@ -997,7 +999,9 @@ def _design_flexure_ACI_318_19(
         if self._A_s_top > 0:
             section_rebar_top = Rebar(self)
             self.flexure_design_results_top = (
-                section_rebar_top.longitudinal_rebar_ACI_318_19(self._A_s_top)
+                section_rebar_top.longitudinal_rebar_ACI_318_19(
+                    self._A_s_top, self._A_s_max_top
+                )
             )
             best_design_top = section_rebar_top.longitudinal_rebar_design
 
