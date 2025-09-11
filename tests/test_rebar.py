@@ -67,6 +67,24 @@ def test_beam_longitudinal_rebar_ACI_318_19_metric(
     assert best_design["clear_spacing"].magnitude == pytest.approx(40, rel=1e-3)
 
 
+def test_longitudinal_rebar_ACI_max_area(beam_example_metric: RectangularBeam) -> None:
+    A_s_req = 5 * cm**2
+    A_s_max = 5.2 * cm**2
+    beam_rebar = Rebar(beam_example_metric)
+    beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=A_s_req, A_s_max=A_s_max)
+    design_with_limit = beam_rebar.longitudinal_rebar_design
+
+    assert design_with_limit["total_as"] <= A_s_max
+
+    beam_rebar_default = Rebar(beam_example_metric)
+    beam_rebar_default.longitudinal_rebar_ACI_318_19(A_s_req=A_s_req)
+    default_design = beam_rebar_default.longitudinal_rebar_design
+
+    assert design_with_limit["total_as"].magnitude == pytest.approx(
+        default_design["total_as"].magnitude, rel=1e-3
+    )
+
+
 # def test_beam_longitudinal_rebar_ACI_318_19_imperial(beam_example_imperial: RectangularBeam) -> None:
 #     # This test will ensure that the longitudinal rebar design works correctly for beams defined in imperial units.
 #     A_s_req = 1.5 * inch**2
@@ -144,6 +162,26 @@ def test_beam_longitudinal_rebar_CIRSOC_201_25(
     assert best_design["total_as"].magnitude == pytest.approx(5.15, rel=1e-3)
     assert best_design["total_bars"] == 3
     assert best_design["clear_spacing"].magnitude == pytest.approx(40, rel=1e-3)
+
+
+def test_longitudinal_rebar_factory_max_area(
+    beam_example_metric: RectangularBeam,
+) -> None:
+    A_s_req = 5 * cm**2
+    A_s_max = 5.2 * cm**2
+    beam_rebar = Rebar(beam_example_metric)
+    beam_rebar.longitudinal_rebar(A_s_req=A_s_req, A_s_max=A_s_max)
+    design_with_limit = beam_rebar.longitudinal_rebar_design
+
+    assert design_with_limit["total_as"] <= A_s_max
+
+    beam_rebar_default = Rebar(beam_example_metric)
+    beam_rebar_default.longitudinal_rebar(A_s_req=A_s_req)
+    default_design = beam_rebar_default.longitudinal_rebar_design
+
+    assert design_with_limit["total_as"].magnitude == pytest.approx(
+        default_design["total_as"].magnitude, rel=1e-3
+    )
 
 
 def test_beam_longitudinal_rebar_small_area(
