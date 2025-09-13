@@ -19,8 +19,8 @@ class Rebar:
         Initializes the Rebar object with the associated beam and settings.
         """
         self.beam = beam
-        self._long_combos_df: DataFrame = None
-        self._trans_combos_df: DataFrame = None
+        self._long_combos_df: DataFrame = pd.DataFrame()
+        self._trans_combos_df: DataFrame = pd.DataFrame()
         self._clear_spacing: Quantity = 0 * mm
         # Unit system default rebar
         if self.beam.concrete.unit_system == "metric":

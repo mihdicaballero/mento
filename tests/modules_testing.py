@@ -151,25 +151,27 @@ def shear_ACI_318_19() -> None:
 def shear_CIRSOC_201_2025() -> None:
     concrete = Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa)
     steelBar = SteelBar(name="ADN 420", f_y=420 * MPa)
-    section = RectangularBeam(
+    beam = RectangularBeam(
         concrete=concrete,
         steel_bar=steelBar,
         c_c=2.5 * cm,
         width=20 * cm,
-        height=60 * cm,
+        height=40 * cm,
         label="Test",
     )
     # section.set_transverse_rebar(
     #     n_stirrups=0, d_b=0.375 * inch, s_l=6 * inch
     # )
 
-    f = Forces(label="ELU_01", V_z=120 * kN)
-    node = Node(section=section, forces=f)
+    f1 = Forces(V_z=73*kN, M_y=109*kNm)
+    node = Node(section=beam, forces=f1)
     # section.plot()
     # results = node.check_shear()
-    results = node.design_shear()
+    # results = node.design_shear()
+    results = node.design_flexure()
     print(results)
-    print(node.shear_results_detailed())
+    print(beam.flexure_design_results_bot)
+    # print(node.shear_results_detailed())
 
 
 def flexure_ACI_318_19_imperial() -> None:
@@ -233,20 +235,17 @@ def flexure_ACI_318_19_metric() -> None:
 
 
 def rebar() -> None:
-    concrete = Concrete_ACI_318_19(name="H30", f_c=30 * MPa)
+    concrete = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
     steelBar = SteelBar(name="ADN 420", f_y=420 * MPa)
-    # beam_settings = BeamSettings()
-    beam_settings = BeamSettings(max_bars_per_layer=4)
     beam = RectangularBeam(
         label="V 20x50",
         concrete=concrete,
         steel_bar=steelBar,
-        width=30 * cm,
-        height=50 * cm,
-        c_c=30 * mm,
-        settings=beam_settings,
+        width=20 * cm,
+        height=40 * cm,
+        c_c=25 * mm,
     )
-    as_req = 10 * cm**2
+    as_req = 9.26 * cm**2
 
     beam_rebar = Rebar(beam)
     long_rebar_df = beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=as_req)
@@ -344,8 +343,8 @@ if __name__ == "__main__":
     # rectangular()
     # shear_EN_1992()
     # shear_ACI_318_19()
-    # shear_CIRSOC_201_2025()
+    shear_CIRSOC_201_2025()
     # flexure_ACI_318_19_imperial()
-    flexure_ACI_318_19_metric()
+    # flexure_ACI_318_19_metric()
     # rebar()
     # summary()
