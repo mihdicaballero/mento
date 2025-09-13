@@ -10,7 +10,7 @@ An intuitive tool for structural engineers to design concrete elements efficient
    getting_started/index
    user_guide/index
    examples/index
-   api/modules
+   api/mento
 
 .. toctree::
    :hidden:
@@ -19,7 +19,7 @@ An intuitive tool for structural engineers to design concrete elements efficient
    dev/contributing
    dev/codeofconduct
 
-If you are new to Mento, check out our :ref:`Getting Started <getting_started/index>`, :ref:`Examples <examples/index>`, and the :ref:`API Reference <api/modules>`.
+If you are new to Mento, check out our :ref:`Getting Started <getting_started/index>`, :ref:`Examples <examples/index>`, and the :ref:`API Reference <api-reference>`.
 
 .. raw:: html
 
@@ -53,7 +53,7 @@ If you are new to Mento, check out our :ref:`Getting Started <getting_started/in
       Step-by-step examples for various tasks.
 
    .. grid-item-card:: API Reference
-      :link: api/modules
+      :link: api-reference
       :link-type: ref
       :class-title: sd-fs-5
       :margin: 2 2 auto auto

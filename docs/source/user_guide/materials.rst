@@ -26,7 +26,7 @@ types, each compliant with different design codes:
 Concrete properties depend in the design code selected. For example:
 
 * **Compressive strength (f_c)**: The characteristic strength of
-  concrete in compression for ACI, in MPa or psi units.
+  concrete in compression for any design code, in MPa or psi units.
 * **Density**: Concrete density (typically around 2500 kg/m³) for
   every code.
 * **Elastic Modulus (E_c or E_cm)**: Secant modulus of elasticity
@@ -46,9 +46,11 @@ To create concrete compliant with the ACI 318-19 standard with a
 
 .. code-block:: python
 
-    from mento import Concrete_ACI_318_19, MPa
+    from mento import Concrete_ACI_318_19, Concrete_EN_1992_2004, MPa
 
     concrete = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
+    print(concrete)
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
     print(concrete)
 
 Steel Models
