@@ -277,46 +277,46 @@ class RectangularBeam(RectangularSection):
 
     def set_longitudinal_rebar_bot(
         self,
-        n1: int = 0,
-        d_b1: Quantity = 0 * mm,
-        n2: int = 0,
-        d_b2: Quantity = 0 * mm,
-        n3: int = 0,
-        d_b3: Quantity = 0 * mm,
-        n4: int = 0,
-        d_b4: Quantity = 0 * mm,
+        n1: int,
+        d_b1: Quantity | None,
+        n2: int,
+        d_b2: Quantity | None,
+        n3: int,
+        d_b3: Quantity | None,
+        n4: int,
+        d_b4: Quantity | None,
     ) -> None:
-        """Update the bottom rebar configuration and recalculate attributes."""
-        self._n1_b = n1 or self._n1_b
-        self._d_b1_b = d_b1 or self._d_b1_b
-        self._n2_b = n2 or self._n2_b
-        self._d_b2_b = d_b2 or self._d_b2_b
-        self._n3_b = n3 or self._n3_b
-        self._d_b3_b = d_b3 or self._d_b3_b
-        self._n4_b = n4 or self._n4_b
-        self._d_b4_b = d_b4 or self._d_b4_b
+        """Hard-overwrite bottom rebar configuration and recalc attributes."""
+        self._n1_b = n1
+        self._d_b1_b = d_b1
+        self._n2_b = n2
+        self._d_b2_b = d_b2
+        self._n3_b = n3
+        self._d_b3_b = d_b3
+        self._n4_b = n4
+        self._d_b4_b = d_b4
         self._update_longitudinal_rebar_attributes()
 
     def set_longitudinal_rebar_top(
         self,
         n1: int,
-        d_b1: Quantity,
-        n2: int = 0,
-        d_b2: Quantity = 0 * mm,
-        n3: int = 0,
-        d_b3: Quantity = 0 * mm,
-        n4: int = 0,
-        d_b4: Quantity = 0 * mm,
+        d_b1: Quantity | None,
+        n2: int,
+        d_b2: Quantity | None,
+        n3: int,
+        d_b3: Quantity | None,
+        n4: int,
+        d_b4: Quantity | None,
     ) -> None:
-        """Update the top rebar configuration and recalculate attributes."""
-        self._n1_t = n1 or self._n1_t
-        self._d_b1_t = d_b1 or self._d_b1_t
-        self._n2_t = n2 or self._n2_t
-        self._d_b2_t = d_b2 or self._d_b2_t
-        self._n3_t = n3 or self._n3_t
-        self._d_b3_t = d_b3 or self._d_b3_t
-        self._n4_t = n4 or self._n4_t
-        self._d_b4_t = d_b4 or self._d_b4_t
+        """Hard-overwrite top rebar configuration and recalc attributes."""
+        self._n1_t = n1
+        self._d_b1_t = d_b1
+        self._n2_t = n2
+        self._d_b2_t = d_b2
+        self._n3_t = n3
+        self._d_b3_t = d_b3
+        self._n4_t = n4
+        self._d_b4_t = d_b4
         self._update_longitudinal_rebar_attributes()
 
     def _calculate_longitudinal_rebar_area(self) -> None:
