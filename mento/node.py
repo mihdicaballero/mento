@@ -1,14 +1,48 @@
 from typing import Union, Optional, List
 import pandas as pd
 
-from mento.beam import RectangularBeam
-from mento.material import SteelBar, Concrete_ACI_318_19, Concrete_EN_1992_2004
 from mento.section import Section
 from mento.forces import Forces
-from mento.units import ksi, psi, kip, inch, ft, MPa, cm, mm, kN
 
 
 class Node:
+    """
+    Node Class
+    The `Node` class represents a structural node that is associated with a section
+    (e.g., a beam) and can have forces applied to it. It provides methods for managing
+    forces, performing structural checks, and designing for flexure and shear.
+    Attributes:
+        section (Section): The section (e.g., beam) associated with the node.
+        forces (List[Forces]): A list of forces applied to the node.
+    Methods:
+        add_forces(forces: Union[Forces, List[Forces]]) -> None:
+            Adds one or more forces to the node.
+        get_forces_list() -> List[Forces]:
+            Returns the list of forces applied to this node.
+        clear_forces() -> None:
+            Removes all forces from the node.
+        check_flexure() -> pd.DataFrame:
+            Performs a flexural check on the section using the applied forces.
+        design_flexure() -> pd.DataFrame:
+            Designs the section for flexure based on the applied forces.
+        check_shear() -> pd.DataFrame:
+            Performs a shear check on the section using the applied forces.
+        design_shear() -> pd.DataFrame:
+            Designs the section for shear based on the applied forces.
+        shear_results_detailed(force: Optional[Forces] = None) -> None:
+            Provides detailed shear results for a specific force or all forces.
+        shear_results_detailed_doc(force: Optional[Forces] = None) -> None:
+            Provides detailed shear results documentation for a specific force or all forces.
+        flexure_results_detailed(force: Optional[Forces] = None) -> None:
+            Provides detailed flexure results for a specific force or all forces.
+        flexure_results_detailed_doc(force: Optional[Forces] = None) -> None:
+            Provides detailed flexure results documentation for a specific force or all forces.
+        results -> None:
+            A property that provides beam results for Jupyter Notebook.
+        id -> int:
+            A read-only property to access the private `_id` of the node.
+    """
+
     _id: int
     _last_id: int = 0  # Class variable to keep track of last assigned ID
 
@@ -102,123 +136,3 @@ class Node:
     def id(self) -> int:
         """Read-only property to access the private _id."""
         return self._id
-
-
-##########################################################################
-# DEBUG ZONE
-##########################################################################
-
-
-def flexure_design_test() -> None:
-    concrete = Concrete_ACI_318_19(name="fc 4000", f_c=4000 * psi)
-    steelBar = SteelBar(name="fy 60000", f_y=60 * ksi)
-    custom_settings = {"clear_cover": 1.5 * inch}
-    beam = RectangularBeam(
-        label="B-12x24",
-        concrete=concrete,
-        steel_bar=steelBar,
-        width=12 * inch,
-        height=24 * inch,
-        settings=custom_settings,
-    )
-
-    f = Forces(label="Test_01", V_z=40 * kip, M_y=400 * kip * ft)
-    f2 = Forces(label="Test_01", V_z=100 * kip, M_y=-400 * kip * ft)
-    node_1 = Node(section=beam, forces=[f, f2])
-
-    node_1.design_flexure()
-    node_1.flexure_results_detailed()
-    # node_1.flexure_results_detailed_doc()
-    print(node_1)
-
-
-def shear_ACI_imperial() -> None:
-    concrete = Concrete_ACI_318_19(name="C4", f_c=4000 * psi)
-    steelBar = SteelBar(name="ADN 420", f_y=60 * ksi)
-    custom_settings = {"clear_cover": 1.5 * inch}
-    beam = RectangularBeam(
-        label="102",
-        concrete=concrete,
-        steel_bar=steelBar,
-        width=10 * inch,
-        height=16 * inch,
-        settings=custom_settings,
-    )
-
-    # f1 = Forces(label='D', V_z=37.727*kip, N_x=20*kip)
-    f1 = Forces(label="D", V_z=37.727 * kip)
-    # f1 = Forces(label='D', V_z=8*kip)
-    # f2 = Forces(label='L', V_z=6*kip) # No shear reinforcing
-    forces = [f1]
-    beam.set_transverse_rebar(n_stirrups=1, d_b=0.5 * inch, s_l=6 * inch)
-    node_1 = Node(beam, forces)
-    # beam.set_longitudinal_rebar_bot(n1=2, d_b1=0.625*inch)
-    print(beam._A_v)
-    results = node_1.check_shear()
-    # results = beam.design_shear()
-    print(results)
-    # section.design_shear(f, A_s=0.847*inch**2)
-    node_1.shear_results_detailed()
-    node_1.shear_results_detailed_doc()
-
-
-def shear_ACI_metric() -> None:
-    concrete = Concrete_ACI_318_19(name="C30", f_c=30 * MPa)
-    steelBar = SteelBar(name="ADN 420", f_y=420 * MPa)
-    custom_settings = {"clear_cover": 30 * mm}
-    beam = RectangularBeam(
-        label="101",
-        concrete=concrete,
-        steel_bar=steelBar,
-        width=20 * cm,
-        height=50 * cm,
-        settings=custom_settings,
-    )
-    f1 = Forces(label="1.4D", V_z=100 * kN)
-    f2 = Forces(label="1.2D+1.6L", V_z=1.55 * kN)
-    f3 = Forces(label="W", V_z=2.20 * kN)
-    f4 = Forces(label="S", V_z=8.0 * kN)
-    f5 = Forces(label="E", V_z=1.0 * kN)
-    forces = [f1, f2, f3, f4, f5]
-    beam.set_longitudinal_rebar_bot(n1=2, d_b1=16 * mm)
-    beam.set_transverse_rebar(n_stirrups=1, d_b=6 * mm, s_l=20 * cm)
-    node = Node(section=beam, forces=forces)
-    results = node.check_shear()
-    # results = beam.design_shear(forces)
-    print(results)
-    # print(beam.shear_design_results)
-    # beam.shear_results_detailed()
-    # print(beam.shear_design_results)
-    # print(beam.results)
-    # beam.shear_results_detailed_doc()
-
-
-def shear_EN_1992() -> None:
-    concrete = Concrete_EN_1992_2004(name="C25", f_ck=25 * MPa)
-    steelBar = SteelBar(name="B500S", f_y=500 * MPa)
-    custom_settings = {"clear_cover": 2.6 * cm}
-    beam = RectangularBeam(
-        label="101",
-        concrete=concrete,
-        steel_bar=steelBar,
-        width=20 * cm,
-        height=60 * cm,
-        settings=custom_settings,
-    )
-    # f = Forces(V_z=100*kN, M_y=100*kNm)
-    f = Forces(V_z=30 * kN, N_x=0 * kN)
-    forces = [f]
-    beam.set_transverse_rebar(n_stirrups=1, d_b=6 * mm, s_l=25 * cm)
-    beam.set_longitudinal_rebar_bot(n1=4, d_b1=16 * mm)
-    # results = beam.check_shear(forces)
-    results = beam.design_shear(forces)
-    print(results)
-    beam.shear_results_detailed()
-    # beam.shear_results_detailed_doc()
-
-
-if __name__ == "__main__":
-    # flexure_design_test()
-    # shear_ACI_imperial()
-    shear_ACI_metric()
-    # shear_EN_1992()

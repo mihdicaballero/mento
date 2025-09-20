@@ -1,51 +1,78 @@
 import pytest
+from typing import Generator
+
 from mento.material import SteelBar, Concrete
-from mento.units import ksi, inch, cm
+from mento.units import inch, cm, mm, MPa
 from mento.rectangular import RectangularSection  # Assuming this is the module name
 
 
 @pytest.fixture()
-def setup_section() -> RectangularSection:
-    concrete = Concrete("C25")
-    steel_bar = SteelBar(name="ADN 420", f_y=60 * ksi)
-    width = 10 * inch
-    height = 16 * inch
-    section = RectangularSection(
-        label="V101", concrete=concrete, steel_bar=steel_bar, width=width, height=height
+def concrete_c25() -> Concrete:
+    return Concrete("C25")
+
+
+@pytest.fixture()
+def steel_b500s() -> SteelBar:
+    return SteelBar(name="B500S", f_y=500 * MPa)
+
+
+@pytest.fixture()
+def basic_rectangular_section(
+    concrete_c25: Concrete, steel_b500s: SteelBar
+) -> RectangularSection:
+    """Fixture for a basic RectangularSection instance."""
+    return RectangularSection(
+        label="R101",
+        concrete=concrete_c25,
+        steel_bar=steel_b500s,
+        c_c=25 * mm,
+        width=30 * cm,  # Example dimensions
+        height=50 * cm,
     )
-    return section
 
 
-def test_width(setup_section: RectangularSection) -> None:
-    section = setup_section
-    expected_width = 10 * inch
-    assert section.width.magnitude == expected_width.to(cm).magnitude
-    assert str(section.width.units) == str(expected_width.to(cm).units)
+@pytest.fixture()
+def imperial_rectangular_section(
+    concrete_c25: Concrete, steel_b500s: SteelBar
+) -> Generator[RectangularSection, None, None]:
+    """Fixture for a RectangularSection with imperial units set in concrete."""
+    # Temporarily override unit system for concrete for this fixture
+    # In a real app, you'd likely configure this via settings or concrete constructor
+    concrete_c25.unit_system = "imperial"
+    section = RectangularSection(
+        label="R102",
+        concrete=concrete_c25,
+        steel_bar=steel_b500s,
+        c_c=1 * inch,  # Example imperial cover
+        width=12 * inch,  # Example imperial width
+        height=24 * inch,
+    )
+    yield section  # Use yield to ensure cleanup happens after the test
+    concrete_c25.unit_system = "metric"  # Reset for other tests if fixture is reused
 
 
-def test_height(setup_section: RectangularSection) -> None:
-    section = setup_section
-    expected_height = 16 * inch
-    assert section.height.magnitude == expected_height.to(cm).magnitude
-    assert str(section.height.units) == str(expected_height.to(cm).units)
+# --- Tests for RectangularSection ---
 
 
-def test_area(setup_section: RectangularSection) -> None:
-    section = setup_section
-    expected_area = (10 * inch) * (16 * inch)
-    assert section.A_x.magnitude == expected_area.to(cm**2).magnitude
-    assert str(section.A_x.units) == str(expected_area.to(cm**2).units)
+def test_rectangular_section_initialization(
+    basic_rectangular_section: RectangularSection,
+) -> None:
+    """Test RectangularSection specific initialization."""
+    assert basic_rectangular_section.width == 30 * cm
+    assert basic_rectangular_section.height == 50 * cm
+    assert basic_rectangular_section.label == "R101"
+    assert basic_rectangular_section.c_c == 25 * mm
 
 
-def test_moment_of_inertia_y(setup_section: RectangularSection) -> None:
-    section = setup_section
-    expected_I_y = ((10 * inch) * (16 * inch) ** 3) / 12
-    assert section.I_y.magnitude == expected_I_y.to(cm**4).magnitude
-    assert str(section.I_y.units) == str(expected_I_y.to(cm**4).units)
+def test_rectangular_section_geometric_properties(
+    basic_rectangular_section: RectangularSection,
+) -> None:
+    """Test calculation of geometric properties (A_x, I_y, I_z)."""
+    expected_A_x = (30 * cm) * (50 * cm)
+    assert basic_rectangular_section.A_x == expected_A_x.to("cm**2")
 
+    expected_I_y = (30 * cm) * (50 * cm) ** 3 / 12
+    assert basic_rectangular_section.I_y == expected_I_y.to("cm**4")
 
-def test_moment_of_inertia_z(setup_section: RectangularSection) -> None:
-    section = setup_section
-    expected_I_z = ((16 * inch) * (10 * inch) ** 3) / 12
-    assert section.I_z.magnitude == expected_I_z.to(cm**4).magnitude
-    assert str(section.I_z.units) == str(expected_I_z.to(cm**4).units)
+    expected_I_z = (50 * cm) * (30 * cm) ** 3 / 12
+    assert basic_rectangular_section.I_z == expected_I_z.to("cm**4")

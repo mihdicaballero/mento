@@ -12,6 +12,7 @@ from .units import (
     GPa,
     MPa,
     kPa,
+    kgf,
     kN,
     kNm,
     kg,
@@ -35,6 +36,7 @@ __all__ = [
     "m",
     "cm",
     "mm",
+    "kgf",
     "kN",
     "kNm",
     "kPa",
@@ -62,45 +64,48 @@ __all__ = [
     "DocumentBuilder",
     "EN_1992_2004_beam",
     "ACI_318_19_beam",
+    "BeamSettings",
     "BeamSummary",
 ]
 
 if TYPE_CHECKING:
-    from .beam import RectangularBeam
-    from .slab import OneWaySlab
-    from .codes import ACI_318_19_beam, EN_1992_2004_beam
-    from .forces import Forces
-    from .material import (
+    from mento.beam import RectangularBeam
+    from mento.codes import ACI_318_19_beam, EN_1992_2004_beam
+    from mento.forces import Forces
+    from mento.material import (
         Concrete_ACI_318_19,
         Concrete_CIRSOC_201_25,
         Concrete_EN_1992_2004,
         SteelBar,
     )
-    from .node import Node
-    from .results import DocumentBuilder, Formatter, TablePrinter
-    from .summary import BeamSummary
+    from mento.settings import BeamSettings
+    from mento.node import Node
+    from mento.results import DocumentBuilder, Formatter, TablePrinter
+    from mento.summary import BeamSummary
 
 
-# Lazy imports to avoid circular dependencies
 def __getattr__(name: str) -> object:
-    if name in {
-        "Node",
-        "Forces",
-        "Concrete_ACI_318_19",
-        "SteelBar",
-        "Concrete_CIRSOC_201_25",
-        "Concrete_EN_1992_2004",
-        "OneWaySlab",
-        "RectangularBeam",
-        "Formatter",
-        "TablePrinter",
-        "DocumentBuilder",
-        "EN_1992_2004_beam",
-        "ACI_318_19_beam",
-        "BeamSummary",
-    }:
+    # Map class names to their actual module files
+    module_mapping = {
+        "RectangularBeam": "beam",
+        "Node": "node",
+        "BeamSettings": "settings",
+        "Forces": "forces",
+        "Concrete_ACI_318_19": "material",
+        "SteelBar": "material",
+        "Concrete_CIRSOC_201_25": "material",
+        "Concrete_EN_1992_2004": "material",
+        "Formatter": "results",
+        "TablePrinter": "results",
+        "DocumentBuilder": "results",
+        "EN_1992_2004_beam": "codes",
+        "ACI_318_19_beam": "codes",
+        "BeamSummary": "summary",
+    }
+
+    if name in module_mapping:
         import importlib
 
-        module = importlib.import_module(f".{name.lower()}", __name__)
+        module = importlib.import_module(f".{module_mapping[name]}", __name__)
         return getattr(module, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
