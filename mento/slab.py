@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional, Dict, Any, TYPE_CHECKING
+from typing import TYPE_CHECKING
 from dataclasses import dataclass
 import math
 import numpy as np
@@ -9,38 +9,30 @@ from mento.beam import RectangularBeam
 from mento.forces import Forces
 from mento.node import Node
 from mento.material import (
-    Concrete,
     SteelBar,
     Concrete_ACI_318_19,
     # Concrete_EN_1992_2004,
 )
-from mento.units import m, mm, cm, inch, MPa, kNm, kN, kip, ksi, psi
+from mento.units import m, mm, cm, inch, MPa, kNm, kN, kip, ksi
 
 if TYPE_CHECKING:
     from pint import Quantity
 
-
 @dataclass
 class OneWaySlab(RectangularBeam):
-    def __init__(
-        self,
-        label: Optional[str],
-        concrete: Concrete,
-        steel_bar: SteelBar,
-        thickness: Quantity = 0 * m,
-        width: Quantity = 0 * m,
-        settings: Optional[Dict[str, Any]] = None,
-    ):
-        # Initialize as a rectangular beam
-        super().__init__(
-            label=label,
-            concrete=concrete,
-            steel_bar=steel_bar,
-            width=width,
-            height=thickness,
-            settings=settings,
-        )
-        self._stirrup_d_b = 0 * mm  # Converts stirrup to 0 mm for slabs
+    """
+    One-way slab section. Inherits all flexure and shear checks from RectangularBeam,
+    but uses bar diameters + spacing instead of number of bars for longitudinal reinforcement.
+    """
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+
+        self._stirrup_d_b = 0 * mm
+        self._stirrup_s_l = 0 * mm
+        self._A_v = 0 * mm**2/m
+
+        self._initialize_longitudinal_rebar_attributes()
 
     def _initialize_longitudinal_rebar_attributes(self) -> None:
         """Initialize all rebar-related attributes with default values."""
@@ -167,8 +159,8 @@ class OneWaySlab(RectangularBeam):
         # a two-way slab.
         self._c_mec_bot = self.c_c + self._bot_rebar_centroid + self._d_b1_b / 2
         self._c_mec_top = self.c_c + self._top_rebar_centroid + self._d_b1_t / 2
-        self._d_bot = self._height - self._c_mec_bot
-        self._d_top = self._height - self._c_mec_top
+        self._d_bot = self.height - self._c_mec_bot
+        self._d_top = self.height - self._c_mec_top
         # Use bottom or top effective height
         self._d_shear = min(self._d_bot, self._d_top)
 
@@ -180,8 +172,9 @@ def slab_metric() -> None:
         label="Slab 01",
         concrete=concrete,
         steel_bar=steelBar,
-        thickness=200 * mm,
-        width=1 * m,
+        width = 1 * m,
+        height = 20 * cm,
+        c_c = 25 * mm
     )
     # Set only position 1 bottom rebar (diameter=10mm, spacing=150mm)
     slab.set_slab_longitudinal_rebar_bot(d_b1=12 * mm, s_b1=20 * cm)
@@ -203,14 +196,13 @@ def slab_metric() -> None:
 def slab_imperial() -> None:
     concrete = Concrete_ACI_318_19(name="C4", f_c=4 * ksi)
     steelBar = SteelBar(name="ADN 420", f_y=60 * ksi)
-    custom_settings = {"clear_cover": 0.75 * inch}
     slab = OneWaySlab(
         label="Slab 01",
         concrete=concrete,
         steel_bar=steelBar,
-        thickness=7 * inch,
         width=12 * inch,
-        settings=custom_settings,
+        height = 7 * inch,
+        c_c = 0.75 * inch
     )
     # Set only position 1 bottom rebar
     slab.set_slab_longitudinal_rebar_bot(d_b1=0.5 * inch, s_b1=12 * inch)
@@ -233,4 +225,4 @@ def slab_imperial() -> None:
 
 
 if __name__ == "__main__":
-    slab_imperial()
+    slab_metric()
