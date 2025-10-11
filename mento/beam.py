@@ -196,6 +196,43 @@ class RectangularBeam(RectangularSection):
         # Update dependent attributes
         self._update_longitudinal_rebar_attributes()
 
+    def _create_rebar_designer(self) -> Rebar:
+        """Factory for the longitudinal reinforcement optimizer."""
+        return Rebar(self)
+
+    def _apply_longitudinal_design_bot(self, design: dict) -> None:
+        """Apply a discrete design to the bottom reinforcement."""
+        self.set_longitudinal_rebar_bot(
+            int(design.get("n_1", 0)),
+            design.get("d_b1"),
+            int(design.get("n_2", 0)),
+            design.get("d_b2"),
+            int(design.get("n_3", 0)),
+            design.get("d_b3"),
+            int(design.get("n_4", 0)),
+            design.get("d_b4"),
+        )
+
+    def _apply_longitudinal_design_top(self, design: dict) -> None:
+        """Apply a discrete design to the top reinforcement."""
+        self.set_longitudinal_rebar_top(
+            int(design.get("n_1", 0)),
+            design.get("d_b1"),
+            int(design.get("n_2", 0)),
+            design.get("d_b2"),
+            int(design.get("n_3", 0)),
+            design.get("d_b3"),
+            int(design.get("n_4", 0)),
+            design.get("d_b4"),
+        )
+
+    def _clear_top_longitudinal(self) -> None:
+        """Reset the top reinforcement to the default placeholder bars."""
+        if self.concrete.unit_system == "metric":
+            self.set_longitudinal_rebar_top(2, 8 * mm)
+        else:
+            self.set_longitudinal_rebar_top(2, 3 / 8 * inch)
+
     def _initialize_ACI_318_attributes(self) -> None:
         if isinstance(self.concrete, Concrete_ACI_318_19):
             self._phi_V_n: Quantity = 0 * kN
