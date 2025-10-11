@@ -906,161 +906,140 @@ def _design_flexure_ACI_318_19(
     self: "RectangularBeam", max_M_y_bot: Quantity, max_M_y_top: Quantity
 ) -> Dict[str, Any]:
     """
-    Designs the flexural reinforcement for a beam cross-section
-    according to ACI 318-19.
-
-    Parameters:
-        Force (Forces): A list of moment forces acting on the section. If a
-        single moment is passed, it will be converted into a list.
-
-    Returns:
-        Dict[str, Any]: A DataFrame containing the adopted bottom and top
-        reinforcement areas and their respective bar spacings.
-
-    Description:
-        This function determines the flexural reinforcement for positive
-        (tension at the bottom) and negative moments (tension at the top)
-        iteratively. The process adjusts the effective depths (`d` and
-        `d_prima`) and the mechanical cover (`rec_mec`) until convergence.
-
-        The reinforcement design starts with the positive moment (M_u_max),
-        determining the required bottom reinforcement and, if needed,
-        compression reinforcement at the top. For sections experiencing
-        negative moments (M_u_min), the function recalculates the top
-        reinforcement requirements by swapping the positions of `d` and
-        `d_prima`.
-
-        The function outputs a summary of the final adopted reinforcement
-        areas and their spacing.
+    Designs the flexural reinforcement for a beam cross-section according to ACI 318-19.
+    Implements 'governing-face + reconciliation' so that each face's final layout covers
+    tension on that face OR compression from the opposite face, whichever is larger.
     """
 
-    # Initial assumptions for mechanical cover and compression depth
-    rec_mec = self.c_c + self._stirrup_d_b + 1 * cm
-    d_prima = self.c_c + self._stirrup_d_b + 1 * cm
-    # Start the iterative process
-    tol = 0.01 * cm  # Tolerance for convergence
+    # --- helpers -----------------------------------------------------------------
+    def _design_longitudinal_for_area(A_req: Quantity, A_max: Quantity) -> pd.DataFrame:
+        """Run discrete design for a target area and return best_design dict."""
+        rebar = Rebar(self)
+        _ = rebar.longitudinal_rebar_ACI_318_19(A_req, A_max)
+        return rebar.longitudinal_rebar_design  # expects keys: n_1..n_4, d_b1..d_b4, total_as, etc.
+
+    def _apply_bot(design: dict) -> None:
+        self.set_longitudinal_rebar_bot(
+            int(design.get("n_1", 0)), design.get("d_b1", None),
+            int(design.get("n_2", 0)), design.get("d_b2", None),
+            int(design.get("n_3", 0)), design.get("d_b3", None),
+            int(design.get("n_4", 0)), design.get("d_b4", None),
+        )
+
+    def _apply_top(design: dict) -> None:
+        self.set_longitudinal_rebar_top(
+            int(design.get("n_1", 0)), design.get("d_b1", None),
+            int(design.get("n_2", 0)), design.get("d_b2", None),
+            int(design.get("n_3", 0)), design.get("d_b3", None),
+            int(design.get("n_4", 0)), design.get("d_b4", None),
+        )
+
+    def _clear_top() -> None:
+        if self.concrete.unit_system == "metric":
+            self._n1_t, self._d_b1_t = 2, 8 * mm
+        else:
+            self._n1_t, self._d_b1_t = 2, 3 / 8 * inch
+
+    # --- initial guesses ----------------------------------------------------------
+    rec_mec = self.c_c + self._stirrup_d_b + 1 * cm     # bottom mechanical cover to centroid (initial)
+    d_prima = self.c_c + self._stirrup_d_b + 1 * cm     # top mechanical cover to centroid (initial)
+
+    tol = 0.01 * cm
     Err = 2 * tol
     iteration_count = 0
 
     while Err >= tol:
         iteration_count += 1
-        # Update the effective depth for bottom tension reinforcement
+
+        # Effective depths for this iteration
         d = self.height - rec_mec
 
-        # Calculate reinforcement for the positive moment, even if it is 0
+        # --- bottom tension case (positive moment on bottom face) ----------------
         (
             self._A_s_min_bot,
             self._A_s_max_bot,
-            A_s_final_bot_Positive_M,
-            A_s_comp_top,
+            A_s_final_bot_Positive_M,   # tension req. on bottom
+            A_s_comp_top,               # compression req. on top from bottom moment
             self._c_d_bot,
         ) = _calculate_flexural_reinforcement_ACI_318_19(self, max_M_y_bot, d, d_prima)
-        # Initialize bottom and top reinforcement
-        self._A_s_bot = A_s_final_bot_Positive_M
+
+        # init in case no negative moment branch runs
+        A_s_comp_bot = 0 * (cm**2)
+        A_s_final_top_Negative_M = 0 * (cm**2)
         self._A_s_top = A_s_comp_top
-        # If there is a negative moment, calculate the top reinforcement
+
+        # --- top tension case (negative moment on top face) ----------------------
         if max_M_y_top < 0:
             (
                 self._A_s_min_top,
                 self._A_s_max_top,
-                A_s_final_top_Negative_M,
-                A_s_comp_bot,
+                A_s_final_top_Negative_M,  # tension req. on top
+                A_s_comp_bot,              # compression req. on bottom from top moment
                 self._c_d_top,
             ) = _calculate_flexural_reinforcement_ACI_318_19(
                 self, abs(max_M_y_top), self.height - d_prima, rec_mec
             )
 
-            # Adjust reinforcement areas based on positive and negative moments
-            self._A_s_bot = max(A_s_final_bot_Positive_M, A_s_comp_bot)
-            self._A_s_top = max(A_s_comp_top, A_s_final_top_Negative_M)
+        # Governing areas on each face (tension on the face vs. opposite-face compression)
+        A_req_bot = max(A_s_final_bot_Positive_M, A_s_comp_bot)
+        A_req_top = max(A_s_comp_top, A_s_final_top_Negative_M)
 
-        # Design bottom reinforcement
-        section_rebar_bot = Rebar(self)
-        self.flexure_design_results_bot = (
-            section_rebar_bot.longitudinal_rebar_ACI_318_19(self._A_s_bot)
-        )
-        best_design = section_rebar_bot.longitudinal_rebar_design
-        # Extract bar information
-        d_b1_bot = best_design["d_b1"]
-        d_b2_bot = best_design["d_b2"]
-        d_b3_bot = best_design["d_b3"]
-        d_b4_bot = best_design["d_b4"]
-        n_1_bot = best_design["n_1"]
-        n_2_bot = best_design["n_2"]
-        n_3_bot = best_design["n_3"]
-        n_4_bot = best_design["n_4"]
+        self._A_s_bot = A_req_bot
+        self._A_s_top = A_req_top
 
-        # Set rebar information to section
-        c_mec_calc = self.c_c + self._stirrup_d_b + self._bot_rebar_centroid
+        # --- Discrete design for each face (independent first pass) ---------------
+        self.flexure_design_results_bot = _design_longitudinal_for_area(A_req_bot, self._A_s_max_bot)
+        self.flexure_design_results_top = None
+        if A_req_top > 0 * (cm**2):
+            self.flexure_design_results_top = _design_longitudinal_for_area(A_req_top, self._A_s_max_top)
 
-        # Design top reinforcement
-        if self._A_s_top > 0:
-            section_rebar_top = Rebar(self)
-            self.flexure_design_results_top = (
-                section_rebar_top.longitudinal_rebar_ACI_318_19(self._A_s_top)
-            )
-            best_design_top = section_rebar_top.longitudinal_rebar_design
-
-            # Extract bar information for top reinforcement
-            d_b1_top = best_design_top["d_b1"]
-            d_b2_top = best_design_top["d_b2"]
-            d_b3_top = best_design_top["d_b3"]
-            d_b4_top = best_design_top["d_b4"]
-            n_1_top = best_design_top["n_1"]
-            n_2_top = best_design_top["n_2"]
-            n_3_top = best_design_top["n_3"]
-            n_4_top = best_design_top["n_4"]
-
-            # Set rebar information to section
-            self.set_longitudinal_rebar_bot(
-                n_1_bot,
-                d_b1_bot,
-                n_2_bot,
-                d_b2_bot,
-                n_3_bot,
-                d_b3_bot,
-                n_4_bot,
-                d_b4_bot,
-            )
-            self.set_longitudinal_rebar_top(
-                n_1_top,
-                d_b1_top,
-                n_2_top,
-                d_b2_top,
-                n_3_top,
-                d_b3_top,
-                n_4_top,
-                d_b4_top,
-            )
-
-            d_prima_calc = self.c_c + self._stirrup_d_b + self._top_rebar_centroid
+        # --- Apply both faces (hard overwrite) -----------------------------------
+        _apply_bot(self.flexure_design_results_bot)
+        if self.flexure_design_results_top is not None:
+            _apply_top(self.flexure_design_results_top)
         else:
-            # If no top reinforcement is required
-            d_prima_calc = d_prima
-            # Set rebar information to section
-            self.set_longitudinal_rebar_bot(
-                n_1_bot,
-                d_b1_bot,
-                n_2_bot,
-                d_b2_bot,
-                n_3_bot,
-                d_b3_bot,
-                n_4_bot,
-                d_b4_bot,
-            )
-            self.set_longitudinal_rebar_top(0, 0 * mm, 0, 0 * mm, 0, 0 * mm, 0, 0 * mm)
+            _clear_top()
 
-        # Update error for iteration
+        # --- Reconciliation (override only if opposite-face compression governs) -
+        A_prov_bot = self.flexure_design_results_bot.get("total_as", 0 * (cm**2))
+        A_prov_top = self.flexure_design_results_top.get("total_as", 0 * (cm**2)) if self.flexure_design_results_top is not None else 0 * (cm**2)
+
+        # If compression from top (A_s_comp_bot) exceeds what bottom provides, re-upgrade bottom
+        if A_s_comp_bot > A_prov_bot:
+            self.flexure_design_results_bot = _design_longitudinal_for_area(A_s_comp_bot, self._A_s_max_bot)
+            _apply_bot(self.flexure_design_results_bot)
+            A_prov_bot = self.flexure_design_results_bot.get("total_as", A_s_comp_bot)
+
+        # If compression from bottom (A_s_comp_top) exceeds what top provides, re-upgrade top
+        if A_s_comp_top > A_prov_top:
+            if A_s_comp_top > 0 * (cm**2):
+                self.flexure_design_results_top = _design_longitudinal_for_area(A_s_comp_top, self._A_s_max_top)
+                _apply_top(self.flexure_design_results_top)
+                A_prov_top = self.flexure_design_results_top.get("total_as", A_s_comp_top)
+            else:
+                _clear_top()
+                A_prov_top = 0 * (cm**2)
+
+        # --- Update geometry (centroids) for next iteration ----------------------
+        c_mec_calc = self.c_c + self._stirrup_d_b + self._bot_rebar_centroid
+        # If there is any top steel, use its centroid; otherwise keep previous d_prima
+        has_top = (self.flexure_design_results_top is not None) and (int(self.flexure_design_results_top.get("n_1", 0)) +
+                                              int(self.flexure_design_results_top.get("n_2", 0)) +
+                                              int(self.flexure_design_results_top.get("n_3", 0)) +
+                                              int(self.flexure_design_results_top.get("n_4", 0)) > 0)
+        d_prima_calc = self.c_c + self._stirrup_d_b + self._top_rebar_centroid if has_top else d_prima
+
+        # --- Convergence update ---------------------------------------------------
         Err = max(abs(c_mec_calc - rec_mec), abs(d_prima_calc - d_prima))
         rec_mec = c_mec_calc
         d_prima = d_prima_calc
 
-    # Return results as a DataFrame
+    # --- Results table ------------------------------------------------------------
     results = {
-        "Bottom_As_adopted": self._A_s_bot.to("inch**2"),
-        "Bottom separation of bars": self._available_s_bot.to("inch"),
-        "As_compression_adopted": self._A_s_top.to("inch**2"),
-        "Top separation of bars": self._available_s_top.to("inch"),
+        "Bottom_As_adopted": self._A_s_bot.to("cm**2"),
+        "Bottom separation of bars": self._available_s_bot.to("mm"),
+        "As_compression_adopted": self._A_s_top.to("cm**2"),
+        "Top separation of bars": self._available_s_top.to("mm"),
     }
     return pd.DataFrame([results], index=[0])
 

@@ -275,67 +275,89 @@ class RectangularBeam(RectangularSection):
         # Update effective heights
         self._update_effective_heights()
 
+    def _len_unit(self) -> Quantity:
+        # Base length unit for this section
+        return (
+            1 * mm
+            if getattr(self.concrete, "unit_system", "metric") == "metric"
+            else 1 * inch
+        )
+
+    def _area_unit(self) -> Quantity:
+        L = self._len_unit()
+        return L**2
+
     def set_longitudinal_rebar_bot(
         self,
-        n1: int = 0,
-        d_b1: Quantity = 0 * mm,
+        n1: int,
+        d_b1: Quantity | None,
         n2: int = 0,
-        d_b2: Quantity = 0 * mm,
+        d_b2: Quantity | None = None,
         n3: int = 0,
-        d_b3: Quantity = 0 * mm,
+        d_b3: Quantity | None = None,
         n4: int = 0,
-        d_b4: Quantity = 0 * mm,
+        d_b4: Quantity | None = None,
     ) -> None:
-        """Update the bottom rebar configuration and recalculate attributes."""
-        self._n1_b = n1 or self._n1_b
-        self._d_b1_b = d_b1 or self._d_b1_b
-        self._n2_b = n2 or self._n2_b
-        self._d_b2_b = d_b2 or self._d_b2_b
-        self._n3_b = n3 or self._n3_b
-        self._d_b3_b = d_b3 or self._d_b3_b
-        self._n4_b = n4 or self._n4_b
-        self._d_b4_b = d_b4 or self._d_b4_b
+        L = self._len_unit()
+        self._n1_b = n1
+        self._d_b1_b = d_b1 if d_b1 is not None else 0 * L
+        self._n2_b = n2
+        self._d_b2_b = d_b2 if d_b2 is not None else 0 * L
+        self._n3_b = n3
+        self._d_b3_b = d_b3 if d_b3 is not None else 0 * L
+        self._n4_b = n4
+        self._d_b4_b = d_b4 if d_b4 is not None else 0 * L
         self._update_longitudinal_rebar_attributes()
 
     def set_longitudinal_rebar_top(
         self,
         n1: int,
-        d_b1: Quantity,
+        d_b1: Quantity | None,
         n2: int = 0,
-        d_b2: Quantity = 0 * mm,
+        d_b2: Quantity | None = None,
         n3: int = 0,
-        d_b3: Quantity = 0 * mm,
+        d_b3: Quantity | None = None,
         n4: int = 0,
-        d_b4: Quantity = 0 * mm,
+        d_b4: Quantity | None = None,
     ) -> None:
-        """Update the top rebar configuration and recalculate attributes."""
-        self._n1_t = n1 or self._n1_t
-        self._d_b1_t = d_b1 or self._d_b1_t
-        self._n2_t = n2 or self._n2_t
-        self._d_b2_t = d_b2 or self._d_b2_t
-        self._n3_t = n3 or self._n3_t
-        self._d_b3_t = d_b3 or self._d_b3_t
-        self._n4_t = n4 or self._n4_t
-        self._d_b4_t = d_b4 or self._d_b4_t
+        L = self._len_unit()
+        self._n1_t = n1
+        self._d_b1_t = d_b1 if d_b1 is not None else 0 * L
+        self._n2_t = n2
+        self._d_b2_t = d_b2 if d_b2 is not None else 0 * L
+        self._n3_t = n3
+        self._d_b3_t = d_b3 if d_b3 is not None else 0 * L
+        self._n4_t = n4
+        self._d_b4_t = d_b4 if d_b4 is not None else 0 * L
         self._update_longitudinal_rebar_attributes()
 
     def _calculate_longitudinal_rebar_area(self) -> None:
-        """Calculate the total rebar area for a given configuration."""
+        """Calculate total rebar area (robust to None or zero diameters)."""
+        A0 = 0 * self._area_unit()
 
-        # AREA OF BOTTOM BARS
+        def area(n: int, d: Quantity | None) -> Quantity:
+            # Treat None or zero diameter as zero area; works with pint
+            if d is None:
+                return A0
+            mag = getattr(d, "magnitude", None)
+            if mag is not None and mag == 0:
+                return A0
+            return n * (d**2) * np.pi / 4
+
+        # Bottom
         self._A_s_bot = (
-            self._n1_b * self._d_b1_b**2 * np.pi / 4
-            + self._n2_b * self._d_b2_b**2 * np.pi / 4
-            + self._n3_b * self._d_b3_b**2 * np.pi / 4
-            + self._n4_b * self._d_b4_b**2 * np.pi / 4
+            area(self._n1_b, self._d_b1_b)
+            + area(self._n2_b, self._d_b2_b)
+            + area(self._n3_b, self._d_b3_b)
+            + area(self._n4_b, self._d_b4_b)
         )
 
-        # AREA OF TOP BARS
+        # Top
         self._A_s_top = (
-            self._n1_t * self._d_b1_t**2 * np.pi / 4
-            + self._n2_t * self._d_b2_t**2 * np.pi / 4
-            + self._n3_t * self._d_b3_t**2 * np.pi / 4
-            + self._n4_t * self._d_b4_t**2 * np.pi / 4
+            area(self._n1_t, self._d_b1_t)
+            + area(self._n2_t, self._d_b2_t)
+            + area(self._n3_t, self._d_b3_t)
+            + area(self._n4_t, self._d_b4_t)
         )
 
     def _calculate_min_clear_spacing(self) -> None:

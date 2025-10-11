@@ -378,6 +378,74 @@ class BeamSummary:
         final_df = pd.concat([units_row, results_df], ignore_index=True)
         return final_df
 
+    def design(self) -> DataFrame:
+        """
+        Run design for all beams in the summary.
+        Fills in the rebar columns (n1–n4, db1–db4, ns, dbs, sl)
+        with the suggested designs for shear and flexure.
+
+        Returns
+        -------
+        DataFrame
+            A copy of the beam summary with designed reinforcement filled in.
+        """
+
+        # Copy the processed data to avoid overwriting self.data
+        design_df = self.data.copy()
+        design_df = self.data.reset_index(drop=True).copy()
+
+        for i, node in enumerate(self.nodes):
+            beam: RectangularBeam = node.section  # type: ignore
+            forces = node.forces[0]
+
+            # --- FLEXURE DESIGN ---
+            node.design_flexure()
+            if forces.M_y.magnitude >= 0:  # tension at bottom face
+                flex_result = beam.flexure_design_results_bot
+                design_df.loc[i, "n1"] = flex_result["n_1"]
+                design_df.loc[i, "db1"] = flex_result["d_b1"]
+                design_df.loc[i, "n2"] = flex_result["n_2"]
+                design_df.loc[i, "db2"] = (
+                    flex_result["d_b2"] if flex_result["d_b2"] is not None else 0
+                )
+                design_df.loc[i, "n3"] = flex_result["n_3"]
+                design_df.loc[i, "db3"] = (
+                    flex_result["d_b3"] if flex_result["d_b3"] is not None else 0
+                )
+                design_df.loc[i, "n4"] = flex_result["n_4"]
+                design_df.loc[i, "db4"] = (
+                    flex_result["d_b4"] if flex_result["d_b4"] is not None else 0
+                )
+            else:  # tension at top face
+                flex_result = beam.flexure_design_results_top
+                design_df.loc[i, "n1"] = flex_result["n_1"]
+                design_df.loc[i, "db1"] = flex_result["d_b1"]
+                design_df.loc[i, "n2"] = flex_result["n_2"]
+                design_df.loc[i, "db2"] = (
+                    flex_result["d_b2"] if flex_result["d_b2"] is not None else 0
+                )
+                design_df.loc[i, "n3"] = flex_result["n_3"]
+                design_df.loc[i, "db3"] = (
+                    flex_result["d_b3"] if flex_result["d_b3"] is not None else 0
+                )
+                design_df.loc[i, "n4"] = flex_result["n_4"]
+                design_df.loc[i, "db4"] = (
+                    flex_result["d_b4"] if flex_result["d_b4"] is not None else 0
+                )
+
+            # --- SHEAR DESIGN ---
+            node.design_shear()
+            shear_row = beam.shear_design_results.iloc[0]  # take best row
+            design_df.loc[i, "ns"] = int(shear_row["n_stir"])
+            design_df.loc[i, "dbs"] = shear_row["d_b"]
+            design_df.loc[i, "sl"] = shear_row["s_l"]
+
+        # store for export
+        self.design_data = design_df
+
+        print("✅ Beam design completed for all beams in Summary.")
+        return design_df
+
     def shear_results(
         self, index: Optional[int] = None, capacity_check: bool = False
     ) -> DataFrame:
@@ -480,3 +548,56 @@ class BeamSummary:
             node.clear_forces()
             node.add_forces(original_forces)
         return results
+
+    # ------------------------------------------------------------
+    # EXCEL I/O HELPERS FOR DESIGN / CHECK WORKFLOW
+    # ------------------------------------------------------------
+
+    def export_design(self, path: str) -> None:
+        """
+        Export current beam list (including units row) to Excel.
+        Typically used after design() to create an editable file.
+
+        Parameters
+        ----------
+        path : str
+            Path to the Excel file to create.
+        """
+        if not hasattr(self, "design_data"):
+            raise AttributeError(
+                "No design data found. Run .design() before exporting."
+            )
+
+        df_numeric = self.design_data.copy()
+        for col in df_numeric.columns:
+            df_numeric[col] = df_numeric[col].apply(
+                lambda x: x.magnitude if hasattr(x, "magnitude") else x
+            )
+        # Recombine units + data before exporting
+        df_export = pd.concat(
+            [
+                pd.DataFrame([self.units_row], columns=self.beam_list.columns),
+                df_numeric,
+            ],
+            ignore_index=True,
+        )
+        df_export.to_excel(path, index=False)
+        print(f"✅ Beam design exported to {path}")
+
+    def import_design(self, path: str) -> None:
+        """
+        Import an Excel file containing edited or designed rebar information.
+        Updates self.beam_list, reprocesses units, and rebuilds nodes.
+
+        Parameters
+        ----------
+        path : str
+            Path to the Excel file to import.
+        """
+        beam_df = pd.read_excel(path)
+
+        # Replace the original beam_list and re-process input
+        self.beam_list = beam_df
+        self.check_and_process_input()
+        self.convert_to_nodes()
+        print("✅ Beam design imported and summary data updated.")
