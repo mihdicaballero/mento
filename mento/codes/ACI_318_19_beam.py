@@ -914,31 +914,18 @@ def _design_flexure_ACI_318_19(
     # --- helpers -----------------------------------------------------------------
     def _design_longitudinal_for_area(A_req: Quantity, A_max: Quantity) -> pd.DataFrame:
         """Run discrete design for a target area and return best_design dict."""
-        rebar = Rebar(self)
+        rebar = self._create_rebar_designer()
         _ = rebar.longitudinal_rebar_ACI_318_19(A_req, A_max)
         return rebar.longitudinal_rebar_design  # expects keys: n_1..n_4, d_b1..d_b4, total_as, etc.
 
     def _apply_bot(design: dict) -> None:
-        self.set_longitudinal_rebar_bot(
-            int(design.get("n_1", 0)), design.get("d_b1", None),
-            int(design.get("n_2", 0)), design.get("d_b2", None),
-            int(design.get("n_3", 0)), design.get("d_b3", None),
-            int(design.get("n_4", 0)), design.get("d_b4", None),
-        )
+        self._apply_longitudinal_design_bot(design)
 
     def _apply_top(design: dict) -> None:
-        self.set_longitudinal_rebar_top(
-            int(design.get("n_1", 0)), design.get("d_b1", None),
-            int(design.get("n_2", 0)), design.get("d_b2", None),
-            int(design.get("n_3", 0)), design.get("d_b3", None),
-            int(design.get("n_4", 0)), design.get("d_b4", None),
-        )
+        self._apply_longitudinal_design_top(design)
 
     def _clear_top() -> None:
-        if self.concrete.unit_system == "metric":
-            self._n1_t, self._d_b1_t = 2, 8 * mm
-        else:
-            self._n1_t, self._d_b1_t = 2, 3 / 8 * inch
+        self._clear_top_longitudinal()
 
     # --- initial guesses ----------------------------------------------------------
     rec_mec = self.c_c + self._stirrup_d_b + 1 * cm     # bottom mechanical cover to centroid (initial)

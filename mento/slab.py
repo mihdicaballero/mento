@@ -1,8 +1,9 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from dataclasses import dataclass
 import math
 import numpy as np
+import pandas as pd
 from devtools import debug
 
 from mento.beam import RectangularBeam
@@ -13,6 +14,7 @@ from mento.material import (
     Concrete_ACI_318_19,
     # Concrete_EN_1992_2004,
 )
+from mento.rebar import Rebar
 from mento.units import m, mm, cm, inch, MPa, kNm, kN, kip, ksi
 
 if TYPE_CHECKING:
@@ -32,7 +34,57 @@ class OneWaySlab(RectangularBeam):
         self._stirrup_s_l = 0 * mm
         self._A_v = 0 * mm**2/m
 
+        # Allow slabs to place as many bars as minimum spacing permits
+        self.settings.max_bars_per_layer = max(self.settings.max_bars_per_layer, 200)
+        # Force same diameter for all bars within a layer
+        self.settings.max_diameter_diff = 0 * self.settings.max_diameter_diff
+
         self._initialize_longitudinal_rebar_attributes()
+
+    def _create_rebar_designer(self) -> Rebar:
+        """Use the slab-tailored rebar optimizer."""
+        return SlabRebar(self)
+
+    def _apply_longitudinal_design_bot(self, design: dict) -> None:
+        merged = self._merge_layer_design(design)
+        super()._apply_longitudinal_design_bot(merged)
+
+    def _apply_longitudinal_design_top(self, design: dict) -> None:
+        merged = self._merge_layer_design(design)
+        super()._apply_longitudinal_design_top(merged)
+
+    def _merge_layer_design(self, design: dict) -> dict:
+        """Collapse multi-group beam layouts into slab-friendly layers."""
+        merged = dict(design)
+
+        n1 = int(design.get("n_1", 0))
+        n2 = int(design.get("n_2", 0))
+        total_layer1 = n1 + n2
+        d1 = design.get("d_b1")
+        if total_layer1 == 0:
+            merged["n_1"] = 0
+            merged["d_b1"] = None
+        else:
+            merged["n_1"] = total_layer1
+            merged["d_b1"] = d1
+        merged["n_2"] = 0
+        merged["d_b2"] = None
+
+        n3 = int(design.get("n_3", 0))
+        n4 = int(design.get("n_4", 0))
+        total_layer2 = n3 + n4
+        if total_layer2 == 0:
+            merged["n_3"] = 0
+            merged["d_b3"] = None
+        else:
+            merged["n_3"] = total_layer1 if total_layer1 > 0 else total_layer2
+            d3 = design.get("d_b3")
+            merged["d_b3"] = d3 if d3 is not None else d1
+        merged["n_4"] = 0
+        merged["d_b4"] = None
+
+        merged["total_bars"] = merged["n_1"] + merged["n_3"]
+        return merged
 
     def _initialize_longitudinal_rebar_attributes(self) -> None:
         """Initialize all rebar-related attributes with default values."""
@@ -163,6 +215,87 @@ class OneWaySlab(RectangularBeam):
         self._d_top = self.height - self._c_mec_top
         # Use bottom or top effective height
         self._d_shear = min(self._d_bot, self._d_top)
+
+
+class SlabRebar(Rebar):
+    """Rebar optimizer that enforces slab-specific layout rules."""
+
+    @staticmethod
+    def _same_diameter(a: Any, b: Any) -> bool:
+        if b is None:
+            return a is None
+        if a is None:
+            return False
+        try:
+            return (a - b).magnitude == 0
+        except AttributeError:
+            return a == b
+
+    def _normalize_slab_rows(self, df: pd.DataFrame) -> pd.DataFrame:
+        if df.empty:
+            return df
+
+        normalized_rows = []
+        for _, row in df.iterrows():
+            n1 = int(row.get("n_1", 0))
+            n2 = int(row.get("n_2", 0))
+            total_layer1 = n1 + n2
+            if total_layer1 == 0:
+                continue
+
+            d1 = row.get("d_b1")
+            d2 = row.get("d_b2")
+            if d2 is not None and not self._same_diameter(d2, d1):
+                continue
+
+            n3 = int(row.get("n_3", 0))
+            n4 = int(row.get("n_4", 0))
+            total_layer2 = n3 + n4
+            if total_layer2 not in (0, total_layer1):
+                continue
+
+            d3 = row.get("d_b3")
+            d4 = row.get("d_b4")
+            if d3 is not None and not self._same_diameter(d3, d1):
+                continue
+            if d4 is not None and not self._same_diameter(d4, d1):
+                continue
+
+            new_row = row.copy()
+            new_row["n_1"] = total_layer1
+            new_row["d_b1"] = d1
+            new_row["n_2"] = 0
+            new_row["d_b2"] = None
+            if total_layer2 == 0:
+                new_row["n_3"] = 0
+                new_row["d_b3"] = None
+            else:
+                new_row["n_3"] = total_layer1
+                new_row["d_b3"] = d1
+            new_row["n_4"] = 0
+            new_row["d_b4"] = None
+            new_row["total_bars"] = new_row["n_1"] + new_row["n_3"]
+            normalized_rows.append(new_row)
+
+        if not normalized_rows:
+            return df
+
+        normalized_df = pd.DataFrame(normalized_rows)
+        normalized_df = normalized_df.drop_duplicates(
+            subset=["n_1", "d_b1", "n_3", "d_b3", "total_as"]
+        )
+        if "functional" in normalized_df.columns:
+            normalized_df.sort_values(by=["functional"], inplace=True)
+        normalized_df.reset_index(drop=True, inplace=True)
+        return normalized_df
+
+    def longitudinal_rebar_ACI_318_19(
+        self, A_s_req: "Quantity", A_s_max: "Quantity" | None = None
+    ) -> pd.DataFrame:
+        super().longitudinal_rebar_ACI_318_19(A_s_req, A_s_max)
+        normalized = self._normalize_slab_rows(self._long_combos_df)
+        self._long_combos_df = normalized
+        return normalized.head(10)
 
 
 def slab_metric() -> None:
