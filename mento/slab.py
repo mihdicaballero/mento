@@ -20,6 +20,7 @@ from mento.units import m, mm, cm, inch, MPa, kNm, kN, kip, ksi
 if TYPE_CHECKING:
     from pint import Quantity
 
+
 @dataclass
 class OneWaySlab(RectangularBeam):
     """
@@ -32,7 +33,7 @@ class OneWaySlab(RectangularBeam):
 
         self._stirrup_d_b = 0 * mm
         self._stirrup_s_l = 0 * mm
-        self._A_v = 0 * mm**2/m
+        self._A_v = 0 * mm**2 / m
 
         # Allow slabs to place as many bars as minimum spacing permits
         self.settings.max_bars_per_layer = max(self.settings.max_bars_per_layer, 200)
@@ -305,9 +306,9 @@ def slab_metric() -> None:
         label="Slab 01",
         concrete=concrete,
         steel_bar=steelBar,
-        width = 1 * m,
-        height = 20 * cm,
-        c_c = 25 * mm
+        width=1 * m,
+        height=20 * cm,
+        c_c=25 * mm,
     )
     # Set only position 1 bottom rebar (diameter=10mm, spacing=150mm)
     slab.set_slab_longitudinal_rebar_bot(d_b1=12 * mm, s_b1=20 * cm)
@@ -319,9 +320,11 @@ def slab_metric() -> None:
     f1 = Forces(label="C1", M_y=20 * kNm)
     f2 = Forces(label="C1", V_z=30 * kN, M_y=-20 * kNm)
     node_1 = Node(slab, [f1, f2])
-    print(node_1.check_flexure())
-    node_1.flexure_results_detailed()
-    # node_1.check_shear()
+    print(node_1.design_flexure())
+    print(slab.flexure_design_results_bot)
+    # print(node_1.check_flexure())
+    # node_1.flexure_results_detailed()
+    # print(node_1.check_shear())
     # node_1.shear_results_detailed()
     # slab.plot()
 
@@ -334,8 +337,8 @@ def slab_imperial() -> None:
         concrete=concrete,
         steel_bar=steelBar,
         width=12 * inch,
-        height = 7 * inch,
-        c_c = 0.75 * inch
+        height=7 * inch,
+        c_c=0.75 * inch,
     )
     # Set only position 1 bottom rebar
     slab.set_slab_longitudinal_rebar_bot(d_b1=0.5 * inch, s_b1=12 * inch)
