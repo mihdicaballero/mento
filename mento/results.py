@@ -393,7 +393,6 @@ class DocumentBuilder:
         table = self.doc.add_table(rows=df.shape[0] + 1, cols=df.shape[1])
         # Apply table style
         table.style = "Light Shading"
-        # Set column widths
         self.set_col_widths(table, column_widths)
         # Populate column headers
         for j in range(df.shape[1]):
