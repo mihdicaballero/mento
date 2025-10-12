@@ -18,6 +18,9 @@ class Rebar:
         """
         Initializes the Rebar object with the associated beam and settings.
         """
+
+        self.mode = getattr(beam, "mode", "beam")  # "beam" or "slab"
+
         self.beam = beam
         self._long_combos_df: DataFrame = pd.DataFrame()
         self._trans_combos_df: DataFrame = pd.DataFrame()
@@ -290,7 +293,10 @@ class Rebar:
     ##########################################################
 
     def longitudinal_rebar_ACI_318_19(
-        self, A_s_req: Quantity, A_s_max: Quantity | None = None
+        self,
+        A_s_req: Quantity,
+        A_s_max: Quantity | None = None,
+        mech_cover: Quantity | None = None,
     ) -> DataFrame:
         """
         Computes the required longitudinal reinforcement based on ACI 318-19.
@@ -306,6 +312,7 @@ class Rebar:
             maximum possible area.
         """
         self.A_s_req = A_s_req
+        self.original_mech_cover = mech_cover
         effective_width = self.beam.width - 2 * (self.beam.c_c + self.beam._stirrup_d_b)
 
         # Variables to track the combinations
@@ -317,6 +324,7 @@ class Rebar:
             self.min_long_rebar = 10 * mm
         else:
             self.min_long_rebar = 3 * inch / 8
+
         # Filter valid rebar diameters based on the minimum longitudinal diameter per design code and beam settings
         valid_rebar_diameters = [
             d
@@ -414,41 +422,45 @@ class Rebar:
                                         "clear_spacing": self._clear_spacing.to("mm"),
                                     }
 
-                            # Now check combinations where bars are added in layer 2 (n3 and n4)
-                            for n3 in [0, 2]:  # n3 can be 0 or fixed at 2 if present
-                                for n4 in range(
-                                    0, self.beam.settings.max_bars_per_layer + 1
-                                ):
-                                    # Ensure layer 2 bars are not more than layer 1 bars
-                                    if n3 + n4 > n1 + n2:
-                                        continue  # Skip if layer 2 bars exceed layer 1 bars
-                                    if n3 == 0 and n4 > 0:
-                                        continue  # If n3 is 0, n4 must also be 0
-                                    if n3 + n4 > self.beam.settings.max_bars_per_layer:
-                                        continue  # Skip if the total bars in layer 2 exceed the limit
+                            # =============================================================
+                            # --- Layer 2 combinations (beam vs slab logic) ---
+                            # =============================================================
 
-                                    # Layer 2 area calculation handling zero values
+                            if self.mode == "slab":
+                                # ---------------------------------------------------------
+                                # In slab mode:
+                                #  - Only two cases are considered:
+                                #       (1) one single layer
+                                #       (2) second layer identical to the first (mirror)
+                                #  - n3 = n1, n4 = n2 when a second layer exists
+                                # ---------------------------------------------------------
+                                for has_second_layer in [False, True]:
+                                    if not has_second_layer:
+                                        n3, n4 = 0, 0
+                                    else:
+                                        n3, n4 = n1, n2
+
+                                    # --- Compute total reinforcement in layer 2 ------------
                                     A_s_layer_2 = n3 * self.rebar_areas[d_b3] + (
                                         n4 * self.rebar_areas[d_b4]
                                         if n4 > 0
                                         else 0 * cm**2
                                     )
-                                    # Condition 4: Area of layer 1 must be >= area of layer 2
+
+                                    # Condition 4: area of layer 1 ≥ area of layer 2
                                     if A_s_layer_1 < A_s_layer_2:
                                         continue
 
-                                    # Condition 6 and 7: Check clear spacing in layer 2
+                                    # Condition 6 and 7: check clear spacing in layer 2
                                     if n4 > 0 and not self._check_spacing(
                                         n3, n4, d_b3, d_b4, effective_width
                                     ):
                                         continue
 
-                                    # Check if total area is enough for required A_s
+                                    # --- Compute total reinforcement and evaluate -----------
                                     total_as = A_s_layer_1 + A_s_layer_2
                                     if total_as >= A_s_req and total_as <= max_limit:
-                                        total_bars = (
-                                            n1 + n2 + n3 + n4
-                                        )  # Count the total number of bars
+                                        total_bars = n1 + n2 + n3 + n4
                                         valid_combinations.append(
                                             {
                                                 "n_1": n1,
@@ -467,7 +479,7 @@ class Rebar:
                                             }
                                         )
                                     else:
-                                        # Track the combination with the maximum possible area (fallback)
+                                        # Track fallback combination with maximum As
                                         if total_as > max_fallback_area:
                                             max_fallback_area = total_as
                                             best_fallback_combination = {
@@ -486,6 +498,81 @@ class Rebar:
                                                 ),
                                             }
 
+                            else:
+                                # ---------------------------------------------------------
+                                # Normal beam logic (original)
+                                # ---------------------------------------------------------
+                                for n3 in [0, 2]:
+                                    for n4 in range(
+                                        0, self.beam.settings.max_bars_per_layer + 1
+                                    ):
+                                        # Ensure layer 2 bars are not more than layer 1 bars
+                                        if n3 + n4 > n1 + n2:
+                                            continue
+                                        if n3 == 0 and n4 > 0:
+                                            continue
+                                        if (
+                                            n3 + n4
+                                            > self.beam.settings.max_bars_per_layer
+                                        ):
+                                            continue
+
+                                        A_s_layer_2 = n3 * self.rebar_areas[d_b3] + (
+                                            n4 * self.rebar_areas[d_b4]
+                                            if n4 > 0
+                                            else 0 * cm**2
+                                        )
+
+                                        if A_s_layer_1 < A_s_layer_2:
+                                            continue
+                                        if n4 > 0 and not self._check_spacing(
+                                            n3, n4, d_b3, d_b4, effective_width
+                                        ):
+                                            continue
+
+                                        total_as = A_s_layer_1 + A_s_layer_2
+                                        if (
+                                            total_as >= A_s_req
+                                            and total_as <= max_limit
+                                        ):
+                                            total_bars = n1 + n2 + n3 + n4
+                                            valid_combinations.append(
+                                                {
+                                                    "n_1": n1,
+                                                    "d_b1": d_b1,
+                                                    "n_2": n2,
+                                                    "d_b2": d_b2 if n2 > 0 else None,
+                                                    "n_3": n3,
+                                                    "d_b3": d_b3 if n3 > 0 else None,
+                                                    "n_4": n4,
+                                                    "d_b4": d_b4 if n4 > 0 else None,
+                                                    "total_as": total_as.to("cm**2"),
+                                                    "total_bars": total_bars,
+                                                    "clear_spacing": self._clear_spacing.to(
+                                                        "mm"
+                                                    ),
+                                                }
+                                            )
+                                        else:
+                                            if total_as > max_fallback_area:
+                                                max_fallback_area = total_as
+                                                best_fallback_combination = {
+                                                    "n_1": n1,
+                                                    "d_b1": d_b1,
+                                                    "n_2": n2,
+                                                    "d_b2": d_b2 if n2 > 0 else None,
+                                                    "n_3": n3,
+                                                    "d_b3": d_b3 if n3 > 0 else None,
+                                                    "n_4": n4,
+                                                    "d_b4": d_b4 if n4 > 0 else None,
+                                                    "total_as": total_as.to("cm**2"),
+                                                    "total_bars": n1 + n2 + n3 + n4,
+                                                    "clear_spacing": self._clear_spacing.to(
+                                                        "mm"
+                                                    ),
+                                                }
+
+        print(A_s_req.to("cm**2"))
         # Convert valid combinations to DataFrame
         df = pd.DataFrame(valid_combinations)
         # Drop duplicate rows based on the specified columns
@@ -496,6 +583,27 @@ class Rebar:
         if df.empty and best_fallback_combination is not None:
             df = pd.DataFrame([best_fallback_combination])
 
+        def _adjust_As_req(row: pd.Series) -> float:
+            c_comb = self._estimate_mechanical_cover(row)
+            # Avoid division by zero
+            d_ratio = (self.beam.height - self.original_mech_cover) / (
+                self.beam.height - c_comb
+            )
+            # If d_ratio < 1.0, need more As → scale up
+            return max(d_ratio.magnitude, 1)  # dimensionless factor
+
+        # Compute factor for each combination
+        df["As_req_factor"] = df.apply(_adjust_As_req, axis=1)
+
+        # Optional extra safety margin for slabs (crack control & thin cover)
+        if getattr(self, "mode", "beam") == "slab":
+            df["As_req_factor"] *= 1.02
+
+        A_s_req_val = self.A_s_req.to(df["total_as"].iloc[0].units)  # ensure same units
+        df["A_s_req_adj"] = A_s_req_val.magnitude * df["As_req_factor"]
+        # Now compare magnitudes directly
+        df = df[df["total_as"].apply(lambda x: x.magnitude) >= df["A_s_req_adj"]].copy()
+
         modified_df: pd.DataFrame = self._calculate_penalties_long_rebar(df)
         # Sort by 'Functional' to sort by the best options
         modified_df.sort_values(by=["functional"], inplace=True)
@@ -504,10 +612,27 @@ class Rebar:
         modified_df.reset_index(drop=True, inplace=True)
         self._long_combos_df = modified_df
 
+        print(modified_df.head(10))
+
         return modified_df.head(10)
 
     def longitudinal_rebar_EN_1992_2004(self, A_s_req: Quantity) -> None:
         pass
+
+    def _estimate_mechanical_cover(self, row: pd.Series) -> "Quantity":
+        """
+        Estimate the total mechanical cover (bottom fiber to centroid of tension steel)
+        based on the bar diameters and number of layers.
+        """
+        # first layer centroid = c_c + stirrup + 0.5 * db1
+        cover = self.beam.c_c + self.beam._stirrup_d_b + 0.5 * row["d_b1"]
+
+        # if there is a second layer, add one bar diameter + clear vertical spacing
+        if (row["n_3"] + row["n_4"]) > 0:
+            # conservative vertical gap between layers
+            v_clear = max(self.beam.settings.layers_spacing, row["d_b1"])
+            cover += row["d_b1"] + v_clear + 0.5 * (row["d_b3"] or row["d_b1"])
+        return cover
 
     def _check_spacing(
         self,
@@ -580,9 +705,10 @@ class Rebar:
         self,
         df: pd.DataFrame,
         alpha: float = 3.5,
-        beta: float = 0.3,
+        beta: float = 0.30,
         gamma: float = 0.25,
         delta: float = 1,
+        epsilon: float = 0,  # No penalty for beams, just slabs
     ) -> pd.DataFrame:
         """
         Calculate penalties for rebar configurations and add them as columns to the DataFrame.
@@ -596,6 +722,15 @@ class Rebar:
         Returns:
             pd.DataFrame: The modified DataFrame with penalty columns and the final functional.
         """
+
+        # Adjust penalty weights depending on element type
+        if getattr(self, "mode", "beam") == "slab":
+            # Slabs prefer many small bars → penalize large diameters and spacing more
+            alpha *= 0.8  # reduce area weight (slabs have smaller demand differences)
+            beta *= 0.1  # stronger sensitivity to number of bars
+            gamma *= 0.5  # less penalty for multi-diameter use
+            delta *= 0.5  # allow two layers if needed
+            epsilon = 0.75  # strong penalty on large bar sizes
 
         # Calculate minimum bars and minimum area of steel
         min_bars = df["total_bars"].min()
@@ -643,9 +778,48 @@ class Rebar:
         df["area_penalty"] = df.apply(
             lambda row: (alpha * row["total_as"] / min_as), axis=1
         )
-        df["bars_penalty"] = beta * (df["total_bars"] - min_bars) / min_bars
+        # Prefer moderate bar counts, where very high or very low will be penalized
+        df["bars_penalty"] = beta * ((df["total_bars"] - min_bars) / min_bars) ** 2
         df["diameter_penalty"] = gamma * df.apply(diameter_difference_penalty, axis=1)
         df["layer_penalty"] = delta * df.apply(layer_penalty, axis=1)
+
+        # Diameter size penalty, for very large or very small
+        min_d = (
+            df[["d_b1", "d_b2", "d_b3", "d_b4"]]
+            .stack()
+            .dropna()
+            .apply(lambda x: x.magnitude)
+            .min()
+        )
+        df["diameter_size_penalty"] = epsilon * (
+            df.apply(
+                lambda r: (
+                    max(
+                        [
+                            d.magnitude
+                            for d, n in zip(
+                                [r["d_b1"], r["d_b2"], r["d_b3"], r["d_b4"]],
+                                [r["n_1"], r["n_2"], r["n_3"], r["n_4"]],
+                            )
+                            if n > 0 and d is not None
+                        ]
+                    )
+                    / min_d
+                    - 1
+                ),
+                axis=1,
+            )
+        )
+        # Slab penalty for large spacing
+        if getattr(self, "mode", "beam") == "slab":
+            max_spacing_allowed = 300  # mm
+            df["spacing_penalty"] = df["clear_spacing"].apply(
+                lambda s: 0
+                if s.magnitude <= max_spacing_allowed
+                else (s.magnitude - max_spacing_allowed) / max_spacing_allowed
+            )
+        else:
+            df["spacing_penalty"] = 0
 
         # Calculate the final functional
         df["functional"] = df.apply(
@@ -654,6 +828,8 @@ class Rebar:
                 + row["bars_penalty"]
                 + row["diameter_penalty"]
                 + row["layer_penalty"]
+                + row["diameter_size_penalty"]
+                + row["spacing_penalty"]
             ),
             axis=1,
         )

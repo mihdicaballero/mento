@@ -31,6 +31,8 @@ class OneWaySlab(RectangularBeam):
     def __post_init__(self) -> None:
         super().__post_init__()
 
+        self.mode = "slab"
+
         self._stirrup_d_b = 0 * mm
         self._stirrup_s_l = 0 * mm
         self._A_v = 0 * mm**2 / m
@@ -41,51 +43,6 @@ class OneWaySlab(RectangularBeam):
         self.settings.max_diameter_diff = 0 * self.settings.max_diameter_diff
 
         self._initialize_longitudinal_rebar_attributes()
-
-    def _create_rebar_designer(self) -> Rebar:
-        """Use the slab-tailored rebar optimizer."""
-        return SlabRebar(self)
-
-    def _apply_longitudinal_design_bot(self, design: dict) -> None:
-        merged = self._merge_layer_design(design)
-        super()._apply_longitudinal_design_bot(merged)
-
-    def _apply_longitudinal_design_top(self, design: dict) -> None:
-        merged = self._merge_layer_design(design)
-        super()._apply_longitudinal_design_top(merged)
-
-    def _merge_layer_design(self, design: dict) -> dict:
-        """Collapse multi-group beam layouts into slab-friendly layers."""
-        merged = dict(design)
-
-        n1 = int(design.get("n_1", 0))
-        n2 = int(design.get("n_2", 0))
-        total_layer1 = n1 + n2
-        d1 = design.get("d_b1")
-        if total_layer1 == 0:
-            merged["n_1"] = 0
-            merged["d_b1"] = None
-        else:
-            merged["n_1"] = total_layer1
-            merged["d_b1"] = d1
-        merged["n_2"] = 0
-        merged["d_b2"] = None
-
-        n3 = int(design.get("n_3", 0))
-        n4 = int(design.get("n_4", 0))
-        total_layer2 = n3 + n4
-        if total_layer2 == 0:
-            merged["n_3"] = 0
-            merged["d_b3"] = None
-        else:
-            merged["n_3"] = total_layer1 if total_layer1 > 0 else total_layer2
-            d3 = design.get("d_b3")
-            merged["d_b3"] = d3 if d3 is not None else d1
-        merged["n_4"] = 0
-        merged["d_b4"] = None
-
-        merged["total_bars"] = merged["n_1"] + merged["n_3"]
-        return merged
 
     def _initialize_longitudinal_rebar_attributes(self) -> None:
         """Initialize all rebar-related attributes with default values."""
@@ -105,8 +62,8 @@ class OneWaySlab(RectangularBeam):
         # Initialize with 12 mm or #4 bars in top & bottom.
         if self.concrete.unit_system == "metric":
             self._d_b1_b, self._d_b1_t = (
-                12 * mm,
-                12 * mm,
+                10 * mm,
+                10 * mm,
             )  # Diameter only, spacing left as 0
         else:
             self._d_b1_b, self._d_b1_t = (4 * inch) / 8, (4 * inch) / 8
@@ -218,87 +175,6 @@ class OneWaySlab(RectangularBeam):
         self._d_shear = min(self._d_bot, self._d_top)
 
 
-class SlabRebar(Rebar):
-    """Rebar optimizer that enforces slab-specific layout rules."""
-
-    @staticmethod
-    def _same_diameter(a: Any, b: Any) -> bool:
-        if b is None:
-            return a is None
-        if a is None:
-            return False
-        try:
-            return (a - b).magnitude == 0
-        except AttributeError:
-            return a == b
-
-    def _normalize_slab_rows(self, df: pd.DataFrame) -> pd.DataFrame:
-        if df.empty:
-            return df
-
-        normalized_rows = []
-        for _, row in df.iterrows():
-            n1 = int(row.get("n_1", 0))
-            n2 = int(row.get("n_2", 0))
-            total_layer1 = n1 + n2
-            if total_layer1 == 0:
-                continue
-
-            d1 = row.get("d_b1")
-            d2 = row.get("d_b2")
-            if d2 is not None and not self._same_diameter(d2, d1):
-                continue
-
-            n3 = int(row.get("n_3", 0))
-            n4 = int(row.get("n_4", 0))
-            total_layer2 = n3 + n4
-            if total_layer2 not in (0, total_layer1):
-                continue
-
-            d3 = row.get("d_b3")
-            d4 = row.get("d_b4")
-            if d3 is not None and not self._same_diameter(d3, d1):
-                continue
-            if d4 is not None and not self._same_diameter(d4, d1):
-                continue
-
-            new_row = row.copy()
-            new_row["n_1"] = total_layer1
-            new_row["d_b1"] = d1
-            new_row["n_2"] = 0
-            new_row["d_b2"] = None
-            if total_layer2 == 0:
-                new_row["n_3"] = 0
-                new_row["d_b3"] = None
-            else:
-                new_row["n_3"] = total_layer1
-                new_row["d_b3"] = d1
-            new_row["n_4"] = 0
-            new_row["d_b4"] = None
-            new_row["total_bars"] = new_row["n_1"] + new_row["n_3"]
-            normalized_rows.append(new_row)
-
-        if not normalized_rows:
-            return df
-
-        normalized_df = pd.DataFrame(normalized_rows)
-        normalized_df = normalized_df.drop_duplicates(
-            subset=["n_1", "d_b1", "n_3", "d_b3", "total_as"]
-        )
-        if "functional" in normalized_df.columns:
-            normalized_df.sort_values(by=["functional"], inplace=True)
-        normalized_df.reset_index(drop=True, inplace=True)
-        return normalized_df
-
-    def longitudinal_rebar_ACI_318_19(
-        self, A_s_req: "Quantity", A_s_max: "Quantity" | None = None
-    ) -> pd.DataFrame:
-        super().longitudinal_rebar_ACI_318_19(A_s_req, A_s_max)
-        normalized = self._normalize_slab_rows(self._long_combos_df)
-        self._long_combos_df = normalized
-        return normalized.head(10)
-
-
 def slab_metric() -> None:
     concrete = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
     steelBar = SteelBar(name="ADN 420", f_y=420 * MPa)
@@ -311,17 +187,18 @@ def slab_metric() -> None:
         c_c=25 * mm,
     )
     # Set only position 1 bottom rebar (diameter=10mm, spacing=150mm)
-    slab.set_slab_longitudinal_rebar_bot(d_b1=12 * mm, s_b1=20 * cm)
+    # slab.set_slab_longitudinal_rebar_bot(d_b1=12 * mm, s_b1=20 * cm)
     # Set top rebar positions 1 and 2 (leave others unchanged)
-    slab.set_slab_longitudinal_rebar_top(d_b1=12 * mm, s_b1=15 * cm)
-    debug(
-        slab._A_s_bot, slab._A_s_top, slab._available_s_bot, slab._available_s_top
-    )  # Debugging output for areas
-    f1 = Forces(label="C1", M_y=20 * kNm)
-    f2 = Forces(label="C1", V_z=30 * kN, M_y=-20 * kNm)
-    node_1 = Node(slab, [f1, f2])
+    # slab.set_slab_longitudinal_rebar_top(d_b1=12 * mm, s_b1=15 * cm)
+    # debug(
+    #     slab._A_s_bot, slab._A_s_top, slab._available_s_bot, slab._available_s_top
+    # )  # Debugging output for areas
+    f1 = Forces(label="C1", M_y=80 * kNm)
+    # f2 = Forces(label="C1", V_z=30 * kN, M_y=-20 * kNm)
+    node_1 = Node(slab, [f1])
     print(node_1.design_flexure())
-    print(slab.flexure_design_results_bot)
+    print(slab._n1_b, slab._d_b1_b, slab._n2_b, slab._d_b2_b)
+    # print(slab.flexure_design_results_bot)
     # print(node_1.check_flexure())
     # node_1.flexure_results_detailed()
     # print(node_1.check_shear())
