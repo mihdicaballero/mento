@@ -14,8 +14,7 @@ from mento.material import (
     Concrete_ACI_318_19,
     # Concrete_EN_1992_2004,
 )
-from mento.rebar import Rebar
-from mento.units import m, mm, cm, inch, MPa, kNm, kN, kip, ksi
+from mento.units import m, mm, cm, inch, MPa, kNm, kip, ksi, kN
 
 if TYPE_CHECKING:
     from pint import Quantity
@@ -46,27 +45,30 @@ class OneWaySlab(RectangularBeam):
 
     def _initialize_longitudinal_rebar_attributes(self) -> None:
         """Initialize all rebar-related attributes with default values."""
+
+        # Unit system default starter rebar for initial effective height
+        if self.concrete.unit_system == "metric":
+            self._n1_b, self._d_b1_b = 2, 8 * mm
+            self._n1_t, self._d_b1_t = 2, 8 * mm
+        else:
+            self._n1_b, self._d_b1_b = 2, 3 / 8 * inch
+            self._n1_t, self._d_b1_t = 2, 3 / 8 * inch
+
         # Bottom rebar defaults (diameter and spacing)
-        self._d_b1_b, self._s_b1_b = 0 * mm, 0 * mm
+        self._s_b1_b = 0 * mm
         self._d_b2_b, self._s_b2_b = 0 * mm, 0 * mm
         self._d_b3_b, self._s_b3_b = 0 * mm, 0 * mm
         self._d_b4_b, self._s_b4_b = 0 * mm, 0 * mm
+        self._n2_b = 0  # No position 2 in slabs
+        self._n4_b = 0  # No position 4 in slabs
 
         # Top rebar defaults (diameter and spacing)
-        self._d_b1_t, self._s_b1_t = 0 * mm, 0 * mm
+        self._s_b1_t = 0 * mm
         self._d_b2_t, self._s_b2_t = 0 * mm, 0 * mm
         self._d_b3_t, self._s_b3_t = 0 * mm, 0 * mm
         self._d_b4_t, self._s_b4_t = 0 * mm, 0 * mm
-
-        # Default starter rebar (for effective depth calculation only)
-        # Initialize with 12 mm or #4 bars in top & bottom.
-        if self.concrete.unit_system == "metric":
-            self._d_b1_b, self._d_b1_t = (
-                10 * mm,
-                10 * mm,
-            )  # Diameter only, spacing left as 0
-        else:
-            self._d_b1_b, self._d_b1_t = (4 * inch) / 8, (4 * inch) / 8
+        self._n2_t = 0  # No position 2 in slabs
+        self._n4_t = 0  # No position 4 in slabs
 
         # Update dependent attributes
         self._calculate_longitudinal_rebars()
@@ -91,12 +93,8 @@ class OneWaySlab(RectangularBeam):
         self,
         d_b1: Quantity = 0 * mm,
         s_b1: Quantity = 0 * mm,
-        d_b2: Quantity = 0 * mm,
-        s_b2: Quantity = 0 * mm,
         d_b3: Quantity = 0 * mm,
         s_b3: Quantity = 0 * mm,
-        d_b4: Quantity = 0 * mm,
-        s_b4: Quantity = 0 * mm,
     ) -> None:
         """Update the bottom rebar configuration and recalculate attributes.
 
@@ -107,12 +105,8 @@ class OneWaySlab(RectangularBeam):
         """
         self._d_b1_b = d_b1 if d_b1 != 0 * mm else self._d_b1_b
         self._s_b1_b = s_b1 if s_b1 != 0 * mm else self._s_b1_b
-        self._d_b2_b = d_b2 if d_b2 != 0 * mm else self._d_b2_b
-        self._s_b2_b = s_b2 if s_b2 != 0 * mm else self._s_b2_b
         self._d_b3_b = d_b3 if d_b3 != 0 * mm else self._d_b3_b
         self._s_b3_b = s_b3 if s_b3 != 0 * mm else self._s_b3_b
-        self._d_b4_b = d_b4 if d_b4 != 0 * mm else self._d_b4_b
-        self._s_b4_b = s_b4 if s_b4 != 0 * mm else self._s_b4_b
         self._calculate_longitudinal_rebars()
         self._update_longitudinal_rebar_attributes()
 
@@ -120,22 +114,14 @@ class OneWaySlab(RectangularBeam):
         self,
         d_b1: Quantity = 0 * mm,
         s_b1: Quantity = 0 * mm,
-        d_b2: Quantity = 0 * mm,
-        s_b2: Quantity = 0 * mm,
         d_b3: Quantity = 0 * mm,
         s_b3: Quantity = 0 * mm,
-        d_b4: Quantity = 0 * mm,
-        s_b4: Quantity = 0 * mm,
     ) -> None:
         """Update the top rebar configuration and recalculate attributes."""
         self._d_b1_t = d_b1 if d_b1 != 0 * mm else self._d_b1_t
         self._s_b1_t = s_b1 if s_b1 != 0 * mm else self._s_b1_t
-        self._d_b2_t = d_b2 if d_b2 != 0 * mm else self._d_b2_t
-        self._s_b2_t = s_b2 if s_b2 != 0 * mm else self._s_b2_t
         self._d_b3_t = d_b3 if d_b3 != 0 * mm else self._d_b3_t
         self._s_b3_t = s_b3 if s_b3 != 0 * mm else self._s_b3_t
-        self._d_b4_t = d_b4 if d_b4 != 0 * mm else self._d_b4_t
-        self._s_b4_t = s_b4 if s_b4 != 0 * mm else self._s_b4_t
         self._calculate_longitudinal_rebars()
         self._update_longitudinal_rebar_attributes()
 
@@ -145,7 +131,7 @@ class OneWaySlab(RectangularBeam):
         # Helper function: Calculate number of bars given spacing and slab width
         def calculate_bars(spacing: Quantity, width: Quantity) -> int:
             if spacing == 0 * mm:
-                return 0
+                return 2  # Default to 2 bars if spacing is zero
             # Round up to ensure full bars (e.g., 3.2 bars → 4 bars)
             return int(
                 np.ceil((width.to("cm").magnitude / spacing.to("cm").magnitude))
@@ -153,15 +139,11 @@ class OneWaySlab(RectangularBeam):
 
         # --- BOTTOM REBAR ---
         self._n1_b = calculate_bars(self._s_b1_b, self.width)
-        self._n2_b = calculate_bars(self._s_b2_b, self.width)
         self._n3_b = calculate_bars(self._s_b3_b, self.width)
-        self._n4_b = calculate_bars(self._s_b4_b, self.width)
 
         # --- TOP REBAR ---
         self._n1_t = calculate_bars(self._s_b1_t, self.width)
-        self._n2_t = calculate_bars(self._s_b2_t, self.width)
         self._n3_t = calculate_bars(self._s_b3_t, self.width)
-        self._n4_t = calculate_bars(self._s_b4_t, self.width)
 
     def _update_effective_heights(self) -> None:
         """Update effective heights and depths for moment and shear calculations."""
@@ -182,28 +164,30 @@ def slab_metric() -> None:
         label="Slab 01",
         concrete=concrete,
         steel_bar=steelBar,
-        width=1 * m,
+        width=1.3 * m,
         height=20 * cm,
         c_c=25 * mm,
     )
     # Set only position 1 bottom rebar (diameter=10mm, spacing=150mm)
-    # slab.set_slab_longitudinal_rebar_bot(d_b1=12 * mm, s_b1=20 * cm)
+    # slab.set_slab_longitudinal_rebar_bot(d_b1=16 * mm, s_b1=19 * cm)
     # Set top rebar positions 1 and 2 (leave others unchanged)
     # slab.set_slab_longitudinal_rebar_top(d_b1=12 * mm, s_b1=15 * cm)
     # debug(
     #     slab._A_s_bot, slab._A_s_top, slab._available_s_bot, slab._available_s_top
     # )  # Debugging output for areas
-    f1 = Forces(label="C1", M_y=80 * kNm)
+    # f1 = Forces(label="C1", M_y=80 * kNm, V_z = 50*kN)
+    f1 = Forces(label="C1", V_z=50 * kN)
     # f2 = Forces(label="C1", V_z=30 * kN, M_y=-20 * kNm)
     node_1 = Node(slab, [f1])
-    print(node_1.design_flexure())
-    print(slab._n1_b, slab._d_b1_b, slab._n2_b, slab._d_b2_b)
+    # print(node_1.design_flexure())
+    print(slab._n1_b, slab._d_b1_b, slab._n1_t, slab._d_b1_t)
     # print(slab.flexure_design_results_bot)
-    # print(node_1.check_flexure())
+    print(node_1.check_flexure())
     # node_1.flexure_results_detailed()
     # print(node_1.check_shear())
     # node_1.shear_results_detailed()
     # slab.plot()
+    print(slab.flexure_results)
 
 
 def slab_imperial() -> None:

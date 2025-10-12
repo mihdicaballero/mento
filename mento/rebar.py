@@ -572,7 +572,6 @@ class Rebar:
                                                     ),
                                                 }
 
-        print(A_s_req.to("cm**2"))
         # Convert valid combinations to DataFrame
         df = pd.DataFrame(valid_combinations)
         # Drop duplicate rows based on the specified columns
@@ -597,7 +596,7 @@ class Rebar:
 
         # Optional extra safety margin for slabs (crack control & thin cover)
         if getattr(self, "mode", "beam") == "slab":
-            df["As_req_factor"] *= 1.02
+            df["As_req_factor"] *= 1.05
 
         A_s_req_val = self.A_s_req.to(df["total_as"].iloc[0].units)  # ensure same units
         df["A_s_req_adj"] = A_s_req_val.magnitude * df["As_req_factor"]
@@ -611,8 +610,6 @@ class Rebar:
         #                           'layer_penalty', 'combined_penalty', 'functional'], inplace=True)
         modified_df.reset_index(drop=True, inplace=True)
         self._long_combos_df = modified_df
-
-        print(modified_df.head(10))
 
         return modified_df.head(10)
 
