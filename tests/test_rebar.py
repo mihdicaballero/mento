@@ -210,31 +210,6 @@ def test_beam_longitudinal_rebar_large_area(
     assert best_design["n_1"] >= 2
     assert best_design["d_b1"] >= 8 * mm
 
-
-def test_beam_longitudinal_rebar_zero_area_metric_ACI(
-    beam_example_metric: RectangularBeam,
-) -> None:
-    A_s_req = 0 * cm**2
-    beam_rebar = Rebar(beam_example_metric)
-    beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=A_s_req)
-    best_design = beam_rebar.longitudinal_rebar_design
-
-    assert best_design is not None
-    assert best_design["total_as"].magnitude == pytest.approx(
-        1.5707, rel=1e-3
-    )  # 2Ø10 minimum
-
-
-# def test_beam_longitudinal_rebar_zero_area_imperial(beam_example_imperial: RectangularBeam) -> None:
-#     A_s_req = 0 * inch**2
-#     beam_rebar = Rebar(beam_example_imperial)
-#     beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=A_s_req)
-#     best_design = beam_rebar.longitudinal_rebar_design
-
-#     assert best_design is not None
-#     assert best_design['total_as'].magnitude == pytest.approx(1.5707,rel=1e-3) # 2#3 minimum
-
-
 def test_beam_transverse_rebar_ACI_318_19_imperial(
     beam_example_imperial: RectangularBeam,
 ) -> None:

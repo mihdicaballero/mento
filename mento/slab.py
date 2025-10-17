@@ -48,11 +48,11 @@ class OneWaySlab(RectangularBeam):
 
         # Unit system default starter rebar for initial effective height
         if self.concrete.unit_system == "metric":
-            self._n1_b, self._d_b1_b = 2, 8 * mm
-            self._n1_t, self._d_b1_t = 2, 8 * mm
+            self._n1_b, self._d_b1_b = 2, 0 * mm
+            self._n1_t, self._d_b1_t = 2, 0 * mm
         else:
-            self._n1_b, self._d_b1_b = 2, 3 / 8 * inch
-            self._n1_t, self._d_b1_t = 2, 3 / 8 * inch
+            self._n1_b, self._d_b1_b = 2, 0 * inch
+            self._n1_t, self._d_b1_t = 2, 0 * inch
 
         # Bottom rebar defaults (diameter and spacing)
         self._s_b1_b = 0 * mm
@@ -145,17 +145,6 @@ class OneWaySlab(RectangularBeam):
         self._n1_t = calculate_bars(self._s_b1_t, self.width)
         self._n3_t = calculate_bars(self._s_b3_t, self.width)
 
-    def _update_effective_heights(self) -> None:
-        """Update effective heights and depths for moment and shear calculations."""
-        # Consider average effective height so it works for analysis in X and Y directions for
-        # a two-way slab.
-        self._c_mec_bot = self.c_c + self._bot_rebar_centroid + self._d_b1_b / 2
-        self._c_mec_top = self.c_c + self._top_rebar_centroid + self._d_b1_t / 2
-        self._d_bot = self.height - self._c_mec_bot
-        self._d_top = self.height - self._c_mec_top
-        # Use bottom or top effective height
-        self._d_shear = min(self._d_bot, self._d_top)
-
 
 def slab_metric() -> None:
     concrete = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
@@ -168,26 +157,26 @@ def slab_metric() -> None:
         height=20 * cm,
         c_c=25 * mm,
     )
-    # Set only position 1 bottom rebar (diameter=10mm, spacing=150mm)
+    # Set only position 1 bottom rebar
     # slab.set_slab_longitudinal_rebar_bot(d_b1=16 * mm, s_b1=19 * cm)
-    # Set top rebar positions 1 and 2 (leave others unchanged)
+    # Set top rebar positions 1
     # slab.set_slab_longitudinal_rebar_top(d_b1=12 * mm, s_b1=15 * cm)
     # debug(
     #     slab._A_s_bot, slab._A_s_top, slab._available_s_bot, slab._available_s_top
     # )  # Debugging output for areas
     # f1 = Forces(label="C1", M_y=80 * kNm, V_z = 50*kN)
     f1 = Forces(label="C1", V_z=50 * kN)
-    # f2 = Forces(label="C1", V_z=30 * kN, M_y=-20 * kNm)
-    node_1 = Node(slab, [f1])
-    # print(node_1.design_flexure())
-    print(slab._n1_b, slab._d_b1_b, slab._n1_t, slab._d_b1_t)
-    # print(slab.flexure_design_results_bot)
-    print(node_1.check_flexure())
+    f2 = Forces(label="C1", V_z=30 * kN, M_y=116.5 * kNm)
+    node_1 = Node(slab, [f1, f2])
+    print(node_1.design_flexure())
+    # print(slab._n1_b, slab._d_b1_b, slab._n1_t, slab._d_b1_t)
+    print(slab.flexure_design_results_bot)
+    # print(node_1.check_flexure())
     # node_1.flexure_results_detailed()
     # print(node_1.check_shear())
     # node_1.shear_results_detailed()
-    # slab.plot()
-    print(slab.flexure_results)
+    slab.plot()
+    # print(slab.flexure_results)
 
 
 def slab_imperial() -> None:

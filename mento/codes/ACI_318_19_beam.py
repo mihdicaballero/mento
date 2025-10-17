@@ -862,6 +862,8 @@ def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.Data
         )
         self._c_d_top = 0
         # Calculate the design capacity ratio for the bottom side.
+        if self._phi_M_n_bot.to("kN*m").magnitude == 0 * kNm:
+            self._phi_M_n_bot = 0.01 * kNm
         self._DCRb_bot = (
             self._M_u_bot.to("kN*m").magnitude / self._phi_M_n_bot.to("kN*m").magnitude
         )
@@ -879,6 +881,8 @@ def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.Data
         )
         self._c_d_bot = 0
         # Calculate the design capacity ratio for the top side.
+        if self._phi_M_n_top.to("kN*m").magnitude == 0 * kNm:
+            self._phi_M_n_top = 0.01 * kNm
         self._DCRb_top = (
             -self._M_u_top.to("kN*m").magnitude / self._phi_M_n_top.to("kN*m").magnitude
         )
@@ -921,15 +925,6 @@ def _design_flexure_ACI_318_19(
         return (
             rebar.longitudinal_rebar_design
         )  # expects keys: n_1..n_4, d_b1..d_b4, total_as, etc.
-
-    def _apply_bot(design: dict) -> None:
-        self._apply_longitudinal_design_bot(design)
-
-    def _apply_top(design: dict) -> None:
-        self._apply_longitudinal_design_top(design)
-
-    def _clear_top() -> None:
-        self._clear_top_longitudinal()
 
     # --- initial guesses ----------------------------------------------------------
     rec_mec = (
@@ -983,9 +978,10 @@ def _design_flexure_ACI_318_19(
         self._A_s_top = A_req_top
 
         # --- Discrete design for each face (independent first pass) ---------------
-        self.flexure_design_results_bot = _design_longitudinal_for_area(
-            A_req_bot, self._A_s_max_bot, self._c_mec_bot
-        )
+        if A_req_bot > 0 * (cm**2):
+            self.flexure_design_results_bot = _design_longitudinal_for_area(
+                A_req_bot, self._A_s_max_bot, self._c_mec_bot
+            )
         self.flexure_design_results_top = None
         if A_req_top > 0 * (cm**2):
             self.flexure_design_results_top = _design_longitudinal_for_area(
@@ -993,14 +989,19 @@ def _design_flexure_ACI_318_19(
             )
 
         # --- Apply both faces (hard overwrite) -----------------------------------
-        _apply_bot(self.flexure_design_results_bot)
+        if self.flexure_design_results_bot is not None:
+            self._apply_longitudinal_design_bot(self.flexure_design_results_bot)
         if self.flexure_design_results_top is not None:
-            _apply_top(self.flexure_design_results_top)
+            self._apply_longitudinal_design_top(self.flexure_design_results_top)
         else:
-            _clear_top()
+            self._clear_top_longitudinal()
 
         # --- Reconciliation (override only if opposite-face compression governs) -
-        A_prov_bot = self.flexure_design_results_bot.get("total_as", 0 * (cm**2))
+        A_prov_bot = (
+            self.flexure_design_results_bot.get("total_as", 0 * (cm**2))
+            if self.flexure_design_results_bot is not None
+            else 0 * (cm**2)
+        )
         A_prov_top = (
             self.flexure_design_results_top.get("total_as", 0 * (cm**2))
             if self.flexure_design_results_top is not None
@@ -1012,7 +1013,7 @@ def _design_flexure_ACI_318_19(
             self.flexure_design_results_bot = _design_longitudinal_for_area(
                 A_s_comp_bot, self._A_s_max_bot, self._c_mec_bot
             )
-            _apply_bot(self.flexure_design_results_bot)
+            self._apply_longitudinal_design_bot(self.flexure_design_results_bot)
             A_prov_bot = self.flexure_design_results_bot.get("total_as", A_s_comp_bot)
 
         # If compression from bottom (A_s_comp_top) exceeds what top provides, re-upgrade top
@@ -1021,12 +1022,12 @@ def _design_flexure_ACI_318_19(
                 self.flexure_design_results_top = _design_longitudinal_for_area(
                     A_s_comp_top, self._A_s_max_top, self._c_mec_top
                 )
-                _apply_top(self.flexure_design_results_top)
+                self._apply_longitudinal_design_top(self.flexure_design_results_top)
                 A_prov_top = self.flexure_design_results_top.get(
                     "total_as", A_s_comp_top
                 )
             else:
-                _clear_top()
+                self._clear_top_longitudinal()
                 A_prov_top = 0 * (cm**2)
 
         # --- Update geometry (centroids) for next iteration ----------------------

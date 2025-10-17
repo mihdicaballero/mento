@@ -352,7 +352,7 @@ class Rebar:
                         if not self._check_diameter_differences(diameters):
                             continue  # Skip this combination if any diameter pair exceeds max_diameter_diff`
 
-                        n1 = 2  # This is a fixed value for every beam
+                        n1 = 0 if self.A_s_req == 0*cm**2 else 2  # This is a fixed value for every beam
 
                         # Iterate over possible numbers of bars in each group
                         for n2 in range(
@@ -582,32 +582,9 @@ class Rebar:
         if df.empty and best_fallback_combination is not None:
             df = pd.DataFrame([best_fallback_combination])
 
-        def _adjust_As_req(row: pd.Series) -> float:
-            c_comb = self._estimate_mechanical_cover(row)
-            # Avoid division by zero
-            d_ratio = (self.beam.height - self.original_mech_cover) / (
-                self.beam.height - c_comb
-            )
-            # If d_ratio < 1.0, need more As → scale up
-            return max(d_ratio.magnitude, 1)  # dimensionless factor
-
-        # Compute factor for each combination
-        df["As_req_factor"] = df.apply(_adjust_As_req, axis=1)
-
-        # Optional extra safety margin for slabs (crack control & thin cover)
-        if getattr(self, "mode", "beam") == "slab":
-            df["As_req_factor"] *= 1.05
-
-        A_s_req_val = self.A_s_req.to(df["total_as"].iloc[0].units)  # ensure same units
-        df["A_s_req_adj"] = A_s_req_val.magnitude * df["As_req_factor"]
-        # Now compare magnitudes directly
-        df = df[df["total_as"].apply(lambda x: x.magnitude) >= df["A_s_req_adj"]].copy()
-
         modified_df: pd.DataFrame = self._calculate_penalties_long_rebar(df)
         # Sort by 'Functional' to sort by the best options
         modified_df.sort_values(by=["functional"], inplace=True)
-        # modified_df.drop(columns=['area_penalty','bars_penalty', 'diameter_penalty',
-        #                           'layer_penalty', 'combined_penalty', 'functional'], inplace=True)
         modified_df.reset_index(drop=True, inplace=True)
         self._long_combos_df = modified_df
 
