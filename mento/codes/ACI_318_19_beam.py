@@ -862,6 +862,8 @@ def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.Data
         )
         self._c_d_top = 0
         # Calculate the design capacity ratio for the bottom side.
+        if self._phi_M_n_bot.to("kN*m").magnitude == 0 * kNm:
+            self._phi_M_n_bot = 0.01 * kNm
         self._DCRb_bot = (
             self._M_u_bot.to("kN*m").magnitude / self._phi_M_n_bot.to("kN*m").magnitude
         )
@@ -879,6 +881,8 @@ def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.Data
         )
         self._c_d_bot = 0
         # Calculate the design capacity ratio for the top side.
+        if self._phi_M_n_top.to("kN*m").magnitude == 0 * kNm:
+            self._phi_M_n_top = 0.01 * kNm
         self._DCRb_top = (
             -self._M_u_top.to("kN*m").magnitude / self._phi_M_n_top.to("kN*m").magnitude
         )
@@ -912,37 +916,23 @@ def _design_flexure_ACI_318_19(
     """
 
     # --- helpers -----------------------------------------------------------------
-    def _design_longitudinal_for_area(A_req: Quantity, A_max: Quantity) -> pd.DataFrame:
+    def _design_longitudinal_for_area(
+        A_req: Quantity, A_max: Quantity, mech_cover: Quantity
+    ) -> pd.DataFrame:
         """Run discrete design for a target area and return best_design dict."""
-        rebar = Rebar(self)
-        _ = rebar.longitudinal_rebar_ACI_318_19(A_req, A_max)
-        return rebar.longitudinal_rebar_design  # expects keys: n_1..n_4, d_b1..d_b4, total_as, etc.
-
-    def _apply_bot(design: dict) -> None:
-        self.set_longitudinal_rebar_bot(
-            int(design.get("n_1", 0)), design.get("d_b1", None),
-            int(design.get("n_2", 0)), design.get("d_b2", None),
-            int(design.get("n_3", 0)), design.get("d_b3", None),
-            int(design.get("n_4", 0)), design.get("d_b4", None),
-        )
-
-    def _apply_top(design: dict) -> None:
-        self.set_longitudinal_rebar_top(
-            int(design.get("n_1", 0)), design.get("d_b1", None),
-            int(design.get("n_2", 0)), design.get("d_b2", None),
-            int(design.get("n_3", 0)), design.get("d_b3", None),
-            int(design.get("n_4", 0)), design.get("d_b4", None),
-        )
-
-    def _clear_top() -> None:
-        if self.concrete.unit_system == "metric":
-            self._n1_t, self._d_b1_t = 2, 8 * mm
-        else:
-            self._n1_t, self._d_b1_t = 2, 3 / 8 * inch
+        rebar = self._create_rebar_designer()
+        _ = rebar.longitudinal_rebar_ACI_318_19(A_req, A_max, mech_cover)
+        return (
+            rebar.longitudinal_rebar_design
+        )  # expects keys: n_1..n_4, d_b1..d_b4, total_as, etc.
 
     # --- initial guesses ----------------------------------------------------------
-    rec_mec = self.c_c + self._stirrup_d_b + 1 * cm     # bottom mechanical cover to centroid (initial)
-    d_prima = self.c_c + self._stirrup_d_b + 1 * cm     # top mechanical cover to centroid (initial)
+    rec_mec = (
+        self.c_c + self._stirrup_d_b + 1 * cm
+    )  # bottom mechanical cover to centroid (initial)
+    d_prima = (
+        self.c_c + self._stirrup_d_b + 1 * cm
+    )  # top mechanical cover to centroid (initial)
 
     tol = 0.01 * cm
     Err = 2 * tol
@@ -958,8 +948,8 @@ def _design_flexure_ACI_318_19(
         (
             self._A_s_min_bot,
             self._A_s_max_bot,
-            A_s_final_bot_Positive_M,   # tension req. on bottom
-            A_s_comp_top,               # compression req. on top from bottom moment
+            A_s_final_bot_Positive_M,  # tension req. on bottom
+            A_s_comp_top,  # compression req. on top from bottom moment
             self._c_d_bot,
         ) = _calculate_flexural_reinforcement_ACI_318_19(self, max_M_y_bot, d, d_prima)
 
@@ -974,7 +964,7 @@ def _design_flexure_ACI_318_19(
                 self._A_s_min_top,
                 self._A_s_max_top,
                 A_s_final_top_Negative_M,  # tension req. on top
-                A_s_comp_bot,              # compression req. on bottom from top moment
+                A_s_comp_bot,  # compression req. on bottom from top moment
                 self._c_d_top,
             ) = _calculate_flexural_reinforcement_ACI_318_19(
                 self, abs(max_M_y_top), self.height - d_prima, rec_mec
@@ -988,46 +978,73 @@ def _design_flexure_ACI_318_19(
         self._A_s_top = A_req_top
 
         # --- Discrete design for each face (independent first pass) ---------------
-        self.flexure_design_results_bot = _design_longitudinal_for_area(A_req_bot, self._A_s_max_bot)
+        if A_req_bot > 0 * (cm**2):
+            self.flexure_design_results_bot = _design_longitudinal_for_area(
+                A_req_bot, self._A_s_max_bot, self._c_mec_bot
+            )
         self.flexure_design_results_top = None
         if A_req_top > 0 * (cm**2):
-            self.flexure_design_results_top = _design_longitudinal_for_area(A_req_top, self._A_s_max_top)
+            self.flexure_design_results_top = _design_longitudinal_for_area(
+                A_req_top, self._A_s_max_top, self._c_mec_top
+            )
 
         # --- Apply both faces (hard overwrite) -----------------------------------
-        _apply_bot(self.flexure_design_results_bot)
+        if self.flexure_design_results_bot is not None:
+            self._apply_longitudinal_design_bot(self.flexure_design_results_bot)
         if self.flexure_design_results_top is not None:
-            _apply_top(self.flexure_design_results_top)
+            self._apply_longitudinal_design_top(self.flexure_design_results_top)
         else:
-            _clear_top()
+            self._clear_top_longitudinal()
 
         # --- Reconciliation (override only if opposite-face compression governs) -
-        A_prov_bot = self.flexure_design_results_bot.get("total_as", 0 * (cm**2))
-        A_prov_top = self.flexure_design_results_top.get("total_as", 0 * (cm**2)) if self.flexure_design_results_top is not None else 0 * (cm**2)
+        A_prov_bot = (
+            self.flexure_design_results_bot.get("total_as", 0 * (cm**2))
+            if self.flexure_design_results_bot is not None
+            else 0 * (cm**2)
+        )
+        A_prov_top = (
+            self.flexure_design_results_top.get("total_as", 0 * (cm**2))
+            if self.flexure_design_results_top is not None
+            else 0 * (cm**2)
+        )
 
         # If compression from top (A_s_comp_bot) exceeds what bottom provides, re-upgrade bottom
         if A_s_comp_bot > A_prov_bot:
-            self.flexure_design_results_bot = _design_longitudinal_for_area(A_s_comp_bot, self._A_s_max_bot)
-            _apply_bot(self.flexure_design_results_bot)
+            self.flexure_design_results_bot = _design_longitudinal_for_area(
+                A_s_comp_bot, self._A_s_max_bot, self._c_mec_bot
+            )
+            self._apply_longitudinal_design_bot(self.flexure_design_results_bot)
             A_prov_bot = self.flexure_design_results_bot.get("total_as", A_s_comp_bot)
 
         # If compression from bottom (A_s_comp_top) exceeds what top provides, re-upgrade top
         if A_s_comp_top > A_prov_top:
             if A_s_comp_top > 0 * (cm**2):
-                self.flexure_design_results_top = _design_longitudinal_for_area(A_s_comp_top, self._A_s_max_top)
-                _apply_top(self.flexure_design_results_top)
-                A_prov_top = self.flexure_design_results_top.get("total_as", A_s_comp_top)
+                self.flexure_design_results_top = _design_longitudinal_for_area(
+                    A_s_comp_top, self._A_s_max_top, self._c_mec_top
+                )
+                self._apply_longitudinal_design_top(self.flexure_design_results_top)
+                A_prov_top = self.flexure_design_results_top.get(
+                    "total_as", A_s_comp_top
+                )
             else:
-                _clear_top()
+                self._clear_top_longitudinal()
                 A_prov_top = 0 * (cm**2)
 
         # --- Update geometry (centroids) for next iteration ----------------------
         c_mec_calc = self.c_c + self._stirrup_d_b + self._bot_rebar_centroid
         # If there is any top steel, use its centroid; otherwise keep previous d_prima
-        has_top = (self.flexure_design_results_top is not None) and (int(self.flexure_design_results_top.get("n_1", 0)) +
-                                              int(self.flexure_design_results_top.get("n_2", 0)) +
-                                              int(self.flexure_design_results_top.get("n_3", 0)) +
-                                              int(self.flexure_design_results_top.get("n_4", 0)) > 0)
-        d_prima_calc = self.c_c + self._stirrup_d_b + self._top_rebar_centroid if has_top else d_prima
+        has_top = (self.flexure_design_results_top is not None) and (
+            int(self.flexure_design_results_top.get("n_1", 0))
+            + int(self.flexure_design_results_top.get("n_2", 0))
+            + int(self.flexure_design_results_top.get("n_3", 0))
+            + int(self.flexure_design_results_top.get("n_4", 0))
+            > 0
+        )
+        d_prima_calc = (
+            self.c_c + self._stirrup_d_b + self._top_rebar_centroid
+            if has_top
+            else d_prima
+        )
 
         # --- Convergence update ---------------------------------------------------
         Err = max(abs(c_mec_calc - rec_mec), abs(d_prima_calc - d_prima))

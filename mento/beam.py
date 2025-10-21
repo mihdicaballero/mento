@@ -114,6 +114,7 @@ class RectangularBeam(RectangularSection):
 
     def _initialize_attributes(self) -> None:
         """Initialize all attributes of the beam."""
+        self.mode = "beam"
         # Stirrups and shear attributes
         self._stirrup_d_b = self.settings.stirrup_diameter_ini
         self._stirrup_s_l: Quantity = 0 * cm
@@ -195,6 +196,43 @@ class RectangularBeam(RectangularSection):
 
         # Update dependent attributes
         self._update_longitudinal_rebar_attributes()
+
+    def _create_rebar_designer(self) -> Rebar:
+        """Factory for the longitudinal reinforcement optimizer."""
+        return Rebar(self)
+
+    def _apply_longitudinal_design_bot(self, design: dict) -> None:
+        """Apply a discrete design to the bottom reinforcement."""
+        self.set_longitudinal_rebar_bot(
+            int(design.get("n_1", 0)),
+            design.get("d_b1"),
+            int(design.get("n_2", 0)),
+            design.get("d_b2"),
+            int(design.get("n_3", 0)),
+            design.get("d_b3"),
+            int(design.get("n_4", 0)),
+            design.get("d_b4"),
+        )
+
+    def _apply_longitudinal_design_top(self, design: dict) -> None:
+        """Apply a discrete design to the top reinforcement."""
+        self.set_longitudinal_rebar_top(
+            int(design.get("n_1", 0)),
+            design.get("d_b1"),
+            int(design.get("n_2", 0)),
+            design.get("d_b2"),
+            int(design.get("n_3", 0)),
+            design.get("d_b3"),
+            int(design.get("n_4", 0)),
+            design.get("d_b4"),
+        )
+
+    def _clear_top_longitudinal(self) -> None:
+        """Reset the top reinforcement to the default placeholder bars."""
+        if self.concrete.unit_system == "metric":
+            self.set_longitudinal_rebar_top(0, 0 * mm)
+        else:
+            self.set_longitudinal_rebar_top(0, 0 * inch)
 
     def _initialize_ACI_318_attributes(self) -> None:
         if isinstance(self.concrete, Concrete_ACI_318_19):
@@ -520,7 +558,6 @@ class RectangularBeam(RectangularSection):
         # Initialize limiting cases
         max_M_y_top = 0 * kN * m  # For negative M_y (top reinforcement design)
         max_M_y_bot = 0 * kN * m  # For positive M_y (bottom reinforcement design)
-
         # Identify the limiting cases
         for force in forces:
             # For top reinforcement, consider the minimum (most negative) moment
@@ -542,9 +579,11 @@ class RectangularBeam(RectangularSection):
                 f"Longitudinal design method not implemented "
                 f"for concrete type: {type(self.concrete).__name__}"
             )
+        print(self._d_b1_t)
 
         # Check flexural capacity for all forces with the assigned reinforcement
         all_results = self.check_flexure(forces)
+        print(self._d_b1_t)
         return all_results
 
     def check_flexure(self, forces: list[Forces]) -> DataFrame:
@@ -1390,7 +1429,7 @@ class RectangularBeam(RectangularSection):
             "2Ø10" (if only n1 and d_b1 are defined)
             "2Ø10+2Ø8" (if both n1/d_b1 and n2/d_b2 are defined)
         """
-        if n1 == 0:
+        if n1 == 0 or d_b1.magnitude == 0:
             rebar_string = "-"
         else:
             rebar_string = f"{n1}Ø{int(d_b1.magnitude)}"
@@ -1517,33 +1556,37 @@ class RectangularBeam(RectangularSection):
         stirrup_height = self.height.to("cm").magnitude - 2 * c_c
         stirrup_thickness = self._stirrup_d_b.to("cm").magnitude
 
-        # Create rounded corners for the stirrup
-        inner_radius = stirrup_thickness * 2
-        outer_radius = stirrup_thickness * 3
+        if self.mode == "beam":
+            # Create rounded corners for the stirrup
+            inner_radius = stirrup_thickness * 2
+            outer_radius = stirrup_thickness * 3
 
-        # Create the outer rounded rectangle for the stirrup
-        outer_rounded_rect = FancyBboxPatch(
-            (c_c, c_c),  # Bottom-left corner
-            stirrup_width,  # Width
-            stirrup_height,  # Height
-            boxstyle=f"Round, pad=0, rounding_size={outer_radius}",  # Rounded corners
-            edgecolor=CUSTOM_COLORS["dark_blue"],
-            facecolor="white",
-            linewidth=1,
-        )
-        self._ax.add_patch(outer_rounded_rect)
+            # Create the outer rounded rectangle for the stirrup
+            outer_rounded_rect = FancyBboxPatch(
+                (c_c, c_c),  # Bottom-left corner
+                stirrup_width,  # Width
+                stirrup_height,  # Height
+                boxstyle=f"Round, pad=0, rounding_size={outer_radius}",  # Rounded corners
+                edgecolor=CUSTOM_COLORS["dark_blue"],
+                facecolor="white",
+                linewidth=1,
+            )
+            self._ax.add_patch(outer_rounded_rect)
 
-        # Create the inner rounded rectangle for the stirrup (offset by thickness)
-        inner_rounded_rect = FancyBboxPatch(
-            (c_c + stirrup_thickness, c_c + stirrup_thickness),  # Bottom-left corner
-            stirrup_width - 2 * stirrup_thickness,  # Width
-            stirrup_height - 2 * stirrup_thickness,  # Height
-            boxstyle=f"Round, pad=0, rounding_size={inner_radius}",  # Rounded corners
-            edgecolor=CUSTOM_COLORS["dark_blue"],
-            facecolor=CUSTOM_COLORS["light_gray"],
-            linewidth=1,
-        )
-        self._ax.add_patch(inner_rounded_rect)
+            # Create the inner rounded rectangle for the stirrup (offset by thickness)
+            inner_rounded_rect = FancyBboxPatch(
+                (
+                    c_c + stirrup_thickness,
+                    c_c + stirrup_thickness,
+                ),  # Bottom-left corner
+                stirrup_width - 2 * stirrup_thickness,  # Width
+                stirrup_height - 2 * stirrup_thickness,  # Height
+                boxstyle=f"Round, pad=0, rounding_size={inner_radius}",  # Rounded corners
+                edgecolor=CUSTOM_COLORS["dark_blue"],
+                facecolor=CUSTOM_COLORS["light_gray"],
+                linewidth=1,
+            )
+            self._ax.add_patch(inner_rounded_rect)
 
         # Set plot limits with some padding
         padding = max(width_cm, height_cm) * 0.2

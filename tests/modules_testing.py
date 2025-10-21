@@ -301,17 +301,18 @@ def summary() -> None:
     steel = SteelBar(name="ADN 500", f_y=500 * MPa)
     from pathlib import Path
 
-    path = Path(__file__).parents[1] / "_notebooks" / "Mento-Input.xlsx"
-    input_df = pd.read_excel(path, sheet_name="Beams", usecols="B:T", skiprows=4)
+    # path = Path(__file__).parents[1] / "_notebooks" / "Mento-Input.xlsx"
+    path = "G:\Mi unidad\mento\Tools\Mento-Input.xlsx"
+    input_df = pd.read_excel(path, sheet_name="Design", usecols="B:T", skiprows=4)
     beam_summary = BeamSummary(concrete=conc, steel_bar=steel, beam_list=input_df)
-    print(beam_summary.data)
+    # print(beam_summary.data)
 
-    # --- Step 2: Run design and export suggested rebars ---
-    print(beam_summary.design())
-    beam_summary.export_design("Beam-Design.xlsx")
+    # # --- Step 2: Run design and export suggested rebars ---
+    # print(beam_summary.design())
+    # beam_summary.export_design("Beam-Design.xlsx")
 
     # --- Step 3: Import edited design and run checks ---
-    # beam_summary.import_design("Beam-Design.xlsx")
+    beam_summary.import_design("Beam-Design.xlsx")
     # print(beam_summary.data)
     # capacity = beam_summary.check(capacity_check=True)
     # print(capacity)
