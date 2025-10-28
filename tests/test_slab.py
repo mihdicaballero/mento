@@ -11,14 +11,14 @@ from mento.forces import Forces
 @pytest.fixture()
 def slab_example_EN_1992_2004() -> OneWaySlab:
     concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
-    steelBar = SteelBar(name="B500S", f_y=500 * MPa)
+    steelBar = SteelBar(name="B500S", f_y=420 * MPa)
     slab = OneWaySlab(
         label="Slab 01",
         concrete=concrete,
         steel_bar=steelBar,
         width=100 * cm,
         height=20 * cm,
-        c_c = 2.5*cm,
+        c_c=2.5 * cm,
     )
     return slab
 
@@ -33,7 +33,7 @@ def slab_example_ACI_318_19() -> OneWaySlab:
         steel_bar=steelBar,
         width=12 * inch,
         height=7 * inch,
-        c_c = 0.75*inch,
+        c_c=0.75 * inch,
     )
     return slab
 
@@ -44,21 +44,24 @@ def test_shear_check_ACI_318_19_1(slab_example_ACI_318_19: OneWaySlab) -> None:
     # See calcpad: ACI 318-19 Slab Shear 01 - Imperial.cpd
     f = Forces(V_z=1.52 * kip, N_x=0 * kip)
     node = Node(section=slab_example_ACI_318_19, forces=f)
+    slab_example_ACI_318_19.set_slab_longitudinal_rebar_bot(
+        d_b1=0.5 * inch, s_b1=10 * inch
+    )
     results = node.check_shear()
 
     # Compare dictionaries with a tolerance for floating-point values, in m
     assert results.iloc[1]["Av,min"] == pytest.approx(0, rel=1e-3)
     assert results.iloc[1]["Av,req"] == pytest.approx(0, rel=1e-3)
     assert results.iloc[1]["Av"] == pytest.approx(0, rel=1e-3)
-    assert results.iloc[1]["ØVc"] == pytest.approx(58.288, rel=1e-3)
-    assert results.iloc[1]["ØVs"] == pytest.approx(180.956, rel=1e-3)
-    assert results.iloc[1]["ØVn"] == pytest.approx(239.247, rel=1e-3)
-    assert results.iloc[1]["ØVmax"] == pytest.approx(291.44, rel=1e-3)
-    assert results.iloc[1]["DCR"] == pytest.approx(0.70144, rel=1e-3)
+    assert results.iloc[1]["ØVc"] == pytest.approx(23.92, rel=1e-3)
+    assert results.iloc[1]["ØVs"] == pytest.approx(0, rel=1e-3)
+    assert results.iloc[1]["ØVn"] == pytest.approx(23.92, rel=1e-3)
+    assert results.iloc[1]["ØVmax"] == pytest.approx(145.45, rel=1e-3)
+    assert results.iloc[1]["DCR"] == pytest.approx(0.283, rel=1e-3)
 
     # Assert non-numeric values directly
-    assert results.iloc[1]["Vu<ØVmax"] is np.True_
-    assert results.iloc[1]["Vu<ØVn"] is np.True_
+    assert results.iloc[1]["Vu≤ØVmax"] is True
+    assert results.iloc[1]["Vu≤ØVn"] is True
 
 
 def test_check_flexure_ACI_318_19_1(slab_example_ACI_318_19: OneWaySlab) -> None:
@@ -74,16 +77,8 @@ def test_check_flexure_ACI_318_19_1(slab_example_ACI_318_19: OneWaySlab) -> None
     assert results.iloc[1]["Label"] == "Slab 01"
     assert results.iloc[1]["Comb."] == "C1"
     assert results.iloc[1]["Position"] == "Bottom"
-    assert results.iloc[1]["As,min"] == pytest.approx(
-        5.26, rel=1e-2
-    )
-    assert results.iloc[1]["As,req bot"] == pytest.approx(
-        33.1712108, rel=1e-3
-    )
-    assert results.iloc[1]["As,req top"] == pytest.approx(
-        4.9250577, rel=1e-3
-    )
-    assert results.iloc[1]["As"] == pytest.approx(
-        5.66, rel=1e-2
-    )
+    assert results.iloc[1]["As,min"] == pytest.approx(5.55, rel=1e-2)
+    assert results.iloc[1]["As,req bot"] == pytest.approx(3.19, rel=1e-3)
+    assert results.iloc[1]["As,req top"] == pytest.approx(0, rel=1e-3)
+    assert results.iloc[1]["As"] == pytest.approx(5.66, rel=1e-2)
     assert results.iloc[1]["Mu"] == pytest.approx(400, rel=1e-5)

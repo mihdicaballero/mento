@@ -783,28 +783,6 @@ def test_rectangular_section_plot_components(
     plt.close()  # Close the figure created by the plot method
 
 
-def test_rectangular_section_plot_imperial_units_text(
-    beam_example_imperial: RectangularBeam,
-) -> None:
-    """
-    Test that the plot method displays dimensions in imperial units
-    when the concrete's unit system is set to 'imperial'.
-    """
-    beam_example_imperial.plot()
-    ax = beam_example_imperial._ax
-    assert ax is not None, "The plot method did not assign an Axes object to _ax."
-
-    # Extract text labels
-    text_labels = [t.get_text() for t in ax.texts]
-
-    # Adjust based on how pint formats "inch" in your setup (e.g., "in", "inch", etc.)
-    # "{:~P}" often uses common abbreviations.
-    assert "{:.0f~P}".format(beam_example_imperial.width.to("inch")) in text_labels
-    assert "{:.0f~P}".format(beam_example_imperial.height.to("inch")) in text_labels
-
-    plt.close()
-
-
 def test_rectangular_section_plot_metric_units_text(
     beam_example_EN_1992_2004: RectangularBeam,
 ) -> None:

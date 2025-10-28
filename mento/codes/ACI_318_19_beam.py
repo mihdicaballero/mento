@@ -93,19 +93,22 @@ def _calculate_concrete_shear_strength_aci(self: "RectangularBeam") -> None:
                 )
         else:
             V_cmin = 0 * kip
-            if self._A_v < self._A_v_min:
+            if self._A_v <= self._A_v_min:
                 self._k_c_min = (
                     8
                     * self._lambda_s
                     * self.concrete.lambda_factor
                     * self._rho_w ** (1 / 3)
-                    * math.sqrt(f_c / psi)
+                    * math.sqrt(f_c.to("psi").magnitude)
                     * psi
                     + self._sigma_Nu
                 )
             else:
                 self._k_c_min = max(
-                    2 * self.concrete.lambda_factor * math.sqrt(f_c / psi) * psi
+                    2
+                    * self.concrete.lambda_factor
+                    * math.sqrt(f_c.to("psi").magnitude)
+                    * psi
                     + self._sigma_Nu,
                     8
                     * self.concrete.lambda_factor
