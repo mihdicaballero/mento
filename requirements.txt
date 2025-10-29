@@ -10,3 +10,4 @@ matplotlib
 openpyxl
 devtools
 types-tabulate
+jinja2
