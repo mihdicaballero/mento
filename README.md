@@ -26,9 +26,9 @@ This repository provides a comprehensive package for the design and structural a
 #### Roadmap
 The development is structured around key milestones, with ongoing tasks that aim to enhance functionality and compliance with design standards:
 - [x] Rectangular concrete beam section check and design for ACI 318-19 and CIRSOC 201-25.
-- [ ] Rectangular concrete beam section check and design for EN 1992-2004.
-- [ ] One way concrete slab check and design for ACI 318-19 and CIRSOC 201-25.
-- [ ] One way concrete slab check and design for EN 1992-2004.
+- [x] Rectangular concrete beam section check and design for EN 1992-2004.
+- [x] One way concrete slab check and design for ACI 318-19 and CIRSOC 201-25.
+- [x] One way concrete slab check and design for EN 1992-2004.
 
 Each milestone incorporates rigorous testing and continuous integration to ensure code quality and reliability.
 

@@ -10,6 +10,7 @@ from pandas import DataFrame
 import math
 import warnings
 from importlib.metadata import version
+from devtools import debug
 
 from mento.rectangular import RectangularSection
 from mento.material import (
@@ -847,8 +848,9 @@ class RectangularBeam(RectangularSection):
     # Beam results for Jupyter Notebook
     @property
     def data(self) -> None:
+        type = self.mode.capitalize()
         markdown_content = (
-            f"Beam {self.label}, $b$={self.width.to('cm')}"
+            f"{type} {self.label}, $b$={self.width.to('cm')}"
             f", $h$={self.height.to('cm')}, $c_{{c}}$={self.c_c.to('cm')}, \
                             Concrete {self.concrete.name}, Rebar {self.steel_bar.name}."
         )
@@ -1487,54 +1489,85 @@ class RectangularBeam(RectangularSection):
         # Plot side bars (position 1 or 3)
         if n1 > 0:
             diameter_cm = d_b1.to("cm").magnitude
-            y_center = (
-                y_base + diameter_cm / 2 if is_bottom else y_base - diameter_cm / 2
-            )
+            radius_cm = diameter_cm / 2.0
+
+            # nominal vertical center before corner correction
+            y_center_nominal = y_base + radius_cm if is_bottom else y_base - radius_cm
+
+            # width available between inner faces of stirrup legs, for this bar diameter
+            clear_span = width_cm - 2 * (c_c_cm + stirrup_d_b_cm + radius_cm)
+
+            # corner offset depends on stirrup diameter (controls bend radius)
+            corner_offset = 0.43 * stirrup_d_b_cm  # tune factor if needed
+
             for i in range(n1):
-                x = (
-                    c_c_cm
-                    + stirrup_d_b_cm
-                    + diameter_cm / 2
-                    + (
-                        i
-                        * (width_cm - 2 * (c_c_cm + stirrup_d_b_cm + diameter_cm / 2))
-                        / (n1 - 1)
+                # even if n1 == 1, just center it
+                if n1 == 1:
+                    x_nominal = width_cm / 2.0
+                else:
+                    x_nominal = (
+                        c_c_cm
+                        + stirrup_d_b_cm
+                        + radius_cm
+                        + i * (clear_span / (n1 - 1))
                     )
-                )
+
+                # default: no shift
+                x_shift = 0.0
+                y_shift = 0.0
+
+                # leftmost bar
+                if i == 0:
+                    x_shift = corner_offset  # push inward (to the right)
+                    y_shift = corner_offset if is_bottom else -corner_offset
+                # rightmost bar
+                elif i == n1 - 1:
+                    x_shift = -corner_offset  # push inward (to the left)
+                    y_shift = corner_offset if is_bottom else -corner_offset
+
+                x_plot = x_nominal + x_shift
+                y_plot = y_center_nominal + y_shift
+
                 circle = Circle(
-                    (x, y_center),
-                    diameter_cm / 2,
+                    (x_plot, y_plot),
+                    radius_cm,
                     color=CUSTOM_COLORS["dark_gray"],
                     fill=True,
                 )
                 self._ax.add_patch(circle)
 
-        # Plot intermediate bars (position 2 or 4)
+        # ---------------------------------
+        # Plot intermediate bars (group n2)
+        # ---------------------------------
         if n2 > 0:
             diameter_cm = d_b2.to("cm").magnitude
-            y_center = (
-                y_base + diameter_cm / 2 if is_bottom else y_base - diameter_cm / 2
-            )
+            radius_cm = diameter_cm / 2.0
+
+            y_center_nominal = y_base + radius_cm if is_bottom else y_base - radius_cm
+
+            clear_span = width_cm - 2 * (c_c_cm + stirrup_d_b_cm + radius_cm)
+
             for i in range(n2):
-                x = (
+                x_nominal = (
                     c_c_cm
                     + stirrup_d_b_cm
-                    + diameter_cm / 2
-                    + (
-                        (i + 1)
-                        * (width_cm - 2 * (c_c_cm + stirrup_d_b_cm + diameter_cm / 2))
-                        / (n2 + 1)
-                    )
+                    + radius_cm
+                    + (i + 1) * (clear_span / (n2 + 1))
                 )
+
+                # intermediate bars: no special offset
+                x_plot = x_nominal
+                y_plot = y_center_nominal
+
                 circle = Circle(
-                    (x, y_center),
-                    diameter_cm / 2,
+                    (x_plot, y_plot),
+                    radius_cm,
                     color=CUSTOM_COLORS["dark_gray"],
                     fill=True,
                 )
                 self._ax.add_patch(circle)
 
-    def plot(self) -> None:
+    def plot(self) -> plt.Figure:
         """
         Plots the rectangular section with a dark gray border, light gray hatch, and dimensions.
         Also plots the stirrup with rounded corners and thickness.
@@ -1568,9 +1601,10 @@ class RectangularBeam(RectangularSection):
         stirrup_thickness = self._stirrup_d_b.to("cm").magnitude
 
         if self.mode == "beam":
-            # Create rounded corners for the stirrup
-            inner_radius = stirrup_thickness * 2
-            outer_radius = stirrup_thickness * 3
+            db = self._stirrup_d_b.to("cm").magnitude  # bar diameter Ø
+
+            inner_radius = 4 * db / 2  # inner corner radius
+            outer_radius = inner_radius + db  # outer corner radius
 
             # Create the outer rounded rectangle for the stirrup
             outer_rounded_rect = FancyBboxPatch(
@@ -1721,5 +1755,10 @@ class RectangularBeam(RectangularSection):
             is_second_layer=True,
         )
 
-        # Show plot
-        plt.show()
+        # Store the section figure
+        self._fig = fig
+
+        # Close the figure so notebooks don't auto-display it twice
+        plt.close(fig)
+
+        return fig

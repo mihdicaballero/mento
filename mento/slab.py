@@ -47,6 +47,7 @@ class OneWaySlab(RectangularBeam):
         """Initialize all rebar-related attributes with default values."""
 
         # Unit system default starter rebar for initial effective height
+        # In this case is 0 mm since the slab might not have bottom or top rebar
         if self.concrete.unit_system == "metric":
             self._n1_b, self._d_b1_b = 2, 0 * mm
             self._n1_t, self._d_b1_t = 2, 0 * mm
@@ -101,7 +102,8 @@ class OneWaySlab(RectangularBeam):
         Args:
             d_b1: Diameter of position 1 bottom rebar (default: 0 mm).
             s_b1: Spacing of position 1 bottom rebar (default: 0 mm).
-            ... (similar for positions 2-4).
+            d_b3: Diameter of position 3 bottom rebar (default: 0 mm).
+            s_b3: Spacing of position 3 bottom rebar (default: 0 mm).
         """
         self._d_b1_b = d_b1 if d_b1 != 0 * mm else self._d_b1_b
         self._s_b1_b = s_b1 if s_b1 != 0 * mm else self._s_b1_b
@@ -117,7 +119,15 @@ class OneWaySlab(RectangularBeam):
         d_b3: Quantity = 0 * mm,
         s_b3: Quantity = 0 * mm,
     ) -> None:
-        """Update the top rebar configuration and recalculate attributes."""
+        """Update the top rebar configuration and recalculate attributes.
+
+        Args:
+            d_b1: Diameter of position 1 top rebar (default: 0 mm).
+            s_b1: Spacing of position 1 top rebar (default: 0 mm).
+            d_b3: Diameter of position 3 top rebar (default: 0 mm).
+            s_b3: Spacing of position 3 top rebar (default: 0 mm).
+
+        """
         self._d_b1_t = d_b1 if d_b1 != 0 * mm else self._d_b1_t
         self._s_b1_t = s_b1 if s_b1 != 0 * mm else self._s_b1_t
         self._d_b3_t = d_b3 if d_b3 != 0 * mm else self._d_b3_t

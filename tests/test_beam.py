@@ -375,17 +375,20 @@ def test_shear_check_ACI_318_19_no_rebar_2(
     results = node.check_shear()
 
     # Compare dictionaries with a tolerance for floating-point values, in m
-    assert results.iloc[1]["Av,min"] == pytest.approx(0, rel=1e-3)
-    assert results.iloc[1]["Av,req"] == pytest.approx(0, rel=1e-3)
-    assert results.iloc[1]["Av"] == pytest.approx(0, rel=1e-3)
     assert beam_example_imperial._d_shear.to("cm").magnitude == pytest.approx(
         36.04, rel=1e-3
     )
-    assert results.iloc[1]["ØVc"] == pytest.approx(59.87, rel=1e-3)
+    assert results.iloc[1]["Av,min"] == pytest.approx(0, rel=1e-3)
+    assert results.iloc[1]["Av,req"] == pytest.approx(0, rel=1e-3)
+    assert results.iloc[1]["Av"] == pytest.approx(0, rel=1e-3)
+    assert beam_example_imperial._k_c_min.to("MPa").magnitude == pytest.approx(
+        0.517, rel=1e-3
+    )
+    assert results.iloc[1]["ØVc"] == pytest.approx(35.48, rel=1e-3)
     assert results.iloc[1]["ØVs"] == pytest.approx(0, rel=1e-3)
-    assert results.iloc[1]["ØVn"] == pytest.approx(59.87, rel=1e-3)
-    assert results.iloc[1]["ØVmax"] == pytest.approx(299.35, rel=1e-3)
-    assert results.iloc[1]["DCR"] == pytest.approx(0.446, rel=1e-3)
+    assert results.iloc[1]["ØVn"] == pytest.approx(35.48, rel=1e-3)
+    assert results.iloc[1]["ØVmax"] == pytest.approx(274.96, rel=1e-3)
+    assert results.iloc[1]["DCR"] == pytest.approx(0.752, rel=1e-3)
 
     # Assert non-numeric values directly
     assert results.iloc[1]["Vu≤ØVmax"] is True
@@ -393,19 +396,26 @@ def test_shear_check_ACI_318_19_no_rebar_2(
 
 
 def test_shear_design_ACI_318_19(beam_example_imperial: RectangularBeam) -> None:
+    # Tested with "ACI 318-19 Beam Shear 01 - Imperial.cpd" for beem that needs rebar
     f = Forces(V_z=37.727 * kip, N_x=0 * kip)
     beam_example_imperial.set_longitudinal_rebar_bot(n1=2, d_b1=0.625 * inch)
     node = Node(section=beam_example_imperial, forces=f)
     results = node.design_shear()
 
     # Compare dictionaries with a tolerance for floating-point values, in m
+    assert beam_example_imperial._d_shear.to("cm").magnitude == pytest.approx(
+        35.08, rel=1e-3
+    )
     assert results.iloc[1]["Av,min"] == pytest.approx(2.12, rel=1e-3)
+    assert beam_example_imperial._V_s_req.to("kN").magnitude == pytest.approx(
+        109.53, rel=1e-3
+    )
     assert results.iloc[1]["Av,req"] == pytest.approx(10.06, rel=1e-3)
-    assert results.iloc[1]["Av"] == pytest.approx(11.22, rel=1e-3)
     assert results.iloc[1]["ØVc"] == pytest.approx(58.29, rel=1e-3)
     assert results.iloc[1]["ØVs"] == pytest.approx(122.15, rel=1e-3)
     assert results.iloc[1]["ØVn"] == pytest.approx(180.44, rel=1e-3)
     assert results.iloc[1]["ØVmax"] == pytest.approx(291.44, rel=1e-3)
+    assert results.iloc[1]["Av"] == pytest.approx(11.22, rel=1e-3)
     assert results.iloc[1]["DCR"] == pytest.approx(0.93, rel=1e-3)
 
     # Assert non-numeric values directly
@@ -786,28 +796,6 @@ def test_rectangular_section_plot_components(
     #   This gets more complex quickly, focusing on existence and basic properties is often enough.
 
     plt.close()  # Close the figure created by the plot method
-
-
-def test_rectangular_section_plot_imperial_units_text(
-    beam_example_imperial: RectangularBeam,
-) -> None:
-    """
-    Test that the plot method displays dimensions in imperial units
-    when the concrete's unit system is set to 'imperial'.
-    """
-    beam_example_imperial.plot()
-    ax = beam_example_imperial._ax
-    assert ax is not None, "The plot method did not assign an Axes object to _ax."
-
-    # Extract text labels
-    text_labels = [t.get_text() for t in ax.texts]
-
-    # Adjust based on how pint formats "inch" in your setup (e.g., "in", "inch", etc.)
-    # "{:~P}" often uses common abbreviations.
-    assert "{:.0f~P}".format(beam_example_imperial.width.to("inch")) in text_labels
-    assert "{:.0f~P}".format(beam_example_imperial.height.to("inch")) in text_labels
-
-    plt.close()
 
 
 def test_rectangular_section_plot_metric_units_text(

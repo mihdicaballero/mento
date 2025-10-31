@@ -15,3 +15,4 @@ In this folder, you will find detailed examples of how to use mento.
    beam_summary_ACI_318-19
    beam_summary_ACI_318-19 Design
    beam_summary_EN_1992-1-1
+   OneWaySlab_check_ACI_318-19
