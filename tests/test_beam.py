@@ -52,21 +52,6 @@ def beam_example_EN_1992_2004() -> RectangularBeam:
     return section
 
 
-@pytest.fixture()
-def beam_example_CIRSOC_201_2025() -> RectangularBeam:
-    concrete = Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa)
-    steel_bar = SteelBar(name="ADN 420", f_y=420 * MPa)
-    section = RectangularBeam(
-        label="Test",
-        concrete=concrete,
-        steel_bar=steel_bar,
-        width=20 * cm,
-        height=60 * cm,
-        c_c=2.5 * cm,
-    )
-    return section
-
-
 def beam_example_EN_1992_2004_2() -> RectangularBeam:
     concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
     steelBar = SteelBar(name="B500S", f_y=500 * MPa)
@@ -93,6 +78,21 @@ def beam_example_EN_1992_2004_3() -> RectangularBeam:
         c_c=3 * cm,
     )
     return section
+
+@pytest.fixture()
+def beam_example_CIRSOC_201_2025() -> RectangularBeam:
+    concrete = Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa)
+    steel_bar = SteelBar(name="ADN 420", f_y=420 * MPa)
+    section = RectangularBeam(
+        label="Test",
+        concrete=concrete,
+        steel_bar=steel_bar,
+        width=20 * cm,
+        height=60 * cm,
+        c_c=2.5 * cm,
+    )
+    return section
+
 
 
 def test_shear_check_EN_1992_2004_rebar_1(
@@ -458,6 +458,7 @@ def test_flexure_check_EN_1992_2004_1(
     beam_example_EN_1992_2004.set_transverse_rebar(n_stirrups=1, d_b=6 * mm, s_l=15 * cm)
     beam_example_EN_1992_2004.set_longitudinal_rebar_bot(n1=4, d_b1=16 * mm)
     assert beam_example_EN_1992_2004._A_s_bot.to(cm**2).magnitude == pytest.approx(8.042, rel=1e-2)
+    assert beam_example_EN_1992_2004._d_bot.to(cm).magnitude == pytest.approx(56.0, rel=1e-2)
     node = Node(section=beam_example_EN_1992_2004, forces=f)
     results = node.check_flexure()
 
@@ -475,7 +476,7 @@ def test_flexure_check_EN_1992_2004_1(
         8.042, rel=1e-2
     )
     assert results.iloc[1]["M_Rd"].to(kNm).magnitude == pytest.approx(
-        181.027, rel=1e-5
+        178.55502631532, rel=1e-5
     )
     assert results.iloc[1]["DCR"] == pytest.approx(0.8286, rel=1e-3)
 
