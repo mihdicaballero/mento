@@ -123,31 +123,31 @@ def shear_EN_1992() -> None:
     # beam.plot()
 
 
-def shear_ACI_318_19() -> None:
-    concrete = Concrete_ACI_318_19(name="C4", f_c=25 * MPa)
-    steelBar = SteelBar(name="ADN 420", f_y=420 * MPa)
+def shear_ACI_318_19_imperial() -> None:
+    concrete = Concrete_ACI_318_19(name="C4", f_c=4000 * psi)
+    steelBar = SteelBar(name="ADN 420", f_y=60 * ksi)
     beam = RectangularBeam(
+        label="V101",
         concrete=concrete,
         steel_bar=steelBar,
-        c_c=2.5 * cm,
-        width=20 * cm,
-        height=40 * cm,
-        label="Test",
+        width=10 * inch,
+        height=16 * inch,
+        c_c=1.5 * inch,
     )
     # section.set_transverse_rebar(
     #     n_stirrups=0, d_b=0.375 * inch, s_l=6 * inch
     # )
-    beam.set_longitudinal_rebar_bot(n1=2, d_b1=16 * mm)
+    beam.set_longitudinal_rebar_bot(n1=2, d_b1=0.625 * inch)
 
-    # f = Forces(label="ELU_01", V_z=30 * kip)
+    # f = Forces(label="ELU_01", V_z = 6 * kip)
     f = Forces(label="ELU_01", V_z=37.727 * kip)
     node = Node(section=beam, forces=f)
     # section.plot()
     # results = node.check_shear()
     results = node.design_shear()
-    print(results)
-    print(beam.shear_design_results)
-    # print(node.shear_results_detailed())
+    # print(results)
+    # print(beam.shear_design_results)
+    node.shear_results_detailed()
     # node.shear_results_detailed_doc()
 
 
@@ -352,9 +352,9 @@ def summary() -> None:
     from pathlib import Path
 
     # path = Path(__file__).parents[1] / "_notebooks" / "Mento-Input.xlsx"
-    path = "G:\Mi unidad\mento\Tools\Mento-Input.xlsx"
-    input_df = pd.read_excel(path, sheet_name="Design", usecols="B:T", skiprows=4)
-    beam_summary = BeamSummary(concrete=conc, steel_bar=steel, beam_list=input_df)
+    # path = "G:\Mi unidad\mento\Tools\Mento-Input.xlsx"
+    # input_df = pd.read_excel(path, sheet_name="Design", usecols="B:T", skiprows=4)
+    # beam_summary = BeamSummary(concrete=conc, steel_bar=steel, beam_list=input_df)
     # print(beam_summary.data)
 
     # # --- Step 2: Run design and export suggested rebars ---
@@ -362,12 +362,12 @@ def summary() -> None:
     # beam_summary.export_design("Beam-Design.xlsx")
 
     # --- Step 3: Import edited design and run checks ---
-    beam_summary.import_design("Beam-Design.xlsx")
+    # beam_summary.import_design("Beam-Design.xlsx")
     # print(beam_summary.data)
     # capacity = beam_summary.check(capacity_check=True)
     # print(capacity)
-    check = beam_summary.check(capacity_check=False)
-    print(check)
+    # check = beam_summary.check(capacity_check=False)
+    # print(check)
     # # beam_summary.check().to_excel('hola.xlsx', index=False)
     # results_shear = beam_summary.shear_results(capacity_check=False)
 
@@ -473,9 +473,9 @@ if __name__ == "__main__":
     # section()
     # rectangular()
     # shear_EN_1992()
-    # shear_ACI_318_19()
+    shear_ACI_318_19_imperial()
     # shear_ACI_318_19_slab()
-    flexure_ACI_318_19_metric_slab()
+    # flexure_ACI_318_19_metric_slab()
     # shear_CIRSOC_201_2025()
     # flexure_ACI_318_19_imperial()
     # flexure_ACI_318_19_metric()

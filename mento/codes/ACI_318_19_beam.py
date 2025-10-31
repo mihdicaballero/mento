@@ -5,6 +5,7 @@ import numpy as np
 from typing import TYPE_CHECKING, Dict, Any, cast
 import warnings
 from collections import OrderedDict
+from devtools import debug
 
 from mento.material import Concrete_ACI_318_19
 from mento.rebar import Rebar
@@ -65,7 +66,7 @@ def _calculate_concrete_shear_strength_aci(self: "RectangularBeam") -> None:
         if self.concrete.unit_system == "metric":
             V_cmin = 0 * kN
 
-            if self._A_v < self._A_v_min:
+            if self._A_v < self._A_v_min or self._A_v_min == 0 * cm**2 / m:
                 if self._A_s_tension == 0 * cm**2:
                     warnings.warn(
                         "Longitudinal rebar As cannot be zero if A_v is less than A_v_min.",
@@ -93,7 +94,7 @@ def _calculate_concrete_shear_strength_aci(self: "RectangularBeam") -> None:
                 )
         else:
             V_cmin = 0 * kip
-            if self._A_v <= self._A_v_min:
+            if self._A_v < self._A_v_min or self._A_v_min == 0 * inch**2 / ft:
                 self._k_c_min = (
                     8
                     * self._lambda_s

@@ -10,6 +10,7 @@ from pandas import DataFrame
 import math
 import warnings
 from importlib.metadata import version
+from devtools import debug
 
 from mento.rectangular import RectangularSection
 from mento.material import (
