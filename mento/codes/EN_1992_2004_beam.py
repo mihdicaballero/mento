@@ -354,7 +354,6 @@ def _min_max_flexural_reinforcement_ratio_EN_1992_2004(
 
     return rho_min, rho_max
 
-
 def _calculate_flexural_reinforcement_EN_1992_2004(
     self: "RectangularBeam", M_Ed: Quantity, d: Quantity, d_prima: float
 ) -> tuple[Quantity, Quantity, Quantity, Quantity]:
@@ -471,8 +470,6 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
 
     return A_s_min, A_s_max, A_s1, A_s2
 
-
-
 def _simple_determine_nominal_moment_EN_1992_2004(
     self: "RectangularBeam", A_s: Quantity, d: Quantity,
     A_s_prime: Quantity, d_prime: Quantity
@@ -486,12 +483,20 @@ def _simple_determine_nominal_moment_EN_1992_2004(
         b=self.width
         omega_1=A_s/(b*d)*f_yd/f_cd # Cuantia traccionada
         omega_2=A_s_prime/(b*d)*f_yd/f_cd # Cuantia comprimida
-        if (A_s_prime.to(cm**2).magnitude>A_s.to(cm**2).magnitude):
+        if (A_s_prime.to(cm**2).magnitude>=A_s.to(cm**2).magnitude):
             z=d-d_prime # Lever arm of internal forces
             M_Rd=A_s*f_yd*z
         elif (omega_1-omega_2 <= 0.36):
+            debug("VINE POR EL CAMINO 2")
             A_tensioned=A_s-A_s_prime
             M_omega_1_omega_2=A_tensioned*f_yd*(d-0.5*self.concrete._lambda_factor()*A_tensioned*f_yd/(f_cd*b))
+            debug(f"d: {d}")
+            debug(f"A_tensioned: {A_tensioned}")
+            debug(f"f_yd: {f_yd}")
+            debug(f"self.concrete._lambda_factor: {self.concrete._lambda_factor()}")
+            debug(f"f_cd: {f_cd}")
+            debug(f"b: {b}")
+            debug(f"M_omega_1_omega_2: {M_omega_1_omega_2}")
             M_Rd=M_omega_1_omega_2+A_s_prime*f_yd*(d-d_prime)
         else:
             M_Rd=0.295*f_cd*b*d**2+A_s_prime*f_yd*(d-d_prime)
@@ -537,16 +542,6 @@ def _determine_nominal_moment_EN_1992_2004(
 
 
     return None
-
-
-
-
-
-
-
-
-
-
 
 def _design_flexure_EN_1992_2004(
     self: "RectangularBeam", max_M_y_bot: Quantity, max_M_y_top: Quantity
@@ -681,11 +676,6 @@ def _design_flexure_EN_1992_2004(
     else:
         raise ValueError("Concrete type is not compatible with EN 1992 shear design.")
 
-
-
-
-
-
 def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> pd.DataFrame:
     """
     """
@@ -748,13 +738,6 @@ def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> pd.Da
 
     # Return the results as a Pandas DataFrame.
     return pd.DataFrame([results], index=[0])
-
-
-
-
-
-
-
 
 def _compile_results_EN_1992_2004_flexure_metric(
     self: "RectangularBeam", force: Forces

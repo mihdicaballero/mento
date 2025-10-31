@@ -20,6 +20,19 @@ from mento.rebar import Rebar
 from mento.summary import BeamSummary
 
 
+#######################################################################################
+def clear_console() -> None:
+    """
+    Auxiliar function for clear console
+    Clears the console based on the operating system.
+    """
+    if os.name == "nt":  # For Windows
+        os.system("cls")
+    else:  # For macOS and Linux
+        os.system("clear")
+
+#######################################################################################
+
 def units() -> None:
     debug(2 * cm, 3 * MPa, 4 * kg, 1 * mm, 1 * m, 3 * kN, 2 * kNm)
     debug(1 * psi, 1 * lb, 1 * kip, 1 * psi, 1 * ksi, 1 * inch, 1 * ft)
@@ -97,6 +110,10 @@ def material() -> None:
     # steelstrand = SteelStrand(name='Y1860',f_y=1700*MPa)
     # debug(steelstrand.get_properties())
     # print(concrete.f_c.to('MPa'), concrete.f_c.to('MPa').magnitude)
+
+
+
+#######################################################################################
 
 
 def shear_EN_1992() -> None:
@@ -202,6 +219,12 @@ def shear_CIRSOC_201_2025() -> None:
     # print(node.shear_results_detailed())
 
 
+
+#######################################################################################
+# TEST ASSOCIATED WITH FLEXURAL FUNCTIONS #############################################
+#######################################################################################
+
+
 def flexure_ACI_318_19_imperial() -> None:
     concrete = Concrete_ACI_318_19(name="C4", f_c=4000 * psi)
     steelBar = SteelBar(name="ADN 420", f_y=60 * ksi)
@@ -286,76 +309,44 @@ def flexure_ACI_318_19_metric_slab() -> None:
     slab.flexure_results_detailed()
 
 
-def rebar() -> None:
-    concrete = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
-    steelBar = SteelBar(name="ADN 420", f_y=420 * MPa)
-    beam = RectangularBeam(
-        label="V 20x50",
+def flexure_EN_1992_2004_TEST_01() -> None:
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    steelBar = SteelBar(name="B500S", f_y=500 * MPa)
+    BEAM_TEST_01 = RectangularBeam(
+        label="BEAM_TEST_01",
         concrete=concrete,
         steel_bar=steelBar,
         width=20 * cm,
-        height=40 * cm,
-        c_c=25 * mm,
+        height=60 * cm,
+        c_c=2.6 * cm,
     )
-    as_req = 9.26 * cm**2
-
-    beam_rebar = Rebar(beam)
-    long_rebar_df = beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=as_req)
-    best_design = beam_rebar.longitudinal_rebar_design
-    print(long_rebar_df, best_design)
-
-
-def rebar_df() -> None:
-    concrete = Concrete_ACI_318_19(name="H30", f_c=30 * MPa)
-    steelBar = SteelBar(name="ADN 420", f_y=420 * MPa)
-    beam_settings = BeamSettings(stirrup_diameter_ini=8 * mm)
-    beam = RectangularBeam(
-        label="V 20x50",
-        concrete=concrete,
-        steel_bar=steelBar,
-        width=20 * cm,
-        height=50 * cm,
-        c_c=30 * mm,
+    BEAM_TEST_01._stirrup_d_b=6*mm
+    BEAM_TEST_01.set_longitudinal_rebar_bot(
+        n1=4,
+        d_b1=16 * mm,
+        n2=0,
+        d_b2=10 *mm,
+        n3=0,
+        d_b3=10 * mm,
+        n4=0,
+        d_b4=10 * mm,
     )
-    beam_rebar = Rebar(beam)
-    # Create a list of required steel areas from 0.5 to 10 with a step of 0.5 cm²
-    as_req_list = np.arange(0.5, 10.5, 0.5) * cm**2
-    # Initialize an empty DataFrame to store the results
-    results_df = pd.DataFrame()
-
-    # Loop through each required steel area
-    for as_req in as_req_list:
-        # Run the longitudinal_rebar_ACI_19 method
-        long_rebar_df = beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=as_req)
-
-        # Extract the first row of the resulting DataFrame
-        first_row = long_rebar_df.iloc[0:1].copy()
-
-        # Add a column to store the required steel area
-        first_row[
-            "as_req"
-        ] = as_req.magnitude  # Store the magnitude (value without units)
-
-        # Append the first row to the results DataFrame
-        results_df = pd.concat([results_df, first_row], ignore_index=True)
-
-    # Display the results DataFrame
-    print(results_df)
+    BEAM_TEST_01.set_longitudinal_rebar_top(
+        n1=0,
+        d_b1=10 * mm,
+        n2=0,
+        d_b2=10 * mm,
+        n3=0,
+        d_b3=10 * mm,
+        n4=0,
+        d_b4=10 * mm,
+    )
+    f = Forces(M_y=150 * kNm)
+    node = Node(section=BEAM_TEST_01, forces=f)
+    results = node.check_flexure()
+    print(results)
 
 
-
-
-
-##########################################################################################################
-
-def clear_console() -> None:
-    """
-    Clears the console based on the operating system.
-    """
-    if os.name == "nt":  # For Windows
-        os.system("cls")
-    else:  # For macOS and Linux
-        os.system("clear")
 
 
 
@@ -401,20 +392,6 @@ def flexure_design_test_calcpad_example() -> None:
 
     flexure_results = beam.design_flexure(forces)
     print(flexure_results)
-
-
-
-def test_design_flexure_EN_1992_2004() -> None:
-    concrete = Concrete_EN_1992_2004(name="H25", f_c=25 * MPa)
-    steelBar = SteelBar(name="fy 60000", f_y=420*MPa)
-    beam = RectangularBeam(
-        label="V-20x60",
-        concrete=concrete,
-        steel_bar=steelBar,
-        c_c=2.6*cm, 
-        width=20 * cm,
-        height=60 * cm
-    )
     
 
 
@@ -468,39 +445,6 @@ def flexure_check_test() -> None:
     beam.flexure_results_detailed()
     # beam.flexure_results_detailed_doc()
     # beam.shear_results_detailed_doc()
-
-def summary() -> None:
-    # --- Step 1: Define materiales and load input file ---
-    # conc = Concrete_ACI_318_19(name="C25", f_c=25 * MPa)
-    conc = Concrete_CIRSOC_201_25(name="C25", f_c=25 * MPa)
-    # conc = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
-    steel = SteelBar(name="ADN 500", f_y=500 * MPa)
-    from pathlib import Path
-
-    # path = Path(__file__).parents[1] / "_notebooks" / "Mento-Input.xlsx"
-    # path = "G:\Mi unidad\mento\Tools\Mento-Input.xlsx"
-    # input_df = pd.read_excel(path, sheet_name="Design", usecols="B:T", skiprows=4)
-    # beam_summary = BeamSummary(concrete=conc, steel_bar=steel, beam_list=input_df)
-    # print(beam_summary.data)
-
-    # # --- Step 2: Run design and export suggested rebars ---
-    # print(beam_summary.design())
-    # beam_summary.export_design("Beam-Design.xlsx")
-
-    # --- Step 3: Import edited design and run checks ---
-    # beam_summary.import_design("Beam-Design.xlsx")
-    # print(beam_summary.data)
-    # capacity = beam_summary.check(capacity_check=True)
-    # print(capacity)
-    # check = beam_summary.check(capacity_check=False)
-    # print(check)
-    # # beam_summary.check().to_excel('hola.xlsx', index=False)
-    # results_shear = beam_summary.shear_results(capacity_check=False)
-
-    # results = beam_summary.shear_results(capacity_check=True)
-    # results_flexure = beam_summary.flexure_results(capacity_check=False)
-    # print(results_shear, "\n", results_flexure)
-    # beam_summary.nodes[2].shear_results_detailed()
 
 
 def flexure_ACI_318_19_metric_single(
@@ -562,6 +506,105 @@ def flexure_ACI_318_19_metric_single(
     current_fig.savefig(out_path, dpi=300, bbox_inches="tight")
     plt.close(current_fig)
 
+#######################################################################################
+
+def rebar() -> None:
+    concrete = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
+    steelBar = SteelBar(name="ADN 420", f_y=420 * MPa)
+    beam = RectangularBeam(
+        label="V 20x50",
+        concrete=concrete,
+        steel_bar=steelBar,
+        width=20 * cm,
+        height=40 * cm,
+        c_c=25 * mm,
+    )
+    as_req = 9.26 * cm**2
+
+    beam_rebar = Rebar(beam)
+    long_rebar_df = beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=as_req)
+    best_design = beam_rebar.longitudinal_rebar_design
+    print(long_rebar_df, best_design)
+
+
+def rebar_df() -> None:
+    concrete = Concrete_ACI_318_19(name="H30", f_c=30 * MPa)
+    steelBar = SteelBar(name="ADN 420", f_y=420 * MPa)
+    beam_settings = BeamSettings(stirrup_diameter_ini=8 * mm)
+    beam = RectangularBeam(
+        label="V 20x50",
+        concrete=concrete,
+        steel_bar=steelBar,
+        width=20 * cm,
+        height=50 * cm,
+        c_c=30 * mm,
+    )
+    beam_rebar = Rebar(beam)
+    # Create a list of required steel areas from 0.5 to 10 with a step of 0.5 cm²
+    as_req_list = np.arange(0.5, 10.5, 0.5) * cm**2
+    # Initialize an empty DataFrame to store the results
+    results_df = pd.DataFrame()
+
+    # Loop through each required steel area
+    for as_req in as_req_list:
+        # Run the longitudinal_rebar_ACI_19 method
+        long_rebar_df = beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=as_req)
+
+        # Extract the first row of the resulting DataFrame
+        first_row = long_rebar_df.iloc[0:1].copy()
+
+        # Add a column to store the required steel area
+        first_row[
+            "as_req"
+        ] = as_req.magnitude  # Store the magnitude (value without units)
+
+        # Append the first row to the results DataFrame
+        results_df = pd.concat([results_df, first_row], ignore_index=True)
+
+    # Display the results DataFrame
+    print(results_df)
+
+
+
+#######################################################################################
+
+
+
+def summary() -> None:
+    # --- Step 1: Define materiales and load input file ---
+    # conc = Concrete_ACI_318_19(name="C25", f_c=25 * MPa)
+    conc = Concrete_CIRSOC_201_25(name="C25", f_c=25 * MPa)
+    # conc = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    steel = SteelBar(name="ADN 500", f_y=500 * MPa)
+    from pathlib import Path
+
+    # path = Path(__file__).parents[1] / "_notebooks" / "Mento-Input.xlsx"
+    # path = "G:\Mi unidad\mento\Tools\Mento-Input.xlsx"
+    # input_df = pd.read_excel(path, sheet_name="Design", usecols="B:T", skiprows=4)
+    # beam_summary = BeamSummary(concrete=conc, steel_bar=steel, beam_list=input_df)
+    # print(beam_summary.data)
+
+    # # --- Step 2: Run design and export suggested rebars ---
+    # print(beam_summary.design())
+    # beam_summary.export_design("Beam-Design.xlsx")
+
+    # --- Step 3: Import edited design and run checks ---
+    # beam_summary.import_design("Beam-Design.xlsx")
+    # print(beam_summary.data)
+    # capacity = beam_summary.check(capacity_check=True)
+    # print(capacity)
+    # check = beam_summary.check(capacity_check=False)
+    # print(check)
+    # # beam_summary.check().to_excel('hola.xlsx', index=False)
+    # results_shear = beam_summary.shear_results(capacity_check=False)
+
+    # results = beam_summary.shear_results(capacity_check=True)
+    # results_flexure = beam_summary.flexure_results(capacity_check=False)
+    # print(results_shear, "\n", results_flexure)
+    # beam_summary.nodes[2].shear_results_detailed()
+
+
+
 
 def batch_test_beam_plots() -> None:
     """
@@ -592,6 +635,10 @@ def batch_test_beam_plots() -> None:
     print(f"Finished. Images saved in: {out_dir}")
 
 
+
+############################################################################################
+
+
 if __name__ == "__main__":
     # units()
     # settings()
@@ -599,11 +646,12 @@ if __name__ == "__main__":
     # section()
     # rectangular()
     # shear_EN_1992()
-    shear_ACI_318_19_imperial()
+    # shear_ACI_318_19_imperial()
     # shear_ACI_318_19_slab()
     # flexure_ACI_318_19_metric_slab()
     # shear_CIRSOC_201_2025()
     # flexure_ACI_318_19_imperial()
+    flexure_EN_1992_2004_TEST_01()
     # flexure_ACI_318_19_metric()
     # rebar()
     # summary()

@@ -613,12 +613,8 @@ class RectangularBeam(RectangularSection):
                 self.concrete.design_code == "ACI 318-19"
                 or self.concrete.design_code == "CIRSOC 201-25"
             ):
-                debug("ENTRE POR EL LADO DE _check_flexure_ACI_318_19")
                 result = _check_flexure_ACI_318_19(self, force)
             elif self.concrete.design_code=="EN 1992-2004":
-                 debug("ENTRE POR EL LADO DE _check_flexure_EN_1992_2004")
-                 debug("FUERZA")
-                 debug(force)
                  result =  _check_flexure_EN_1992_2004(self, force)
             else:
                 raise ValueError(
