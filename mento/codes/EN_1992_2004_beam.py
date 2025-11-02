@@ -320,8 +320,6 @@ def _design_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> None:
 # FLEXURE CHECK AND DESIGN
 ##########################################################
 
-#TODO limitar hormigon a C50/60
-
 
 def _min_max_flexural_reinforcement_ratio_EN_1992_2004(
     self: "RectangularBeam",
@@ -362,12 +360,10 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
     """
     debug("INVOCARON A LA FUNCION _calculate_flexural_reinforcement_EN_1992_2004")
     debug("M_Ed:", M_Ed)
-
+    debug("d:", d)
     rho_min, rho_max = _min_max_flexural_reinforcement_ratio_EN_1992_2004(self)
     A_s_min = rho_min * d * self.width
     A_s_max = rho_max * d * self.width  # noqa: F841
-
-
 
     # Constants and material properties
     if isinstance(self.concrete, Concrete_EN_1992_2004):
@@ -379,14 +375,17 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
         f_yd=self.steel_bar.f_y/self.concrete.gamma_s
 
         # Relative depth of compression zone at yielding of bottom reinforcement
-        k_1=0.4
         concrete_en = cast("Concrete_EN_1992_2004", self.concrete)
-        k_2=0.6+0.0014/concrete_en._epsilon_cu3
-
-        xi_eff_lim = lambda_ * ((self.concrete._delta - k_1)/ k_2)
+        xi_eff=((self.concrete._delta - self.concrete._k_1)/ self.concrete._k_2)
+        xi_eff_lim = lambda_ * 0.45
+        #TODO Falta verificar que xi_eff sea menor que xi_eff_lim
+        
+        debug(f"Lambda:{lambda_}")
+        debug(f"El xi_eff_lim:{xi_eff_lim}")
 
         # Compression zone depth limit
         x_eff_lim = xi_eff_lim * d
+        debug(f"El x_eff_lim:{x_eff_lim}")
 
         # Limit moment for compressive reinforcement
         self._f_cd = self.concrete._alpha_cc * self.concrete.f_ck / self.concrete.gamma_c
@@ -434,36 +433,37 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
             # Compressive reinforcement is required
 
             # Limit tensile reinforcement area
-            A_s1_lim = (M_lim / ((d - 0.5 * x_eff_lim) * f_yd)).to("cm^2")
+            z=d - 0.5 *lambda_* x_eff_lim
+            A_s1_lim = (M_lim / (z * f_yd)).to("cm^2")
+            debug(f"El A_s1_lim rd: {A_s1_lim}")
+            
 
-            # No compressive reinforcement required
-            A_s2 = 0 * cm**2
 
-            # Lever arm of internal forces for compressive reinforcement
-            z_2=d - d_prima
 
-            #Compression zone depth with plastic limit
-            x_u = d*(self.concrete._delta - 0.4)
+            # Compression zone depth with plastic limit (EC2 §5.5)
+            if self.concrete._f_ck <= 50 * MPa:
+                x_u = d * (self.concrete._delta - self.concrete._k_1) / self.concrete._k_2
+            else:
+                x_u = d * (self.concrete._delta - self.concrete._k_3) / self.concrete._k_4
 
 
             #Compressive reinforcement strain'
-            epsilon_s2 = (x_u - d_prima)/x_u*concrete_en._epsilon_cu3
+            epsilon_s2 = (x_u - d_prima)/x_u*concrete_en._epsilon_cu2
 
             # Compressive reinforcement stress'
             f_sd = min(epsilon_s2*self.steel_bar._E_s, f_yd)
-            #TODO REVISAR ESTO
 
-
-
-            # Limit tensile reinforcement area
-            A_s1_lim = (M_lim / ((d - 0.5 * x_eff_lim) * f_yd)).to("cm^2")
 
             # Extra moment to take with top reinforcement
             delta_M = M_Ed - M_lim
+            debug(delta_M)
 
+            # Lever arm of internal forces for compressive reinforcement
+            z_2=d - d_prima
+            debug(z_2)
             # Required compressive reinforcement area
-            A_s2 = (delta_M / ((z_2) * f_yd)).to("cm^2")
-
+            A_s2 = (delta_M / ((z_2) * f_sd)).to("cm^2")
+            debug(A_s2)
 
             # Required tensile reinforcement area
             A_s1 = max(A_s1_lim + A_s2, A_s_min)

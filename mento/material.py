@@ -220,10 +220,17 @@ class Concrete_EN_1992_2004(Concrete):
     _f_ck: Quantity = field(init=False)  # Characteristic concrete strength
     _f_cm: Quantity = field(init=False)  # Mean compressive strength
     _f_ctm: Quantity = field(init=False)  # Mean tensile strength
+    _epsilon_cu2: float = field(init=False)
     _epsilon_cu3: float = field(init=False)
     _gamma_c: float = field(init=False, default=1.5)  # Default value
     _gamma_s: float = field(init=False, default=1.15)  # Default value
     _alpha_cc: float = field(init=False, default=1.00)  # Default value for the property
+    _k_1: float = field(init=False)  
+    _k_2: float = field(init=False)  
+    _k_3: float = field(init=False)  
+    _k_4: float = field(init=False)     
+    _k_5: float = field(init=False)  
+    _k_6: float = field(init=False) 
 
     def __post_init__(self) -> None:
         # Crucial: Call parent's __post_init__ first to set unit_system and density
@@ -236,10 +243,21 @@ class Concrete_EN_1992_2004(Concrete):
         self._f_cm = self._f_ck + 8 * MPa
         self._E_cm = 22000 * (self._f_cm.to("MPa").magnitude / 10) ** 0.3 * MPa
         self._f_ctm = 0.3 * (self._f_ck.to("MPa").magnitude) ** (2 / 3) * MPa
-        self._epsilon_cu3 = 0.0035  # Ultimate strain in concrete
+        self._epsilon_cu1 = 2.8 + 27 * ((98 - (self._f_cm.to("MPa").magnitude) / 100))** 4  if self._f_ck >= 50 * MPa else 3.5
+        self._epsilon_c2  = 2.0 + 0.085 * ((self._f_ck.to("MPa").magnitude - 50)) ** 0.53   if self._f_ck >= 50 * MPa else 2.0
+        self._epsilon_cu2 = 2.6 + 35 * ((90 - (self._f_ck.to("MPa").magnitude)) / 100) ** 4 if self._f_ck >= 50 * MPa else 3.5
+        self._epsilon_c3  = 1.75 + 0.55 * ((self._f_ck.to("MPa").magnitude - 50) / 40)      if self._f_ck >= 50 * MPa else 1.75
+        self._epsilon_cu3 = 2.6 + 35 * ((90 - (self._f_ck.to("MPa").magnitude)) / 100) ** 4 if self._f_ck >= 50 * MPa else 3.5        
         self._gamma_c = 1.5
         self._gamma_s = 1.15
         self._alpha_cc = self._alpha_cc_calc()
+        # Default values for k values EN_1992-1-1 - ART 5.5:
+        self._k_1=0.44
+        self._k_2=1.25*(0.6+0.0014/self._epsilon_cu2)
+        self._k_3=0.54
+        self._k_4=1.25*(0.6+0.0014/self._epsilon_cu2)
+        self._k_5=0.7
+        self._k_6=0.8*self._epsilon_cu2
 
     def _alpha_cc_calc(self) -> float:
         # Implementation for alpha_cc, as per Eurocode EN 1992-1-1
@@ -248,7 +266,7 @@ class Concrete_EN_1992_2004(Concrete):
         # use of 1.0 is unconservative. For this reason, the UK National Annex recommends a value for
         # αcc of 0.85, as is proposed in the CEB Model Codes.
         return 0.85
-
+    
     def _lambda_factor(self) -> float:
         """
         Calculate the effective compression zone depth factor (λ) as per EN 1992-1-1.
