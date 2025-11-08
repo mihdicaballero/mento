@@ -28,12 +28,27 @@ def slab_example_ACI_318_19() -> OneWaySlab:
     concrete = Concrete_ACI_318_19(name="H25", f_c=4 * ksi)
     steelBar = SteelBar(name="ADN 420", f_y=60 * ksi)
     slab = OneWaySlab(
-        label="Slab 01",
+        label="Slab 02",
         concrete=concrete,
         steel_bar=steelBar,
         width=12 * inch,
         height=7 * inch,
         c_c=0.75 * inch,
+    )
+    return slab
+
+
+@pytest.fixture()
+def slab_example_ACI_318_19_metric() -> OneWaySlab:
+    concrete = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
+    steelBar = SteelBar(name="ADN 420", f_y=420 * MPa)
+    slab = OneWaySlab(
+        label="Slab 03",
+        concrete=concrete,
+        steel_bar=steelBar,
+        width=100 * cm,
+        height=20 * cm,
+        c_c=2.5 * cm,
     )
     return slab
 
@@ -64,21 +79,47 @@ def test_shear_check_ACI_318_19_1(slab_example_ACI_318_19: OneWaySlab) -> None:
     assert results.iloc[1]["Vu≤ØVn"] is True
 
 
-def test_check_flexure_ACI_318_19_1(slab_example_ACI_318_19: OneWaySlab) -> None:
+def test_check_flexure_ACI_318_19_1(slab_example_ACI_318_19_metric: OneWaySlab) -> None:
     # Testing the check of the reinforced slab with simple reinforcement
-    # # See calcpad: ACI 318-19 Slab Flexure 01 - Metric.cpd
+    # See calcpad: ACI 318-19 Slab Flexure 01 - Metric.cpd
     f = Forces(label="C1", M_y=20 * kNm)
-    slab_example_ACI_318_19.set_slab_longitudinal_rebar_bot(d_b1=12 * mm, s_b1=20 * cm)
-    node = Node(section=slab_example_ACI_318_19, forces=f)
+    slab_example_ACI_318_19_metric.set_slab_longitudinal_rebar_bot(
+        d_b1=12 * mm, s_b1=20 * cm
+    )
+    node = Node(section=slab_example_ACI_318_19_metric, forces=f)
     results = node.check_flexure()
 
     print(results)
 
-    assert results.iloc[1]["Label"] == "Slab 01"
+    assert results.iloc[1]["Label"] == "Slab 03"
     assert results.iloc[1]["Comb."] == "C1"
     assert results.iloc[1]["Position"] == "Bottom"
-    assert results.iloc[1]["As,min"] == pytest.approx(5.55, rel=1e-2)
-    assert results.iloc[1]["As,req bot"] == pytest.approx(3.19, rel=1e-3)
+    assert results.iloc[1]["As,min"] == pytest.approx(5.63, rel=1e-2)
+    assert results.iloc[1]["As,req bot"] == pytest.approx(4.25, rel=1e-3)
     assert results.iloc[1]["As,req top"] == pytest.approx(0, rel=1e-3)
-    assert results.iloc[1]["As"] == pytest.approx(5.66, rel=1e-2)
-    assert results.iloc[1]["Mu"] == pytest.approx(400, rel=1e-5)
+    assert results.iloc[1]["As"] == pytest.approx(5.65, rel=1e-2)
+    assert results.iloc[1]["Mu"] == pytest.approx(20, rel=1e-5)
+    assert results.iloc[1]["DCR"] == pytest.approx(0.573, rel=1e-5)
+
+
+def test_check_flexure_ACI_318_19_2(slab_example_ACI_318_19_metric: OneWaySlab) -> None:
+    # Testing the check of the reinforced slab with simple reinforcement
+    # See calcpad: ACI 318-19 Slab Flexure 01 - Metric.cpd
+    f = Forces(label="C1", M_y=50 * kNm)
+    slab_example_ACI_318_19_metric.set_slab_longitudinal_rebar_bot(
+        d_b1=12 * mm, s_b1=20 * cm
+    )
+    node = Node(section=slab_example_ACI_318_19_metric, forces=f)
+    results = node.check_flexure()
+
+    print(results)
+
+    assert results.iloc[1]["Label"] == "Slab 03"
+    assert results.iloc[1]["Comb."] == "C1"
+    assert results.iloc[1]["Position"] == "Bottom"
+    assert results.iloc[1]["As,min"] == pytest.approx(5.63, rel=1e-2)
+    assert results.iloc[1]["As,req bot"] == pytest.approx(8.22, rel=1e-3)
+    assert results.iloc[1]["As,req top"] == pytest.approx(0, rel=1e-3)
+    assert results.iloc[1]["As"] == pytest.approx(5.65, rel=1e-2)
+    assert results.iloc[1]["Mu"] == pytest.approx(50, rel=1e-5)
+    assert results.iloc[1]["DCR"] == pytest.approx(1.431, rel=1e-5)

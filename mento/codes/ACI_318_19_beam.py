@@ -548,7 +548,9 @@ def _calculate_flexural_reinforcement_ACI_318_19(
     b = self.width
 
     # Determine minimum and maximum reinforcement areas
-    rho_min = _minimum_flexural_reinforcement_ratio_ACI_318_19(self, M_u)
+    rho_min = _minimum_flexural_reinforcement_ratio_ACI_318_19(
+        self, M_u
+    )  # Mechanical minimum reinforcement ratio
     A_s_min = rho_min * d * b
     rho_max = _maximum_flexural_reinforcement_ratio_ACI_318_19(
         self,
@@ -588,17 +590,26 @@ def _calculate_flexural_reinforcement_ACI_318_19(
 
     c_d = clean_zero(c / d)
 
-    # Adjust the required reinforcement to meet the limits
-    if A_s_calc > A_s_min:
+    A_s_final: Quantity = 0 * cm**2
+
+    if A_s_calc >= A_s_min:
+        # Case 1:
+        # Required steel from analysis is already larger than the minimum.
+        # The 4/3 rule should NOT be used here because it would increase steel unnecessarily.
         A_s_final = A_s_calc
-    elif 4 * A_s_calc / 3 > A_s_min:
-        A_s_final = A_s_min
     else:
-        A_s_final = (
-            clean_zero(4 * A_s_calc.to("cm**2").magnitude / 3) * cm**2
-            if setting_flexural_min_reduction == "True"
-            else A_s_min
-        )
+        # Case 2:
+        # Required steel is less than the minimum.
+        # We check if using 4/3 * A_s_calc provides LESS steel than the minimum.
+        if (4 * A_s_calc) / 3 < A_s_min:
+            # 4/3 rule is beneficial → provide 4/3 * A_s_calc
+            A_s_final = (4 * A_s_calc) / 3
+        else:
+            # The minimum mechanical reinforcement results in less steel → use A_s_min
+            A_s_final = A_s_min
+
+    # Optional cleanup and unit formatting
+    A_s_final = clean_zero(A_s_final.to("cm**2").magnitude) * cm**2
 
     # Determine if compression reinforcement is required
     if A_s_final <= A_s_max:
