@@ -1,5 +1,8 @@
 import pytest
 import numpy as np
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.colors import to_rgba
 from matplotlib.patches import Rectangle, FancyBboxPatch

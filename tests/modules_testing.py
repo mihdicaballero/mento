@@ -281,8 +281,8 @@ def flexure_ACI_318_19_metric_slab() -> None:
 
     f = Forces(label="Test_01", M_y=20 * kNm)
     node = Node(section=slab, forces=f)
-    slab.set_slab_longitudinal_rebar_bot(d_b1=12 * mm, s_b1=20 * cm)
-    node.check_flexure()
+    slab.set_slab_longitudinal_rebar_bot(d_b1=12 * mm, s_b1=25 * cm)
+    print(node.check_flexure())
     slab.flexure_results_detailed()
 
 
@@ -473,9 +473,9 @@ if __name__ == "__main__":
     # section()
     # rectangular()
     # shear_EN_1992()
-    shear_ACI_318_19_imperial()
+    # shear_ACI_318_19_imperial()
     # shear_ACI_318_19_slab()
-    # flexure_ACI_318_19_metric_slab()
+    flexure_ACI_318_19_metric_slab()
     # shear_CIRSOC_201_2025()
     # flexure_ACI_318_19_imperial()
     # flexure_ACI_318_19_metric()
