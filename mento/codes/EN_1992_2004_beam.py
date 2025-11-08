@@ -29,7 +29,7 @@ def _initialize_variables_EN_1992_2004(self: "RectangularBeam", force: Forces) -
         self._M_Ed_bot = 0 * kNm
         self._M_Ed_top = self._M_Ed
     if isinstance(self.concrete, Concrete_EN_1992_2004):
-        self._f_ywd = self._f_ywk / self.concrete.gamma_s
+        self._f_ywd = self._f_ywk / self.concrete._gamma_s
         alpha_cc_shear = 1  # Take this as 1.00 for shear design and not 0.85, as in Eurocode Applied.
         self._f_cd = alpha_cc_shear * self.concrete.f_ck / self.concrete.gamma_c
 
@@ -372,7 +372,7 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
         )  # Factor for effective compression zone depth (EN 1992-1-1)
         eta = self.concrete._eta_factor()  # Factor for concrete strength (EN 1992-1-1)
         # Define f_yd
-        f_yd=self.steel_bar.f_y/self.concrete.gamma_s
+        f_yd=self.steel_bar.f_y/self.concrete._gamma_s
 
         # Relative depth of compression zone at yielding of bottom reinforcement
         concrete_en = cast("Concrete_EN_1992_2004", self.concrete)
@@ -476,31 +476,46 @@ def _simple_determine_nominal_moment_EN_1992_2004(
 ) -> Quantity:
     
     # Constants and material properties
+    debug("ENTRAMOS EN LA FUNCION _simple_determine_nominal_moment_EN_1992_2004")
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         # For reference see Jimenez Montoya 16 Ed. P 213
-        f_yd=self.steel_bar.f_y/self.concrete.gamma_s
+        f_yd=self.steel_bar._f_y/self.concrete._gamma_s
         f_cd=self.concrete._alpha_cc * self.concrete.f_ck / self.concrete.gamma_c
         b=self.width
-        omega_1=A_s/(b*d)*f_yd/f_cd # Cuantia traccionada
+        debug(A_s)
+        debug(A_s_prime)
+        omega_1=A_s*f_yd/(b*d*f_cd) # Cuantia traccionada
         omega_2=A_s_prime/(b*d)*f_yd/f_cd # Cuantia comprimida
+        debug(omega_1)
+        debug(omega_2)
+        debug(b)
+        debug(f_cd)
+        debug(f_yd)
         if (A_s_prime.to(cm**2).magnitude>=A_s.to(cm**2).magnitude):
+            debug("VINE POR EL CAMINO 1")
             z=d-d_prime # Lever arm of internal forces
+            debug(z)
             M_Rd=A_s*f_yd*z
+
         elif (omega_1-omega_2 <= 0.36):
             debug("VINE POR EL CAMINO 2")
             A_tensioned=A_s-A_s_prime
             M_omega_1_omega_2=A_tensioned*f_yd*(d-0.5*self.concrete._lambda_factor()*A_tensioned*f_yd/(f_cd*b))
-            debug(f"d: {d}")
-            debug(f"A_tensioned: {A_tensioned}")
-            debug(f"f_yd: {f_yd}")
+            debug(f"d: {d.to(cm)}")
+            debug(f"A_tensioned: {A_tensioned.to(cm**2)}")
+            debug(f"f_yd: {f_yd.to(MPa)}")
             debug(f"self.concrete._lambda_factor: {self.concrete._lambda_factor()}")
-            debug(f"f_cd: {f_cd}")
-            debug(f"b: {b}")
-            debug(f"M_omega_1_omega_2: {M_omega_1_omega_2}")
+            debug(f"f_cd: {f_cd.to(MPa)}")
+            debug(f"b: {b.to(cm)}")
+            debug(f"M_omega_1_omega_2: {M_omega_1_omega_2.to(kNm)}")
             M_Rd=M_omega_1_omega_2+A_s_prime*f_yd*(d-d_prime)
         else:
+            debug("VINE POR EL CAMINO 3")
+            debug("omega_1-omega_2 > 0.36")
             M_Rd=0.295*f_cd*b*d**2+A_s_prime*f_yd*(d-d_prime)
+            debug(f"EL MRD ME DIO {M_Rd}")
     debug(M_Rd.to(kNm))
+    debug("SALIMOS DE _simple_determine_nominal_moment_EN_1992_2004")
     return M_Rd
 
 def _determine_nominal_moment_EN_1992_2004(
@@ -521,7 +536,8 @@ def _determine_nominal_moment_EN_1992_2004(
     """
     # Calculate minimum and maximum reinforcement ratios
     [rho_min, rho_max] = _min_max_flexural_reinforcement_ratio_EN_1992_2004(self)
-    
+    debug("ESTAMOS EN LA FUNCION _determine_nominal_moment_EN_1992_2004")
+
     # For positive moments (tension in the bottom), set minimum reinforcement accordingly.
     if force._M_y > 0 * kNm:
         rho_min_top = 0 * dimensionless
@@ -533,14 +549,20 @@ def _determine_nominal_moment_EN_1992_2004(
     # Calculate minimum and maximum bottom reinforcement areas
     self._A_s_min_bot = rho_min_bot * self._d_bot * self.width
     self._A_s_max_bot = rho_max * self._d_bot * self.width
+    debug(self._A_s_min_bot)
+    debug(self._A_s_max_bot)
     # Determine the nominal moment for positive moments
     self._M_Rd_bot = _simple_determine_nominal_moment_EN_1992_2004(self, self._A_s_bot, self._d_bot, self._A_s_top, self._c_mec_top)
+    debug(self._M_Rd_bot)
     # Determine capacity for negative moment (tension at the top)
     self._A_s_min_top = rho_min_top * self._d_top * self.width
     self._A_s_max_top = rho_max * self._d_top * self.width
+    debug(self._A_s_min_top)
+    debug(self._A_s_max_top)
     self._M_Rd_top =_simple_determine_nominal_moment_EN_1992_2004(self, self._A_s_top, self._d_top, self._A_s_bot, self._c_mec_bot)
+    debug(self._M_Rd_top)
 
-
+    debug("SALIMOS DE _determine_nominal_moment_EN_1992_2004")
     return None
 
 def _design_flexure_EN_1992_2004(
@@ -800,7 +822,7 @@ def _initialize_dicts_EN_1992_2004_shear(self: "RectangularBeam") -> None:
                 round(self.concrete.f_ck.to("MPa").magnitude, 2),
                 round(self.steel_bar.f_y.to("MPa").magnitude, 2),
                 self.concrete.gamma_c,
-                self.concrete.gamma_s,
+                self.concrete._gamma_s,
                 self.concrete.alpha_cc,
             ],
             "Unit": ["", "MPa", "MPa", "", "", ""],

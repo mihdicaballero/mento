@@ -206,7 +206,6 @@ class Concrete_EN_1992_2004(Concrete):
         f_ctm (property): Returns the mean tensile strength.
         epsilon_cu3 (property): Returns the ultimate strain in concrete.
         gamma_c (property): Returns the partial safety factor for concrete.
-        gamma_s (property): Returns the partial safety factor for steel.
         alpha_cc (property): Returns the α_cc coefficient.
         Lambda_factor (property): Returns the λ factor.
         Eta_factor (property): Returns the η factor.
@@ -215,22 +214,6 @@ class Concrete_EN_1992_2004(Concrete):
         This class is intended for use in structural engineering applications where concrete properties must comply with EN 1992-1-1:2004.
         It provides all necessary parameters for design and verification according to the code.
     """
-
-    _E_cm: Quantity = field(init=False)  # Secant modulus of elasticity
-    _f_ck: Quantity = field(init=False)  # Characteristic concrete strength
-    _f_cm: Quantity = field(init=False)  # Mean compressive strength
-    _f_ctm: Quantity = field(init=False)  # Mean tensile strength
-    _epsilon_cu2: float = field(init=False)
-    _epsilon_cu3: float = field(init=False)
-    _gamma_c: float = field(init=False, default=1.5)  # Default value
-    _gamma_s: float = field(init=False, default=1.15)  # Default value
-    _alpha_cc: float = field(init=False, default=1.00)  # Default value for the property
-    _k_1: float = field(init=False)  
-    _k_2: float = field(init=False)  
-    _k_3: float = field(init=False)  
-    _k_4: float = field(init=False)     
-    _k_5: float = field(init=False)  
-    _k_6: float = field(init=False) 
 
     def __post_init__(self) -> None:
         # Crucial: Call parent's __post_init__ first to set unit_system and density
@@ -328,7 +311,7 @@ class Concrete_EN_1992_2004(Concrete):
     @property
     def gamma_c(self) -> float:
         return self._gamma_c
-
+    
     @property
     def gamma_s(self) -> float:
         return self._gamma_s
@@ -370,9 +353,9 @@ class Concrete_EN_1992_2004(Concrete):
 class Steel(Material):
     _f_y: Quantity = field(init=False)
     _density: Quantity = field(default=7850 * kg / m**3)
-
+    
     def __init__(
-        self, name: str, f_y: Quantity, density: Quantity = 7850 * kg / m**3
+        self, name: str, f_y: Quantity, density: Quantity = 7850 * kg / m**3, gamma_s: float = 1.15
     ):
         super().__init__(name)
         self._f_y = f_y
@@ -386,6 +369,7 @@ class Steel(Material):
     def density(self) -> Quantity:
         return self._density
 
+    
 
 @dataclass
 class SteelBar(Steel):
