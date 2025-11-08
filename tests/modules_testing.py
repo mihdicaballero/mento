@@ -680,6 +680,8 @@ def batch_test_beam_plots() -> None:
 ############################################################################################
 
 
+
+
 if __name__ == "__main__":
     # units()
     # settings()
@@ -689,11 +691,11 @@ if __name__ == "__main__":
     # shear_EN_1992()
     # shear_ACI_318_19_imperial()
     # shear_ACI_318_19_slab()
-    flexure_ACI_318_19_metric_slab()
+    #flexure_ACI_318_19_metric_slab()
     # shear_CIRSOC_201_2025()
     # flexure_ACI_318_19_imperial()
     # flexure_EN_1992_2004_TEST_01()
-    flexure_EN_1992_2004_TEST_02()
+    #flexure_EN_1992_2004_TEST_02()
     # flexure_ACI_318_19_metric()
     # rebar()
     # summary()

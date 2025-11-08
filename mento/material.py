@@ -226,11 +226,11 @@ class Concrete_EN_1992_2004(Concrete):
         self._f_cm = self._f_ck + 8 * MPa
         self._E_cm = 22000 * (self._f_cm.to("MPa").magnitude / 10) ** 0.3 * MPa
         self._f_ctm = 0.3 * (self._f_ck.to("MPa").magnitude) ** (2 / 3) * MPa
-        self._epsilon_cu1 = 2.8 + 27 * ((98 - (self._f_cm.to("MPa").magnitude) / 100))** 4  if self._f_ck >= 50 * MPa else 3.5
-        self._epsilon_c2  = 2.0 + 0.085 * ((self._f_ck.to("MPa").magnitude - 50)) ** 0.53   if self._f_ck >= 50 * MPa else 2.0
-        self._epsilon_cu2 = 2.6 + 35 * ((90 - (self._f_ck.to("MPa").magnitude)) / 100) ** 4 if self._f_ck >= 50 * MPa else 3.5
-        self._epsilon_c3  = 1.75 + 0.55 * ((self._f_ck.to("MPa").magnitude - 50) / 40)      if self._f_ck >= 50 * MPa else 1.75
-        self._epsilon_cu3 = 2.6 + 35 * ((90 - (self._f_ck.to("MPa").magnitude)) / 100) ** 4 if self._f_ck >= 50 * MPa else 3.5        
+        self._epsilon_cu1 = (2.8 + 27 * ((98 - self._f_cm.to("MPa").magnitude) / 100) ** 4 if self._f_ck >= 50 * MPa else 3.5) * 1e-3
+        self._epsilon_c2  = (2.0 + 0.085 * ((self._f_ck.to("MPa").magnitude - 50)) ** 0.53 if self._f_ck >= 50 * MPa else 2.0) * 1e-3
+        self._epsilon_cu2 = (2.6 + 35 * ((90 - self._f_ck.to("MPa").magnitude) / 100) ** 4 if self._f_ck >= 50 * MPa else 3.5) * 1e-3
+        self._epsilon_c3  = (1.75 + 0.55 * ((self._f_ck.to("MPa").magnitude - 50) / 40) if self._f_ck >= 50 * MPa else 1.75) * 1e-3
+        self._epsilon_cu3 = (2.6 + 35 * ((90 - self._f_ck.to("MPa").magnitude) / 100) ** 4 if self._f_ck >= 50 * MPa else 3.5) * 1e-3
         self._gamma_c = 1.5
         self._gamma_s = 1.15
         self._alpha_cc = self._alpha_cc_calc()
