@@ -1,8 +1,6 @@
 from dataclasses import dataclass
 from IPython.display import Markdown, display
 from typing import Optional, Dict
-import matplotlib
-matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle, Rectangle, FancyBboxPatch
 from pint import Quantity
@@ -659,6 +657,7 @@ class RectangularBeam(RectangularSection):
 
         # Mark shear as checked
         self._flexure_checked = True
+
         return all_results
 
     ##########################################################
@@ -774,6 +773,7 @@ class RectangularBeam(RectangularSection):
                         "Av,min": "cm²/m",
                         "Av,req": "cm²/m",
                         "Av": "cm²/m",
+                        "NEd": "kN",
                         "VEd,1": "kN",
                         "VEd,2": "kN",
                         "VRd,c": "kN",

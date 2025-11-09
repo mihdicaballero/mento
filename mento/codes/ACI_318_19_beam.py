@@ -593,21 +593,35 @@ def _calculate_flexural_reinforcement_ACI_318_19(
 
     A_s_bool = False
 
+    # 1.8‰ of the gross section (custom geometric minimum rule)
+    if self.mode == "beam":
+        A_s_geo_min = (1.8 / (1000)) * self.width * self.height
+    elif self.mode == "slab":
+        A_s_geo_min = (1.8 / (1000)) * self.width * self.height
+
     if A_s_calc >= A_s_min:
         # Case 1:
-        # Required steel from analysis is already larger than the minimum.
-        # The 4/3 rule should NOT be used here because it would increase steel unnecessarily.
+        # The required steel already exceeds the ACI minimum.
+        # Do not apply the 4/3 rule, as it would increase steel unnecessarily.
         A_s_final = A_s_calc
     else:
         # Case 2:
-        # Required steel is less than the minimum.
-        # We check if using 4/3 * A_s_calc provides LESS steel than the minimum.
-        if (4 * A_s_calc) / 3 < A_s_min:
-            # 4/3 rule is beneficial → provide 4/3 * A_s_calc
-            A_s_final = (4 * A_s_calc) / 3
-            A_s_bool = True
+        # The required steel is less than the ACI minimum.
+        # Evaluate whether using 4/3 * A_s_calc provides less steel than A_s_min.
+        A_s_4_3 = (4 * A_s_calc) / 3
+
+        if A_s_4_3 < A_s_min:
+            # The 4/3 rule is potentially beneficial → check the geometric minimum
+            if A_s_4_3 >= A_s_geo_min:
+                # 4/3 * A_s_calc satisfies the geometric minimum → adopt it
+                A_s_final = A_s_4_3
+                A_s_bool = True
+            else:
+                # 4/3 * A_s_calc is lower than 1.8‰ of (b·h) → enforce geometric minimum
+                A_s_final = A_s_geo_min
+                # A_s_bool remains False (4/3 rule not effectively used)
         else:
-            # The minimum mechanical reinforcement results in less steel → use A_s_min
+            # 4/3 * A_s_calc is not smaller than A_s_min → use the ACI minimum
             A_s_final = A_s_min
 
     # Optional cleanup and unit formatting
@@ -999,12 +1013,12 @@ def _design_flexure_ACI_318_19(
         self._A_s_top = A_req_top
 
         # --- Discrete design for each face (independent first pass) ---------------
-        if A_req_bot > 0 * (cm**2):
+        if A_req_bot >= 0 * (cm**2):
             self.flexure_design_results_bot = _design_longitudinal_for_area(
                 A_req_bot, self._A_s_max_bot, self._c_mec_bot
             )
         self.flexure_design_results_top = None
-        if A_req_top > 0 * (cm**2):
+        if A_req_top >= 0 * (cm**2):
             self.flexure_design_results_top = _design_longitudinal_for_area(
                 A_req_top, self._A_s_max_top, self._c_mec_top
             )
@@ -1408,7 +1422,9 @@ def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
                 # Any other failure (includes max or no flags)
                 checks.append("❌")
 
-        self._all_flexure_checks_passed = all(check == "✔️" for check in checks)
+        self._all_flexure_checks_passed = not any(
+            check in ("❌") for check in checks
+        )
         self._data_min_max_flexure = {
             "Check": [
                 "Min/Max As rebar top",

@@ -165,7 +165,7 @@ def shear_ACI_318_19_imperial() -> None:
     # print(results)
     # print(beam.shear_design_results)
     node.shear_results_detailed()
-    # node.shear_results_detailed_doc()
+    node.shear_results_detailed_doc()
 
 
 def shear_ACI_318_19_slab() -> None:
@@ -189,8 +189,8 @@ def shear_ACI_318_19_slab() -> None:
     # results = node.design_shear()
     print(results)
     # print(slab.shear_design_results)
-    print(node.shear_results_detailed())
-    # node.shear_results_detailed_doc()
+    node.shear_results_detailed()
+    node.shear_results_detailed_doc()
 
 
 def shear_CIRSOC_201_2025() -> None:
@@ -294,7 +294,6 @@ def flexure_ACI_318_19_metric() -> None:
 
 
 def flexure_ACI_318_19_metric_slab() -> None:
-    # concrete = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
     concrete = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
     steelBar = SteelBar(name="ADN 420", f_y=420 * MPa)
     slab = OneWaySlab(
@@ -309,8 +308,9 @@ def flexure_ACI_318_19_metric_slab() -> None:
     f = Forces(label="Test_01", M_y=20 * kNm)
     node = Node(section=slab, forces=f)
     slab.set_slab_longitudinal_rebar_bot(d_b1=12 * mm, s_b1=25 * cm)
-    print(node.check_flexure())
-    slab.flexure_results_detailed()
+    node.check_flexure()
+    node.flexure_results_detailed()
+    # slab.flexure_results_detailed_doc()
 
 
 def check_flexure_EN_1992_2004_TEST_01() -> None:
@@ -444,6 +444,7 @@ def design_flexure_EN_1992_2004_test_01() -> None:
     results = BEAM_TEST_DESIGN_FLEXURE_01.design_flexure(forces)
     # print(beam.flexure_design_results_bot,'\n', beam.flexure_design_results_top)
     print(results)
+    BEAM_TEST_DESIGN_FLEXURE_01.flexure_results_detailed_doc()
 
 def design_flexure_ACI_318_test_01() -> None:
     concrete = Concrete_ACI_318_19(name="fc 4000", f_c=4000 * psi)
@@ -463,6 +464,7 @@ def design_flexure_ACI_318_test_01() -> None:
 
     flexure_results = beam.design_flexure(forces)
     print(flexure_results)
+    print(beam.flexure_design_results_bot)
     
 def flexure_design_test_EN() -> None:
     #TODO Sale mal el DCR
@@ -637,13 +639,33 @@ def rebar_df() -> None:
 
 
 
-def summary() -> None:
+def summary_ACI() -> None:
     # --- Step 1: Define materiales and load input file ---
-    # conc = Concrete_ACI_318_19(name="C25", f_c=25 * MPa)
-    conc = Concrete_CIRSOC_201_25(name="C25", f_c=25 * MPa)
-    # conc = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    conc = Concrete_ACI_318_19(name="C25", f_c=25 * MPa)
+    # conc = Concrete_CIRSOC_201_25(name="C25", f_c=25 * MPa)
     steel = SteelBar(name="ADN 500", f_y=500 * MPa)
-    from pathlib import Path
+    data = {'Label': ['', 'V101', 'V102', 'V103', 'V104'],
+        "Comb.": ["", "ELU 1", "ELU 2", "ELU 3", "ELU 4"],
+        'b': ['cm', 20, 20, 20, 20],
+        'h': ['cm', 50, 50, 50, 50],
+        "cc": ["mm", 25, 25, 25, 25],
+        'Nx': ['kN', -10, 20, 0, 0],
+        'Vz': ['kN', 20, -50, 100, 100],
+        'My': ['kNm', 0, -35, 40, 45],
+        'ns': ['', 0, 1.0, 1.0, 1.0],
+        'dbs': ['mm', 0, 6, 6, 6],
+        'sl': ['cm', 0, 20, 20, 20],
+        'n1': ['', 2.0, 2, 2.0, 2.0],
+        'db1': ['mm', 12, 12, 12, 12],
+        'n2': ['', 1.0, 1, 1.0, 0.0],
+        'db2': ['mm', 10, 16, 10, 0],
+        'n3': ['', 2.0, 0.0, 2.0, 0.0],
+        'db3': ['mm', 12, 0, 16, 0],
+        'n4': ['', 0, 0.0, 0, 0.0],
+        'db4': ['mm', 0, 0, 0, 0]}
+    input_df = pd.DataFrame(data)
+
+    beam_summary = BeamSummary(concrete=conc, steel_bar=steel, beam_list=input_df)
 
     # path = Path(__file__).parents[1] / "_notebooks" / "Mento-Input.xlsx"
     # path = "G:\Mi unidad\mento\Tools\Mento-Input.xlsx"
@@ -652,7 +674,7 @@ def summary() -> None:
     # print(beam_summary.data)
 
     # # --- Step 2: Run design and export suggested rebars ---
-    # print(beam_summary.design())
+    print(beam_summary.design())
     # beam_summary.export_design("Beam-Design.xlsx")
 
     # --- Step 3: Import edited design and run checks ---
@@ -670,8 +692,45 @@ def summary() -> None:
     # print(results_shear, "\n", results_flexure)
     # beam_summary.nodes[2].shear_results_detailed()
 
+def summary_EN_1992() -> None:
+    # --- Step 1: Define materiales and load input file ---
+    conc = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    steel = SteelBar(name="ADN 500", f_y=500 * MPa)
+    data = {'Label': ['', 'V101', 'V102', 'V103', 'V104'],
+        "Comb.": ["", "ELU 1", "ELU 2", "ELU 3", "ELU 4"],
+        'b': ['cm', 20, 20, 20, 20],
+        'h': ['cm', 50, 50, 50, 50],
+        "cc": ["mm", 25, 25, 25, 25],
+        'Nx': ['kN', -10, 20, 0, 0],
+        'Vz': ['kN', 20, -50, 100, 100],
+        'My': ['kNm', 0, -35, 40, 45],
+        'ns': ['', 0, 1.0, 1.0, 1.0],
+        'dbs': ['mm', 0, 6, 6, 6],
+        'sl': ['cm', 0, 20, 20, 20],
+        'n1': ['', 2.0, 2, 2.0, 2.0],
+        'db1': ['mm', 12, 12, 12, 12],
+        'n2': ['', 1.0, 1, 1.0, 0.0],
+        'db2': ['mm', 10, 16, 10, 0],
+        'n3': ['', 2.0, 0.0, 2.0, 0.0],
+        'db3': ['mm', 12, 0, 16, 0],
+        'n4': ['', 0, 0.0, 0, 0.0],
+        'db4': ['mm', 0, 0, 0, 0]}
+    input_df = pd.DataFrame(data)
 
+    beam_summary = BeamSummary(concrete=conc, steel_bar=steel, beam_list=input_df)
 
+    print(beam_summary.data)
+    capacity = beam_summary.check(capacity_check=True)
+    print(capacity)
+    check = beam_summary.check(capacity_check=False)
+    print(check)
+    # # beam_summary.check().to_excel('hola.xlsx', index=False)
+    # results_shear = beam_summary.shear_results(capacity_check=False)
+
+    # results = beam_summary.shear_results(capacity_check=True)
+    # results_flexure = beam_summary.flexure_results(capacity_check=False)
+    # print(results_shear, "\n", results_flexure)
+    # beam_summary.nodes[2].shear_results_detailed()
 
 def batch_test_beam_plots() -> None:
     """
@@ -701,12 +760,7 @@ def batch_test_beam_plots() -> None:
 
     print(f"Finished. Images saved in: {out_dir}")
 
-
-
 ############################################################################################
-
-
-
 
 if __name__ == "__main__":
     # units()
@@ -714,17 +768,18 @@ if __name__ == "__main__":
     # material()
     # section()
     # rectangular()
-    # shear_EN_1992()
     # shear_ACI_318_19_imperial()
     # shear_ACI_318_19_slab()
-    flexure_ACI_318_19_metric_slab()
     # shear_CIRSOC_201_2025()
+    # shear_EN_1992()
+    # flexure_ACI_318_19_metric_slab()
     # check_flexure_ACI_318_19_imperial()
+    # design_flexure_ACI_318_test_01()
     # check_flexure_EN_1992_2004_TEST_01()
     # check_flexure_EN_1992_2004_TEST_02()
     # check_flexure_EN_1992_2004_TEST_04()
     # design_flexure_EN_1992_2004_test_01()
-    # design_flexure_ACI_318_test_01()
     # rebar()
-    # summary()
+    summary_ACI()
+    # summary_EN_1992()
     # batch_test_beam_plots()

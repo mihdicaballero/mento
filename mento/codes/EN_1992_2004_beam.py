@@ -142,7 +142,6 @@ def _calculate_max_shear_strength_EN_1992_2004(self: "RectangularBeam") -> None:
             * self._f_cd_shear
             / (cot_theta_min + math.tan(theta_min))
         ).to("kN")
-        print(alpha_cw)
 
         if self._V_Ed_1 <= V_Rd_max_min_angle:
             # If within the minimum angle
@@ -269,6 +268,7 @@ def _check_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> DataFra
             "Av": round(
                 self._A_v.to("cm ** 2 / m").magnitude, 2
             ),  # Provided stirrup reinforcement per unit length
+            "NEd": self._N_Ed.to('kN').magnitude,
             "VEd,1": self._V_Ed_1.to(
                 "kN"
             ).magnitude,  # Max Vu for the design at the support
@@ -371,7 +371,7 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
         # Relative depth of compression zone at yielding of bottom reinforcement
         concrete_en = cast("Concrete_EN_1992_2004", self.concrete)
         xi_eff_lim_1=((self.concrete._delta - self.concrete._k_1)/ self.concrete._k_2)
-        xi_eff_lim_2 = lambda_ * 0.45 # Condición de ductilidad
+        xi_eff_lim_2 = lambda_ * 0.45 # Ductility condition
         xi_eff_lim=min(xi_eff_lim_1, xi_eff_lim_2)
         # Compression zone depth limit
         x_eff_lim = xi_eff_lim * d
@@ -445,8 +445,8 @@ def _simple_determine_nominal_moment_EN_1992_2004(
         f_yd=self.steel_bar._f_y/self.concrete._gamma_s
         f_cd=self.concrete._alpha_cc * self.concrete.f_ck / self.concrete.gamma_c
         b=self.width
-        omega_1=A_s*f_yd/(b*d*f_cd) # Cuantia traccionada
-        omega_2=A_s_prime/(b*d)*f_yd/f_cd # Cuantia comprimida
+        omega_1=A_s*f_yd/(b*d*f_cd) # tension rebar ratio
+        omega_2=A_s_prime/(b*d)*f_yd/f_cd # Compression rebar ratio
         if (A_s_prime.to(cm**2).magnitude>=A_s.to(cm**2).magnitude):
             z=d-d_prime # Lever arm of internal forces
             M_Rd=A_s*f_yd*z
@@ -765,7 +765,7 @@ def _initialize_dicts_EN_1992_2004_shear(self: "RectangularBeam") -> None:
                 "Clear cover",
                 "Longitudinal tension rebar",
             ],
-            "Variable": ["h", "b", "rgeom", "As"],
+            "Variable": ["h", "b", "cc", "As"],
             "Value": [
                 self.height.to("cm").magnitude,
                 self.width.to("cm").magnitude,
