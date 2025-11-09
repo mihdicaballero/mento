@@ -3,7 +3,7 @@ from pint import Quantity
 from typing import TYPE_CHECKING, Dict, Any, Tuple, cast
 import pandas as pd
 from pandas import DataFrame
-from devtools import debug
+# from devtools import debug
 
 
 from mento.material import Concrete_EN_1992_2004
@@ -31,7 +31,9 @@ def _initialize_variables_EN_1992_2004(self: "RectangularBeam", force: Forces) -
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         self._f_ywd = self._f_ywk / self.concrete._gamma_s
         alpha_cc_shear = 1  # Take this as 1.00 for shear design and not 0.85, as in Eurocode Applied.
-        self._f_cd = alpha_cc_shear * self.concrete.f_ck / self.concrete.gamma_c
+        self._f_cd_shear = alpha_cc_shear * self.concrete.f_ck / self.concrete.gamma_c
+        # Flexure concrete resistance with a alpha_cc reduction
+        self._f_cd = self.concrete._alpha_cc * self.concrete.f_ck / self.concrete.gamma_c
 
 
 ##########################################################
@@ -82,7 +84,7 @@ def _initialize_shear_variables_EN_1992_2004(
         self._k_value = min(1 + math.sqrt(200 / self._d_shear.to("mm").magnitude), 2)
 
         # Positive of compression
-        self._sigma_cp = min(self._N_Ed / self.A_x, 0.2 * self._f_cd)
+        self._sigma_cp = min(self._N_Ed / self.A_x, 0.2 * self._f_cd_shear)
 
 def _shear_without_rebar_EN_1992_2004(self: "RectangularBeam") -> Quantity:
     self._stirrup_d_b = 0 * mm
@@ -132,16 +134,15 @@ def _calculate_max_shear_strength_EN_1992_2004(self: "RectangularBeam") -> None:
         # Check the minimum strut angle θ = 21.8° (cot(θ) = 2.5)
         theta_min: float = math.radians(21.8)
         cot_theta_min: float = 1 / math.tan(theta_min)
-        self._f_cd = self.concrete.alpha_cc * self.concrete.f_ck / self.concrete.gamma_c
-        #TODO REVISAR SI EL ALPHA QUE VA ACA ES EL DEL CONCRETE O EL DE CORTE. YO MODIFIQUE PORQUE HABIA UN ERROR EN ROJO
         V_Rd_max_min_angle = (
             alpha_cw
             * self.width
             * self._z
             * v_1
-            * self._f_cd
+            * self._f_cd_shear
             / (cot_theta_min + math.tan(theta_min))
         ).to("kN")
+        print(alpha_cw)
 
         if self._V_Ed_1 <= V_Rd_max_min_angle:
             # If within the minimum angle
@@ -158,7 +159,7 @@ def _calculate_max_shear_strength_EN_1992_2004(self: "RectangularBeam") -> None:
                 * self.width
                 * self._z
                 * v_1
-                * self._f_cd
+                * self._f_cd_shear
                 / (cot_theta_max + math.tan(theta_max))
             ).to("kN")
 
@@ -177,7 +178,7 @@ def _calculate_max_shear_strength_EN_1992_2004(self: "RectangularBeam") -> None:
                     * self.width
                     * self._z
                     * v_1
-                    * self._f_cd
+                    * self._f_cd_shear
                     / (self._cot_theta + math.tan(self._theta))
                 ).to("kN")
 
@@ -375,7 +376,6 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
         # Compression zone depth limit
         x_eff_lim = xi_eff_lim * d
         # Limit moment for compressive reinforcement
-        self._f_cd = self.concrete._alpha_cc * self.concrete.f_ck / self.concrete.gamma_c
 
         M_lim = eta * self._f_cd * self.width * x_eff_lim * (d - 0.5 * x_eff_lim)
 

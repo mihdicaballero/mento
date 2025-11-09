@@ -118,7 +118,7 @@ class Formatter:
 
     def color_DCR_df(
         self, df: pd.DataFrame, DCR_columns: list
-    ) -> Styler:  # Use Styler directly now
+    ) -> pd.io.formats.style.Styler:  # Use Styler directly now
         """
         Apply color styling to specified DCR-related columns in the DataFrame.
 
@@ -126,7 +126,7 @@ class Formatter:
         :param DCR_columns: List of column names to apply the DCR styling to.
         :return: A styled DataFrame with colored DCR values.
         """
-        return df.style.applymap(self.apply_DCR_style, subset=DCR_columns).format(
+        return df.style.map(self.apply_DCR_style, subset=DCR_columns).format(
             precision=2
         )
 

@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from IPython.display import Markdown, display
 from typing import Optional, Dict
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle, Rectangle, FancyBboxPatch
 from pint import Quantity
@@ -263,14 +265,11 @@ class RectangularBeam(RectangularSection):
             self._d_b_max_top: Quantity = 0 * mm
             self.flexure_design_results_bot: DataFrame = None
             self.flexure_design_results_top: DataFrame = None
+            self._A_s_bool_bot: bool = False
+            self._A_s_bool_top: bool = False
 
     def _initialize_EN_1992_2004_attributes(self) -> None:
         if isinstance(self.concrete, Concrete_EN_1992_2004):
-            # self._f_yk = self.steel_bar.f_y
-            # self._f_ck = self.concrete.f_ck
-            # self._f_ctm = self.concrete.f_ctm
-            # self._epsilon_cu3 = self.concrete._epsilon_cu3
-            # self._E_s = self.steel_bar.E_s
             self._V_Ed_1: Quantity = 0 * kN
             self._V_Ed_2: Quantity = 0 * kN
             self._N_Ed: Quantity = 0 * kN
@@ -281,9 +280,10 @@ class RectangularBeam(RectangularSection):
             self._V_Rd_max: Quantity = 0 * kN
             self._V_Rd: Quantity = 0 * kN
             self._k_value: float = 0
-            self._f_ywk: Quantity = 0 * MPa
+            self._f_ywk = self.steel_bar.f_y
             self._f_ywd: Quantity = 0 * MPa
             self._f_cd: Quantity = 0 * MPa
+            self._f_cd_shear: Quantity = 0 * MPa
             self._A_p = 0 * cm**2  # No prestressed for now
             self._sigma_cp: Quantity = 0 * MPa
             self._theta: float = 0
