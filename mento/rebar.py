@@ -582,16 +582,21 @@ class Rebar:
         if df.empty and best_fallback_combination is not None:
             df = pd.DataFrame([best_fallback_combination])
 
-        modified_df: pd.DataFrame = self._calculate_penalties_long_rebar(df)
-        # Sort by 'Functional' to sort by the best options
-        modified_df.sort_values(by=["functional"], inplace=True)
-        modified_df.reset_index(drop=True, inplace=True)
+        if self.A_s_req == 0*cm**2:
+            modified_df: pd.DataFrame = df
+            modified_df['d_b1'] = 0
+        else:
+            modified_df = self._calculate_penalties_long_rebar(df)
+            # Sort by 'Functional' to sort by the best options
+            modified_df.sort_values(by=["functional"], inplace=True)
+            modified_df.reset_index(drop=True, inplace=True)
+
         self._long_combos_df = modified_df
 
         return modified_df.head(10)
 
     def longitudinal_rebar_EN_1992_2004(self, A_s_req: Quantity) -> None:
-        pass
+        self.longitudinal_rebar_ACI_318_19(A_s_req) #TODO WE HAVE TO CHANGE THIS
 
     def _estimate_mechanical_cover(self, row: pd.Series) -> "Quantity":
         """

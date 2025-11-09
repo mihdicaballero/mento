@@ -242,7 +242,7 @@ class BeamSummary:
                     code_specific_data = {
                         "MRd,top": round(beam._M_Rd_top.to("kN*m").magnitude, 1),
                         "MRd,bot": round(beam._M_Rd_bot.to("kN*m").magnitude, 1),
-                        "VRd": shear_results["V_Rd"][1],
+                        "VRd": shear_results["VRd"][1],
                     }
                     code_specific_units = {
                         "MRd,top": "kNm",
@@ -318,12 +318,12 @@ class BeamSummary:
                 # Code-specific data
                 if isinstance(self.concrete, Concrete_EN_1992_2004):  # TODO
                     code_specific_data = {
-                        "MEd": round(flexure_results["Mu"][0], 1),
-                        "VEd": round(shear_results["Vu"][0], 1),
-                        "NEd": round(shear_results["Nu"][0], 1),
+                        "MEd": round(flexure_results["MEd"][0], 1),
+                        "VEd": round(shear_results["VEd,2"][0], 1),
+                        "NEd": round(shear_results["NEd"][0], 1),
                         "MRd,top": round(beam._M_Rd_top.to("kN*m").magnitude, 1),
                         "MRd,bot": round(beam._M_Rd_bot.to("kN*m").magnitude, 1),
-                        "VRd": round(shear_results["V_Rd"][0], 1),
+                        "VRd": round(shear_results["VRd"][0], 1),
                     }
                     code_specific_units = {
                         "MEd": "kNm",
@@ -402,6 +402,7 @@ class BeamSummary:
             node.design_flexure()
             if forces.M_y.magnitude >= 0:  # tension at bottom face
                 flex_result = beam.flexure_design_results_bot
+                # print(beam.flexure_design_results_bot)
                 design_df.loc[i, "n1"] = flex_result["n_1"]
                 design_df.loc[i, "db1"] = flex_result["d_b1"]
                 design_df.loc[i, "n2"] = flex_result["n_2"]

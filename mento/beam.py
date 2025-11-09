@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from IPython.display import Markdown, display
 from typing import Optional, Dict
 import matplotlib.pyplot as plt
@@ -9,7 +9,6 @@ import pandas as pd
 from pandas import DataFrame
 import math
 import warnings
-from importlib.metadata import version
 
 from mento.rectangular import RectangularSection
 from mento.material import (
@@ -21,10 +20,13 @@ from mento.units import MPa, mm, inch, kN, m, cm, kNm, dimensionless
 from mento.results import Formatter, TablePrinter, DocumentBuilder, CUSTOM_COLORS
 from mento.forces import Forces
 from mento.settings import BeamSettings
+from mento._version import __version__ as MENTO_VERSION
 
 from mento.codes.EN_1992_2004_beam import (
     _check_shear_EN_1992_2004,
+    _check_flexure_EN_1992_2004,
     _design_shear_EN_1992_2004,
+    _design_flexure_EN_1992_2004
 )
 from mento.codes.ACI_318_19_beam import (
     _check_shear_ACI_318_19,
@@ -32,8 +34,6 @@ from mento.codes.ACI_318_19_beam import (
     _check_flexure_ACI_318_19,
     _design_flexure_ACI_318_19,
 )
-
-MENTO_VERSION = version("mento")
 
 
 @dataclass
@@ -92,10 +92,8 @@ class RectangularBeam(RectangularSection):
         supporting multiple design codes and detailed reporting.
     """
 
-    settings: BeamSettings = field(
-        default_factory=BeamSettings
-    )  # allow user to pass settings
-
+    settings: Optional[BeamSettings] = None
+    
     def __post_init__(self) -> None:
         super().__post_init__()  # Call parent attributes
         if not self.settings:
@@ -263,14 +261,11 @@ class RectangularBeam(RectangularSection):
             self._d_b_max_top: Quantity = 0 * mm
             self.flexure_design_results_bot: DataFrame = None
             self.flexure_design_results_top: DataFrame = None
+            self._A_s_bool_bot: bool = False
+            self._A_s_bool_top: bool = False
 
     def _initialize_EN_1992_2004_attributes(self) -> None:
         if isinstance(self.concrete, Concrete_EN_1992_2004):
-            # self._f_yk = self.steel_bar.f_y
-            # self._f_ck = self.concrete.f_ck
-            # self._f_ctm = self.concrete.f_ctm
-            # self._epsilon_cu3 = self.concrete._epsilon_cu3
-            # self._E_s = self.steel_bar.E_s
             self._V_Ed_1: Quantity = 0 * kN
             self._V_Ed_2: Quantity = 0 * kN
             self._N_Ed: Quantity = 0 * kN
@@ -281,15 +276,19 @@ class RectangularBeam(RectangularSection):
             self._V_Rd_max: Quantity = 0 * kN
             self._V_Rd: Quantity = 0 * kN
             self._k_value: float = 0
-            self._f_ywk: Quantity = 0 * MPa
+            self._f_ywk = self.steel_bar.f_y
             self._f_ywd: Quantity = 0 * MPa
-            self._f_yd: Quantity = 0 * MPa
             self._f_cd: Quantity = 0 * MPa
+            self._f_cd_shear: Quantity = 0 * MPa
             self._A_p = 0 * cm**2  # No prestressed for now
             self._sigma_cp: Quantity = 0 * MPa
             self._theta: float = 0
             self._cot_theta: float = 0
             self._z: Quantity = 0 * cm
+            self._M_Rd_bot: Quantity = 0 * kNm
+            self._M_Rd_top: Quantity = 0 * kNm
+            self._M_Ed_bot: Quantity = 0 * kNm
+            self._M_Ed_top: Quantity = 0 * kNm
 
     ##########################################################
     # SET LONGITUDINAL AND TRANSVERSE REBAR AND UPDATE ATTRIBUTES
@@ -475,12 +474,10 @@ class RectangularBeam(RectangularSection):
             + self._d_b4_b / 2
         )
         # Calculate the total area of each layer
-        area_1_b = (
-            self._n1_b * self._d_b1_b**2 * np.pi / 4
-        )  # Area proportional to number of bars and their diameter
-        area_2_b = self._n2_b * self._d_b2_b**2 * np.pi / 4
-        area_3_b = self._n3_b * self._d_b3_b**2 * np.pi / 4
-        area_4_b = self._n4_b * self._d_b4_b**2 * np.pi / 4
+        area_1_b = self._n1_b * self._d_b1_b**2 * np.pi / 4.0
+        area_2_b = self._n2_b * self._d_b2_b**2 * np.pi / 4.0
+        area_3_b = self._n3_b * self._d_b3_b**2 * np.pi / 4.0
+        area_4_b = self._n4_b * self._d_b4_b**2 * np.pi / 4.0
 
         # Calculate the centroid as a weighted average
         total_area_b = area_1_b + area_2_b + area_3_b + area_4_b
@@ -490,7 +487,6 @@ class RectangularBeam(RectangularSection):
         self._bot_rebar_centroid = (
             area_1_b * y1_b + area_2_b * y2_b + area_3_b * y3_b + area_4_b * y4_b
         ) / total_area_b
-
         # TOP BARS CENTROID
         # Calculate the vertical positions of the bar layers
         y1_t = self._d_b1_t / 2
@@ -521,7 +517,7 @@ class RectangularBeam(RectangularSection):
 
         self._top_rebar_centroid = (
             area_1_t * y1_t + area_2_t * y2_t + area_3_t * y3_t + area_4_t * y4_t
-        ) / total_area_t
+        ) / total_area_t       
 
     def _update_longitudinal_rebar_attributes(self) -> None:
         """Recalculate attributes dependent on rebar configuration for both top and bottom reinforcing."""
@@ -554,7 +550,6 @@ class RectangularBeam(RectangularSection):
         DataFrame
             A DataFrame summarizing the flexural design results for all forces.
         """
-
         # Initialize limiting cases
         max_M_y_top = 0 * kN * m  # For negative M_y (top reinforcement design)
         max_M_y_bot = 0 * kN * m  # For positive M_y (bottom reinforcement design)
@@ -574,16 +569,16 @@ class RectangularBeam(RectangularSection):
             or self.concrete.design_code == "CIRSOC 201-25"
         ):
             _design_flexure_ACI_318_19(self, max_M_y_bot, max_M_y_top)
+        elif (self.concrete.design_code == "EN 1992-2004"):
+            _design_flexure_EN_1992_2004(self, max_M_y_bot, max_M_y_top)
         else:
             raise ValueError(
                 f"Longitudinal design method not implemented "
                 f"for concrete type: {type(self.concrete).__name__}"
             )
-        print(self._d_b1_t)
 
         # Check flexural capacity for all forces with the assigned reinforcement
         all_results = self.check_flexure(forces)
-        print(self._d_b1_t)
         return all_results
 
     def check_flexure(self, forces: list[Forces]) -> DataFrame:
@@ -606,8 +601,8 @@ class RectangularBeam(RectangularSection):
                 or self.concrete.design_code == "CIRSOC 201-25"
             ):
                 result = _check_flexure_ACI_318_19(self, force)
-            # elif self.concrete.design_code=="EN 1992-2004":
-            #     result =  _check_shear_EN_1992_2004(self, force)
+            elif self.concrete.design_code=="EN 1992-2004":
+                 result =  _check_flexure_EN_1992_2004(self, force)
             else:
                 raise ValueError(
                     f"Flexure design method not implemented for concrete type: {type(self.concrete).__name__}"
@@ -660,6 +655,7 @@ class RectangularBeam(RectangularSection):
 
         # Mark shear as checked
         self._flexure_checked = True
+
         return all_results
 
     ##########################################################
@@ -775,6 +771,7 @@ class RectangularBeam(RectangularSection):
                         "Av,min": "cm²/m",
                         "Av,req": "cm²/m",
                         "Av": "cm²/m",
+                        "NEd": "kN",
                         "VEd,1": "kN",
                         "VEd,2": "kN",
                         "VRd,c": "kN",
@@ -810,7 +807,12 @@ class RectangularBeam(RectangularSection):
             )
 
     def _get_units_row_flexure(self) -> pd.DataFrame:
-        return pd.DataFrame(
+        #TODO: Add imperial units row output
+        if (
+                self.concrete.design_code == "ACI 318-19"
+                or self.concrete.design_code == "CIRSOC 201-25"
+            ):
+            units_row = pd.DataFrame(
             [
                 {
                     "Label": "",
@@ -828,6 +830,31 @@ class RectangularBeam(RectangularSection):
                 }
             ]
         )
+        elif self.concrete.design_code=="EN 1992-2004":
+            units_row = pd.DataFrame(
+            [
+                {
+                    "Label": "",
+                    "Comb.": "",
+                    "Position": "",
+                    "As,min": "cm²",
+                    "As,req top": "cm²",
+                    "As,req bot": "cm²",
+                    "As": "cm²",
+                    # "c/d": "",  # Uncomment if you include this field later
+                    "MEd": "kNm",
+                    "MRd": "kNm",
+                    "MEd≤MRd": "",
+                    "DCR": "",
+                }
+            ]
+        )
+        else:
+            raise ValueError(
+                f"Flexure design method not implemented for concrete type: {type(self.concrete).__name__}"
+            )  # noqa: E501
+        
+        return units_row
 
     ##########################################################
     # RESULTS
@@ -836,8 +863,9 @@ class RectangularBeam(RectangularSection):
     # Beam results for Jupyter Notebook
     @property
     def data(self) -> None:
+        type = self.mode.capitalize()
         markdown_content = (
-            f"Beam {self.label}, $b$={self.width.to('cm')}"
+            f"{type} {self.label}, $b$={self.width.to('cm')}"
             f", $h$={self.height.to('cm')}, $c_{{c}}$={self.c_c.to('cm')}, \
                             Concrete {self.concrete.name}, Rebar {self.steel_bar.name}."
         )
@@ -1476,54 +1504,85 @@ class RectangularBeam(RectangularSection):
         # Plot side bars (position 1 or 3)
         if n1 > 0:
             diameter_cm = d_b1.to("cm").magnitude
-            y_center = (
-                y_base + diameter_cm / 2 if is_bottom else y_base - diameter_cm / 2
-            )
+            radius_cm = diameter_cm / 2.0
+
+            # nominal vertical center before corner correction
+            y_center_nominal = y_base + radius_cm if is_bottom else y_base - radius_cm
+
+            # width available between inner faces of stirrup legs, for this bar diameter
+            clear_span = width_cm - 2 * (c_c_cm + stirrup_d_b_cm + radius_cm)
+
+            # corner offset depends on stirrup diameter (controls bend radius)
+            corner_offset = 0.43 * stirrup_d_b_cm  # tune factor if needed
+
             for i in range(n1):
-                x = (
-                    c_c_cm
-                    + stirrup_d_b_cm
-                    + diameter_cm / 2
-                    + (
-                        i
-                        * (width_cm - 2 * (c_c_cm + stirrup_d_b_cm + diameter_cm / 2))
-                        / (n1 - 1)
+                # even if n1 == 1, just center it
+                if n1 == 1:
+                    x_nominal = width_cm / 2.0
+                else:
+                    x_nominal = (
+                        c_c_cm
+                        + stirrup_d_b_cm
+                        + radius_cm
+                        + i * (clear_span / (n1 - 1))
                     )
-                )
+
+                # default: no shift
+                x_shift = 0.0
+                y_shift = 0.0
+
+                # leftmost bar
+                if i == 0:
+                    x_shift = corner_offset  # push inward (to the right)
+                    y_shift = corner_offset if is_bottom else -corner_offset
+                # rightmost bar
+                elif i == n1 - 1:
+                    x_shift = -corner_offset  # push inward (to the left)
+                    y_shift = corner_offset if is_bottom else -corner_offset
+
+                x_plot = x_nominal + x_shift
+                y_plot = y_center_nominal + y_shift
+
                 circle = Circle(
-                    (x, y_center),
-                    diameter_cm / 2,
+                    (x_plot, y_plot),
+                    radius_cm,
                     color=CUSTOM_COLORS["dark_gray"],
                     fill=True,
                 )
                 self._ax.add_patch(circle)
 
-        # Plot intermediate bars (position 2 or 4)
+        # ---------------------------------
+        # Plot intermediate bars (group n2)
+        # ---------------------------------
         if n2 > 0:
             diameter_cm = d_b2.to("cm").magnitude
-            y_center = (
-                y_base + diameter_cm / 2 if is_bottom else y_base - diameter_cm / 2
-            )
+            radius_cm = diameter_cm / 2.0
+
+            y_center_nominal = y_base + radius_cm if is_bottom else y_base - radius_cm
+
+            clear_span = width_cm - 2 * (c_c_cm + stirrup_d_b_cm + radius_cm)
+
             for i in range(n2):
-                x = (
+                x_nominal = (
                     c_c_cm
                     + stirrup_d_b_cm
-                    + diameter_cm / 2
-                    + (
-                        (i + 1)
-                        * (width_cm - 2 * (c_c_cm + stirrup_d_b_cm + diameter_cm / 2))
-                        / (n2 + 1)
-                    )
+                    + radius_cm
+                    + (i + 1) * (clear_span / (n2 + 1))
                 )
+
+                # intermediate bars: no special offset
+                x_plot = x_nominal
+                y_plot = y_center_nominal
+
                 circle = Circle(
-                    (x, y_center),
-                    diameter_cm / 2,
+                    (x_plot, y_plot),
+                    radius_cm,
                     color=CUSTOM_COLORS["dark_gray"],
                     fill=True,
                 )
                 self._ax.add_patch(circle)
 
-    def plot(self) -> None:
+    def plot(self) -> plt.Figure:
         """
         Plots the rectangular section with a dark gray border, light gray hatch, and dimensions.
         Also plots the stirrup with rounded corners and thickness.
@@ -1557,9 +1616,10 @@ class RectangularBeam(RectangularSection):
         stirrup_thickness = self._stirrup_d_b.to("cm").magnitude
 
         if self.mode == "beam":
-            # Create rounded corners for the stirrup
-            inner_radius = stirrup_thickness * 2
-            outer_radius = stirrup_thickness * 3
+            db = self._stirrup_d_b.to("cm").magnitude  # bar diameter Ø
+
+            inner_radius = 4 * db / 2  # inner corner radius
+            outer_radius = inner_radius + db  # outer corner radius
 
             # Create the outer rounded rectangle for the stirrup
             outer_rounded_rect = FancyBboxPatch(
@@ -1710,5 +1770,10 @@ class RectangularBeam(RectangularSection):
             is_second_layer=True,
         )
 
-        # Show plot
-        plt.show()
+        # Store the section figure
+        self._fig = fig
+
+        # Close the figure so notebooks don't auto-display it twice
+        plt.close(fig)
+
+        return fig

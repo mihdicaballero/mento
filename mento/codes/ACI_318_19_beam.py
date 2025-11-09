@@ -5,6 +5,7 @@ import numpy as np
 from typing import TYPE_CHECKING, Dict, Any, cast
 import warnings
 from collections import OrderedDict
+from devtools import debug
 
 from mento.material import Concrete_ACI_318_19
 from mento.rebar import Rebar
@@ -65,7 +66,7 @@ def _calculate_concrete_shear_strength_aci(self: "RectangularBeam") -> None:
         if self.concrete.unit_system == "metric":
             V_cmin = 0 * kN
 
-            if self._A_v < self._A_v_min:
+            if self._A_v < self._A_v_min or self._A_v_min == 0 * cm**2 / m:
                 if self._A_s_tension == 0 * cm**2:
                     warnings.warn(
                         "Longitudinal rebar As cannot be zero if A_v is less than A_v_min.",
@@ -93,19 +94,22 @@ def _calculate_concrete_shear_strength_aci(self: "RectangularBeam") -> None:
                 )
         else:
             V_cmin = 0 * kip
-            if self._A_v < self._A_v_min:
+            if self._A_v < self._A_v_min or self._A_v_min == 0 * inch**2 / ft:
                 self._k_c_min = (
                     8
                     * self._lambda_s
                     * self.concrete.lambda_factor
                     * self._rho_w ** (1 / 3)
-                    * math.sqrt(f_c / psi)
+                    * math.sqrt(f_c.to("psi").magnitude)
                     * psi
                     + self._sigma_Nu
                 )
             else:
                 self._k_c_min = max(
-                    2 * self.concrete.lambda_factor * math.sqrt(f_c / psi) * psi
+                    2
+                    * self.concrete.lambda_factor
+                    * math.sqrt(f_c.to("psi").magnitude)
+                    * psi
                     + self._sigma_Nu,
                     8
                     * self.concrete.lambda_factor
@@ -515,7 +519,7 @@ def _minimum_flexural_reinforcement_ratio_ACI_318_19(
 
 def _calculate_flexural_reinforcement_ACI_318_19(
     self: "RectangularBeam", M_u: Quantity, d: float, d_prima: float
-) -> tuple[Quantity, Quantity, Quantity, Quantity, float]:
+) -> tuple[Quantity, Quantity, Quantity, Quantity, float, bool]:
     """
     Calculates the flexural reinforcement for a given factored moment according to ACI 318-19.
 
@@ -537,14 +541,16 @@ def _calculate_flexural_reinforcement_ACI_318_19(
             - A_s_final (Quantity): Final reinforcement area adopted for the tensile zone.
             - A_s_comp (Quantity): Compression reinforcement area (if required).
             - c_d (float): Ratio of the calculated neutral axis depth to the effective depth (c/d).
+            - A_s_bool: Boolean indicating if 4/3*A_s_calc is adopted instead of A_s_min
     """
     concrete_aci = cast("Concrete_ACI_318_19", self.concrete)
     # Extract relevant properties and settings
-    setting_flexural_min_reduction = concrete_aci._flexural_min_reduction
     b = self.width
 
     # Determine minimum and maximum reinforcement areas
-    rho_min = _minimum_flexural_reinforcement_ratio_ACI_318_19(self, M_u)
+    rho_min = _minimum_flexural_reinforcement_ratio_ACI_318_19(
+        self, M_u
+    )  # Mechanical minimum reinforcement ratio
     A_s_min = rho_min * d * b
     rho_max = _maximum_flexural_reinforcement_ratio_ACI_318_19(
         self,
@@ -553,7 +559,6 @@ def _calculate_flexural_reinforcement_ACI_318_19(
 
     # Calculate required reinforcement based on the nominal moment capacity
     R_n = M_u / (concrete_aci._phi_t * b * d**2)
-    # TODO: REVIEW WHAT TO DO WHEN THE VALUE INSIDE THE SQUARE ROOT IS NEGATIVE.
     # Verify if the value under the square root is negative
     sqrt_value = 1 - 2 * R_n / (0.85 * self.concrete.f_c)
     if sqrt_value < 0:
@@ -584,17 +589,43 @@ def _calculate_flexural_reinforcement_ACI_318_19(
 
     c_d = clean_zero(c / d)
 
-    # Adjust the required reinforcement to meet the limits
-    if A_s_calc > A_s_min:
+    A_s_final: Quantity = 0 * cm**2
+
+    A_s_bool = False
+
+    # 1.8‰ of the gross section (custom geometric minimum rule)
+    if self.mode == "beam":
+        A_s_geo_min = (1.8 / (1000)) * self.width * self.height
+    elif self.mode == "slab":
+        A_s_geo_min = (1.8 / (1000)) * self.width * self.height
+
+    if A_s_calc >= A_s_min:
+        # Case 1:
+        # The required steel already exceeds the ACI minimum.
+        # Do not apply the 4/3 rule, as it would increase steel unnecessarily.
         A_s_final = A_s_calc
-    elif 4 * A_s_calc / 3 > A_s_min:
-        A_s_final = A_s_min
     else:
-        A_s_final = (
-            clean_zero(4 * A_s_calc.to("cm**2").magnitude / 3) * cm**2
-            if setting_flexural_min_reduction == "True"
-            else A_s_min
-        )
+        # Case 2:
+        # The required steel is less than the ACI minimum.
+        # Evaluate whether using 4/3 * A_s_calc provides less steel than A_s_min.
+        A_s_4_3 = (4 * A_s_calc) / 3
+
+        if A_s_4_3 < A_s_min:
+            # The 4/3 rule is potentially beneficial → check the geometric minimum
+            if A_s_4_3 >= A_s_geo_min:
+                # 4/3 * A_s_calc satisfies the geometric minimum → adopt it
+                A_s_final = A_s_4_3
+                A_s_bool = True
+            else:
+                # 4/3 * A_s_calc is lower than 1.8‰ of (b·h) → enforce geometric minimum
+                A_s_final = A_s_geo_min
+                # A_s_bool remains False (4/3 rule not effectively used)
+        else:
+            # 4/3 * A_s_calc is not smaller than A_s_min → use the ACI minimum
+            A_s_final = A_s_min
+
+    # Optional cleanup and unit formatting
+    A_s_final = clean_zero(A_s_final.to("cm**2").magnitude) * cm**2
 
     # Determine if compression reinforcement is required
     if A_s_final <= A_s_max:
@@ -628,7 +659,7 @@ def _calculate_flexural_reinforcement_ACI_318_19(
         # use an approximate value to provide an estimate.
         A_s_final = M_u / (concrete_aci._phi_t * 0.9 * d * self.steel_bar.f_y)
 
-    return A_s_min, A_s_max, A_s_final, A_s_comp, c_d
+    return A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool
 
 
 def _determine_nominal_moment_simple_reinf_ACI_318_19(
@@ -857,12 +888,13 @@ def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.Data
             self._A_s_req_bot,
             self._A_s_req_top,
             self._c_d_bot,
+            self._A_s_bool_bot
         ) = _calculate_flexural_reinforcement_ACI_318_19(
-            self, self._M_u_bot, self._d_bot, self._c_mec_top
+            self, self._M_u_bot, self._d_bot, self._c_mec_top,
         )
         self._c_d_top = 0
         # Calculate the design capacity ratio for the bottom side.
-        if self._phi_M_n_bot.to("kN*m").magnitude == 0 * kNm:
+        if self._phi_M_n_bot.to("kN*m").magnitude == 0 :
             self._phi_M_n_bot = 0.01 * kNm
         self._DCRb_bot = (
             self._M_u_bot.to("kN*m").magnitude / self._phi_M_n_bot.to("kN*m").magnitude
@@ -876,12 +908,13 @@ def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.Data
             self._A_s_req_top,
             self._A_s_req_bot,
             self._c_d_top,
+            self._A_s_bool_top
         ) = _calculate_flexural_reinforcement_ACI_318_19(
-            self, abs(self._M_u_top), self._d_top, self._c_mec_bot
+            self, abs(self._M_u_top.to("kN*m").magnitude)*kNm, self._d_top, self._c_mec_bot, 
         )
         self._c_d_bot = 0
         # Calculate the design capacity ratio for the top side.
-        if self._phi_M_n_top.to("kN*m").magnitude == 0 * kNm:
+        if self._phi_M_n_top.to("kN*m").magnitude == 0 :
             self._phi_M_n_top = 0.01 * kNm
         self._DCRb_top = (
             -self._M_u_top.to("kN*m").magnitude / self._phi_M_n_top.to("kN*m").magnitude
@@ -951,6 +984,7 @@ def _design_flexure_ACI_318_19(
             A_s_final_bot_Positive_M,  # tension req. on bottom
             A_s_comp_top,  # compression req. on top from bottom moment
             self._c_d_bot,
+            self._A_s_bool_bot
         ) = _calculate_flexural_reinforcement_ACI_318_19(self, max_M_y_bot, d, d_prima)
 
         # init in case no negative moment branch runs
@@ -966,8 +1000,9 @@ def _design_flexure_ACI_318_19(
                 A_s_final_top_Negative_M,  # tension req. on top
                 A_s_comp_bot,  # compression req. on bottom from top moment
                 self._c_d_top,
+                self._A_s_bool_top
             ) = _calculate_flexural_reinforcement_ACI_318_19(
-                self, abs(max_M_y_top), self.height - d_prima, rec_mec
+                self, abs(max_M_y_top.to("kN*m").magnitude)*kNm, self.height - d_prima, rec_mec
             )
 
         # Governing areas on each face (tension on the face vs. opposite-face compression)
@@ -978,12 +1013,12 @@ def _design_flexure_ACI_318_19(
         self._A_s_top = A_req_top
 
         # --- Discrete design for each face (independent first pass) ---------------
-        if A_req_bot > 0 * (cm**2):
+        if A_req_bot >= 0 * (cm**2):
             self.flexure_design_results_bot = _design_longitudinal_for_area(
                 A_req_bot, self._A_s_max_bot, self._c_mec_bot
             )
         self.flexure_design_results_top = None
-        if A_req_top > 0 * (cm**2):
+        if A_req_top >= 0 * (cm**2):
             self.flexure_design_results_top = _design_longitudinal_for_area(
                 A_req_top, self._A_s_max_top, self._c_mec_top
             )
@@ -1318,7 +1353,6 @@ def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
                 "Mechanical bottom cover",
             ],
             "Variable": ["h", "b", "cc", "cm,top", "cm,bot"],
-            # TODO: ver bien tema As de armadura traccionada que podria ser superior o inferior.
             "Value": [
                 self.height.to("cm").magnitude,
                 self.width.to("cm").magnitude,
@@ -1366,15 +1400,31 @@ def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
             self._available_s_bot,
         ]  # Current values to check
 
-        # Generate check marks based on the range conditions
-        checks = [
-            "✔️"
-            if (min_val is None or curr >= min_val)
-            and (max_val is None or curr <= max_val)
-            else "❌"
-            for curr, min_val, max_val in zip(current_values, min_values, max_values)
-        ]
-        self._all_flexure_checks_passed = all(check == "✔️" for check in checks)
+        ARTICLE_STR = "9.6.1.3"
+
+        checks = []
+        for i, (curr, min_val, max_val) in enumerate(zip(current_values, min_values, max_values)):
+            passed = (min_val is None or curr >= min_val) and (max_val is None or curr <= max_val)
+            if passed:
+                checks.append("✔️")
+                continue
+
+            # Detect if fails by min or max
+            failed_min = (min_val is not None) and (curr < min_val)
+
+            if i == 0 and failed_min and getattr(self, "_A_s_bool_top", True):
+                # Position 0 -> _A_s_top vs _A_s_min_top
+                checks.append(ARTICLE_STR)
+            elif i == 2 and failed_min and getattr(self, "_A_s_bool_bot", True):
+                # Position 2 -> _A_s_bot vs _A_s_min_bot
+                checks.append(ARTICLE_STR)
+            else:
+                # Any other failure (includes max or no flags)
+                checks.append("❌")
+
+        self._all_flexure_checks_passed = not any(
+            check in ("❌") for check in checks
+        )
         self._data_min_max_flexure = {
             "Check": [
                 "Min/Max As rebar top",

@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from docx.oxml import parse_xml
 from docx.oxml.ns import nsdecls
 from pandas.io.formats.style import Styler
+from io import BytesIO
 
 CUSTOM_COLORS = {
     "blue": "#1f77b4",  # Default Matplotlib blue
@@ -117,7 +118,7 @@ class Formatter:
 
     def color_DCR_df(
         self, df: pd.DataFrame, DCR_columns: list
-    ) -> Styler:  # Use Styler directly now
+    ) -> pd.io.formats.style.Styler:  # Use Styler directly now
         """
         Apply color styling to specified DCR-related columns in the DataFrame.
 
@@ -125,7 +126,7 @@ class Formatter:
         :param DCR_columns: List of column names to apply the DCR styling to.
         :return: A styled DataFrame with colored DCR values.
         """
-        return df.style.applymap(self.apply_DCR_style, subset=DCR_columns).format(
+        return df.style.map(self.apply_DCR_style, subset=DCR_columns).format(
             precision=2
         )
 
@@ -373,45 +374,65 @@ class DocumentBuilder:
             for idx, width in enumerate(column_widths):
                 row.cells[idx].width = width
 
-    def add_table(self, df: pd.DataFrame, column_widths: List[Cm]) -> None:
+    def add_table(
+        self,
+        df: pd.DataFrame,
+        column_widths: List[Cm],
+        font_size: Optional[float] = 9,
+    ) -> None:
         """
         Adds a table to the document, populated with data from a DataFrame.
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         df : pd.DataFrame
             The DataFrame containing the data for the table.
-
         column_widths : List[Cm]
             List of column widths for the table.
+        font_size : float, optional
+            Font size (in points) for table text. Default is 10 pt.
 
-        Returns:
-        --------
-        Table
+        Returns
+        -------
+        docx.table.Table
+            The created table object.
         """
-        # Initialize the table with the DataFrame dimensions
+        from docx.shared import Pt
+
+        # --- Create and style table ---
         table = self.doc.add_table(rows=df.shape[0] + 1, cols=df.shape[1])
-        # Apply table style
         table.style = "Light Shading"
         self.set_col_widths(table, column_widths)
-        # Populate column headers
+
+        # --- Header row ---
         for j in range(df.shape[1]):
             table.cell(0, j).text = str(df.columns[j])
-        # Populate table data
+
+        # --- Data rows ---
         for i in range(df.shape[0]):
             for j in range(df.shape[1]):
-                cell = df.iat[i, j]
-                table.cell(i + 1, j).text = str(cell)
-        # Customize style for first column
-        for row in table.rows[1:]:
-            cell = row.cells[0]
-            run = cell.paragraphs[0].runs[0]
-            run.font.bold = False
-        # Add a spacer paragraph after the table
-        spacer = self.doc.add_paragraph()
-        spacer.paragraph_format.space_after = Pt(0)  # Remove space after the paragraph
+                value = df.iat[i, j]
+                table.cell(i + 1, j).text = str(value)
 
-        return None
+        # --- Format all text ---
+        if font_size is not None:
+            for row in table.rows:
+                for cell in row.cells:
+                    for paragraph in cell.paragraphs:
+                        for run in paragraph.runs:
+                            run.font.size = Pt(font_size)
+
+        # --- First column not bold ---
+        for row in table.rows[1:]:
+            first_cell = row.cells[0]
+            for run in first_cell.paragraphs[0].runs:
+                run.font.bold = False
+
+        # --- Add spacer paragraph ---
+        spacer = self.doc.add_paragraph()
+        spacer.paragraph_format.space_after = Pt(0)
+
+        return table
 
     def add_table_data(self, df: pd.DataFrame) -> None:
         column_widths = [Cm(12), Cm(2), Cm(2), Cm(2)]
@@ -455,6 +476,52 @@ class DocumentBuilder:
     def add_table_min_max(self, df: pd.DataFrame) -> None:
         column_widths = [Cm(10), Cm(2), Cm(2), Cm(2), Cm(2), Cm(1)]
         self.add_table(df, column_widths)
+
+    def add_figure(self, fig: "plt.Figure", width: float = 16) -> None:
+        """
+        Inserts a matplotlib Figure into the Word document.
+
+        Parameters
+        ----------
+        fig : matplotlib.figure.Figure
+            The figure to insert.
+        width : float
+            Width in centimeters (default 12 cm). Height auto-scales.
+        """
+        buf = BytesIO()
+        fig.savefig(buf, format="png", dpi=200, bbox_inches="tight")
+        plt.close(fig)
+        buf.seek(0)
+        self.doc.add_picture(buf, width=Cm(width))
+        buf.close()
+
+        # small space after
+        spacer = self.doc.add_paragraph()
+        spacer.paragraph_format.space_after = Pt(0)
+
+    def add_image(self, image_path: str, width: Optional[Cm] = None) -> None:
+        """
+        Insert an external image into the document.
+
+        Parameters
+        ----------
+        image_path : str
+            Absolute or relative path to the image file.
+        width : docx.shared.Cm, optional
+            Target width. Height scales to keep aspect ratio.
+        """
+        # paragraph container so image is not glued to previous element
+        paragraph = self.doc.add_paragraph()
+        run = paragraph.add_run()
+
+        if width is not None:
+            run.add_picture(image_path, width=width)
+        else:
+            run.add_picture(image_path)
+
+        # small space after
+        spacer = self.doc.add_paragraph()
+        spacer.paragraph_format.space_after = Pt(0)
 
     def save(self, filename: str) -> None:
         """
