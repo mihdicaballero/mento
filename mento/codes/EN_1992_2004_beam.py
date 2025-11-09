@@ -38,7 +38,6 @@ def _initialize_variables_EN_1992_2004(self: "RectangularBeam", force: Forces) -
 # SHEAR CHECK AND DESIGN
 ##########################################################
 
-
 def _initialize_shear_variables_EN_1992_2004(
     self: "RectangularBeam", force: Forces
 ) -> None:
@@ -83,10 +82,7 @@ def _initialize_shear_variables_EN_1992_2004(
         self._k_value = min(1 + math.sqrt(200 / self._d_shear.to("mm").magnitude), 2)
 
         # Positive of compression
-        self._f_cd = self.concrete.alpha_cc * self.concrete.f_ck / self.concrete.gamma_c
-        #TODO REVISAR SI EL ALPHA QUE VA ACA ES EL DEL CONCRETE O EL DE CORTE. YO MODIFIQUE PORQUE HABIA UN ERROR EN ROJO
         self._sigma_cp = min(self._N_Ed / self.A_x, 0.2 * self._f_cd)
-
 
 def _shear_without_rebar_EN_1992_2004(self: "RectangularBeam") -> Quantity:
     self._stirrup_d_b = 0 * mm
@@ -376,9 +372,9 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
 
         # Relative depth of compression zone at yielding of bottom reinforcement
         concrete_en = cast("Concrete_EN_1992_2004", self.concrete)
-        xi_eff=((self.concrete._delta - self.concrete._k_1)/ self.concrete._k_2)
-        xi_eff_lim = lambda_ * 0.45
-        #TODO Falta verificar que xi_eff sea menor que xi_eff_lim
+        xi_eff_lim_1=((self.concrete._delta - self.concrete._k_1)/ self.concrete._k_2)
+        xi_eff_lim_2 = lambda_ * 0.45 # Condición de ductilidad
+        xi_eff_lim=min(xi_eff_lim_1, xi_eff_lim_2)
         
         debug(f"Lambda:{lambda_}")
         debug(f"El xi_eff_lim:{xi_eff_lim}")
