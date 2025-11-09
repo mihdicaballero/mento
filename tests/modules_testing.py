@@ -225,7 +225,8 @@ def shear_CIRSOC_201_2025() -> None:
 #######################################################################################
 
 
-def flexure_ACI_318_19_imperial() -> None:
+def check_flexure_ACI_318_19_imperial() -> None:
+    clear_console()
     concrete = Concrete_ACI_318_19(name="C4", f_c=4000 * psi)
     steelBar = SteelBar(name="ADN 420", f_y=60 * ksi)
     section = RectangularBeam(
@@ -236,25 +237,28 @@ def flexure_ACI_318_19_imperial() -> None:
         height=24 * inch,
         label="Test Rectangular Beam",
     )
+    debug(section.settings)
     section.set_longitudinal_rebar_bot(
         n1=2,
         d_b1=1.41 * inch,
         n2=0,
-        d_b2=1.128 * inch,
+        d_b2=0 * inch,
         n3=2,
         d_b3=1.27 * inch,
         n4=0,
-        d_b4=1 * inch,
+        d_b4=0 * inch,
     )
+    section.set_transverse_rebar(n_stirrups=1, d_b=(3/8) *inch, s_l=6 *inch)
+    debug(section._d_b1_b, section._d_b3_b)
     section.set_longitudinal_rebar_top(
         n1=2,
         d_b1=0.75 * inch,
         n2=0,
-        d_b2=1.128 * inch,
+        d_b2=0 * inch,
         n3=0,
         d_b3=1 * inch,
         n4=0,
-        d_b4=1 * inch,
+        d_b4=0 * inch,
     )
 
     f = Forces(label="Test_01", M_y=400 * kip * ft, V_z=10 * kip)
@@ -309,7 +313,7 @@ def flexure_ACI_318_19_metric_slab() -> None:
     slab.flexure_results_detailed()
 
 
-def flexure_EN_1992_2004_TEST_01() -> None:
+def check_flexure_EN_1992_2004_TEST_01() -> None:
     clear_console()
     concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
     steelBar = SteelBar(name="B500S", f_y=500 * MPa)
@@ -348,7 +352,7 @@ def flexure_EN_1992_2004_TEST_01() -> None:
     print(results)
     debug(results.iloc[1]["M_Rd"].to(kNm).magnitude )
 
-def flexure_EN_1992_2004_TEST_02() -> None:
+def check_flexure_EN_1992_2004_TEST_02() -> None:
     clear_console()
     concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
     steelBar = SteelBar(name="B500S", f_y=500 * MPa)
@@ -387,7 +391,7 @@ def flexure_EN_1992_2004_TEST_02() -> None:
     print(results)
     debug(results.iloc[1]["M_Rd"].to(kNm).magnitude )
 
-def flexure_EN_1992_2004_TEST_04() -> None:
+def check_flexure_EN_1992_2004_TEST_04() -> None:
     clear_console()
     concrete = Concrete_EN_1992_2004(name="C60", f_c=60 * MPa)
     steelBar = SteelBar(name="B400S", f_y=400 * MPa)
@@ -418,30 +422,30 @@ def flexure_EN_1992_2004_TEST_04() -> None:
     print(results)
     debug(results.iloc[1]["M_Rd"].to(kNm).magnitude )
 
-
-
-def flexure_design_test() -> None:
-    # clear_console()
-    concrete = Concrete_ACI_318_19(name="C25", f_c=25 * MPa)
-    steelBar = SteelBar(name="ADN 420", f_y=420 * MPa)
-    beam = RectangularBeam(
-        label="101",
-        concrete=concrete,
-        steel_bar=steelBar,
-        c_c=2.5*cm,
-        width=15 * cm,
-        height=50 * cm
-    )
+def design_flexure_EN_1992_2004_test_01() -> None:
+    clear_console()
+    concrete = Concrete_EN_1992_2004(name="C60", f_c=60 * MPa)
+    steelBar = SteelBar(name="B400S", f_y=400 * MPa)
     f1 = Forces(label="C1", M_y=20 * kNm)
     f2 = Forces(label="C2", M_y=-20 * kNm)
-    forces = [f1, f2]
-    results = beam.design_flexure(forces)
+    f3 = Forces(label="C3", M_y=-25 * kNm)
+    f4 = Forces(label="C4", M_y=150 * kNm)
+    f5 = Forces(label="C5", M_y=120 * kNm)
+    f6 = Forces(label="C6", M_y=-28 * kNm)
+    BEAM_TEST_DESIGN_FLEXURE_01 = RectangularBeam(
+        label="test 01",
+        concrete=concrete,
+        steel_bar=steelBar,
+        width=30 * cm,
+        height=50 * cm,
+        c_c=3 * cm,
+    )
+    forces = [f1, f2, f3, f4, f5, f6]
+    results = BEAM_TEST_DESIGN_FLEXURE_01.design_flexure(forces)
     # print(beam.flexure_design_results_bot,'\n', beam.flexure_design_results_top)
     print(results)
-    # beam.flexure_results_detailed()
 
-
-def flexure_design_test_calcpad_example() -> None:
+def design_flexure_ACI_318_test_01() -> None:
     concrete = Concrete_ACI_318_19(name="fc 4000", f_c=4000 * psi)
     steelBar = SteelBar(name="fy 60000", f_y=60 * ksi)
     beam = RectangularBeam(
@@ -453,18 +457,13 @@ def flexure_design_test_calcpad_example() -> None:
         height=24 * inch
     )
 
-    # beam.set_longitudinal_rebar_bot(n1=2,d_b1=1.375*inch, n3=2,d_b3=1.27*inch)
-    # beam.set_longitudinal_rebar_top(n1=2,d_b1=1.375*inch, n3=2,d_b3=1.27*inch)
-
-    f = Forces(label="Test_01", V_z=40 * kip, M_y=400 * kip * ft)
-    f2 = Forces(label="Test_01", V_z=100 * kip, M_y=-400 * kip * ft)
-    forces = [f, f2]
+    f1 = Forces(label="Test_01", V_z=40 * kip, M_y=400 * kip * ft)
+    f2 = Forces(label="Test_02", V_z=100 * kip, M_y=-400 * kip * ft)
+    forces = [f1, f2]
 
     flexure_results = beam.design_flexure(forces)
     print(flexure_results)
     
-
-
 def flexure_design_test_EN() -> None:
     #TODO Sale mal el DCR
     concrete = Concrete_EN_1992_2004(name="H25", f_c=25 * MPa)
@@ -484,8 +483,6 @@ def flexure_design_test_EN() -> None:
 
     flexure_results = beam.design_flexure(forces)
     print(flexure_results)
-
-
 
 def flexure_check_test() -> None:
     clear_console()
@@ -720,13 +717,14 @@ if __name__ == "__main__":
     # shear_EN_1992()
     # shear_ACI_318_19_imperial()
     # shear_ACI_318_19_slab()
-    #flexure_ACI_318_19_metric_slab()
+    # flexure_ACI_318_19_metric_slab()
     # shear_CIRSOC_201_2025()
-    # flexure_ACI_318_19_imperial()
-    # flexure_EN_1992_2004_TEST_01()
-    # flexure_EN_1992_2004_TEST_02()
-    flexure_EN_1992_2004_TEST_04()
-    # flexure_ACI_318_19_metric()
+    # check_flexure_ACI_318_19_imperial()
+    # check_flexure_EN_1992_2004_TEST_01()
+    # check_flexure_EN_1992_2004_TEST_02()
+    # check_flexure_EN_1992_2004_TEST_04()
+    design_flexure_EN_1992_2004_test_01()
+    design_flexure_ACI_318_test_01()
     # rebar()
     # summary()
     # batch_test_beam_plots()

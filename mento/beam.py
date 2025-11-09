@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from IPython.display import Markdown, display
 from typing import Optional, Dict
 import matplotlib.pyplot as plt
@@ -10,7 +10,6 @@ from pandas import DataFrame
 import math
 import warnings
 from importlib.metadata import version
-from devtools import debug
 
 from mento.rectangular import RectangularSection
 from mento.material import (
@@ -95,10 +94,8 @@ class RectangularBeam(RectangularSection):
         supporting multiple design codes and detailed reporting.
     """
 
-    settings: BeamSettings = field(
-        default_factory=BeamSettings
-    )  # allow user to pass settings
-
+    settings: Optional[BeamSettings] = None
+    
     def __post_init__(self) -> None:
         super().__post_init__()  # Call parent attributes
         if not self.settings:
@@ -481,12 +478,10 @@ class RectangularBeam(RectangularSection):
             + self._d_b4_b / 2
         )
         # Calculate the total area of each layer
-        area_1_b = (
-            self._n1_b * self._d_b1_b**2 * np.pi / 4
-        )  # Area proportional to number of bars and their diameter
-        area_2_b = self._n2_b * self._d_b2_b**2 * np.pi / 4
-        area_3_b = self._n3_b * self._d_b3_b**2 * np.pi / 4
-        area_4_b = self._n4_b * self._d_b4_b**2 * np.pi / 4
+        area_1_b = self._n1_b * self._d_b1_b**2 * np.pi / 4.0
+        area_2_b = self._n2_b * self._d_b2_b**2 * np.pi / 4.0
+        area_3_b = self._n3_b * self._d_b3_b**2 * np.pi / 4.0
+        area_4_b = self._n4_b * self._d_b4_b**2 * np.pi / 4.0
 
         # Calculate the centroid as a weighted average
         total_area_b = area_1_b + area_2_b + area_3_b + area_4_b
@@ -496,7 +491,6 @@ class RectangularBeam(RectangularSection):
         self._bot_rebar_centroid = (
             area_1_b * y1_b + area_2_b * y2_b + area_3_b * y3_b + area_4_b * y4_b
         ) / total_area_b
-
         # TOP BARS CENTROID
         # Calculate the vertical positions of the bar layers
         y1_t = self._d_b1_t / 2
@@ -527,7 +521,7 @@ class RectangularBeam(RectangularSection):
 
         self._top_rebar_centroid = (
             area_1_t * y1_t + area_2_t * y2_t + area_3_t * y3_t + area_4_t * y4_t
-        ) / total_area_t
+        ) / total_area_t       
 
     def _update_longitudinal_rebar_attributes(self) -> None:
         """Recalculate attributes dependent on rebar configuration for both top and bottom reinforcing."""
@@ -580,18 +574,15 @@ class RectangularBeam(RectangularSection):
         ):
             _design_flexure_ACI_318_19(self, max_M_y_bot, max_M_y_top)
         elif (self.concrete.design_code == "EN 1992-2004"):
-            debug("ESTOY POR ENTRAR EN _design_flexure_EN_1992_2004")
             _design_flexure_EN_1992_2004(self, max_M_y_bot, max_M_y_top)
         else:
             raise ValueError(
                 f"Longitudinal design method not implemented "
                 f"for concrete type: {type(self.concrete).__name__}"
             )
-        print(self._d_b1_t)
 
         # Check flexural capacity for all forces with the assigned reinforcement
         all_results = self.check_flexure(forces)
-        print(self._d_b1_t)
         return all_results
 
     def check_flexure(self, forces: list[Forces]) -> DataFrame:
@@ -818,7 +809,12 @@ class RectangularBeam(RectangularSection):
             )
 
     def _get_units_row_flexure(self) -> pd.DataFrame:
-        return pd.DataFrame(
+        #TODO: Add imperial units row output
+        if (
+                self.concrete.design_code == "ACI 318-19"
+                or self.concrete.design_code == "CIRSOC 201-25"
+            ):
+            units_row = pd.DataFrame(
             [
                 {
                     "Label": "",
@@ -836,6 +832,31 @@ class RectangularBeam(RectangularSection):
                 }
             ]
         )
+        elif self.concrete.design_code=="EN 1992-2004":
+            units_row = pd.DataFrame(
+            [
+                {
+                    "Label": "",
+                    "Comb.": "",
+                    "Position": "",
+                    "As,min": "cm²",
+                    "As,req top": "cm²",
+                    "As,req bot": "cm²",
+                    "As": "cm²",
+                    # "c/d": "",  # Uncomment if you include this field later
+                    "MEd": "kNm",
+                    "MRd": "kNm",
+                    "MEd≤MRd": "",
+                    "DCR": "",
+                }
+            ]
+        )
+        else:
+            raise ValueError(
+                f"Flexure design method not implemented for concrete type: {type(self.concrete).__name__}"
+            )  # noqa: E501
+        
+        return units_row
 
     ##########################################################
     # RESULTS

@@ -877,7 +877,7 @@ def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.Data
         )
         self._c_d_top = 0
         # Calculate the design capacity ratio for the bottom side.
-        if self._phi_M_n_bot.to("kN*m").magnitude == 0 * kNm:
+        if self._phi_M_n_bot.to("kN*m").magnitude == 0 :
             self._phi_M_n_bot = 0.01 * kNm
         self._DCRb_bot = (
             self._M_u_bot.to("kN*m").magnitude / self._phi_M_n_bot.to("kN*m").magnitude
@@ -896,7 +896,7 @@ def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.Data
         )
         self._c_d_bot = 0
         # Calculate the design capacity ratio for the top side.
-        if self._phi_M_n_top.to("kN*m").magnitude == 0 * kNm:
+        if self._phi_M_n_top.to("kN*m").magnitude == 0 :
             self._phi_M_n_top = 0.01 * kNm
         self._DCRb_top = (
             -self._M_u_top.to("kN*m").magnitude / self._phi_M_n_top.to("kN*m").magnitude

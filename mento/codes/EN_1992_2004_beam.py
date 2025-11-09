@@ -354,9 +354,6 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
     """
     Calculate the required top and bottom reinforcement areas for bending.
     """
-    debug("INVOCARON A LA FUNCION _calculate_flexural_reinforcement_EN_1992_2004")
-    debug("M_Ed:", M_Ed)
-    debug("d:", d)
     rho_min, rho_max = _min_max_flexural_reinforcement_ratio_EN_1992_2004(self)
     A_s_min = rho_min * d * self.width
     A_s_max = rho_max * d * self.width  # noqa: F841
@@ -375,29 +372,15 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
         xi_eff_lim_1=((self.concrete._delta - self.concrete._k_1)/ self.concrete._k_2)
         xi_eff_lim_2 = lambda_ * 0.45 # Condición de ductilidad
         xi_eff_lim=min(xi_eff_lim_1, xi_eff_lim_2)
-        
-        debug(f"Lambda:{lambda_}")
-        debug(f"El xi_eff_lim:{xi_eff_lim}")
-
         # Compression zone depth limit
         x_eff_lim = xi_eff_lim * d
-        debug(f"El x_eff_lim:{x_eff_lim}")
-
         # Limit moment for compressive reinforcement
         self._f_cd = self.concrete._alpha_cc * self.concrete.f_ck / self.concrete.gamma_c
-        debug(x_eff_lim.to(cm))
-        debug(d.to(cm))
-        debug(self.width.to(cm))        
-        debug(self._f_cd.to(MPa))
-        debug(eta)
 
         M_lim = eta * self._f_cd * self.width * x_eff_lim * (d - 0.5 * x_eff_lim)
-        debug(M_lim.to(kNm))
 
         # Check if compressive reinforcement is required
         if M_Ed <= M_lim:
-            debug("M_Ed<=M_lim")
-            debug("NO SE REQUIERE ARMADO DE COMPRESION")
             # No compressive reinforcement required
             # Relative design bending moment
             K_value = (
@@ -405,36 +388,24 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
                 .to("dimensionless")
                 .magnitude
             )
-            debug("d: ",d)
-            debug("f_cd: " , self._f_cd)
-            debug("K: " , K_value)
+
             # Compression zone depth
             x_eff = d * (1 - math.sqrt(1 - 2 * K_value))
-            debug("x_eff: " , x_eff)
 
             # Area of required tensile reinforcement
-            # TODO ACA NO SE BIEN QUE ES EL ETA, VER QUE EL CALCPAD LO HACE DISTINTO ,CON EL BRAZO DE PALANCA.
             z=d-0.5*lambda_*x_eff
-            debug("z: ",z)
             A_s1=M_Ed/(z*f_yd)
-            debug("A_s1:", A_s1.to(cm**2))
             # Ensure the area meets the minimum requirement
             A_s1 = max(A_s1, A_s_min)
-            debug("A_s1:", A_s1.to(cm**2))
             # No compressive reinforcement required
             A_s2 = 0 * cm**2
 
         else:
-            debug("SE REQUIERE ARMADO DE COMPRESION")
             # Compressive reinforcement is required
 
             # Limit tensile reinforcement area
             z=d - 0.5 *lambda_* x_eff_lim
-            A_s1_lim = (M_lim / (z * f_yd)).to("cm^2")
-            debug(f"El A_s1_lim rd: {A_s1_lim}")
-            
-
-
+            A_s1_lim = (M_lim / (z * f_yd)).to("cm^2")      
 
             # Compression zone depth with plastic limit (EC2 §5.5)
             if self.concrete._f_ck <= 50 * MPa:
@@ -452,14 +423,11 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
 
             # Extra moment to take with top reinforcement
             delta_M = M_Ed - M_lim
-            debug(delta_M)
 
             # Lever arm of internal forces for compressive reinforcement
             z_2=d - d_prima
-            debug(z_2)
             # Required compressive reinforcement area
             A_s2 = (delta_M / ((z_2) * f_sd)).to("cm^2")
-            debug(A_s2)
 
             # Required tensile reinforcement area
             A_s1 = max(A_s1_lim + A_s2, A_s_min)
@@ -472,46 +440,23 @@ def _simple_determine_nominal_moment_EN_1992_2004(
 ) -> Quantity:
     
     # Constants and material properties
-    debug("ENTRAMOS EN LA FUNCION _simple_determine_nominal_moment_EN_1992_2004")
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         # For reference see Jimenez Montoya 16 Ed. P 213
         f_yd=self.steel_bar._f_y/self.concrete._gamma_s
         f_cd=self.concrete._alpha_cc * self.concrete.f_ck / self.concrete.gamma_c
         b=self.width
-        debug(A_s)
-        debug(A_s_prime)
         omega_1=A_s*f_yd/(b*d*f_cd) # Cuantia traccionada
         omega_2=A_s_prime/(b*d)*f_yd/f_cd # Cuantia comprimida
-        debug(omega_1)
-        debug(omega_2)
-        debug(b)
-        debug(f_cd)
-        debug(f_yd)
         if (A_s_prime.to(cm**2).magnitude>=A_s.to(cm**2).magnitude):
-            debug("VINE POR EL CAMINO 1")
             z=d-d_prime # Lever arm of internal forces
-            debug(z)
             M_Rd=A_s*f_yd*z
 
         elif (omega_1-omega_2 <= 0.36):
-            debug("VINE POR EL CAMINO 2")
             A_tensioned=A_s-A_s_prime
             M_omega_1_omega_2=A_tensioned*f_yd*(d-0.5*self.concrete._lambda_factor()*A_tensioned*f_yd/(f_cd*b))
-            debug(f"d: {d.to(cm)}")
-            debug(f"A_tensioned: {A_tensioned.to(cm**2)}")
-            debug(f"f_yd: {f_yd.to(MPa)}")
-            debug(f"self.concrete._lambda_factor: {self.concrete._lambda_factor()}")
-            debug(f"f_cd: {f_cd.to(MPa)}")
-            debug(f"b: {b.to(cm)}")
-            debug(f"M_omega_1_omega_2: {M_omega_1_omega_2.to(kNm)}")
             M_Rd=M_omega_1_omega_2+A_s_prime*f_yd*(d-d_prime)
         else:
-            debug("VINE POR EL CAMINO 3")
-            debug("omega_1-omega_2 > 0.36")
             M_Rd=0.295*f_cd*b*d**2+A_s_prime*f_yd*(d-d_prime)
-            debug(f"EL MRD ME DIO {M_Rd}")
-    debug(M_Rd.to(kNm))
-    debug("SALIMOS DE _simple_determine_nominal_moment_EN_1992_2004")
     return M_Rd
 
 def _determine_nominal_moment_EN_1992_2004(
@@ -532,7 +477,6 @@ def _determine_nominal_moment_EN_1992_2004(
     """
     # Calculate minimum and maximum reinforcement ratios
     [rho_min, rho_max] = _min_max_flexural_reinforcement_ratio_EN_1992_2004(self)
-    debug("ESTAMOS EN LA FUNCION _determine_nominal_moment_EN_1992_2004")
 
     # For positive moments (tension in the bottom), set minimum reinforcement accordingly.
     if force._M_y > 0 * kNm:
@@ -545,20 +489,12 @@ def _determine_nominal_moment_EN_1992_2004(
     # Calculate minimum and maximum bottom reinforcement areas
     self._A_s_min_bot = rho_min_bot * self._d_bot * self.width
     self._A_s_max_bot = rho_max * self._d_bot * self.width
-    debug(self._A_s_min_bot)
-    debug(self._A_s_max_bot)
     # Determine the nominal moment for positive moments
     self._M_Rd_bot = _simple_determine_nominal_moment_EN_1992_2004(self, self._A_s_bot, self._d_bot, self._A_s_top, self._c_mec_top)
-    debug(self._M_Rd_bot)
     # Determine capacity for negative moment (tension at the top)
     self._A_s_min_top = rho_min_top * self._d_top * self.width
     self._A_s_max_top = rho_max * self._d_top * self.width
-    debug(self._A_s_min_top)
-    debug(self._A_s_max_top)
     self._M_Rd_top =_simple_determine_nominal_moment_EN_1992_2004(self, self._A_s_top, self._d_top, self._A_s_bot, self._c_mec_bot)
-    debug(self._M_Rd_top)
-
-    debug("SALIMOS DE _determine_nominal_moment_EN_1992_2004")
     return None
 
 def _design_flexure_EN_1992_2004(
@@ -605,7 +541,7 @@ def _design_flexure_EN_1992_2004(
             # Design bottom reinforcement
             section_rebar_bot = Rebar(self)
             self.flexure_design_results_bot = (
-                section_rebar_bot.longitudinal_rebar_ACI_318_19(self._A_s_bot)
+                section_rebar_bot.longitudinal_rebar_EN_1992_2004(self._A_s_bot)
             )
             best_design = section_rebar_bot.longitudinal_rebar_design
             # Extract bar information
@@ -748,7 +684,6 @@ def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> pd.Da
     self._rho_l_top = self._A_s_bot / (self._d_top * self.width)
 
     # Compile the design results into a dictionary.
-    #TODO HAY QUE ARMAR EL COMPILE RESULTS DE EN
     results = _compile_results_EN_1992_2004_flexure_metric(self, force)
 
     # Initialize any additional dictionaries required for ACI 318-19 flexural checks.
@@ -763,33 +698,33 @@ def _compile_results_EN_1992_2004_flexure_metric(
     # Create dictionaries for bottom and top rows
     if self._M_Ed >= 0:
         result = {
-            "Section Label": self.label,
-            "Load Combo": force.label,
+            "Label": self.label,
+            "Comb.": force.label,
             "Position": "Bottom",
-            "As,min": self._A_s_min_bot.to("cm ** 2"),
-            "As,req top": self._A_s_req_top.to("cm ** 2"),
-            "As,req bot": self._A_s_req_bot.to("cm ** 2"),
-            "As": self._A_s_bot.to("cm ** 2"),
+            "As,min": round(self._A_s_min_bot.to("cm ** 2").magnitude, 2),
+            "As,req top": round(self._A_s_req_top.to("cm ** 2").magnitude, 2),
+            "As,req bot": round(self._A_s_req_bot.to("cm ** 2").magnitude, 2),
+            "As": round(self._A_s_bot.to("cm ** 2").magnitude, 2),
             # 'c/d': self._c_d_bot,
-            "M_Ed": self._M_Ed_bot.to("kN*m"),
-            "M_Rd": self._M_Rd_bot.to("kN*m"),
-            "M_Ed<M_Rd": self._M_Ed_bot <= self._M_Rd_bot,
-            "DCR": self._DCRb_bot,
+            "MEd": round(self._M_Ed_bot.to("kN*m").magnitude, 2),
+            "MRd": round(self._M_Rd_bot.to("kN*m").magnitude, 2),
+            "MEd≤MRd": self._M_Ed_bot <= self._M_Rd_bot,
+            "DCR": round(self._DCRb_bot,3),
         }
     else:
         result = {
-            "Section Label": self.label,
-            "Load Combo": force.label,
+            "Label": self.label,
+            "Comb.": force.label,
             "Position": "Top",
-            "As,min": self._A_s_min_top.to("cm ** 2"),
-            "As,req top": self._A_s_req_top.to("cm ** 2"),
-            "As,req bot": self._A_s_req_bot.to("cm ** 2"),
-            "As": self._A_s_top.to("cm ** 2"),
+            "As,min": round(self._A_s_min_top.to("cm ** 2").magnitude, 2),
+            "As,req top": round(self._A_s_req_top.to("cm ** 2").magnitude, 2),
+            "As,req bot": round(self._A_s_req_bot.to("cm ** 2").magnitude, 2),
+            "As": round(self._A_s_top.to("cm ** 2").magnitude, 2),
             # 'c/d': self._c_d_top,
-            "M_Ed": self._M_Ed_top.to("kN*m"),
-            "M_Rd": self._M_Rd_top.to("kN*m"),
-            "M_Ed<M_Rd": -self._M_Ed_top <= self._M_Rd_top,
-            "DCR": self._DCRb_top,
+            "MEd": round(self._M_Ed_top.to("kN*m").magnitude, 2),
+            "MRd": round(self._M_Rd_top.to("kN*m").magnitude, 2),
+            "MEd≤MRd": self._M_Ed_top <= self._M_Rd_top,
+            "DCR": round(self._DCRb_top,3),
         }
     return result
 
@@ -983,7 +918,6 @@ def _initialize_dicts_EN_1992_2004_flexure(self: "RectangularBeam") -> None:
                 "Mechanical bottom cover",
             ],
             "Variable": ["h", "b", "cc", "cm,top", "cm,bot"],
-            # TODO: ver bien tema As de armadura traccionada que podria ser superior o inferior.
             "Value": [
                 self.height.to("cm").magnitude,
                 self.width.to("cm").magnitude,
