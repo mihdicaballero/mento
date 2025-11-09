@@ -9,7 +9,6 @@ import pandas as pd
 from pandas import DataFrame
 import math
 import warnings
-from importlib.metadata import version
 
 from mento.rectangular import RectangularSection
 from mento.material import (
@@ -21,6 +20,7 @@ from mento.units import MPa, mm, inch, kN, m, cm, kNm, dimensionless
 from mento.results import Formatter, TablePrinter, DocumentBuilder, CUSTOM_COLORS
 from mento.forces import Forces
 from mento.settings import BeamSettings
+from mento._version import __version__ as MENTO_VERSION
 
 from mento.codes.EN_1992_2004_beam import (
     _check_shear_EN_1992_2004,
@@ -34,8 +34,6 @@ from mento.codes.ACI_318_19_beam import (
     _check_flexure_ACI_318_19,
     _design_flexure_ACI_318_19,
 )
-
-MENTO_VERSION = version("mento")
 
 
 @dataclass

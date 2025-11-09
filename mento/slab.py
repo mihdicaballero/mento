@@ -1,9 +1,8 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 from dataclasses import dataclass
 import math
 import numpy as np
-import pandas as pd
 from devtools import debug
 
 from mento.beam import RectangularBeam
