@@ -266,6 +266,7 @@ def check_flexure_ACI_318_19_imperial() -> None:
     # section.plot()
     results = node.check_flexure()
     print(results)
+    section.plot()
 
 
 def flexure_ACI_318_19_metric() -> None:
@@ -480,14 +481,15 @@ def flexure_design_test_EN() -> None:
     )
     beam._stirrup_d_b = 6*mm
 
-    f = Forces(label="Test_01", M_y=100 * kNm)
-    forces = [f]
+    f1 = Forces(label="Test_01", V_z=50*kN, M_y=450 * kNm)
+    f2 = Forces(label="Test_01", V_z=150*kN, M_y=-500 * kNm)
+    forces = [f1, f2]
+    beam.design_flexure(forces)
+    beam.design_shear(forces)
+    beam.plot()
 
-    flexure_results = beam.design_flexure(forces)
-    print(flexure_results)
 
 def flexure_check_test() -> None:
-    clear_console()
     concrete = Concrete_ACI_318_19(name="H-25", f_c=25 * MPa)
     steelBar = SteelBar(name="420", f_y=420 * MPa)
 
@@ -499,19 +501,17 @@ def flexure_check_test() -> None:
         width=20 * cm,
         height=60 * cm
     )
-
-
     beam.set_longitudinal_rebar_bot(n1=2, d_b1=12 * mm, n2=1, d_b2=12 * mm)
     beam.set_longitudinal_rebar_top(n1=2, d_b1=16 * mm)
     f1 = Forces(label="D", M_y=0 * kNm, V_z=50 * kN)
     f2 = Forces(label="L", M_y=-100 * kNm)
-    f3 = Forces(label="W", M_y=-50 * kNm)
-    f4 = Forces(label="S", M_y=110 * kNm)
+    f3 = Forces(label="W", M_y=-150 * kNm)
+    f4 = Forces(label="S", M_y=210 * kNm)
     forces = [f1, f2, f3, f4]
     beam.check_flexure(forces)
-
+    beam.plot()
     # beam.check_shear()
-    beam.flexure_results_detailed()
+    # beam.flexure_results_detailed()
     # beam.flexure_results_detailed_doc()
     # beam.shear_results_detailed_doc()
 
@@ -568,7 +568,7 @@ def flexure_ACI_318_19_metric_single(
     fig = plt.figure()  # create a figure handle so we can close later
     plt.close(fig)  # we'll let section.plot() create its own fig
 
-    section.plot(show=False)  # this calls plt.show() in your code currently
+    section.plot()  # this calls plt.show() in your code currently
 
     # Instead of relying on show(), grab current figure and save:
     current_fig = plt.gcf()
@@ -773,13 +773,14 @@ if __name__ == "__main__":
     # shear_CIRSOC_201_2025()
     # shear_EN_1992()
     # flexure_ACI_318_19_metric_slab()
-    # check_flexure_ACI_318_19_imperial()
+    check_flexure_ACI_318_19_imperial()
     # design_flexure_ACI_318_test_01()
+    # flexure_design_test_EN()
     # check_flexure_EN_1992_2004_TEST_01()
     # check_flexure_EN_1992_2004_TEST_02()
     # check_flexure_EN_1992_2004_TEST_04()
     # design_flexure_EN_1992_2004_test_01()
     # rebar()
-    summary_ACI()
+    # summary_ACI()
     # summary_EN_1992()
     # batch_test_beam_plots()

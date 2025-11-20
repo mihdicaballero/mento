@@ -1582,7 +1582,111 @@ class RectangularBeam(RectangularSection):
                 )
                 self._ax.add_patch(circle)
 
-    def plot(self) -> plt.Figure:
+    def _format_rebar_layer_text(
+        self,
+        n1: int,
+        d_b1: Quantity,
+        n2: int,
+        d_b2: Quantity,
+    ) -> str:
+        """
+        Devuelve un string tipo '2Ø16+3Ø10' a partir de n1, d1, n2, d2.
+        Si un grupo tiene n=0, no se incluye.
+        Diámetros en mm.
+        """
+        parts = []
+
+        if n1 > 0:
+            phi1 = d_b1.to("mm").magnitude
+            parts.append(f"{n1}Ø{phi1:.0f}")
+
+        if n2 > 0:
+            phi2 = d_b2.to("mm").magnitude
+            parts.append(f"{n2}Ø{phi2:.0f}")
+
+        return "+".join(parts) if parts else ""
+    
+    def _annotate_rebar_layer_text(
+        self,
+        width_cm: float,
+        height_cm: float,
+        c_c_cm: float,
+        stirrup_d_b_cm: float,
+        layers_spacing_cm: float,
+        n1: int,
+        d_b1: Quantity,
+        n2: int,
+        d_b2: Quantity,
+        max_db: Quantity,
+        is_bottom: bool = True,
+        is_second_layer: bool = False,
+    ) -> None:
+        """
+        Escribe a la derecha de la sección la leyenda de armadura para un layer.
+        Ejemplo: '2Ø16+3Ø10'.
+        """
+
+        text = self._format_rebar_layer_text(n1, d_b1, n2, d_b2)
+        if not text:
+            return  # nada que mostrar
+
+        # misma lógica de y_base que en _plot_rebar_layer
+        y_base = (
+            c_c_cm + stirrup_d_b_cm
+            if is_bottom
+            else height_cm - c_c_cm - stirrup_d_b_cm
+        )
+
+        if is_second_layer:
+            shift = layers_spacing_cm + max_db.to("cm").magnitude
+            y_base = y_base + shift if is_bottom else y_base - shift
+
+        # posición vertical aproximada del centro del layer
+        rep_db_cm = max_db.to("cm").magnitude
+        y_center = y_base + rep_db_cm / 2.0 if is_bottom else y_base - rep_db_cm / 2.0
+
+        # posición horizontal del texto (a la derecha de la sección)
+        x_text = width_cm + 0.1 * width_cm
+
+        self._ax.text( # type: ignore
+            x_text,
+            y_center,
+            text,
+            ha="left",
+            va="center",
+            color=CUSTOM_COLORS["dark_gray"],
+            # fontsize=10,
+        )
+
+    def _annotate_stirrups_text(
+            self,
+            width_cm: float,
+            height_cm: float,
+        ) -> None:
+        """
+        Escribe la leyenda de estribos a la derecha, a media altura.
+        Ejemplo: '1eØ6/20' o '2eØ6/20'.
+        """
+        phi_mm = self._stirrup_d_b.to("mm").magnitude
+        s_cm = self._stirrup_s_l.to("cm").magnitude
+
+        text = f"{self._stirrup_n:.0f}eØ{phi_mm:.0f}/{s_cm:.0f}"
+        print(self._stirrup_n, self._stirrup_s_l)
+
+        x_text = width_cm + 0.1 * width_cm
+        y_text = height_cm / 2.0
+
+        self._ax.text( # type: ignore
+            x_text,
+            y_text,
+            text,
+            ha="left",
+            va="center",
+            color=CUSTOM_COLORS["dark_gray"],
+            # fontsize=10,
+        )
+
+    def plot(self, show: bool = True) -> plt.Figure:
         """
         Plots the rectangular section with a dark gray border, light gray hatch, and dimensions.
         Also plots the stirrup with rounded corners and thickness.
@@ -1770,10 +1874,83 @@ class RectangularBeam(RectangularSection):
             is_second_layer=True,
         )
 
+        
+        ### REBAR TEXT ANNOTATIONS
+        # Bottom, 1st layer
+        self._annotate_rebar_layer_text(
+            width_cm,
+            height_cm,
+            c_c_cm,
+            stirrup_d_b_cm,
+            layers_spacing_cm,
+            self._n1_b,
+            self._d_b1_b,
+            self._n2_b,
+            self._d_b2_b,
+            max_db=self._d_b1_b,
+            is_bottom=True,
+            is_second_layer=False,
+        )
+
+        # Bottom, 2nd layer
+        self._annotate_rebar_layer_text(
+            width_cm,
+            height_cm,
+            c_c_cm,
+            stirrup_d_b_cm,
+            layers_spacing_cm,
+            self._n3_b,
+            self._d_b3_b,
+            self._n4_b,
+            self._d_b4_b,
+            max_db=self._d_b1_b,
+            is_bottom=True,
+            is_second_layer=True,
+        )
+
+        # Top, 1st layer
+        self._annotate_rebar_layer_text(
+            width_cm,
+            height_cm,
+            c_c_cm,
+            stirrup_d_b_cm,
+            layers_spacing_cm,
+            self._n1_t,
+            self._d_b1_t,
+            self._n2_t,
+            self._d_b2_t,
+            max_db=self._d_b1_t,
+            is_bottom=False,
+            is_second_layer=False,
+        )
+
+        # Top, 2nd layer
+        self._annotate_rebar_layer_text(
+            width_cm,
+            height_cm,
+            c_c_cm,
+            stirrup_d_b_cm,
+            layers_spacing_cm,
+            self._n3_t,
+            self._d_b3_t,
+            self._n4_t,
+            self._d_b4_t,
+            max_db=self._d_b1_t,
+            is_bottom=False,
+            is_second_layer=True,
+        )
+
+        # Stirrups text
+        self._annotate_stirrups_text(width_cm, height_cm)
+
         # Store the section figure
         self._fig = fig
 
-        # Close the figure so notebooks don't auto-display it twice
-        plt.close(fig)
+        # # Close the figure so notebooks don't auto-display it twice
+        # plt.close(fig)
+
+        if show:
+            plt.show()
+            return None
 
         return fig
