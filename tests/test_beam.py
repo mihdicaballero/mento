@@ -783,8 +783,8 @@ def test_rectangular_section_plot_components(
     # matplotlib.axes.Axes.annotate returns an Annotation object.
     # Text labels are found in ax.texts
     assert (
-        len(ax.texts) == 4
-    ), "Expected 4 text annotations for dimensions (width, height)."
+        len(ax.texts) == 6
+    ), "Expected 6 text annotations for dimensions (width, height)."
 
     # You could add more specific checks, e.g.:
     # - Check the coordinates of the main rectangle:

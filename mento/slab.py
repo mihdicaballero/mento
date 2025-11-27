@@ -48,11 +48,11 @@ class OneWaySlab(RectangularBeam):
         # Unit system default starter rebar for initial effective height
         # In this case is 0 mm since the slab might not have bottom or top rebar
         if self.concrete.unit_system == "metric":
-            self._n1_b, self._d_b1_b = 2, 0 * mm
-            self._n1_t, self._d_b1_t = 2, 0 * mm
+            self._n1_b, self._d_b1_b = 0, 0 * mm
+            self._n1_t, self._d_b1_t = 0, 0 * mm
         else:
-            self._n1_b, self._d_b1_b = 2, 0 * inch
-            self._n1_t, self._d_b1_t = 2, 0 * inch
+            self._n1_b, self._d_b1_b = 0, 0 * inch
+            self._n1_t, self._d_b1_t = 0, 0 * inch
 
         # Bottom rebar defaults (diameter and spacing)
         self._s_b1_b = 0 * mm
@@ -140,7 +140,7 @@ class OneWaySlab(RectangularBeam):
         # Helper function: Calculate number of bars given spacing and slab width
         def calculate_bars(spacing: Quantity, width: Quantity) -> int:
             if spacing == 0 * mm:
-                return 2  # Default to 2 bars if spacing is zero
+                return 0  # Default to 0 bars if spacing is zero
             # Round up to ensure full bars (e.g., 3.2 bars → 4 bars)
             return int(
                 np.ceil((width.to("cm").magnitude / spacing.to("cm").magnitude))
@@ -171,15 +171,16 @@ def slab_metric() -> None:
     # Set top rebar positions 1
     # slab.set_slab_longitudinal_rebar_top(d_b1=12 * mm, s_b1=15 * cm)
     # debug(
-    #     slab._A_s_bot, slab._A_s_top, slab._available_s_bot, slab._available_s_top
+        # slab._A_s_bot, slab._A_s_top, slab._available_s_bot, slab._available_s_top
     # )  # Debugging output for areas
     # f1 = Forces(label="C1", M_y=80 * kNm, V_z = 50*kN)
     f1 = Forces(label="C1", V_z=50 * kN)
-    f2 = Forces(label="C1", V_z=30 * kN, M_y=116.5 * kNm)
+    f2 = Forces(label="C1", V_z=30 * kN, M_y=86 * kNm)
     node_1 = Node(slab, [f1, f2])
+    # node_1.check_flexure()
     print(node_1.design_flexure())
-    # print(slab._n1_b, slab._d_b1_b, slab._n1_t, slab._d_b1_t)
-    print(slab.flexure_design_results_bot)
+    debug(slab._n1_b, slab._d_b1_b, slab._n1_t, slab._d_b1_t)
+    # print(slab.flexure_design_results_bot)
     # print(node_1.check_flexure())
     # node_1.flexure_results_detailed()
     # print(node_1.check_shear())
@@ -195,7 +196,7 @@ def slab_imperial() -> None:
         label="Slab 01",
         concrete=concrete,
         steel_bar=steelBar,
-        width=12 * inch,
+        width=40 * inch,
         height=7 * inch,
         c_c=0.75 * inch,
     )
@@ -217,7 +218,9 @@ def slab_imperial() -> None:
     # node_1.flexure_results_detailed()
     node_1.check_shear()
     node_1.shear_results_detailed()
+    slab.plot()
 
 
 if __name__ == "__main__":
     slab_metric()
+    # slab_imperial()

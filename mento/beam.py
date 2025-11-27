@@ -1594,13 +1594,31 @@ class RectangularBeam(RectangularSection):
         Si un grupo tiene n=0, no se incluye.
         Diámetros en mm.
         """
-        parts = []
 
-        if n1 > 0:
+        mode = getattr(self, "mode", "beam")
+
+        if mode == "slab":
+            total_bars = n1 + n2
+            if total_bars == 0:
+                return ""
+
+            # Tomar el diámetro "no nulo"
+            if n1 > 0 and d_b1 is not None:
+                phi = d_b1.to("mm").magnitude
+            elif n2 > 0 and d_b2 is not None:
+                phi = d_b2.to("mm").magnitude
+            else:
+                return ""  # por seguridad
+
+            return f"{total_bars}Ø{phi:.0f}"
+
+        parts: list[str] = []
+
+        if n1 > 0 and d_b1 is not None:
             phi1 = d_b1.to("mm").magnitude
             parts.append(f"{n1}Ø{phi1:.0f}")
 
-        if n2 > 0:
+        if n2 > 0 and d_b2 is not None:
             phi2 = d_b2.to("mm").magnitude
             parts.append(f"{n2}Ø{phi2:.0f}")
 
@@ -1667,11 +1685,13 @@ class RectangularBeam(RectangularSection):
         Escribe la leyenda de estribos a la derecha, a media altura.
         Ejemplo: '1eØ6/20' o '2eØ6/20'.
         """
+        if self._stirrup_n == 0:
+            return # nothing to show
+
         phi_mm = self._stirrup_d_b.to("mm").magnitude
         s_cm = self._stirrup_s_l.to("cm").magnitude
 
         text = f"{self._stirrup_n:.0f}eØ{phi_mm:.0f}/{s_cm:.0f}"
-        print(self._stirrup_n, self._stirrup_s_l)
 
         x_text = width_cm + 0.1 * width_cm
         y_text = height_cm / 2.0
