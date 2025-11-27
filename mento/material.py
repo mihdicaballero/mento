@@ -221,26 +221,46 @@ class Concrete_EN_1992_2004(Concrete):
         self.design_code = "EN 1992-2004"
 
         # The f_c passed to Concrete is the f_ck for Eurocode
-        self._delta=0.85
+        self._delta = 0.85
         self._f_ck = self.f_c
         self._f_cm = self._f_ck + 8 * MPa
         self._E_cm = 22000 * (self._f_cm.to("MPa").magnitude / 10) ** 0.3 * MPa
         self._f_ctm = 0.3 * (self._f_ck.to("MPa").magnitude) ** (2 / 3) * MPa
-        self._epsilon_cu1 = (2.8 + 27 * ((98 - self._f_cm.to("MPa").magnitude) / 100) ** 4 if self._f_ck >= 50 * MPa else 3.5) * 1e-3
-        self._epsilon_c2  = (2.0 + 0.085 * ((self._f_ck.to("MPa").magnitude - 50)) ** 0.53 if self._f_ck >= 50 * MPa else 2.0) * 1e-3
-        self._epsilon_cu2 = (2.6 + 35 * ((90 - self._f_ck.to("MPa").magnitude) / 100) ** 4 if self._f_ck >= 50 * MPa else 3.5) * 1e-3
-        self._epsilon_c3  = (1.75 + 0.55 * ((self._f_ck.to("MPa").magnitude - 50) / 40) if self._f_ck >= 50 * MPa else 1.75) * 1e-3
-        self._epsilon_cu3 = (2.6 + 35 * ((90 - self._f_ck.to("MPa").magnitude) / 100) ** 4 if self._f_ck >= 50 * MPa else 3.5) * 1e-3
+        self._epsilon_cu1 = (
+            2.8 + 27 * ((98 - self._f_cm.to("MPa").magnitude) / 100) ** 4
+            if self._f_ck >= 50 * MPa
+            else 3.5
+        ) * 1e-3
+        self._epsilon_c2 = (
+            2.0 + 0.085 * ((self._f_ck.to("MPa").magnitude - 50)) ** 0.53
+            if self._f_ck >= 50 * MPa
+            else 2.0
+        ) * 1e-3
+        self._epsilon_cu2 = (
+            2.6 + 35 * ((90 - self._f_ck.to("MPa").magnitude) / 100) ** 4
+            if self._f_ck >= 50 * MPa
+            else 3.5
+        ) * 1e-3
+        self._epsilon_c3 = (
+            1.75 + 0.55 * ((self._f_ck.to("MPa").magnitude - 50) / 40)
+            if self._f_ck >= 50 * MPa
+            else 1.75
+        ) * 1e-3
+        self._epsilon_cu3 = (
+            2.6 + 35 * ((90 - self._f_ck.to("MPa").magnitude) / 100) ** 4
+            if self._f_ck >= 50 * MPa
+            else 3.5
+        ) * 1e-3
         self._gamma_c = 1.5
         self._gamma_s = 1.15
         self._alpha_cc = self._alpha_cc_calc()
         # Default values for k values EN_1992-1-1 - ART 5.5:
-        self._k_1=0.44
-        self._k_2=1.25*(0.6+0.0014/self._epsilon_cu2)
-        self._k_3=0.54
-        self._k_4=1.25*(0.6+0.0014/self._epsilon_cu2)
-        self._k_5=0.7
-        self._k_6=0.8*self._epsilon_cu2
+        self._k_1 = 0.44
+        self._k_2 = 1.25 * (0.6 + 0.0014 / self._epsilon_cu2)
+        self._k_3 = 0.54
+        self._k_4 = 1.25 * (0.6 + 0.0014 / self._epsilon_cu2)
+        self._k_5 = 0.7
+        self._k_6 = 0.8 * self._epsilon_cu2
 
     def _alpha_cc_calc(self) -> float:
         # Implementation for alpha_cc, as per Eurocode EN 1992-1-1
@@ -249,7 +269,7 @@ class Concrete_EN_1992_2004(Concrete):
         # use of 1.0 is unconservative. For this reason, the UK National Annex recommends a value for
         # αcc of 0.85, as is proposed in the CEB Model Codes.
         return 0.85
-    
+
     def _lambda_factor(self) -> float:
         """
         Calculate the effective compression zone depth factor (λ) as per EN 1992-1-1.
@@ -311,7 +331,7 @@ class Concrete_EN_1992_2004(Concrete):
     @property
     def gamma_c(self) -> float:
         return self._gamma_c
-    
+
     @property
     def gamma_s(self) -> float:
         return self._gamma_s
@@ -353,9 +373,13 @@ class Concrete_EN_1992_2004(Concrete):
 class Steel(Material):
     _f_y: Quantity = field(init=False)
     _density: Quantity = field(default=7850 * kg / m**3)
-    
+
     def __init__(
-        self, name: str, f_y: Quantity, density: Quantity = 7850 * kg / m**3, gamma_s: float = 1.15
+        self,
+        name: str,
+        f_y: Quantity,
+        density: Quantity = 7850 * kg / m**3,
+        gamma_s: float = 1.15,
     ):
         super().__init__(name)
         self._f_y = f_y
@@ -369,7 +393,6 @@ class Steel(Material):
     def density(self) -> Quantity:
         return self._density
 
-    
 
 @dataclass
 class SteelBar(Steel):
