@@ -888,13 +888,16 @@ def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.Data
             self._A_s_req_bot,
             self._A_s_req_top,
             self._c_d_bot,
-            self._A_s_bool_bot
+            self._A_s_bool_bot,
         ) = _calculate_flexural_reinforcement_ACI_318_19(
-            self, self._M_u_bot, self._d_bot, self._c_mec_top,
+            self,
+            self._M_u_bot,
+            self._d_bot,
+            self._c_mec_top,
         )
         self._c_d_top = 0
         # Calculate the design capacity ratio for the bottom side.
-        if self._phi_M_n_bot.to("kN*m").magnitude == 0 :
+        if self._phi_M_n_bot.to("kN*m").magnitude == 0:
             self._phi_M_n_bot = 0.01 * kNm
         self._DCRb_bot = (
             self._M_u_bot.to("kN*m").magnitude / self._phi_M_n_bot.to("kN*m").magnitude
@@ -908,13 +911,16 @@ def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.Data
             self._A_s_req_top,
             self._A_s_req_bot,
             self._c_d_top,
-            self._A_s_bool_top
+            self._A_s_bool_top,
         ) = _calculate_flexural_reinforcement_ACI_318_19(
-            self, abs(self._M_u_top.to("kN*m").magnitude)*kNm, self._d_top, self._c_mec_bot, 
+            self,
+            abs(self._M_u_top.to("kN*m").magnitude) * kNm,
+            self._d_top,
+            self._c_mec_bot,
         )
         self._c_d_bot = 0
         # Calculate the design capacity ratio for the top side.
-        if self._phi_M_n_top.to("kN*m").magnitude == 0 :
+        if self._phi_M_n_top.to("kN*m").magnitude == 0:
             self._phi_M_n_top = 0.01 * kNm
         self._DCRb_top = (
             -self._M_u_top.to("kN*m").magnitude / self._phi_M_n_top.to("kN*m").magnitude
@@ -984,7 +990,7 @@ def _design_flexure_ACI_318_19(
             A_s_final_bot_Positive_M,  # tension req. on bottom
             A_s_comp_top,  # compression req. on top from bottom moment
             self._c_d_bot,
-            self._A_s_bool_bot
+            self._A_s_bool_bot,
         ) = _calculate_flexural_reinforcement_ACI_318_19(self, max_M_y_bot, d, d_prima)
 
         # init in case no negative moment branch runs
@@ -1000,9 +1006,12 @@ def _design_flexure_ACI_318_19(
                 A_s_final_top_Negative_M,  # tension req. on top
                 A_s_comp_bot,  # compression req. on bottom from top moment
                 self._c_d_top,
-                self._A_s_bool_top
+                self._A_s_bool_top,
             ) = _calculate_flexural_reinforcement_ACI_318_19(
-                self, abs(max_M_y_top.to("kN*m").magnitude)*kNm, self.height - d_prima, rec_mec
+                self,
+                abs(max_M_y_top.to("kN*m").magnitude) * kNm,
+                self.height - d_prima,
+                rec_mec,
             )
 
         # Governing areas on each face (tension on the face vs. opposite-face compression)
@@ -1403,8 +1412,12 @@ def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
         ARTICLE_STR = "9.6.1.3"
 
         checks = []
-        for i, (curr, min_val, max_val) in enumerate(zip(current_values, min_values, max_values)):
-            passed = (min_val is None or curr >= min_val) and (max_val is None or curr <= max_val)
+        for i, (curr, min_val, max_val) in enumerate(
+            zip(current_values, min_values, max_values)
+        ):
+            passed = (min_val is None or curr >= min_val) and (
+                max_val is None or curr <= max_val
+            )
             if passed:
                 checks.append("✔️")
                 continue
@@ -1422,9 +1435,7 @@ def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
                 # Any other failure (includes max or no flags)
                 checks.append("❌")
 
-        self._all_flexure_checks_passed = not any(
-            check in ("❌") for check in checks
-        )
+        self._all_flexure_checks_passed = not any(check in ("❌") for check in checks)
         self._data_min_max_flexure = {
             "Check": [
                 "Min/Max As rebar top",

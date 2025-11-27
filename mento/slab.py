@@ -171,7 +171,7 @@ def slab_metric() -> None:
     # Set top rebar positions 1
     # slab.set_slab_longitudinal_rebar_top(d_b1=12 * mm, s_b1=15 * cm)
     # debug(
-        # slab._A_s_bot, slab._A_s_top, slab._available_s_bot, slab._available_s_top
+    # slab._A_s_bot, slab._A_s_top, slab._available_s_bot, slab._available_s_top
     # )  # Debugging output for areas
     # f1 = Forces(label="C1", M_y=80 * kNm, V_z = 50*kN)
     f1 = Forces(label="C1", V_z=50 * kN)

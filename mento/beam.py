@@ -26,7 +26,7 @@ from mento.codes.EN_1992_2004_beam import (
     _check_shear_EN_1992_2004,
     _check_flexure_EN_1992_2004,
     _design_shear_EN_1992_2004,
-    _design_flexure_EN_1992_2004
+    _design_flexure_EN_1992_2004,
 )
 from mento.codes.ACI_318_19_beam import (
     _check_shear_ACI_318_19,
@@ -93,7 +93,7 @@ class RectangularBeam(RectangularSection):
     """
 
     settings: Optional[BeamSettings] = None
-    
+
     def __post_init__(self) -> None:
         super().__post_init__()  # Call parent attributes
         if not self.settings:
@@ -517,7 +517,7 @@ class RectangularBeam(RectangularSection):
 
         self._top_rebar_centroid = (
             area_1_t * y1_t + area_2_t * y2_t + area_3_t * y3_t + area_4_t * y4_t
-        ) / total_area_t       
+        ) / total_area_t
 
     def _update_longitudinal_rebar_attributes(self) -> None:
         """Recalculate attributes dependent on rebar configuration for both top and bottom reinforcing."""
@@ -569,7 +569,7 @@ class RectangularBeam(RectangularSection):
             or self.concrete.design_code == "CIRSOC 201-25"
         ):
             _design_flexure_ACI_318_19(self, max_M_y_bot, max_M_y_top)
-        elif (self.concrete.design_code == "EN 1992-2004"):
+        elif self.concrete.design_code == "EN 1992-2004":
             _design_flexure_EN_1992_2004(self, max_M_y_bot, max_M_y_top)
         else:
             raise ValueError(
@@ -601,8 +601,8 @@ class RectangularBeam(RectangularSection):
                 or self.concrete.design_code == "CIRSOC 201-25"
             ):
                 result = _check_flexure_ACI_318_19(self, force)
-            elif self.concrete.design_code=="EN 1992-2004":
-                 result =  _check_flexure_EN_1992_2004(self, force)
+            elif self.concrete.design_code == "EN 1992-2004":
+                result = _check_flexure_EN_1992_2004(self, force)
             else:
                 raise ValueError(
                     f"Flexure design method not implemented for concrete type: {type(self.concrete).__name__}"
@@ -807,53 +807,53 @@ class RectangularBeam(RectangularSection):
             )
 
     def _get_units_row_flexure(self) -> pd.DataFrame:
-        #TODO: Add imperial units row output
+        # TODO: Add imperial units row output
         if (
-                self.concrete.design_code == "ACI 318-19"
-                or self.concrete.design_code == "CIRSOC 201-25"
-            ):
+            self.concrete.design_code == "ACI 318-19"
+            or self.concrete.design_code == "CIRSOC 201-25"
+        ):
             units_row = pd.DataFrame(
-            [
-                {
-                    "Label": "",
-                    "Comb.": "",
-                    "Position": "",
-                    "As,min": "cm²",
-                    "As,req top": "cm²",
-                    "As,req bot": "cm²",
-                    "As": "cm²",
-                    # "c/d": "",  # Uncomment if you include this field later
-                    "Mu": "kNm",
-                    "ØMn": "kNm",
-                    "Mu≤ØMn": "",
-                    "DCR": "",
-                }
-            ]
-        )
-        elif self.concrete.design_code=="EN 1992-2004":
+                [
+                    {
+                        "Label": "",
+                        "Comb.": "",
+                        "Position": "",
+                        "As,min": "cm²",
+                        "As,req top": "cm²",
+                        "As,req bot": "cm²",
+                        "As": "cm²",
+                        # "c/d": "",  # Uncomment if you include this field later
+                        "Mu": "kNm",
+                        "ØMn": "kNm",
+                        "Mu≤ØMn": "",
+                        "DCR": "",
+                    }
+                ]
+            )
+        elif self.concrete.design_code == "EN 1992-2004":
             units_row = pd.DataFrame(
-            [
-                {
-                    "Label": "",
-                    "Comb.": "",
-                    "Position": "",
-                    "As,min": "cm²",
-                    "As,req top": "cm²",
-                    "As,req bot": "cm²",
-                    "As": "cm²",
-                    # "c/d": "",  # Uncomment if you include this field later
-                    "MEd": "kNm",
-                    "MRd": "kNm",
-                    "MEd≤MRd": "",
-                    "DCR": "",
-                }
-            ]
-        )
+                [
+                    {
+                        "Label": "",
+                        "Comb.": "",
+                        "Position": "",
+                        "As,min": "cm²",
+                        "As,req top": "cm²",
+                        "As,req bot": "cm²",
+                        "As": "cm²",
+                        # "c/d": "",  # Uncomment if you include this field later
+                        "MEd": "kNm",
+                        "MRd": "kNm",
+                        "MEd≤MRd": "",
+                        "DCR": "",
+                    }
+                ]
+            )
         else:
             raise ValueError(
                 f"Flexure design method not implemented for concrete type: {type(self.concrete).__name__}"
             )  # noqa: E501
-        
+
         return units_row
 
     ##########################################################
@@ -1623,7 +1623,7 @@ class RectangularBeam(RectangularSection):
             parts.append(f"{n2}Ø{phi2:.0f}")
 
         return "+".join(parts) if parts else ""
-    
+
     def _annotate_rebar_layer_text(
         self,
         width_cm: float,
@@ -1666,7 +1666,7 @@ class RectangularBeam(RectangularSection):
         # posición horizontal del texto (a la derecha de la sección)
         x_text = width_cm + 0.1 * width_cm
 
-        self._ax.text( # type: ignore
+        self._ax.text(  # type: ignore
             x_text,
             y_center,
             text,
@@ -1677,16 +1677,16 @@ class RectangularBeam(RectangularSection):
         )
 
     def _annotate_stirrups_text(
-            self,
-            width_cm: float,
-            height_cm: float,
-        ) -> None:
+        self,
+        width_cm: float,
+        height_cm: float,
+    ) -> None:
         """
         Escribe la leyenda de estribos a la derecha, a media altura.
         Ejemplo: '1eØ6/20' o '2eØ6/20'.
         """
         if self._stirrup_n == 0:
-            return # nothing to show
+            return  # nothing to show
 
         phi_mm = self._stirrup_d_b.to("mm").magnitude
         s_cm = self._stirrup_s_l.to("cm").magnitude
@@ -1696,7 +1696,7 @@ class RectangularBeam(RectangularSection):
         x_text = width_cm + 0.1 * width_cm
         y_text = height_cm / 2.0
 
-        self._ax.text( # type: ignore
+        self._ax.text(  # type: ignore
             x_text,
             y_text,
             text,
@@ -1706,7 +1706,129 @@ class RectangularBeam(RectangularSection):
             # fontsize=10,
         )
 
-    def plot(self, show: bool = True) -> plt.Figure:
+    def _add_rounded_stirrup(
+        self,
+        x0: float,
+        y0: float,
+        width: float,
+        height: float,
+        db_cm: float,
+        facecolor: str,
+    ) -> None:
+        """
+        Add one closed stirrup with rounded corners and thickness db_cm.
+
+        All dimensions in cm.
+        (x0, y0) is bottom-left of the OUTER stirrup line.
+        """
+        # corner radii (same logic you already have)
+        inner_radius = 4 * db_cm / 2
+        outer_radius = inner_radius + db_cm
+
+        outer = FancyBboxPatch(
+            (x0, y0),
+            width,
+            height,
+            boxstyle=f"Round, pad=0, rounding_size={outer_radius}",
+            edgecolor=CUSTOM_COLORS["dark_blue"],
+            facecolor="white",
+            linewidth=db_cm,  # thickness of the steel
+        )
+        self._ax.add_patch(outer)
+
+        inner = FancyBboxPatch(
+            (x0 + db_cm, y0 + db_cm),
+            width - 2 * db_cm,
+            height - 2 * db_cm,
+            boxstyle=f"Round, pad=0, rounding_size={inner_radius}",
+            edgecolor=CUSTOM_COLORS["dark_blue"],
+            facecolor=facecolor,
+            linewidth=1,
+        )
+        self._ax.add_patch(inner)
+
+    def _plot_stirrups_in_section(
+        self,
+        c_c_cm: float,
+        section_width_cm: float,
+        section_height_cm: float,
+        stirrup_db_cm: float,
+        n_stirrups: int,
+    ) -> None:
+        """
+        Plot 1, 2 or 3 stirrups inside the beam section.
+
+        Rules:
+        - 1 stirrup: full width (current behavior).
+        - 2 stirrups: outer full width, inner with 1/2 width, centered.
+        - 3 stirrups: outer full width, plus 2 inner stirrups whose total
+        occupied width is about 1/4 of the section width (each ~1/8), placed
+        symmetrically left/right.
+        """
+
+        # base geometry (outer stirrup like now)
+        stirrup_width = section_width_cm - 2 * c_c_cm
+        stirrup_height = section_height_cm - 2 * c_c_cm
+
+        # Always draw the outer stirrup
+        self._add_rounded_stirrup(
+            x0=c_c_cm,
+            y0=c_c_cm,
+            width=stirrup_width,
+            height=stirrup_height,
+            db_cm=stirrup_db_cm,
+            facecolor=CUSTOM_COLORS["light_gray"],
+        )
+
+        if n_stirrups <= 1:
+            return
+
+        # Case 2 stirrups: inner one with 1/2 width, centered
+        if n_stirrups == 2:
+            inner_width = 0.5 * stirrup_width
+            x_center = c_c_cm + stirrup_width / 2
+            x0_inner = x_center - inner_width / 2
+
+            self._add_rounded_stirrup(
+                x0=x0_inner,
+                y0=c_c_cm,
+                width=inner_width,
+                height=stirrup_height,
+                db_cm=stirrup_db_cm,
+                facecolor=CUSTOM_COLORS["light_gray"],
+            )
+            return
+
+        # Case 3+ stirrups: outer + 2 small inner ones.
+        # Clamp so it doesn't exceed outer stirrup
+        inner_width = min(0.25 * section_width_cm, 0.4 * stirrup_width)
+
+        # Place inner stirrups roughly at quarter points of the outer stirrup
+        # -> centers at 1/3 and 2/3 of stirrup span
+        x_left_center = c_c_cm + stirrup_width * (1 / 3) - stirrup_db_cm / 2
+        x_right_center = c_c_cm + stirrup_width * (2 / 3) + stirrup_db_cm / 2
+
+        x0_left = x_left_center - inner_width / 2 - stirrup_db_cm / 2
+        x0_right = x_right_center - inner_width / 2 + stirrup_db_cm / 2
+
+        self._add_rounded_stirrup(
+            x0=x0_left,
+            y0=c_c_cm,
+            width=inner_width,
+            height=stirrup_height,
+            db_cm=stirrup_db_cm,
+            facecolor=CUSTOM_COLORS["light_gray"],
+        )
+        self._add_rounded_stirrup(
+            x0=x0_right,
+            y0=c_c_cm,
+            width=inner_width,
+            height=stirrup_height,
+            db_cm=stirrup_db_cm,
+            facecolor=CUSTOM_COLORS["light_gray"],
+        )
+
+    def plot(self) -> plt.Figure:  # type: ignore
         """
         Plots the rectangular section with a dark gray border, light gray hatch, and dimensions.
         Also plots the stirrup with rounded corners and thickness.
@@ -1733,44 +1855,19 @@ class RectangularBeam(RectangularSection):
         )
         self._ax.add_patch(rect)
 
-        # Calculate stirrup dimensions
-        c_c = self.c_c.to("cm").magnitude
-        stirrup_width = self.width.to("cm").magnitude - 2 * c_c
-        stirrup_height = self.height.to("cm").magnitude - 2 * c_c
-        stirrup_thickness = self._stirrup_d_b.to("cm").magnitude
-
         if self.mode == "beam":
             db = self._stirrup_d_b.to("cm").magnitude  # bar diameter Ø
 
-            inner_radius = 4 * db / 2  # inner corner radius
-            outer_radius = inner_radius + db  # outer corner radius
+            # Cap at 3 for drawing (you can show 1, 2, or 3)
+            n_stirrups = max(1, min(3, self._stirrup_n))
 
-            # Create the outer rounded rectangle for the stirrup
-            outer_rounded_rect = FancyBboxPatch(
-                (c_c, c_c),  # Bottom-left corner
-                stirrup_width,  # Width
-                stirrup_height,  # Height
-                boxstyle=f"Round, pad=0, rounding_size={outer_radius}",  # Rounded corners
-                edgecolor=CUSTOM_COLORS["dark_blue"],
-                facecolor="white",
-                linewidth=1,
+            self._plot_stirrups_in_section(
+                c_c_cm=c_c_cm,
+                section_width_cm=width_cm,
+                section_height_cm=height_cm,
+                stirrup_db_cm=db,
+                n_stirrups=n_stirrups,
             )
-            self._ax.add_patch(outer_rounded_rect)
-
-            # Create the inner rounded rectangle for the stirrup (offset by thickness)
-            inner_rounded_rect = FancyBboxPatch(
-                (
-                    c_c + stirrup_thickness,
-                    c_c + stirrup_thickness,
-                ),  # Bottom-left corner
-                stirrup_width - 2 * stirrup_thickness,  # Width
-                stirrup_height - 2 * stirrup_thickness,  # Height
-                boxstyle=f"Round, pad=0, rounding_size={inner_radius}",  # Rounded corners
-                edgecolor=CUSTOM_COLORS["dark_blue"],
-                facecolor=CUSTOM_COLORS["light_gray"],
-                linewidth=1,
-            )
-            self._ax.add_patch(inner_rounded_rect)
 
         # Set plot limits with some padding
         padding = max(width_cm, height_cm) * 0.2
@@ -1894,7 +1991,6 @@ class RectangularBeam(RectangularSection):
             is_second_layer=True,
         )
 
-        
         ### REBAR TEXT ANNOTATIONS
         # Bottom, 1st layer
         self._annotate_rebar_layer_text(
@@ -1967,10 +2063,6 @@ class RectangularBeam(RectangularSection):
         self._fig = fig
 
         # # Close the figure so notebooks don't auto-display it twice
-        # plt.close(fig)
-
-        if show:
-            plt.show()
-            return None
+        plt.close(fig)
 
         return fig

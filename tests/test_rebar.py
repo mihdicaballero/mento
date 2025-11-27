@@ -210,6 +210,7 @@ def test_beam_longitudinal_rebar_large_area(
     assert best_design["n_1"] >= 2
     assert best_design["d_b1"] >= 8 * mm
 
+
 def test_beam_transverse_rebar_ACI_318_19_imperial(
     beam_example_imperial: RectangularBeam,
 ) -> None:

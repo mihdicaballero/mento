@@ -321,19 +321,21 @@ class Rebar:
         # --- Early exit: no steel required -------------------------------------
         if A_s_req.to("cm**2").magnitude == 0:
             df = pd.DataFrame(
-                [{
-                    "n_1": 0,
-                    "d_b1": 0 * mm,
-                    "n_2": 0,
-                    "d_b2": None,
-                    "n_3": 0,
-                    "d_b3": None,
-                    "n_4": 0,
-                    "d_b4": None,
-                    "total_as": 0 * cm**2,
-                    "total_bars": 0,
-                    "clear_spacing": self.beam.settings.clear_spacing.to("mm"),
-                }]
+                [
+                    {
+                        "n_1": 0,
+                        "d_b1": 0 * mm,
+                        "n_2": 0,
+                        "d_b2": None,
+                        "n_3": 0,
+                        "d_b3": None,
+                        "n_4": 0,
+                        "d_b4": None,
+                        "total_as": 0 * cm**2,
+                        "total_bars": 0,
+                        "clear_spacing": self.beam.settings.clear_spacing.to("mm"),
+                    }
+                ]
             )
             self._long_combos_df = df
             return df
@@ -400,20 +402,23 @@ class Rebar:
                         if not self._check_diameter_differences(diameters):
                             continue  # Skip this combination if any diameter pair exceeds max_diameter_diff`
 
-                        n1 = 0 if self.A_s_req == 0*cm**2 else 2  # This is a fixed value for every beam
+                        n1 = (
+                            0 if self.A_s_req == 0 * cm**2 else 2
+                        )  # This is a fixed value for every beam
 
                         # Iterate over possible numbers of bars in each group
                         for n2 in range(
                             0, self.beam.settings.max_bars_per_layer + 1
                         ):  # n2 can be 0 or more
-
                             if n1 + n2 > self.beam.settings.max_bars_per_layer:
                                 continue  # Skip if the total bars in layer 1 exceed the limit
-                            
+
                             spacing_ok = True
 
                             # ALWAYS compute spacing for this layer-1 combo
-                            if not self._check_spacing(n1, n2, d_b1, d_b2, effective_width):
+                            if not self._check_spacing(
+                                n1, n2, d_b1, d_b2, effective_width
+                            ):
                                 continue
 
                             # Calculate area for layer 1
@@ -423,7 +428,9 @@ class Rebar:
 
                             # Condition 6 and 7: Check clear spacing in layer 1
                             if n2 > 0:
-                                spacing_ok = self._check_spacing(n1, n2, d_b1, d_b2, effective_width)
+                                spacing_ok = self._check_spacing(
+                                    n1, n2, d_b1, d_b2, effective_width
+                                )
                                 if not spacing_ok:
                                     continue
 
@@ -647,7 +654,7 @@ class Rebar:
         return modified_df.head(10)
 
     def longitudinal_rebar_EN_1992_2004(self, A_s_req: Quantity) -> None:
-        self.longitudinal_rebar_ACI_318_19(A_s_req) #TODO WE HAVE TO CHANGE THIS
+        self.longitudinal_rebar_ACI_318_19(A_s_req)  # TODO WE HAVE TO CHANGE THIS
 
     def _estimate_mechanical_cover(self, row: pd.Series) -> "Quantity":
         """

@@ -67,7 +67,7 @@ class Forces:
     def id(self) -> int:
         """Read-only property for accessing the unique ID of the instance."""
         return self._id
-    
+
     @id.setter
     def id(self, value) -> None:  # type: ignore[no-untyped-def]
         # Normalize error message across Python versions (3.10 vs 3.11+)
