@@ -22,6 +22,8 @@ from mento.codes.ACI_318_19_beam import (
     _determine_nominal_moment_double_reinf_ACI_318_19,
 )
 from mento.results import CUSTOM_COLORS
+from mento.settings import BeamSettings
+from mento.rebar import Rebar
 
 
 @pytest.fixture()
@@ -98,6 +100,44 @@ def beam_example_CIRSOC_201_2025() -> RectangularBeam:
         c_c=2.5 * cm,
     )
     return section
+
+
+def build_metric_beam(settings: BeamSettings | None = None) -> RectangularBeam:
+    concrete = Concrete_ACI_318_19(name="H30", f_c=30 * MPa)
+    steel = SteelBar(name="ADN 420", f_y=420 * MPa)
+    return RectangularBeam(
+        label="additional",
+        concrete=concrete,
+        steel_bar=steel,
+        width=30 * cm,
+        height=50 * cm,
+        c_c=40 * mm,
+        settings=settings,
+    )
+
+
+def test_beam_respects_provided_settings_unit_system() -> None:
+    settings = BeamSettings(unit_system="imperial", max_bars_per_layer=3)
+    beam = build_metric_beam(settings=settings)
+
+    assert beam.settings.unit_system == "metric"
+    assert beam.settings.max_bars_per_layer == 3
+    assert beam.mode == "beam"
+
+
+def test_rebar_designer_factory_returns_rebar() -> None:
+    beam = build_metric_beam()
+
+    assert isinstance(beam._create_rebar_designer(), Rebar)
+
+
+def test_initialize_longitudinal_rebar_attributes_metric_defaults() -> None:
+    beam = build_metric_beam()
+
+    assert beam._n1_b == 2
+    assert beam._n1_t == 2
+    assert beam._d_b1_b.magnitude == pytest.approx(8)
+    assert beam._d_b1_t.magnitude == pytest.approx(8)
 
 
 def test_shear_check_EN_1992_2004_rebar_1(
