@@ -290,6 +290,8 @@ def _check_shear_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.DataFr
     if isinstance(self.concrete, Concrete_ACI_318_19):
         # Set the initial variables
         _initialize_variables_ACI_318_19(self, force.M_y)
+        self._N_u = force._N_x
+        self._V_u = force._V_z
 
         # Minimum shear reinforcement calculation
         _calculate_A_v_min_ACI(self, self.concrete.f_c)
@@ -333,6 +335,8 @@ def _check_shear_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.DataFr
 def _design_shear_ACI_318_19(self: "RectangularBeam", force: Forces) -> None:
     # Set the initial variables
     _initialize_variables_ACI_318_19(self, force.M_y)
+    self._N_u = force._N_x
+    self._V_u = force._V_z
     # Minimum shear reinforcement calculation
     _calculate_A_v_min_ACI(self, self.concrete.f_c)
     # Consider that the beam has minimum reinforcement
