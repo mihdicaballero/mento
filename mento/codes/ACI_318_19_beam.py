@@ -17,11 +17,9 @@ if TYPE_CHECKING:
     from ..beam import RectangularBeam  # Import Beam for type checking only
 
 
-def _initialize_variables_ACI_318_19(self: "RectangularBeam", force: Forces) -> None:
+def _initialize_variables_ACI_318_19(self: "RectangularBeam", M_y: Quantity) -> None:
     if isinstance(self.concrete, Concrete_ACI_318_19):
-        self._N_u = force._N_x
-        self._V_u = force._V_z
-        self._M_u = force._M_y
+        self._M_u = M_y
         if self._M_u > 0 * kNm:
             self._M_u_bot = self._M_u
             self._M_u_top = 0 * kNm
@@ -30,7 +28,7 @@ def _initialize_variables_ACI_318_19(self: "RectangularBeam", force: Forces) -> 
             self._M_u_top = self._M_u
         self.f_yt = _calculate_f_yt_aci(self)
         # Consider bottom or top tension reinforcement
-        self._A_s_tension = self._A_s_bot if force._M_y >= 0 * kNm else self._A_s_top
+        self._A_s_tension = self._A_s_bot if self._M_u >= 0 * kNm else self._A_s_top
 
 
 ##########################################################
@@ -291,7 +289,9 @@ def _calculate_rebar_spacing_aci(self: "RectangularBeam") -> None:
 def _check_shear_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.DataFrame:
     if isinstance(self.concrete, Concrete_ACI_318_19):
         # Set the initial variables
-        _initialize_variables_ACI_318_19(self, force)
+        _initialize_variables_ACI_318_19(self, force.M_y)
+        self._N_u = force._N_x
+        self._V_u = force._V_z
 
         # Minimum shear reinforcement calculation
         _calculate_A_v_min_ACI(self, self.concrete.f_c)
@@ -334,7 +334,9 @@ def _check_shear_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.DataFr
 
 def _design_shear_ACI_318_19(self: "RectangularBeam", force: Forces) -> None:
     # Set the initial variables
-    _initialize_variables_ACI_318_19(self, force)
+    _initialize_variables_ACI_318_19(self, force.M_y)
+    self._N_u = force._N_x
+    self._V_u = force._V_z
     # Minimum shear reinforcement calculation
     _calculate_A_v_min_ACI(self, self.concrete.f_c)
     # Consider that the beam has minimum reinforcement
@@ -875,7 +877,7 @@ def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.Data
     """
 
     # Initialize the design variables according to ACI 318-19 requirements using the provided force.
-    _initialize_variables_ACI_318_19(self, force)
+    _initialize_variables_ACI_318_19(self, force.M_y)
 
     # Calculate the nominal moments for both top and bottom reinforcement.
     _determine_nominal_moment_ACI_318_19(self, force)

@@ -1593,10 +1593,19 @@ class RectangularBeam(RectangularSection):
         Devuelve un string tipo '2Ø16+3Ø10' a partir de n1, d1, n2, d2.
         Si un grupo tiene n=0, no se incluye.
         Diámetros en mm.
+
+        En slab:
+            - Siempre combina en un único grupo: '5Ø12'.
+        En beam:
+            - Si n1 y n2 tienen el mismo diámetro, combina: '4Ø16'.
+            - Si son distintos, deja el formato '2Ø16+3Ø10'.
         """
 
         mode = getattr(self, "mode", "beam")
 
+        # -------------------------------
+        # MODO SLAB: siempre combinar
+        # -------------------------------
         if mode == "slab":
             total_bars = n1 + n2
             if total_bars == 0:
@@ -1612,6 +1621,20 @@ class RectangularBeam(RectangularSection):
 
             return f"{total_bars}Ø{phi:.0f}"
 
+        # -------------------------------
+        # MODO BEAM
+        # -------------------------------
+        # Si n1 y n2 tienen el mismo diámetro y ambos > 0 → combinar
+        if n1 > 0 and n2 > 0 and d_b1 is not None and d_b2 is not None:
+            phi1 = d_b1.to("mm").magnitude
+            phi2 = d_b2.to("mm").magnitude
+
+            # Igualdad con una pequeña tolerancia
+            if abs(phi1 - phi2) < 1e-6:
+                total_bars = n1 + n2
+                return f"{total_bars}Ø{phi1:.0f}"
+
+        # Caso general: como lo tenías antes
         parts: list[str] = []
 
         if n1 > 0 and d_b1 is not None:
@@ -1828,7 +1851,7 @@ class RectangularBeam(RectangularSection):
             facecolor=CUSTOM_COLORS["light_gray"],
         )
 
-    def plot(self) -> plt.Figure:  # type: ignore
+    def plot(self, show: bool = False) -> plt.Figure:  # type: ignore
         """
         Plots the rectangular section with a dark gray border, light gray hatch, and dimensions.
         Also plots the stirrup with rounded corners and thickness.
@@ -2061,6 +2084,9 @@ class RectangularBeam(RectangularSection):
 
         # Store the section figure
         self._fig = fig
+
+        if show:
+            plt.show()
 
         # # Close the figure so notebooks don't auto-display it twice
         plt.close(fig)

@@ -24,6 +24,7 @@ class BeamSettings:
       - layers_spacing: 25 mm
       - max_diameter_diff: 5 mm
       - minimum_longitudinal_diameter: 8 mm
+      - max_longitudinal_diameter: 32 mm
       - max_bars_per_layer: 5
 
     Imperial Defaults:
@@ -33,6 +34,7 @@ class BeamSettings:
       - layers_spacing: 1 inch
       - max_diameter_diff: 0.25 inch
       - minimum_longitudinal_diameter: 3/8 inch
+      - max_longitudinal_diameter: 1.693 inch
       - max_bars_per_layer: 5
     """
 
@@ -44,6 +46,7 @@ class BeamSettings:
         "layers_spacing": 25 * mm,
         "max_diameter_diff": 5 * mm,
         "minimum_longitudinal_diameter": 8 * mm,
+        "max_longitudinal_diameter": 32 * mm,
         "max_bars_per_layer": 5,
     }
 
@@ -54,6 +57,7 @@ class BeamSettings:
         "layers_spacing": 1 * inch,
         "max_diameter_diff": 0.25 * inch,
         "minimum_longitudinal_diameter": 3 / 8 * inch,
+        "max_longitudinal_diameter": 1.693 * inch,
         "max_bars_per_layer": 5,
     }
 
@@ -65,6 +69,7 @@ class BeamSettings:
     layers_spacing: Any = field(default=_NOT_SET)
     max_diameter_diff: Any = field(default=_NOT_SET)
     minimum_longitudinal_diameter: Any = field(default=_NOT_SET)
+    max_longitudinal_diameter: Any = field(default=_NOT_SET)
     max_bars_per_layer: Any = field(default=_NOT_SET)
 
     def __post_init__(self) -> None:

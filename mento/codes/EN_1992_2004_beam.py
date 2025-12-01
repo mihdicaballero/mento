@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Dict, Any, Tuple, cast
 import pandas as pd
 from pandas import DataFrame
 
-# from devtools import debug
+from devtools import debug
 
 
 from mento.material import Concrete_EN_1992_2004
@@ -17,17 +17,10 @@ if TYPE_CHECKING:
     from ..beam import RectangularBeam  # Import Beam for type checking only
 
 
-def _initialize_variables_EN_1992_2004(self: "RectangularBeam", force: Forces) -> None:
+def _initialize_variables_EN_1992_2004(self: "RectangularBeam") -> None:
     """
     Initialize variables for EN 1992-2004 design code.
     """
-    self._M_Ed = force._M_y
-    if self._M_Ed > 0 * kNm:
-        self._M_Ed_bot = self._M_Ed
-        self._M_Ed_top = 0 * kNm
-    else:
-        self._M_Ed_bot = 0 * kNm
-        self._M_Ed_top = self._M_Ed
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         self._f_ywd = self._f_ywk / self.concrete._gamma_s
         alpha_cc_shear = 1  # Take this as 1.00 for shear design and not 0.85, as in Eurocode Applied.
@@ -212,7 +205,7 @@ def _check_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> DataFra
             self._stirrup_d_b = 0 * mm
             self._update_effective_heights()
             # Initialize all the code related variables
-            _initialize_variables_EN_1992_2004(self, force)
+            _initialize_variables_EN_1992_2004(self)
             _initialize_shear_variables_EN_1992_2004(self, force)
             # Calculate V_Rd_c
             self._V_Rd_c = _shear_without_rebar_EN_1992_2004(self)
@@ -228,7 +221,7 @@ def _check_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> DataFra
 
         else:
             # Initialize all the code related variables
-            _initialize_variables_EN_1992_2004(self, force)
+            _initialize_variables_EN_1992_2004(self)
             _initialize_shear_variables_EN_1992_2004(self, force)
             # Shear reinforcement calculations
             d_bs = self._stirrup_d_b
@@ -305,7 +298,9 @@ def _check_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> DataFra
 def _design_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> None:
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         # Initialize all the code related variables
-        _initialize_variables_EN_1992_2004(self, force)
+        _initialize_variables_EN_1992_2004(self)
+        # Split bottom and top moments
+        _split_top_bot_moment(self, force)
         _initialize_shear_variables_EN_1992_2004(self, force)
         # Calculate maximum shear strength
         _calculate_max_shear_strength_EN_1992_2004(self)
@@ -524,20 +519,34 @@ def _determine_nominal_moment_EN_1992_2004(
     return None
 
 
+def _split_top_bot_moment(self: "RectangularBeam", force: Forces) -> None:
+    self._M_Ed = force._M_y
+    if self._M_Ed > 0 * kNm:
+        self._M_Ed_bot = self._M_Ed
+        self._M_Ed_top = 0 * kNm
+    else:
+        self._M_Ed_bot = 0 * kNm
+        self._M_Ed_top = self._M_Ed
+
+
 def _design_flexure_EN_1992_2004(
     self: "RectangularBeam", max_M_y_bot: Quantity, max_M_y_top: Quantity
 ) -> Dict[str, Any]:
+    # Initialize the design variables requirements using the provided force.
+    _initialize_variables_EN_1992_2004(self)
+
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         # Initialize all the code related variables
         # Initial assumptions for mechanical cover and compression depth
-        rec_mec = self.c_c + self._stirrup_d_b + 1 * cm
-        d_prima = self.c_c + self._stirrup_d_b + 1 * cm
+        rec_mec = self.c_c + self._stirrup_d_b + 1 * cm  # type: ignore
+        d_prima = self.c_c + self._stirrup_d_b + 1 * cm  # type: ignore
         # Start the iterative process
         tol = 0.01 * cm  # Tolerance for convergence
         Err = 2 * tol
         iteration_count = 0
+        max_iterations = 50
 
-        while Err >= tol:
+        while Err >= tol and iteration_count < max_iterations:
             iteration_count += 1
             # Update the effective depth for bottom tension reinforcement
             d = self.height - rec_mec
@@ -548,11 +557,12 @@ def _design_flexure_EN_1992_2004(
                 A_s_final_bot_Positive_M,
                 A_s_comp_top,
             ) = _calculate_flexural_reinforcement_EN_1992_2004(
-                self, max_M_y_bot, d, d_prima
+                self, max_M_y_bot, d, d_prima  # type: ignore
             )
             # Initialize bottom and top reinforcement
             self._A_s_bot = A_s_final_bot_Positive_M
             self._A_s_top = A_s_comp_top
+
             # If there is a negative moment, calculate the top reinforcement
             if max_M_y_top < 0:
                 (
@@ -561,7 +571,7 @@ def _design_flexure_EN_1992_2004(
                     A_s_final_top_Negative_M,
                     A_s_comp_bot,
                 ) = _calculate_flexural_reinforcement_EN_1992_2004(
-                    self, abs(max_M_y_top / kNm) * kNm, d, d_prima
+                    self, abs(max_M_y_top / kNm) * kNm, d, d_prima  # type: ignore
                 )
 
                 # Adjust reinforcement areas based on positive and negative moments
@@ -570,86 +580,60 @@ def _design_flexure_EN_1992_2004(
 
             # Design bottom reinforcement
             section_rebar_bot = Rebar(self)
-            self.flexure_design_results_bot = (
-                section_rebar_bot.longitudinal_rebar_EN_1992_2004(self._A_s_bot)
-            )
-            best_design = section_rebar_bot.longitudinal_rebar_design
-            # Extract bar information
-            d_b1_bot = best_design["d_b1"]
-            d_b2_bot = best_design["d_b2"]
-            d_b3_bot = best_design["d_b3"]
-            d_b4_bot = best_design["d_b4"]
-            n_1_bot = best_design["n_1"]
-            n_2_bot = best_design["n_2"]
-            n_3_bot = best_design["n_3"]
-            n_4_bot = best_design["n_4"]
+            section_rebar_bot.longitudinal_rebar_EN_1992_2004(self._A_s_bot)
+            best_design_bot = section_rebar_bot.longitudinal_rebar_design
 
-            # Set rebar information to section
-            c_mec_calc = self.c_c + self._stirrup_d_b + self._bot_rebar_centroid
-
-            # Design top reinforcement
             if self._A_s_top > 0:
                 section_rebar_top = Rebar(self)
-                self.flexure_design_results_top = (
-                    section_rebar_top.longitudinal_rebar_EN_1992_2004(self._A_s_top)
-                )
+                section_rebar_top.longitudinal_rebar_EN_1992_2004(self._A_s_top)
                 best_design_top = section_rebar_top.longitudinal_rebar_design
-
-                # Extract bar information for top reinforcement
-                d_b1_top = best_design_top["d_b1"]
-                d_b2_top = best_design_top["d_b2"]
-                d_b3_top = best_design_top["d_b3"]
-                d_b4_top = best_design_top["d_b4"]
-                n_1_top = best_design_top["n_1"]
-                n_2_top = best_design_top["n_2"]
-                n_3_top = best_design_top["n_3"]
-                n_4_top = best_design_top["n_4"]
-
-                # Set rebar information to section
-                self.set_longitudinal_rebar_bot(
-                    n_1_bot,
-                    d_b1_bot,
-                    n_2_bot,
-                    d_b2_bot,
-                    n_3_bot,
-                    d_b3_bot,
-                    n_4_bot,
-                    d_b4_bot,
-                )
-                self.set_longitudinal_rebar_top(
-                    n_1_top,
-                    d_b1_top,
-                    n_2_top,
-                    d_b2_top,
-                    n_3_top,
-                    d_b3_top,
-                    n_4_top,
-                    d_b4_top,
-                )
-
-                d_prima_calc = self.c_c + self._stirrup_d_b + self._top_rebar_centroid
             else:
-                # If no top reinforcement is required
-                d_prima_calc = d_prima
-                # Set rebar information to section
-                self.set_longitudinal_rebar_bot(
-                    n_1_bot,
-                    d_b1_bot,
-                    n_2_bot,
-                    d_b2_bot,
-                    n_3_bot,
-                    d_b3_bot,
-                    n_4_bot,
-                    d_b4_bot,
+                best_design_top = None
+
+            # Set bottom rebar
+            self.set_longitudinal_rebar_bot(
+                best_design_bot["n_1"],
+                best_design_bot["d_b1"],
+                best_design_bot["n_2"],
+                best_design_bot["d_b2"],
+                best_design_bot["n_3"],
+                best_design_bot["d_b3"],
+                best_design_bot["n_4"],
+                best_design_bot["d_b4"],
+            )
+            if best_design_top is not None:
+                self.set_longitudinal_rebar_top(
+                    best_design_top["n_1"],
+                    best_design_top["d_b1"],
+                    best_design_top["n_2"],
+                    best_design_top["d_b2"],
+                    best_design_top["n_3"],
+                    best_design_top["d_b3"],
+                    best_design_top["n_4"],
+                    best_design_top["d_b4"],
                 )
+            else:
                 self.set_longitudinal_rebar_top(
                     0, 0 * mm, 0, 0 * mm, 0, 0 * mm, 0, 0 * mm
                 )
+
+            # Recalculate rebar centroid
+            c_mec_calc = self.c_c + self._stirrup_d_b + self._bot_rebar_centroid
+
+            if best_design_top is not None and self._A_s_top > 0:
+                d_prima_calc = self.c_c + self._stirrup_d_b + self._top_rebar_centroid
+            else:
+                d_prima_calc = d_prima
 
             # Update error for iteration
             Err = max(abs(c_mec_calc - rec_mec), abs(d_prima_calc - d_prima))
             rec_mec = c_mec_calc
             d_prima = d_prima_calc
+
+        if iteration_count >= max_iterations:
+            # Podés loguear un warning si querés:
+            Warning("Flexure EN 1992 did not converge within max_iterations")
+            pass
 
         # Return results as a DataFrame
         results = {
@@ -660,13 +644,16 @@ def _design_flexure_EN_1992_2004(
         }
         return pd.DataFrame([results], index=[0])
     else:
-        raise ValueError("Concrete type is not compatible with EN 1992 shear design.")
+        raise ValueError("Concrete type is not compatible with EN 1992 flexure design.")
 
 
 def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> pd.DataFrame:
     """ """
-    # Initialize the design variables according to ACI 318-19 requirements using the provided force.
-    _initialize_variables_EN_1992_2004(self, force)
+    # Initialize the design variables requirements using the provided force.
+    _initialize_variables_EN_1992_2004(self)
+
+    # Split bottom and top moments
+    _split_top_bot_moment(self, force)
 
     # Calculate the nominal moments for both top and bottom reinforcement.
 
