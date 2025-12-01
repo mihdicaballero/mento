@@ -15,8 +15,7 @@ This repository provides a comprehensive package for the design and structural a
 #### Features
 - Check and design for flexure and shear of:
     - Rectangular Concrete Beam
-    - Circular Concrete Column
-    - Rectangular Concrete Column
+    - Rectangular One way Slab
 - Unit-sensitive design, allowing users to input variables with their respective units for accurate calculations.
 - Interactive usage in Jupyter Notebooks, allowing users to create custom calculations using package modules.
 - Results are presented in markdown format within the notebook and as pandas DataFrames for easy handling of multiple checks.

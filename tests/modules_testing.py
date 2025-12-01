@@ -217,7 +217,6 @@ def shear_CIRSOC_201_2025() -> None:
     results = node.design_flexure()
     print(results)
     beam.plot()
-    plt.show()
     print(beam.flexure_design_results_bot)
     # print(node.shear_results_detailed())
 
@@ -479,6 +478,7 @@ def flexure_design_test_EN() -> None:
     # TODO Sale mal el DCR
     concrete = Concrete_EN_1992_2004(name="H25", f_c=25 * MPa)
     steelBar = SteelBar(name="fy 60000", f_y=500 * MPa)
+    settings = BeamSettings(max_longitudinal_diameter=20 * mm)
     beam = RectangularBeam(
         label="V-20x60",
         concrete=concrete,
@@ -486,15 +486,16 @@ def flexure_design_test_EN() -> None:
         c_c=2.6 * cm,
         width=20 * cm,
         height=60 * cm,
+        settings=settings,
     )
     beam._stirrup_d_b = 6 * mm
 
-    f1 = Forces(label="Test_01", V_z=50 * kN, M_y=450 * kNm)
-    f2 = Forces(label="Test_01", V_z=150 * kN, M_y=-500 * kNm)
-    forces = [f1, f2]
+    f1 = Forces(label="Test_01", V_z=50 * kN, M_y=350 * kNm)
+    # f2 = Forces(label="Test_01", V_z=150*kN, M_y=-400 * kNm)
+    forces = [f1]
     beam.design_flexure(forces)
     beam.design_shear(forces)
-    beam.plot()
+    beam.plot(show=True)
 
 
 def flexure_check_test() -> None:
@@ -785,8 +786,8 @@ if __name__ == "__main__":
     # rectangular()
     # shear_ACI_318_19_imperial()
     # shear_ACI_318_19_slab()
-    shear_CIRSOC_201_2025()
-    shear_EN_1992()
+    # shear_CIRSOC_201_2025()
+    # shear_EN_1992()
     # flexure_ACI_318_19_metric_slab()
     # check_flexure_ACI_318_19_imperial()
     # design_flexure_ACI_318_test_01()

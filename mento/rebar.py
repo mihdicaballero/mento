@@ -356,6 +356,7 @@ class Rebar:
             for d in self.rebar_diameters
             if d >= self.min_long_rebar
             and d >= self.beam.settings.minimum_longitudinal_diameter
+            and d <= self.beam.settings.max_longitudinal_diameter
         ]
 
         for d_b1 in valid_rebar_diameters:  # Without taking Ø6 as a possible solution
