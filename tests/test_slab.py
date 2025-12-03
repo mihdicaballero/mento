@@ -1,5 +1,4 @@
 import pytest
-import numpy as np
 
 from mento.node import Node
 from mento.slab import OneWaySlab
@@ -106,9 +105,7 @@ def test_shear_check_ACI_318_19_1(slab_example_ACI_318_19: OneWaySlab) -> None:
     # See calcpad: ACI 318-19 Slab Shear 01 - Imperial.cpd
     f = Forces(V_z=1.52 * kip, N_x=0 * kip)
     node = Node(section=slab_example_ACI_318_19, forces=f)
-    slab_example_ACI_318_19.set_slab_longitudinal_rebar_bot(
-        d_b1=0.5 * inch, s_b1=10 * inch
-    )
+    slab_example_ACI_318_19.set_slab_longitudinal_rebar_bot(d_b1=0.5 * inch, s_b1=10 * inch)
     results = node.check_shear()
 
     # Compare dictionaries with a tolerance for floating-point values, in m
@@ -130,9 +127,7 @@ def test_check_flexure_ACI_318_19_1(slab_example_ACI_318_19_metric: OneWaySlab) 
     # Testing the check of the reinforced slab with simple reinforcement
     # See calcpad: ACI 318-19 Slab Flexure 01 - Metric.cpd
     f = Forces(label="C1", M_y=20 * kNm)
-    slab_example_ACI_318_19_metric.set_slab_longitudinal_rebar_bot(
-        d_b1=12 * mm, s_b1=20 * cm
-    )
+    slab_example_ACI_318_19_metric.set_slab_longitudinal_rebar_bot(d_b1=12 * mm, s_b1=20 * cm)
     node = Node(section=slab_example_ACI_318_19_metric, forces=f)
     results = node.check_flexure()
 
@@ -153,9 +148,7 @@ def test_check_flexure_ACI_318_19_2(slab_example_ACI_318_19_metric: OneWaySlab) 
     # Testing the check of the reinforced slab with simple reinforcement
     # See calcpad: ACI 318-19 Slab Flexure 01 - Metric.cpd
     f = Forces(label="C1", M_y=50 * kNm)
-    slab_example_ACI_318_19_metric.set_slab_longitudinal_rebar_bot(
-        d_b1=12 * mm, s_b1=20 * cm
-    )
+    slab_example_ACI_318_19_metric.set_slab_longitudinal_rebar_bot(d_b1=12 * mm, s_b1=20 * cm)
     node = Node(section=slab_example_ACI_318_19_metric, forces=f)
     results = node.check_flexure()
 

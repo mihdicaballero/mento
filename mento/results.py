@@ -7,8 +7,8 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from docx.oxml import parse_xml
 from docx.oxml.ns import nsdecls
-from pandas.io.formats.style import Styler
 from io import BytesIO
+from pandas.io.formats.style import Styler
 
 CUSTOM_COLORS = {
     "blue": "#1f77b4",  # Default Matplotlib blue
@@ -103,9 +103,7 @@ class Formatter:
         # Determine the color based on DCR value
         if self.mid_value > DCR:
             color = self.green
-        elif (
-            self.mid_value <= DCR <= self.max_value
-        ):  # Use self.max_value here for consistency
+        elif self.mid_value <= DCR <= self.max_value:  # Use self.max_value here for consistency
             color = self.yellow
         else:
             color = self.red
@@ -116,9 +114,7 @@ class Formatter:
         formatted_value = round(value, 2) if isinstance(value, (int, float)) else value
         return self.DCR_value_df(formatted_value)
 
-    def color_DCR_df(
-        self, df: pd.DataFrame, DCR_columns: list
-    ) -> pd.io.formats.style.Styler:  # Use Styler directly now
+    def color_DCR_df(self, df: pd.DataFrame, DCR_columns: list) -> Styler:  # Use Styler directly now
         """
         Apply color styling to specified DCR-related columns in the DataFrame.
 
@@ -126,9 +122,7 @@ class Formatter:
         :param DCR_columns: List of column names to apply the DCR styling to.
         :return: A styled DataFrame with colored DCR values.
         """
-        return df.style.map(self.apply_DCR_style, subset=DCR_columns).format(
-            precision=2
-        )
+        return df.style.map(self.apply_DCR_style, subset=DCR_columns).format(precision=2)
 
 
 class TablePrinter:
@@ -346,9 +340,7 @@ class DocumentBuilder:
         None
         """
         heading = self.doc.add_heading(text, level=level)
-        heading.paragraph_format.space_before = Pt(
-            0
-        )  # Remove space after the paragraph
+        heading.paragraph_format.space_before = Pt(0)  # Remove space after the paragraph
 
     def add_text(self, text: str) -> None:
         """Adds a paragraph to the document"""
@@ -465,9 +457,7 @@ class DocumentBuilder:
         # Apply shading and font color to the entire last row
         for cell in table.rows[last_row_idx].cells:
             # Apply background color
-            cell._element.get_or_add_tcPr().append(
-                parse_xml(f'<w:shd {nsdecls("w")} w:fill="{shading_color}"/>')
-            )
+            cell._element.get_or_add_tcPr().append(parse_xml(f'<w:shd {nsdecls("w")} w:fill="{shading_color}"/>'))
             # Apply font color
             for paragraph in cell.paragraphs:
                 for run in paragraph.runs:
