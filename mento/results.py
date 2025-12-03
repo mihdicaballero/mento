@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from docx.oxml import parse_xml
 from docx.oxml.ns import nsdecls
 from io import BytesIO
+from pandas.io.formats.style import Styler
 
 CUSTOM_COLORS = {
     "blue": "#1f77b4",  # Default Matplotlib blue
@@ -113,9 +114,7 @@ class Formatter:
         formatted_value = round(value, 2) if isinstance(value, (int, float)) else value
         return self.DCR_value_df(formatted_value)
 
-    def color_DCR_df(
-        self, df: pd.DataFrame, DCR_columns: list
-    ) -> pd.io.formats.style.Styler:  # Use Styler directly now
+    def color_DCR_df(self, df: pd.DataFrame, DCR_columns: list) -> Styler:  # Use Styler directly now
         """
         Apply color styling to specified DCR-related columns in the DataFrame.
 
