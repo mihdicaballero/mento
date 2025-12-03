@@ -76,9 +76,7 @@ def settings() -> None:
 def section() -> None:
     concrete = Concrete("C25")
     steel_bar = SteelBar(name="B500S", f_y=500 * MPa)
-    section = Section(
-        c_c=25 * mm, concrete=concrete, steel_bar=steel_bar, label="Test Section"
-    )
+    section = Section(c_c=25 * mm, concrete=concrete, steel_bar=steel_bar, label="Test Section")
     print(section)
 
 
@@ -163,7 +161,7 @@ def shear_ACI_318_19_imperial() -> None:
     # section.plot()
     # results = node.check_shear()
     results = node.design_shear()
-    # print(results)
+    print(results)
     # print(beam.shear_design_results)
     node.shear_results_detailed()
     node.shear_results_detailed_doc()
@@ -285,10 +283,10 @@ def flexure_ACI_318_19_metric() -> None:
 
     f = Forces(label="Test_01", M_y=100 * kNm, V_z=50 * kN)
     node = Node(section=section, forces=f)
-    # results = node.check_flexure()
+
     section.set_longitudinal_rebar_bot(n1=2, d_b1=16 * mm)
     section.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=10 * cm)
-    # node.design_shear()
+    node.design_shear()
     section.plot()
     # print(section.shear_results_detailed())
     # print(section.flexure_design_results_bot)
@@ -328,7 +326,7 @@ def check_flexure_EN_1992_2004_TEST_01() -> None:
         height=60 * cm,
         c_c=2.6 * cm,
     )
-    BEAM_TEST_01._stirrup_d_b = 6 * mm
+    BEAM_TEST_01.set_transverse_rebar(n_stirrups=1, d_b=6 * mm, s_l=20 * cm)
     BEAM_TEST_01.set_longitudinal_rebar_bot(
         n1=4,
         d_b1=16 * mm,
@@ -351,9 +349,9 @@ def check_flexure_EN_1992_2004_TEST_01() -> None:
     )
     f = Forces(M_y=150 * kNm)
     node = Node(section=BEAM_TEST_01, forces=f)
-    results = node.check_flexure()
-    print(results)
-    debug(results.iloc[1]["M_Rd"].to(kNm).magnitude)
+    node.check()
+    node.shear_results_detailed()
+    node.flexure_results_detailed()
 
 
 def check_flexure_EN_1992_2004_TEST_02() -> None:
@@ -429,7 +427,6 @@ def check_flexure_EN_1992_2004_TEST_04() -> None:
 
 
 def design_flexure_EN_1992_2004_test_01() -> None:
-    clear_console()
     concrete = Concrete_EN_1992_2004(name="C60", f_c=60 * MPa)
     steelBar = SteelBar(name="B400S", f_y=400 * MPa)
     f1 = Forces(label="C1", M_y=20 * kNm)
@@ -450,7 +447,7 @@ def design_flexure_EN_1992_2004_test_01() -> None:
     results = BEAM_TEST_DESIGN_FLEXURE_01.design_flexure(forces)
     # print(beam.flexure_design_results_bot,'\n', beam.flexure_design_results_top)
     print(results)
-    BEAM_TEST_DESIGN_FLEXURE_01.flexure_results_detailed_doc()
+    BEAM_TEST_DESIGN_FLEXURE_01.flexure_results_detailed()
 
 
 def design_flexure_ACI_318_test_01() -> None:
@@ -469,7 +466,7 @@ def design_flexure_ACI_318_test_01() -> None:
     f2 = Forces(label="Test_02", V_z=100 * kip, M_y=-400 * kip * ft)
     forces = [f1, f2]
 
-    flexure_results = beam.design_flexure(forces)
+    flexure_results = beam.design(forces)
     print(flexure_results)
     print(beam.flexure_design_results_bot)
 
@@ -490,12 +487,14 @@ def flexure_design_test_EN() -> None:
     )
     beam._stirrup_d_b = 6 * mm
 
-    f1 = Forces(label="Test_01", V_z=50 * kN, M_y=350 * kNm)
+    f1 = Forces(label="Test_01", V_z=350 * kN, M_y=350 * kNm)
     # f2 = Forces(label="Test_01", V_z=150*kN, M_y=-400 * kNm)
     forces = [f1]
-    beam.design_flexure(forces)
-    beam.design_shear(forces)
+    # beam.design_flexure(forces)
+    # beam.design_shear(forces)
+    beam.design(forces)
     beam.plot(show=True)
+    beam.flexure_results_detailed()
 
 
 def flexure_check_test() -> None:
@@ -525,9 +524,7 @@ def flexure_check_test() -> None:
     # beam.shear_results_detailed_doc()
 
 
-def flexure_ACI_318_19_metric_single(
-    d_long_mm: float, d_stir_mm: float, out_path: str
-) -> None:
+def flexure_ACI_318_19_metric_single(d_long_mm: float, d_stir_mm: float, out_path: str) -> None:
     """
     Build one RectangularBeam with given bar diameters and save plot as PNG.
     d_long_mm  = diameter (mm) of bottom longitudinal corner bars (n1)
@@ -551,9 +548,7 @@ def flexure_ACI_318_19_metric_single(
 
     # dummy load etc. (not strictly needed for plotting but keeping consistent)
     f = Forces(label="Test_01", M_y=100 * kNm, V_z=50 * kN)
-    node = Node(
-        section=section, forces=f
-    )  # noqa: F841 (we don't use `node` directly here)
+    node = Node(section=section, forces=f)  # noqa: F841 (we don't use `node` directly here)
 
     # Assign bottom longitudinal reinforcement
     # n1=2 bars of diameter d_long_mm
@@ -610,7 +605,6 @@ def rebar() -> None:
 def rebar_df() -> None:
     concrete = Concrete_ACI_318_19(name="H30", f_c=30 * MPa)
     steelBar = SteelBar(name="ADN 420", f_y=420 * MPa)
-    beam_settings = BeamSettings(stirrup_diameter_ini=8 * mm)
     beam = RectangularBeam(
         label="V 20x50",
         concrete=concrete,
@@ -634,9 +628,7 @@ def rebar_df() -> None:
         first_row = long_rebar_df.iloc[0:1].copy()
 
         # Add a column to store the required steel area
-        first_row[
-            "as_req"
-        ] = as_req.magnitude  # Store the magnitude (value without units)
+        first_row["as_req"] = as_req.magnitude  # Store the magnitude (value without units)
 
         # Append the first row to the results DataFrame
         results_df = pd.concat([results_df, first_row], ignore_index=True)
@@ -795,7 +787,7 @@ if __name__ == "__main__":
     # check_flexure_EN_1992_2004_TEST_01()
     # check_flexure_EN_1992_2004_TEST_02()
     # check_flexure_EN_1992_2004_TEST_04()
-    # design_flexure_EN_1992_2004_test_01()
+    design_flexure_EN_1992_2004_test_01()
     # rebar()
     # summary_ACI()
     # summary_EN_1992()

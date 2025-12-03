@@ -52,6 +52,12 @@ class Section:
         """Read-only property to access the private _id."""
         return self._id
 
+    def check(self, forces: List[Forces]) -> None:
+        pass
+
+    def design(self, forces: List[Forces]) -> None:
+        pass
+
     def check_shear(self, forces: List[Forces]) -> None:
         pass
 

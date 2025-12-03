@@ -9,6 +9,7 @@ import pandas as pd
 from pandas import DataFrame
 import math
 import warnings
+# from devtools import debug
 
 from mento.rectangular import RectangularSection
 from mento.material import (
@@ -314,11 +315,7 @@ class RectangularBeam(RectangularSection):
 
     def _len_unit(self) -> Quantity:
         # Base length unit for this section
-        return (
-            1 * mm
-            if getattr(self.concrete, "unit_system", "metric") == "metric"
-            else 1 * inch
-        )
+        return 1 * mm if getattr(self.concrete, "unit_system", "metric") == "metric" else 1 * inch
 
     def _area_unit(self) -> Quantity:
         L = self._len_unit()
@@ -405,9 +402,7 @@ class RectangularBeam(RectangularSection):
             Quantity: The maximum clear spacing between bars in either the first or second layer.
         """
 
-        def layer_clear_spacing(
-            n_a: int, d_a: Quantity, n_b: int, d_b: Quantity
-        ) -> Quantity:
+        def layer_clear_spacing(n_a: int, d_a: Quantity, n_b: int, d_b: Quantity) -> Quantity:
             """
             Helper function to calculate clear spacing for a given layer.
 
@@ -429,24 +424,16 @@ class RectangularBeam(RectangularSection):
 
         # AVAIABLE CLEAR SPACING FOR BOTTOM BARS
         # Calculate clear spacing for each layer
-        spacing_layer1_b = layer_clear_spacing(
-            self._n1_b, self._d_b1_b, self._n2_b, self._d_b2_b
-        )
-        spacing_layer2_b = layer_clear_spacing(
-            self._n3_b, self._d_b3_b, self._n4_b, self._d_b4_b
-        )
+        spacing_layer1_b = layer_clear_spacing(self._n1_b, self._d_b1_b, self._n2_b, self._d_b2_b)
+        spacing_layer2_b = layer_clear_spacing(self._n3_b, self._d_b3_b, self._n4_b, self._d_b4_b)
 
         # Return the maximum clear spacing between the two layers
         self._available_s_bot = min(spacing_layer1_b, spacing_layer2_b)
 
         # AVAIABLE CLEAR SPACING FOR TOP BARS
         # Calculate clear spacing for each layer
-        spacing_layer1_t = layer_clear_spacing(
-            self._n1_t, self._d_b1_t, self._n2_t, self._d_b2_t
-        )
-        spacing_layer2_t = layer_clear_spacing(
-            self._n3_t, self._d_b3_t, self._n4_t, self._d_b4_t
-        )
+        spacing_layer1_t = layer_clear_spacing(self._n1_t, self._d_b1_t, self._n2_t, self._d_b2_t)
+        spacing_layer2_t = layer_clear_spacing(self._n3_t, self._d_b3_t, self._n4_t, self._d_b4_t)
 
         # Return the maximum clear spacing between the two layers
         self._available_s_top = min(spacing_layer1_t, spacing_layer2_t)
@@ -463,16 +450,8 @@ class RectangularBeam(RectangularSection):
         # Calculate the vertical positions of the bar layers
         y1_b = self._d_b1_b / 2
         y2_b = self._d_b2_b / 2
-        y3_b = (
-            max(self._d_b1_b, self._d_b2_b)
-            + self.settings.layers_spacing
-            + self._d_b3_b / 2
-        )
-        y4_b = (
-            max(self._d_b1_b, self._d_b2_b)
-            + self.settings.layers_spacing
-            + self._d_b4_b / 2
-        )
+        y3_b = max(self._d_b1_b, self._d_b2_b) + self.settings.layers_spacing + self._d_b3_b / 2
+        y4_b = max(self._d_b1_b, self._d_b2_b) + self.settings.layers_spacing + self._d_b4_b / 2
         # Calculate the total area of each layer
         area_1_b = self._n1_b * self._d_b1_b**2 * np.pi / 4.0
         area_2_b = self._n2_b * self._d_b2_b**2 * np.pi / 4.0
@@ -491,21 +470,11 @@ class RectangularBeam(RectangularSection):
         # Calculate the vertical positions of the bar layers
         y1_t = self._d_b1_t / 2
         y2_t = self._d_b2_t / 2
-        y3_t = (
-            max(self._d_b1_t, self._d_b2_t)
-            + self.settings.layers_spacing
-            + self._d_b3_t / 2
-        )
-        y4_t = (
-            max(self._d_b1_t, self._d_b2_t)
-            + self.settings.layers_spacing
-            + self._d_b4_t / 2
-        )
+        y3_t = max(self._d_b1_t, self._d_b2_t) + self.settings.layers_spacing + self._d_b3_t / 2
+        y4_t = max(self._d_b1_t, self._d_b2_t) + self.settings.layers_spacing + self._d_b4_t / 2
 
         # Calculate the total area of each layer
-        area_1_t = (
-            self._n1_t * self._d_b1_t**2 * np.pi / 4
-        )  # Area proportional to number of bars and their diameter
+        area_1_t = self._n1_t * self._d_b1_t**2 * np.pi / 4  # Area proportional to number of bars and their diameter
         area_2_t = self._n2_t * self._d_b2_t**2 * np.pi / 4
         area_3_t = self._n3_t * self._d_b3_t**2 * np.pi / 4
         area_4_t = self._n4_t * self._d_b4_t**2 * np.pi / 4
@@ -564,17 +533,13 @@ class RectangularBeam(RectangularSection):
                 max_M_y_bot = force._M_y
                 self._limiting_case_top = force
         # Design flexural reinforcement for the limiting cases
-        if (
-            self.concrete.design_code == "ACI 318-19"
-            or self.concrete.design_code == "CIRSOC 201-25"
-        ):
+        if self.concrete.design_code == "ACI 318-19" or self.concrete.design_code == "CIRSOC 201-25":
             _design_flexure_ACI_318_19(self, max_M_y_bot, max_M_y_top)
         elif self.concrete.design_code == "EN 1992-2004":
             _design_flexure_EN_1992_2004(self, max_M_y_bot, max_M_y_top)
         else:
             raise ValueError(
-                f"Longitudinal design method not implemented "
-                f"for concrete type: {type(self.concrete).__name__}"
+                f"Longitudinal design method not implemented " f"for concrete type: {type(self.concrete).__name__}"
             )
 
         # Check flexural capacity for all forces with the assigned reinforcement
@@ -596,10 +561,7 @@ class RectangularBeam(RectangularSection):
 
         for force in forces:
             # Select the method based on design code
-            if (
-                self.concrete.design_code == "ACI 318-19"
-                or self.concrete.design_code == "CIRSOC 201-25"
-            ):
+            if self.concrete.design_code == "ACI 318-19" or self.concrete.design_code == "CIRSOC 201-25":
                 result = _check_flexure_ACI_318_19(self, force)
             elif self.concrete.design_code == "EN 1992-2004":
                 result = _check_flexure_EN_1992_2004(self, force)
@@ -626,17 +588,13 @@ class RectangularBeam(RectangularSection):
             if current_dcr_top >= max_dcr_top:
                 max_dcr_top = current_dcr_top
                 limiting_case_top = result
-                limiting_case_top_details = self._flexure_results_detailed_list[
-                    force.id
-                ]
+                limiting_case_top_details = self._flexure_results_detailed_list[force.id]
 
             # Update bottom limiting case
             if current_dcr_bot >= max_dcr_bot:
                 max_dcr_bot = current_dcr_bot
                 limiting_case_bot = result
-                limiting_case_bot_details = self._flexure_results_detailed_list[
-                    force.id
-                ]
+                limiting_case_bot_details = self._flexure_results_detailed_list[force.id]
 
         # Compile all results into a single DataFrame
         all_data = pd.concat(self._flexure_results_list, ignore_index=True)
@@ -669,17 +627,13 @@ class RectangularBeam(RectangularSection):
 
         # Step 1: Identify the worst-case force
         for force in forces:
-            if (
-                self.concrete.design_code == "ACI 318-19"
-                or self.concrete.design_code == "CIRSOC 201-25"
-            ):
+            if self.concrete.design_code == "ACI 318-19" or self.concrete.design_code == "CIRSOC 201-25":
                 _design_shear_ACI_318_19(self, force)
             elif self.concrete.design_code == "EN 1992-2004":
                 _design_shear_EN_1992_2004(self, force)
             else:
                 raise ValueError(
-                    f"Shear design method not implemented for concrete type:"
-                    f"{type(self.concrete).__name__}"
+                    f"Shear design method not implemented for concrete type:" f"{type(self.concrete).__name__}"
                 )
             # Check if this result is the limiting case
             current_A_v_req = self._A_v_req
@@ -689,9 +643,7 @@ class RectangularBeam(RectangularSection):
 
         # Step 2: Perform rebar design for the worst-case force
         section_rebar = Rebar(self)
-        self.shear_design_results = section_rebar.transverse_rebar(
-            max_A_v_req, max_V_s_req, self._alpha
-        )
+        self.shear_design_results = section_rebar.transverse_rebar(max_A_v_req, max_V_s_req, self._alpha)
         self._best_rebar_design = section_rebar.transverse_rebar_design
         self._stirrup_s_l = self._best_rebar_design["s_l"]
         self._stirrup_s_w = self._best_rebar_design["s_w"]
@@ -702,6 +654,9 @@ class RectangularBeam(RectangularSection):
             self._best_rebar_design["d_b"],
             self._best_rebar_design["s_l"],
         )
+
+        # Update longitudinal rebar attributes
+        self._update_longitudinal_rebar_attributes()
 
         # Step 3: Check shear adequacy for all forces using the designed rebar
         all_results = self.check_shear(forces)
@@ -716,10 +671,7 @@ class RectangularBeam(RectangularSection):
 
         for force in forces:
             # Select the method based on design code
-            if (
-                self.concrete.design_code == "ACI 318-19"
-                or self.concrete.design_code == "CIRSOC 201-25"
-            ):
+            if self.concrete.design_code == "ACI 318-19" or self.concrete.design_code == "CIRSOC 201-25":
                 result = _check_shear_ACI_318_19(self, force)
             elif self.concrete.design_code == "EN 1992-2004":
                 result = _check_shear_EN_1992_2004(self, force)
@@ -740,12 +692,10 @@ class RectangularBeam(RectangularSection):
 
             # Check if this result is the limiting case
             current_dcr = result["DCR"][0]
-            if current_dcr > max_dcr:
+            if current_dcr >= max_dcr:
                 max_dcr = current_dcr
                 self._limiting_case_shear = result
-                self._limiting_case_shear_details = self._shear_results_detailed_list[
-                    force.id
-                ]
+                self._limiting_case_shear_details = self._shear_results_detailed_list[force.id]
 
         # Compile all results into a single DataFrame
         all_data = pd.concat(self._shear_results_list, ignore_index=True)
@@ -753,9 +703,7 @@ class RectangularBeam(RectangularSection):
         all_results = pd.concat([units_row, all_data], ignore_index=True)
 
         # Identify the most limiting case by Demand-to-Capacity Ratio (DCR) or other criteria
-        self.limiting_case_shear = all_data.loc[
-            all_data["DCR"].idxmax()
-        ]  # Select row with highest DCR
+        self.limiting_case_shear = all_data.loc[all_data["DCR"].idxmax()]  # Select row with highest DCR
 
         self._shear_checked = True  # Mark shear as checked
         return all_results
@@ -808,10 +756,7 @@ class RectangularBeam(RectangularSection):
 
     def _get_units_row_flexure(self) -> pd.DataFrame:
         # TODO: Add imperial units row output
-        if (
-            self.concrete.design_code == "ACI 318-19"
-            or self.concrete.design_code == "CIRSOC 201-25"
-        ):
+        if self.concrete.design_code == "ACI 318-19" or self.concrete.design_code == "CIRSOC 201-25":
             units_row = pd.DataFrame(
                 [
                     {
@@ -850,11 +795,28 @@ class RectangularBeam(RectangularSection):
                 ]
             )
         else:
-            raise ValueError(
-                f"Flexure design method not implemented for concrete type: {type(self.concrete).__name__}"
-            )  # noqa: E501
+            raise ValueError(f"Flexure design method not implemented for concrete type: {type(self.concrete).__name__}")  # noqa: E501
 
         return units_row
+
+    ##########################################################
+    # CHECK & DESIGN ALL
+    ##########################################################
+
+    def design(self, forces: list[Forces]) -> None:
+        """
+        Complete design: flexure + shear + flexure check.
+        """
+        self.design_flexure(forces)
+        self.design_shear(forces)
+        self.check_flexure(forces)
+
+    def check(self, forces: list[Forces]) -> None:
+        """
+        Complete check: flexure + shear.
+        """
+        self.check_flexure(forces)
+        self.check_shear(forces)
 
     ##########################################################
     # RESULTS
@@ -879,8 +841,7 @@ class RectangularBeam(RectangularSection):
     def flexure_results(self) -> None:
         if not self._flexure_checked:
             warnings.warn(
-                "Flexural design has not been performed yet. Call _check_flexure() or "
-                "design_flexure() first.",
+                "Flexural design has not been performed yet. Call _check_flexure() or " "design_flexure() first.",
                 UserWarning,
             )
             self._md_flexure_results = "Flexural results are not available."
@@ -894,16 +855,8 @@ class RectangularBeam(RectangularSection):
 
         checks_pass_top = top_details.get("checks_pass")
         checks_pass_bot = bot_details.get("checks_pass")
-        warning_top = (
-            "⚠️ Some checks failed, see detailed results."
-            if not checks_pass_top
-            else ""
-        )
-        warning_bot = (
-            "⚠️ Some checks failed, see detailed results."
-            if not checks_pass_bot
-            else ""
-        )
+        warning_top = "⚠️ Some checks failed, see detailed results." if not checks_pass_top else ""
+        warning_bot = "⚠️ Some checks failed, see detailed results." if not checks_pass_bot else ""
 
         # Pending for approval
         # all_checks_top = top_details.get('flexure_check')
@@ -923,9 +876,7 @@ class RectangularBeam(RectangularSection):
             Mn_top = top_result_data["Value"][9]
             DCR_top = top_result_data["Value"][10]
 
-            rebar_top = f"{top_rebar_1}" + (
-                f" ++ {top_rebar_2}" if top_rebar_2 != "-" else ""
-            )
+            rebar_top = f"{top_rebar_1}" + (f" ++ {top_rebar_2}" if top_rebar_2 != "-" else "")
             formatted_DCR_top = formatter.DCR(DCR_top)
 
             markdown_content += (
@@ -944,9 +895,7 @@ class RectangularBeam(RectangularSection):
             Mn_bot = bot_result_data["Value"][9]
             DCR_bot = bot_result_data["Value"][10]
 
-            rebar_bot = f"{bot_rebar_1}" + (
-                f" ++ {bot_rebar_2}" if bot_rebar_2 != "-" else ""
-            )
+            rebar_bot = f"{bot_rebar_1}" + (f" ++ {bot_rebar_2}" if bot_rebar_2 != "-" else "")
             formatted_DCR_bot = formatter.DCR(DCR_bot)
 
             markdown_content += (
@@ -965,8 +914,7 @@ class RectangularBeam(RectangularSection):
     def shear_results(self) -> None:
         if not self._shear_checked:
             warnings.warn(
-                "Shear design has not been performed yet. Call check_shear() or "
-                "design_shear() first.",
+                "Shear design has not been performed yet. Call check_shear() or " "design_shear() first.",
                 UserWarning,
             )
             self._md_shear_results = "Shear results are not available."
@@ -992,15 +940,8 @@ class RectangularBeam(RectangularSection):
                     f"{limiting_reinforcement['Value'][2]} cm"
                 )
             # Limitng cases checks
-            warning = (
-                "⚠️ Some checks failed, see detailed results."
-                if not checks_pass
-                else ""
-            )
-            if (
-                self.concrete.design_code == "ACI 318-19"
-                or self.concrete.design_code == "CIRSOC 201-25"
-            ):
+            warning = "⚠️ Some checks failed, see detailed results." if not checks_pass else ""
+            if self.concrete.design_code == "ACI 318-19" or self.concrete.design_code == "CIRSOC 201-25":
                 markdown_content = (
                     f"Shear reinforcing {rebar_v}, $A_v$={limiting_reinforcement['Value'][6]} cm²/m"
                     f", $V_u$={limiting_forces['Value'][1]} kN, $\\phi V_n$={limiting_shear_concrete['Value'][7]} kN → {formatted_DCR} {warning}"
@@ -1046,8 +987,7 @@ class RectangularBeam(RectangularSection):
         """
         if not self._flexure_checked:
             warnings.warn(
-                "Flexural check has not been performed yet. Call _check_flexure or "
-                "design_flexure first.",
+                "Flexural check has not been performed yet. Call _check_flexure or " "design_flexure first.",
                 UserWarning,
             )
             self._md_flexure_results = "Flexure results are not available."
@@ -1056,9 +996,7 @@ class RectangularBeam(RectangularSection):
         # Determine which results to display (limiting case by default)
         if force:
             if force.id not in self._flexure_results_detailed_list:
-                raise ValueError(
-                    f"No results found for Forces object with ID {force.id}."
-                )
+                raise ValueError(f"No results found for Forces object with ID {force.id}.")
             result_data = self._flexure_results_detailed_list[force.id]
             top_result_data = result_data["flexure_capacity_top"]
             bot_result_data = result_data["flexure_capacity_bot"]
@@ -1070,12 +1008,8 @@ class RectangularBeam(RectangularSection):
             if self._limiting_case_flexure_bot_details is None:
                 raise ValueError("Bottom limiting case details are not available.")
             # Use the worst-case top and bottom scenarios
-            top_result_data = self._limiting_case_flexure_top_details[
-                "flexure_capacity_top"
-            ]
-            bot_result_data = self._limiting_case_flexure_bot_details[
-                "flexure_capacity_bot"
-            ]
+            top_result_data = self._limiting_case_flexure_top_details["flexure_capacity_top"]
+            bot_result_data = self._limiting_case_flexure_bot_details["flexure_capacity_bot"]
             forces_result = {
                 "Design_forces": [
                     "Top max moment",
@@ -1083,12 +1017,8 @@ class RectangularBeam(RectangularSection):
                 ],
                 "Variable": ["Mu,top", "Mu,bot"],
                 "Value": [
-                    round(
-                        self._limiting_case_flexure_top_details["forces"]["Value"][0], 2
-                    ),
-                    round(
-                        self._limiting_case_flexure_bot_details["forces"]["Value"][1], 2
-                    ),
+                    round(self._limiting_case_flexure_top_details["forces"]["Value"][0], 2),
+                    round(self._limiting_case_flexure_bot_details["forces"]["Value"][1], 2),
                 ],
                 "Unit": ["kNm", "kNm"],
             }
@@ -1119,23 +1049,15 @@ class RectangularBeam(RectangularSection):
                     ),  # Bottom limiting case spacing
                 ],
                 "Min.": [
-                    round(
-                        self._limiting_case_flexure_top_details["min_max"]["Min."][0], 2
-                    ),  # Top limiting case As_min
-                    self._limiting_case_flexure_top_details["min_max"]["Min."][
-                        1
-                    ],  # Top limiting case spacing min
+                    round(self._limiting_case_flexure_top_details["min_max"]["Min."][0], 2),  # Top limiting case As_min
+                    self._limiting_case_flexure_top_details["min_max"]["Min."][1],  # Top limiting case spacing min
                     round(
                         self._limiting_case_flexure_bot_details["min_max"]["Min."][2], 2
                     ),  # Bottom limiting case As_min
-                    self._limiting_case_flexure_bot_details["min_max"]["Min."][
-                        3
-                    ],  # Bottom limiting case spacing min
+                    self._limiting_case_flexure_bot_details["min_max"]["Min."][3],  # Bottom limiting case spacing min
                 ],
                 "Max.": [
-                    round(
-                        self._limiting_case_flexure_top_details["min_max"]["Max."][0], 2
-                    ),  # Top limiting case As_max
+                    round(self._limiting_case_flexure_top_details["min_max"]["Max."][0], 2),  # Top limiting case As_max
                     "",  # No max constraint for spacing
                     round(
                         self._limiting_case_flexure_bot_details["min_max"]["Max."][2], 2
@@ -1143,18 +1065,10 @@ class RectangularBeam(RectangularSection):
                     "",  # No max constraint for spacing
                 ],
                 "Ok?": [
-                    self._limiting_case_flexure_top_details["min_max"]["Ok?"][
-                        0
-                    ],  # Top As check
-                    self._limiting_case_flexure_top_details["min_max"]["Ok?"][
-                        1
-                    ],  # Top spacing check
-                    self._limiting_case_flexure_bot_details["min_max"]["Ok?"][
-                        2
-                    ],  # Bottom As check
-                    self._limiting_case_flexure_bot_details["min_max"]["Ok?"][
-                        3
-                    ],  # Bottom spacing check
+                    self._limiting_case_flexure_top_details["min_max"]["Ok?"][0],  # Top As check
+                    self._limiting_case_flexure_top_details["min_max"]["Ok?"][1],  # Top spacing check
+                    self._limiting_case_flexure_bot_details["min_max"]["Ok?"][2],  # Bottom As check
+                    self._limiting_case_flexure_bot_details["min_max"]["Ok?"][3],  # Bottom spacing check
                 ],
             }
 
@@ -1188,8 +1102,7 @@ class RectangularBeam(RectangularSection):
         """
         if not self._flexure_checked:
             warnings.warn(
-                "Flexural check has not been performed yet. Call _check_flexure or "
-                "design_flexure first.",
+                "Flexural check has not been performed yet. Call _check_flexure or " "design_flexure first.",
                 UserWarning,
             )
             self._md_flexure_results = "Flexural results are not available."
@@ -1198,9 +1111,7 @@ class RectangularBeam(RectangularSection):
         # Determine which results to display (limiting case by default)
         if force:
             if force.id not in self._flexure_results_detailed_list:
-                raise ValueError(
-                    f"No results found for Forces object with ID {force.id}."
-                )
+                raise ValueError(f"No results found for Forces object with ID {force.id}.")
             result_data = self._flexure_results_detailed_list[force.id]
             top_result_data = result_data["flexure_capacity_top"]
             bot_result_data = result_data["flexure_capacity_bot"]
@@ -1212,12 +1123,8 @@ class RectangularBeam(RectangularSection):
             if self._limiting_case_flexure_bot_details is None:
                 raise ValueError("Bottom limiting case details are not available.")
             # Use the worst-case top and bottom scenarios
-            top_result_data = self._limiting_case_flexure_top_details[
-                "flexure_capacity_top"
-            ]
-            bot_result_data = self._limiting_case_flexure_bot_details[
-                "flexure_capacity_bot"
-            ]
+            top_result_data = self._limiting_case_flexure_top_details["flexure_capacity_top"]
+            bot_result_data = self._limiting_case_flexure_bot_details["flexure_capacity_bot"]
             forces_result = {
                 "Design forces": [
                     "Top max moment",
@@ -1225,12 +1132,8 @@ class RectangularBeam(RectangularSection):
                 ],
                 "Variable": ["Mu,top", "Mu,bot"],
                 "Value": [
-                    round(
-                        self._limiting_case_flexure_top_details["forces"]["Value"][0], 2
-                    ),
-                    round(
-                        self._limiting_case_flexure_bot_details["forces"]["Value"][1], 2
-                    ),
+                    round(self._limiting_case_flexure_top_details["forces"]["Value"][0], 2),
+                    round(self._limiting_case_flexure_bot_details["forces"]["Value"][1], 2),
                 ],
                 "Unit": ["kNm", "kNm"],
             }
@@ -1261,23 +1164,15 @@ class RectangularBeam(RectangularSection):
                     ),  # Bottom limiting case spacing
                 ],
                 "Min.": [
-                    round(
-                        self._limiting_case_flexure_top_details["min_max"]["Min."][0], 2
-                    ),  # Top limiting case As_min
-                    self._limiting_case_flexure_top_details["min_max"]["Min."][
-                        1
-                    ],  # Top limiting case spacing min
+                    round(self._limiting_case_flexure_top_details["min_max"]["Min."][0], 2),  # Top limiting case As_min
+                    self._limiting_case_flexure_top_details["min_max"]["Min."][1],  # Top limiting case spacing min
                     round(
                         self._limiting_case_flexure_bot_details["min_max"]["Min."][2], 2
                     ),  # Bottom limiting case As_min
-                    self._limiting_case_flexure_bot_details["min_max"]["Min."][
-                        3
-                    ],  # Bottom limiting case spacing min
+                    self._limiting_case_flexure_bot_details["min_max"]["Min."][3],  # Bottom limiting case spacing min
                 ],
                 "Max.": [
-                    round(
-                        self._limiting_case_flexure_top_details["min_max"]["Max."][0], 2
-                    ),  # Top limiting case As_max
+                    round(self._limiting_case_flexure_top_details["min_max"]["Max."][0], 2),  # Top limiting case As_max
                     "",  # No max constraint for spacing
                     round(
                         self._limiting_case_flexure_bot_details["min_max"]["Max."][2], 2
@@ -1285,18 +1180,10 @@ class RectangularBeam(RectangularSection):
                     "",  # No max constraint for spacing
                 ],
                 "Ok?": [
-                    self._limiting_case_flexure_top_details["min_max"]["Ok?"][
-                        0
-                    ],  # Top As check
-                    self._limiting_case_flexure_top_details["min_max"]["Ok?"][
-                        1
-                    ],  # Top spacing check
-                    self._limiting_case_flexure_bot_details["min_max"]["Ok?"][
-                        2
-                    ],  # Bottom As check
-                    self._limiting_case_flexure_bot_details["min_max"]["Ok?"][
-                        3
-                    ],  # Bottom spacing check
+                    self._limiting_case_flexure_top_details["min_max"]["Ok?"][0],  # Top As check
+                    self._limiting_case_flexure_top_details["min_max"]["Ok?"][1],  # Top spacing check
+                    self._limiting_case_flexure_bot_details["min_max"]["Ok?"][2],  # Bottom As check
+                    self._limiting_case_flexure_bot_details["min_max"]["Ok?"][3],  # Bottom spacing check
                 ],
             }
 
@@ -1313,9 +1200,7 @@ class RectangularBeam(RectangularSection):
 
         # Add first section and table
         doc_builder.add_heading(f"Beam {self.label} flexure check", level=1)
-        doc_builder.add_text(
-            f"Made with mento {MENTO_VERSION}. Design code: {self.concrete.design_code}"
-        )
+        doc_builder.add_text(f"Made with mento {MENTO_VERSION}. Design code: {self.concrete.design_code}")
         doc_builder.add_heading("Materials", level=2)
         doc_builder.add_table_data(df_materials)
         doc_builder.add_table_data(df_geometry)
@@ -1332,9 +1217,7 @@ class RectangularBeam(RectangularSection):
         doc_builder.add_table_dcr(df_flexure_capacity_bottom)
 
         # Save the Word doc
-        doc_builder.save(
-            f"Beam {self.label} flexure check {self.concrete.design_code}.docx"
-        )
+        doc_builder.save(f"Beam {self.label} flexure check {self.concrete.design_code}.docx")
 
     def shear_results_detailed(self, force: Optional[Forces] = None) -> None:
         """
@@ -1350,8 +1233,7 @@ class RectangularBeam(RectangularSection):
         """
         if not self._shear_checked:
             warnings.warn(
-                "Shear check has not been performed yet. Call check_shear or "
-                "design_shear first.",
+                "Shear check has not been performed yet. Call check_shear or " "design_shear first.",
                 UserWarning,
             )
             self._md_shear_results = "Shear results are not available."
@@ -1360,9 +1242,7 @@ class RectangularBeam(RectangularSection):
         if force:
             force_id = force.id
             if force_id not in self._shear_results_detailed_list:
-                raise ValueError(
-                    f"No results found for Forces object with ID {force_id}."
-                )
+                raise ValueError(f"No results found for Forces object with ID {force_id}.")
             result_data = self._shear_results_detailed_list[force_id]
         else:
             # Default to limiting case
@@ -1377,9 +1257,7 @@ class RectangularBeam(RectangularSection):
         forces_printer = TablePrinter("FORCES")
         forces_printer.print_table_data(result_data["forces"], headers="keys")
         steel_printer = TablePrinter("SHEAR STRENGTH")
-        steel_printer.print_table_data(
-            result_data["shear_reinforcement"], headers="keys"
-        )
+        steel_printer.print_table_data(result_data["shear_reinforcement"], headers="keys")
         min_max_printer = TablePrinter("MAX AND MIN LIMIT CHECKS")
         min_max_printer.print_table_data(result_data["min_max"], headers="keys")
         concrete_printer = TablePrinter("CONCRETE STRENGTH")
@@ -1396,8 +1274,7 @@ class RectangularBeam(RectangularSection):
         """
         if not self._shear_checked:
             warnings.warn(
-                "Shear check has not been performed yet. Call check_shear or "
-                "design_shear first.",
+                "Shear check has not been performed yet. Call check_shear or " "design_shear first.",
                 UserWarning,
             )
             self._md_shear_results = "Shear results are not available."
@@ -1406,9 +1283,7 @@ class RectangularBeam(RectangularSection):
         if force:
             force_id = force.id
             if force_id not in self._shear_results_detailed_list:
-                raise ValueError(
-                    f"No results found for Forces object with ID {force_id}."
-                )
+                raise ValueError(f"No results found for Forces object with ID {force_id}.")
             result_data = self._shear_results_detailed_list[force_id]
         else:
             # Default to limiting case
@@ -1427,9 +1302,7 @@ class RectangularBeam(RectangularSection):
 
         # Add first section and table
         doc_builder.add_heading(f"Beam {self.label} shear check", level=1)
-        doc_builder.add_text(
-            f"Made with mento {MENTO_VERSION}. Design code: {self.concrete.design_code}"
-        )
+        doc_builder.add_text(f"Made with mento {MENTO_VERSION}. Design code: {self.concrete.design_code}")
         doc_builder.add_heading("Materials", level=2)
         doc_builder.add_table_data(df_materials)
         doc_builder.add_table_data(df_geometry)
@@ -1443,27 +1316,37 @@ class RectangularBeam(RectangularSection):
         doc_builder.add_table_dcr(df_shear_concrete)
 
         # Save the Word doc
-        doc_builder.save(
-            f"Beam {self.label} shear check {self.concrete.design_code}.docx"
-        )
+        doc_builder.save(f"Beam {self.label} shear check {self.concrete.design_code}.docx")
 
-    def _format_longitudinal_rebar_string(
-        self, n1: int, d_b1: Quantity, n2: int = 0, d_b2: Quantity = 0 * mm
-    ) -> str:
+    def _format_longitudinal_rebar_string(self, n1: int, d_b1: Quantity, n2: int = 0, d_b2: Quantity = 0 * mm) -> str:
         """
         Returns a formatted string representing the rebars and their diameters.
 
-        Example output:
-            "2Ø10" (if only n1 and d_b1 are defined)
-            "2Ø10+2Ø8" (if both n1/d_b1 and n2/d_b2 are defined)
+        Rules:
+        - If n1 and n2 have the same diameter → combine (e.g., 2Ø16 + 1Ø16 → 3Ø16)
+        - If they differ → show both groups (e.g., 2Ø16+2Ø10)
+        - If no bars exist → "-"
         """
-        if n1 == 0 or d_b1.magnitude == 0:
-            rebar_string = "-"
-        else:
-            rebar_string = f"{n1}Ø{int(d_b1.magnitude)}"
-            if n2 > 0 and d_b2.magnitude > 0:  # Check if n2 and d_b2 are defined
-                rebar_string += f"+{n2}Ø{int(d_b2.magnitude)}"
-        return rebar_string
+        # Convert diameters safely
+        phi1 = int(d_b1.to("mm").magnitude) if (d_b1 is not None and d_b1.magnitude > 0) else 0
+        phi2 = int(d_b2.to("mm").magnitude) if (d_b2 is not None and d_b2.magnitude > 0) else 0
+
+        # No bars at all
+        if n1 == 0 and n2 == 0:
+            return "-"
+
+        # Only one group
+        if n2 == 0 or phi2 == 0:
+            return f"{n1}Ø{phi1}"
+        if n1 == 0 or phi1 == 0:
+            return f"{n2}Ø{phi2}"
+
+        # Same diameter → combine quantities
+        if phi1 == phi2:
+            return f"{n1 + n2}Ø{phi1}"
+
+        # Different diameters → write both
+        return f"{n1}Ø{phi1}+{n2}Ø{phi2}"
 
     ##########################################################
     # PLOT BEAM SECTION WITH REBAR
@@ -1488,11 +1371,7 @@ class RectangularBeam(RectangularSection):
         Helper method to plot a single layer of rebars.
         """
         # Calculate y-position based on layer and bottom/top
-        y_base = (
-            c_c_cm + stirrup_d_b_cm
-            if is_bottom
-            else height_cm - c_c_cm - stirrup_d_b_cm
-        )
+        y_base = c_c_cm + stirrup_d_b_cm if is_bottom else height_cm - c_c_cm - stirrup_d_b_cm
 
         if is_second_layer:
             y_base += (
@@ -1520,12 +1399,7 @@ class RectangularBeam(RectangularSection):
                 if n1 == 1:
                     x_nominal = width_cm / 2.0
                 else:
-                    x_nominal = (
-                        c_c_cm
-                        + stirrup_d_b_cm
-                        + radius_cm
-                        + i * (clear_span / (n1 - 1))
-                    )
+                    x_nominal = c_c_cm + stirrup_d_b_cm + radius_cm + i * (clear_span / (n1 - 1))
 
                 # default: no shift
                 x_shift = 0.0
@@ -1563,12 +1437,7 @@ class RectangularBeam(RectangularSection):
             clear_span = width_cm - 2 * (c_c_cm + stirrup_d_b_cm + radius_cm)
 
             for i in range(n2):
-                x_nominal = (
-                    c_c_cm
-                    + stirrup_d_b_cm
-                    + radius_cm
-                    + (i + 1) * (clear_span / (n2 + 1))
-                )
+                x_nominal = c_c_cm + stirrup_d_b_cm + radius_cm + (i + 1) * (clear_span / (n2 + 1))
 
                 # intermediate bars: no special offset
                 x_plot = x_nominal
@@ -1672,11 +1541,7 @@ class RectangularBeam(RectangularSection):
             return  # nada que mostrar
 
         # misma lógica de y_base que en _plot_rebar_layer
-        y_base = (
-            c_c_cm + stirrup_d_b_cm
-            if is_bottom
-            else height_cm - c_c_cm - stirrup_d_b_cm
-        )
+        y_base = c_c_cm + stirrup_d_b_cm if is_bottom else height_cm - c_c_cm - stirrup_d_b_cm
 
         if is_second_layer:
             shift = layers_spacing_cm + max_db.to("cm").magnitude
