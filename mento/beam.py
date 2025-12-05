@@ -142,6 +142,7 @@ class RectangularBeam(RectangularSection):
         self._c_d_bot: float = 0
         self._shear_checked = False  # Tracks if shear check or design has been done
         self._flexure_checked = False  # Tracks if shear check or design has been done
+        self._doubly_reinforced = False  # Tracks if doubly reinforced section is used
 
         # Initialize default concrete beam attributes
         self._initialize_code_attributes()
