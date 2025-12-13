@@ -1,4 +1,4 @@
-<img width="647" height="230" alt="mento_github" src="https://github.com/user-attachments/assets/ab6a51b5-7a99-4f39-9781-ef22773ceec6" />
+<img width="800" alt="mento_github" src="https://github.com/user-attachments/assets/32128ec0-a8c2-4782-b210-1afc633f0da6" />
 
 *An intuitive tool for structural engineers to design concrete elements efficiently.*
 
