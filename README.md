@@ -1,4 +1,5 @@
-# Mento
+<img width="647" height="230" alt="mento_github" src="https://github.com/user-attachments/assets/ab6a51b5-7a99-4f39-9781-ef22773ceec6" />
+
 *An intuitive tool for structural engineers to design concrete elements efficiently.*
 
 [![Tests](https://github.com/mihdicaballero/mento/actions/workflows/tests.yml/badge.svg)][tests]
