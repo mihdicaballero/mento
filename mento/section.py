@@ -88,4 +88,4 @@ class Section:
     # Beam results for Jupyter Notebook
     @property
     def results(self) -> None:
-        return self.results
+        pass

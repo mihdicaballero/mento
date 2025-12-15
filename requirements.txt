@@ -1,7 +1,7 @@
 pint
 pandas
 seaborn
-numpy
+numpy==1.26.4
 IPython
 ipykernel
 tabulate

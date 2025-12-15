@@ -49,7 +49,7 @@ jobs:
 
       - name: Run tests
         if: matrix.session == 'tests'
-        run: pytest --cov --cov-report=xml
+        run: pytest --cov=mento --cov-config=.coveragerc --cov-report=xml
         shell: bash
 
       - name: Upload results to Codecov

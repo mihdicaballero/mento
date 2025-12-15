@@ -1,14 +1,14 @@
-# Mento
+<img width="800" alt="mento_github" src="https://github.com/user-attachments/assets/32128ec0-a8c2-4782-b210-1afc633f0da6" />
+
 *An intuitive tool for structural engineers to design concrete elements efficiently.*
 
 [![Tests](https://github.com/mihdicaballero/mento/actions/workflows/tests.yml/badge.svg)][tests]
 [![Docs](https://readthedocs.org/projects/mento-docs/badge/?version=latest)](https://mento-docs.readthedocs.io/en/latest/?badge=latest)
-[![Codecov](https://codecov.io/gh/robbievanleeuwen/concrete-properties/branch/master/graph/badge.svg)][codecov]
+[![codecov](https://codecov.io/github/mihdicaballero/mento/graph/badge.svg?token=9X81ZRKMCX)](https://codecov.io/github/mihdicaballero/mento)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/charliermarsh/ruff/main/assets/badge/v2.json)][ruff]
 
 [tests]: https://github.com/mihdicaballero/mento/actions/workflows/tests.yml
 [ruff]: https://github.com/charliermarsh/ruff
-[codecov]: https://app.codecov.io/github/mihdicaballero/mento
 
 This repository provides a comprehensive package for the design and structural analysis of concrete sections, beams and columns. The package adheres to multiple design codes, ensuring broad applicability in structural engineering projects.
 

@@ -52,6 +52,53 @@ def slab_example_ACI_318_19_metric() -> OneWaySlab:
     return slab
 
 
+def build_slab() -> OneWaySlab:
+    concrete = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
+    steel = SteelBar(name="ADN 420", f_y=420 * MPa)
+    return OneWaySlab(
+        label="Slab extra",
+        concrete=concrete,
+        steel_bar=steel,
+        width=120 * cm,
+        height=20 * cm,
+        c_c=20 * mm,
+    )
+
+
+def test_slab_initialization_sets_slab_mode_and_defaults() -> None:
+    slab = build_slab()
+
+    assert slab.mode == "slab"
+    assert slab._stirrup_d_b.magnitude == 0
+    assert slab.settings.max_bars_per_layer >= 200
+
+
+def test_set_slab_transverse_rebar_computes_shear_area() -> None:
+    slab = build_slab()
+
+    slab.set_slab_transverse_rebar(d_b=10 * mm, s_long=20 * cm, s_trans=25 * cm)
+
+    assert slab._A_v.magnitude > 0
+    assert slab._stirrup_s_l == 20 * cm
+
+
+def test_longitudinal_rebar_spacing_updates_counts() -> None:
+    slab = build_slab()
+
+    slab.set_slab_longitudinal_rebar_bot(d_b1=12 * mm, s_b1=30 * cm, d_b3=10 * mm, s_b3=25 * cm)
+    slab.set_slab_longitudinal_rebar_top(d_b1=8 * mm, s_b1=40 * cm)
+
+    assert slab._n1_b == 4  # ceil(120/30)
+    assert slab._n3_b == 5  # ceil(120/25)
+    assert slab._n1_t == 3  # ceil(120/40)
+    assert slab._n3_t == 0  # spacing left as default zero
+
+    # ensure defaults are preserved when zero values are provided
+    previous_spacing = slab._s_b1_t
+    slab.set_slab_longitudinal_rebar_top(s_b3=0 * mm)
+    assert slab._s_b1_t == previous_spacing
+
+
 def test_shear_check_ACI_318_19_1(slab_example_ACI_318_19: OneWaySlab) -> None:
     # Example from Two-Way Flat Plate Concrete Floor System Analysis and Design (ACI 318-14) adjusted to ACI 318-19.
     # With guidance from CRSI Design Guide on ACI 318-19

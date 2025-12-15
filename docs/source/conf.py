@@ -72,11 +72,15 @@ html_static_path = ["_static"]
 html_css_files = [
     "custom.css",  # Add a custom CSS file
 ]
+html_logo = "_static/logo/mento_isotipo_transparente.png"
+html_favicon = "_static/logo/mento_isotipo_transparente.png"
 html_theme_options = {
     "repository_url": "https://github.com/mihdicaballero/mento",
     "repository_branch": "main",
     "use_repository_button": True,
     "use_issues_button": True,
+    "logo_only": True,
+    "display_version": False,
 }
 
 # Output file base name for HTML help builder.

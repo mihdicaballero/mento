@@ -556,6 +556,7 @@ def _calculate_flexural_reinforcement_ACI_318_19(
     if A_s_final <= A_s_max:
         A_s_comp = 0 * cm**2
     else:
+        self._doubly_reinforced = True
         rho = (
             0.85
             * concrete_aci._beta_1
@@ -1287,6 +1288,18 @@ def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
 
         checks = []
         for i, (curr, min_val, max_val) in enumerate(zip(current_values, min_values, max_values)):
+            # Generate check marks based on the range conditions
+            for i, (curr, min_val, max_val) in enumerate(zip(current_values, min_values, max_values)):
+                # --- EXCEPTION FOR DOUBLY REINFORCED SECTIONS ---
+                # If doubly reinforced, ignore maximum limits for top (i=0) and bottom (i=2)
+                if self._doubly_reinforced and i in (0, 2):
+                    # If it passes min, we give the special tag
+                    if min_val is None or curr >= min_val:
+                        checks.append("✔️ D.R.")
+                        continue
+                    # If it fails min, let the normal logic handle it (fall through)
+            # -------------------------------------------------
+
             passed = (min_val is None or curr >= min_val) and (max_val is None or curr <= max_val)
             if passed:
                 checks.append("✔️")
