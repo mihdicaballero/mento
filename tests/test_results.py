@@ -4,11 +4,13 @@ from docx import Document
 from typing import List, Any
 from docx.shared import Cm
 import matplotlib
+from mento.results import Formatter, TablePrinter, DocumentBuilder, configure_plot_settings
 
 matplotlib.use("Agg")  # Use non-GUI backend for testing
 import matplotlib.pyplot as plt
 
-from mento.results import Formatter, TablePrinter, DocumentBuilder, configure_plot_settings
+# Disable LaTeX for testing to avoid CI/CD issues
+plt.rcParams["text.usetex"] = False
 
 
 @pytest.fixture
@@ -36,12 +38,19 @@ def document_builder() -> DocumentBuilder:
 
 def test_configure_plot_settings() -> None:
     """Test that configure_plot_settings runs without error."""
+    # Temporarily disable usetex for testing
+    original_usetex = plt.rcParams.get("text.usetex", False)
+    plt.rcParams["text.usetex"] = False
+
     configure_plot_settings()
 
-    # Verify some settings were applied
+    # Verify some settings were applied (but not usetex in CI)
     assert plt.rcParams["axes.titlesize"] == 12
     assert plt.rcParams["axes.labelsize"] == 12
     assert plt.rcParams["legend.fontsize"] == 12
+
+    # Restore original setting
+    plt.rcParams["text.usetex"] = original_usetex
 
 
 # --- Tests for Formatter class ---
