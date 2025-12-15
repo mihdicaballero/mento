@@ -31,9 +31,7 @@ def steel_b500s() -> SteelBar:
 @pytest.fixture()
 def basic_section(concrete_c25: Concrete, steel_b500s: SteelBar) -> Section:
     """Fixture for a basic Section instance."""
-    return Section(
-        label="V101", concrete=concrete_c25, steel_bar=steel_b500s, c_c=25 * mm
-    )
+    return Section(label="V101", concrete=concrete_c25, steel_bar=steel_b500s, c_c=25 * mm)
 
 
 @pytest.fixture()
@@ -50,9 +48,7 @@ def sample_forces() -> List[Forces]:
 # --- Tests for Section Initialization and Attributes ---
 
 
-def test_section_initialization(
-    basic_section: Section, concrete_c25: Concrete, steel_b500s: SteelBar
-) -> None:
+def test_section_initialization(basic_section: Section, concrete_c25: Concrete, steel_b500s: SteelBar) -> None:
     """Test that the Section is initialized correctly with basic attributes."""
     assert basic_section.label == "V101"
     assert basic_section.concrete is concrete_c25  # Check if it's the exact same object
@@ -78,12 +74,8 @@ def test_section_id_increment(basic_section: Section) -> None:
     concrete_temp = Concrete("C25")
     steel_temp = SteelBar(name="B500S", f_y=500 * MPa)
 
-    section2 = Section(
-        label="V102", concrete=concrete_temp, steel_bar=steel_temp, c_c=25 * mm
-    )
-    section3 = Section(
-        label="V103", concrete=concrete_temp, steel_bar=steel_temp, c_c=25 * mm
-    )
+    section2 = Section(label="V102", concrete=concrete_temp, steel_bar=steel_temp, c_c=25 * mm)
+    section3 = Section(label="V103", concrete=concrete_temp, steel_bar=steel_temp, c_c=25 * mm)
 
     # The fixture's instance will have an ID. Subsequent instances will increment from there.
     # The exact value depends on how many times Section has been instantiated in tests.
@@ -98,78 +90,132 @@ def test_section_id_read_only(basic_section: Section) -> None:
         basic_section.id = 999  # type: ignore [misc] # Intentional type ignore for testing attribute error
 
 
-# --- Tests for Placeholder Methods (and future implementations) ---
+# --- Tests for check and design methods ---
 
 
-def test_check_shear_placeholder(
-    basic_section: Section, sample_forces: List[Forces]
-) -> None:
+def test_check_method(basic_section: Section, sample_forces: List[Forces]) -> None:
+    """Test the check method (currently a pass statement)."""
+    result = basic_section.check(sample_forces)
+    assert result is None  # Since it's a pass, it should return None
+
+
+def test_design_method(basic_section: Section, sample_forces: List[Forces]) -> None:
+    """Test the design method (currently a pass statement)."""
+    result = basic_section.design(sample_forces)
+    assert result is None
+
+
+# --- Tests for Shear Methods ---
+
+
+def test_check_shear_placeholder(basic_section: Section, sample_forces: List[Forces]) -> None:
     """Test the placeholder for check_shear method."""
-    # This test simply ensures the method can be called without error for now.
-    # When implementation starts, this test will need to be updated.
-    try:
-        basic_section.check_shear(sample_forces)
-    except NotImplementedError:
-        pytest.fail(
-            "check_shear should currently be a pass or raise NotImplementedError if intended."
-        )
-    except Exception as e:
-        pytest.fail(f"check_shear raised an unexpected error: {e}")
+    result = basic_section.check_shear(sample_forces)
+    assert result is None
 
 
-def test_design_shear_placeholder(
-    basic_section: Section, sample_forces: List[Forces]
-) -> None:
+def test_design_shear_placeholder(basic_section: Section, sample_forces: List[Forces]) -> None:
     """Test the placeholder for design_shear method."""
-    try:
-        basic_section.design_shear(sample_forces)
-    except NotImplementedError:
-        pytest.fail(
-            "design_shear should currently be a pass or raise NotImplementedError if intended."
-        )
-    except Exception as e:
-        pytest.fail(f"design_shear raised an unexpected error: {e}")
+    result = basic_section.design_shear(sample_forces)
+    assert result is None
 
 
-def test_check_flexure_placeholder(
-    basic_section: Section, sample_forces: List[Forces]
-) -> None:
-    """Test the placeholder for check_flexure method."""
-    try:
-        basic_section.check_flexure(sample_forces)
-    except NotImplementedError:
-        pytest.fail(
-            "check_flexure should currently be a pass or raise NotImplementedError if intended."
-        )
-    except Exception as e:
-        pytest.fail(f"check_flexure raised an unexpected error: {e}")
-
-
-def test_design_flexure_placeholder(
-    basic_section: Section, sample_forces: List[Forces]
-) -> None:
-    """Test the placeholder for design_flexure method."""
-    try:
-        basic_section.design_flexure(sample_forces)
-    except NotImplementedError:
-        pytest.fail(
-            "design_flexure should currently be a pass or raise NotImplementedError if intended."
-        )
-    except Exception as e:
-        pytest.fail(f"design_flexure raised an unexpected error: {e}")
-
-
-# Add similar placeholder tests for shear_results_detailed, flexure_results_detailed, etc.
-def test_shear_results_detailed_placeholder(
-    basic_section: Section, sample_forces: List[Forces]
-) -> None:
+def test_shear_results_detailed_placeholder(basic_section: Section, sample_forces: List[Forces]) -> None:
     """Test placeholder for shear_results_detailed."""
-    try:
-        basic_section.shear_results_detailed(sample_forces[0])  # Pass one force
-        basic_section.shear_results_detailed()  # Test without force
-    except NotImplementedError:
-        pytest.fail(
-            "shear_results_detailed should currently be a pass or raise NotImplementedError."
-        )
-    except Exception as e:
-        pytest.fail(f"shear_results_detailed raised an unexpected error: {e}")
+    result1 = basic_section.shear_results_detailed(sample_forces[0])
+    assert result1 is None
+
+    result2 = basic_section.shear_results_detailed()
+    assert result2 is None
+
+
+def test_shear_results_detailed_doc_placeholder(basic_section: Section, sample_forces: List[Forces]) -> None:
+    """Test placeholder for shear_results_detailed_doc."""
+    result1 = basic_section.shear_results_detailed_doc(sample_forces[0])
+    assert result1 is None
+
+    result2 = basic_section.shear_results_detailed_doc()
+    assert result2 is None
+
+
+# --- Tests for Flexure Methods ---
+
+
+def test_check_flexure_placeholder(basic_section: Section, sample_forces: List[Forces]) -> None:
+    """Test the placeholder for check_flexure method."""
+    result = basic_section.check_flexure(sample_forces)
+    assert result is None
+
+
+def test_design_flexure_placeholder(basic_section: Section, sample_forces: List[Forces]) -> None:
+    """Test the placeholder for design_flexure method."""
+    result = basic_section.design_flexure(sample_forces)
+    assert result is None
+
+
+def test_flexure_results_detailed_placeholder(basic_section: Section, sample_forces: List[Forces]) -> None:
+    """Test placeholder for flexure_results_detailed."""
+    result1 = basic_section.flexure_results_detailed(sample_forces[0])
+    assert result1 is None
+
+    result2 = basic_section.flexure_results_detailed()
+    assert result2 is None
+
+
+def test_flexure_results_detailed_doc_placeholder(basic_section: Section, sample_forces: List[Forces]) -> None:
+    """Test placeholder for flexure_results_detailed_doc."""
+    result1 = basic_section.flexure_results_detailed_doc(sample_forces[0])
+    assert result1 is None
+
+    result2 = basic_section.flexure_results_detailed_doc()
+    assert result2 is None
+
+
+# --- Tests for Helper Methods ---
+
+
+def test_get_units_row_shear(basic_section: Section) -> None:
+    """Test the _get_units_row_shear method."""
+    result = basic_section._get_units_row_shear()
+    assert result is None
+
+
+# --- Tests for Properties ---
+
+
+def test_results_property(basic_section: Section) -> None:
+    """Test the results property."""
+    result = basic_section.results
+    assert result is None
+
+
+# --- Additional Edge Case Tests ---
+
+
+def test_section_with_all_parameters() -> None:
+    """Test creating a section with all parameters specified."""
+    concrete = Concrete("C30")
+    steel = SteelBar(name="A400", f_y=400 * MPa)
+    section = Section(concrete=concrete, steel_bar=steel, c_c=30 * mm, label="TestSection")
+    assert section.label == "TestSection"
+    assert section.concrete is concrete
+    assert section.steel_bar is steel
+    assert section.c_c == 30 * mm
+    assert section.node is None
+
+
+def test_multiple_sections_independent_ids() -> None:
+    """Test that multiple sections have independent, incrementing IDs."""
+    concrete = Concrete("C25")
+    steel = SteelBar(name="B500S", f_y=500 * MPa)
+
+    sections = [Section(concrete=concrete, steel_bar=steel, c_c=25 * mm, label=f"S{i}") for i in range(5)]
+
+    # Verify IDs are unique and incrementing
+    ids = [s.id for s in sections]
+    assert len(ids) == len(set(ids))  # All IDs are unique
+    assert ids == sorted(ids)  # IDs are in ascending order
+
+    # Verify each successive ID increments by 1
+    for i in range(len(ids) - 1):
+        assert ids[i + 1] == ids[i] + 1

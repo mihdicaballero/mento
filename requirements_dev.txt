@@ -3,7 +3,7 @@ ruff
 pint
 pytest
 pytest-cov
-numpy
+numpy==1.26.4
 pandas
 IPython
 mypy
