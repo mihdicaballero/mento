@@ -580,6 +580,29 @@ def flexure_ACI_318_19_metric_single(d_long_mm: float, d_stir_mm: float, out_pat
     plt.close(current_fig)
 
 
+def design_CIRSOC_201_25_flexure() -> None:
+    # Define materials
+    concrete = Concrete_CIRSOC_201_25(name="C35", f_c=35 * MPa)
+    steel = SteelBar(name="ADN 420", f_y=420 * MPa)
+
+    # Beam settings
+    settings = BeamSettings(max_longitudinal_diameter=25 * mm, max_bars_per_layer=50)
+
+    # Define beam geometry
+    beam = RectangularBeam(
+        label="2082", concrete=concrete, steel_bar=steel, width=70 * cm, height=70 * cm, c_c=25 * mm, settings=settings
+    )
+    # Define forces
+    f1 = Forces(V_z=2000 * kN, M_y=-4105 * kNm)
+    node_1 = Node(section=beam, forces=f1)
+    # Perform all checks
+    # node_1.check()
+    node_1.design()
+    # Print results in Markdown format
+    beam.plot(show=True)
+    node_1.flexure_results_detailed()
+
+
 #######################################################################################
 
 
@@ -771,6 +794,7 @@ def batch_test_beam_plots() -> None:
 ############################################################################################
 
 if __name__ == "__main__":
+    design_CIRSOC_201_25_flexure()
     # units()
     # settings()
     # material()
@@ -783,11 +807,11 @@ if __name__ == "__main__":
     # flexure_ACI_318_19_metric_slab()
     # check_flexure_ACI_318_19_imperial()
     # design_flexure_ACI_318_test_01()
-    flexure_design_test_EN()
+    # flexure_design_test_EN()
     # check_flexure_EN_1992_2004_TEST_01()
     # check_flexure_EN_1992_2004_TEST_02()
     # check_flexure_EN_1992_2004_TEST_04()
-    design_flexure_EN_1992_2004_test_01()
+    # design_flexure_EN_1992_2004_test_01()
     # rebar()
     # summary_ACI()
     # summary_EN_1992()

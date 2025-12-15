@@ -25,7 +25,7 @@ class BeamSettings:
       - max_diameter_diff: 5 mm
       - minimum_longitudinal_diameter: 8 mm
       - max_longitudinal_diameter: 32 mm
-      - max_bars_per_layer: 5
+      - max_bars_per_layer: 12
 
     Imperial Defaults:
       - clear_spacing: 1 inch
@@ -35,7 +35,7 @@ class BeamSettings:
       - max_diameter_diff: 0.25 inch
       - minimum_longitudinal_diameter: 3/8 inch
       - max_longitudinal_diameter: 1.693 inch
-      - max_bars_per_layer: 5
+      - max_bars_per_layer: 12
     """
 
     # Class-level default values (documented but not shown in hover)
@@ -47,7 +47,7 @@ class BeamSettings:
         "max_diameter_diff": 5 * mm,
         "minimum_longitudinal_diameter": 8 * mm,
         "max_longitudinal_diameter": 32 * mm,
-        "max_bars_per_layer": 5,
+        "max_bars_per_layer": 12,
     }
 
     _imperial_defaults: ClassVar[Dict[str, Any]] = {
@@ -58,7 +58,7 @@ class BeamSettings:
         "max_diameter_diff": 0.25 * inch,
         "minimum_longitudinal_diameter": 3 / 8 * inch,
         "max_longitudinal_diameter": 1.693 * inch,
-        "max_bars_per_layer": 5,
+        "max_bars_per_layer": 12,
     }
 
     unit_system: str = "metric"
@@ -73,11 +73,7 @@ class BeamSettings:
     max_bars_per_layer: Any = field(default=_NOT_SET)
 
     def __post_init__(self) -> None:
-        defaults = (
-            self._imperial_defaults
-            if self.unit_system == "imperial"
-            else self._metric_defaults
-        )
+        defaults = self._imperial_defaults if self.unit_system == "imperial" else self._metric_defaults
 
         for f in fields(self):
             if not f.init or f.name == "unit_system":
@@ -97,12 +93,8 @@ class BeamSettings:
         for name, value in vars(self).items():
             # Skip private and special attributes, and the unit_system field
             if not name.startswith("_") and name != "unit_system":
-                if hasattr(value, "magnitude") and hasattr(
-                    value, "units"
-                ):  # It's a Quantity
-                    settings_list.append(
-                        f"{name}: {value.magnitude:.2f} {value.units:~}"
-                    )
+                if hasattr(value, "magnitude") and hasattr(value, "units"):  # It's a Quantity
+                    settings_list.append(f"{name}: {value.magnitude:.2f} {value.units:~}")
                 else:
                     settings_list.append(f"{name}: {value}")
         return "\n".join(settings_list)

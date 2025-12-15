@@ -377,9 +377,6 @@ def _maximum_flexural_reinforcement_ratio_ACI_318_19(self: "RectangularBeam") ->
         properties of the concrete (β1 and ε_c) and steel (ε_y).
 
         Note:
-        - The parameter `epsilon_min_rebar_ACI_318_19` is calculated as the
-        sum of the steel's yield strain (ε_y) and the concrete's strain
-        at crushing (ε_c).
         - This function only works if the `design_code` of the concrete is
         set to "ACI 318-19". For other codes, it returns 0.
 
@@ -387,16 +384,14 @@ def _maximum_flexural_reinforcement_ratio_ACI_318_19(self: "RectangularBeam") ->
     # Cast the concrete object to the specific ACI subclass
     concrete_aci = cast("Concrete_ACI_318_19", self.concrete)
 
-    # Calculate minimum steel strain for ductility (tension controlled according 9.3.3.1 and 21.2.2)
-    epsilon_min_rebar_ACI_318_19 = self.steel_bar.epsilon_y + concrete_aci._epsilon_c
-
     # Calculate maximum reinforcement ratio (ρ_max)
+    # From CRSI Guide - Beam Theory page 6-3
     rho_max = (
         0.85
         * concrete_aci.beta_1
         * self.concrete.f_c
         / self.steel_bar.f_y
-        * (concrete_aci._epsilon_c / (concrete_aci._epsilon_c + epsilon_min_rebar_ACI_318_19))
+        * (concrete_aci._epsilon_c / (self.steel_bar.epsilon_y + concrete_aci._epsilon_c * 2))
     )
 
     return rho_max
