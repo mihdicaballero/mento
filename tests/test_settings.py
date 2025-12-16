@@ -35,9 +35,7 @@ def imperial_settings() -> BeamSettings:
 
 def test_metric_defaults_all_set(metric_settings: BeamSettings) -> None:
     """Test that all metric defaults are correctly applied when no custom values are given."""
-    expected_defaults = (
-        BeamSettings._metric_defaults
-    )  # Access the class variable for comparison
+    expected_defaults = BeamSettings._metric_defaults  # Access the class variable for comparison
 
     for field_info in fields(BeamSettings):
         if field_info.name in expected_defaults:  # Check only fields with defaults
@@ -84,14 +82,10 @@ def test_override_specific_metric_setting() -> None:
 def test_override_specific_imperial_setting() -> None:
     """Test overriding a specific setting in imperial system."""
     custom_stirrup_diameter = 0.5 * inch
-    settings = BeamSettings(
-        unit_system="imperial", stirrup_diameter_ini=custom_stirrup_diameter
-    )
+    settings = BeamSettings(unit_system="imperial", stirrup_diameter_ini=custom_stirrup_diameter)
     assert_quantity_equal(settings.stirrup_diameter_ini, custom_stirrup_diameter)
     # Ensure other settings remain default imperial
-    assert_quantity_equal(
-        settings.clear_spacing, BeamSettings._imperial_defaults["clear_spacing"]
-    )
+    assert_quantity_equal(settings.clear_spacing, BeamSettings._imperial_defaults["clear_spacing"])
 
 
 def test_custom_unit_system_with_no_defaults_set() -> None:
@@ -102,9 +96,7 @@ def test_custom_unit_system_with_no_defaults_set() -> None:
     # Given the current implementation, it will always fall back to metric if not "imperial".
     settings = BeamSettings(unit_system="unknown_system")
     assert settings.unit_system == "unknown_system"  # Unit system itself is set
-    assert_quantity_equal(
-        settings.clear_spacing, BeamSettings._metric_defaults["clear_spacing"]
-    )
+    assert_quantity_equal(settings.clear_spacing, BeamSettings._metric_defaults["clear_spacing"])
     # This implies that any system other than "imperial" defaults to metric. This is good to test.
 
 
@@ -147,7 +139,7 @@ def test_str_metric_defaults(metric_settings: BeamSettings) -> None:
         "layers_spacing: 25.00 mm",
         "max_diameter_diff: 5.00 mm",
         "minimum_longitudinal_diameter: 8.00 mm",
-        "max_bars_per_layer: 5",
+        "max_bars_per_layer: 12",
     ]
     for line in expected_lines:
         assert line in s
@@ -167,7 +159,7 @@ def test_str_imperial_defaults(imperial_settings: BeamSettings) -> None:
         "layers_spacing: 1.00 in",
         "max_diameter_diff: 0.25 in",
         "minimum_longitudinal_diameter: 0.38 in",
-        "max_bars_per_layer: 5",
+        "max_bars_per_layer: 12",
     ]
     for line in expected_lines:
         assert line in s
@@ -176,9 +168,7 @@ def test_str_imperial_defaults(imperial_settings: BeamSettings) -> None:
 
 def test_str_with_custom_values() -> None:
     """Test the string representation with some custom values."""
-    settings = BeamSettings(
-        unit_system="metric", clear_spacing=40 * mm, max_bars_per_layer=7
-    )
+    settings = BeamSettings(unit_system="metric", clear_spacing=40 * mm, max_bars_per_layer=7)
     s = str(settings)
     assert "clear_spacing: 40.00 mm" in s
     assert "max_bars_per_layer: 7" in s

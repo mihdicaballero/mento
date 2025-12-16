@@ -56,7 +56,7 @@ allow_any_generics = true
 
 [tool.pytest.ini_options]
 minversion = "6.0"
-addopts = "-ra -q"
+addopts = "-ra -q --cov=mento --cov-report=html --cov-report=term-missing -v"
 testpaths = [
     "tests",
 ]
