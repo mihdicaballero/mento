@@ -3,17 +3,9 @@ from typing import TYPE_CHECKING
 from dataclasses import dataclass
 import math
 import numpy as np
-from devtools import debug
 
 from mento.beam import RectangularBeam
-from mento.forces import Forces
-from mento.node import Node
-from mento.material import (
-    SteelBar,
-    Concrete_ACI_318_19,
-    # Concrete_EN_1992_2004,
-)
-from mento.units import m, mm, cm, inch, MPa, kNm, kip, ksi, kN
+from mento.units import m, mm, cm, inch
 
 if TYPE_CHECKING:
     from pint import Quantity
@@ -142,9 +134,7 @@ class OneWaySlab(RectangularBeam):
             if spacing == 0 * mm:
                 return 0  # Default to 0 bars if spacing is zero
             # Round up to ensure full bars (e.g., 3.2 bars → 4 bars)
-            return int(
-                np.ceil((width.to("cm").magnitude / spacing.to("cm").magnitude))
-            )  # Returns dimensionless count
+            return int(np.ceil((width.to("cm").magnitude / spacing.to("cm").magnitude)))  # Returns dimensionless count
 
         # --- BOTTOM REBAR ---
         self._n1_b = calculate_bars(self._s_b1_b, self.width)
@@ -153,74 +143,3 @@ class OneWaySlab(RectangularBeam):
         # --- TOP REBAR ---
         self._n1_t = calculate_bars(self._s_b1_t, self.width)
         self._n3_t = calculate_bars(self._s_b3_t, self.width)
-
-
-def slab_metric() -> None:
-    concrete = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
-    steelBar = SteelBar(name="ADN 420", f_y=420 * MPa)
-    slab = OneWaySlab(
-        label="Slab 01",
-        concrete=concrete,
-        steel_bar=steelBar,
-        width=1.3 * m,
-        height=20 * cm,
-        c_c=25 * mm,
-    )
-    # Set only position 1 bottom rebar
-    # slab.set_slab_longitudinal_rebar_bot(d_b1=16 * mm, s_b1=19 * cm)
-    # Set top rebar positions 1
-    # slab.set_slab_longitudinal_rebar_top(d_b1=12 * mm, s_b1=15 * cm)
-    # debug(
-    # slab._A_s_bot, slab._A_s_top, slab._available_s_bot, slab._available_s_top
-    # )  # Debugging output for areas
-    # f1 = Forces(label="C1", M_y=80 * kNm, V_z = 50*kN)
-    f1 = Forces(label="C1", V_z=50 * kN)
-    f2 = Forces(label="C1", V_z=30 * kN, M_y=86 * kNm)
-    node_1 = Node(slab, [f1, f2])
-    # node_1.check_flexure()
-    print(node_1.design_flexure())
-    debug(slab._n1_b, slab._d_b1_b, slab._n1_t, slab._d_b1_t)
-    # print(slab.flexure_design_results_bot)
-    # print(node_1.check_flexure())
-    # node_1.flexure_results_detailed()
-    # print(node_1.check_shear())
-    # node_1.shear_results_detailed()
-    slab.plot()
-    # print(slab.flexure_results)
-
-
-def slab_imperial() -> None:
-    concrete = Concrete_ACI_318_19(name="C4", f_c=4 * ksi)
-    steelBar = SteelBar(name="ADN 420", f_y=60 * ksi)
-    slab = OneWaySlab(
-        label="Slab 01",
-        concrete=concrete,
-        steel_bar=steelBar,
-        width=40 * inch,
-        height=7 * inch,
-        c_c=0.75 * inch,
-    )
-    # Set only position 1 bottom rebar
-    slab.set_slab_longitudinal_rebar_bot(d_b1=0.5 * inch, s_b1=12 * inch)
-    # Set top rebar positions 1 and 2
-    slab.set_slab_longitudinal_rebar_top(d_b1=0.5 * inch, s_b1=12 * inch)
-    debug(
-        slab._A_s_bot,
-        slab._A_s_top,
-        slab._n1_b,
-        slab._available_s_bot,
-        slab._available_s_top,
-    )  # Debugging output for areas
-    f1 = Forces(label="C1", M_y=20 * kNm)
-    f2 = Forces(label="C1", V_z=1.52 * kip, M_y=-20 * kNm)
-    node_1 = Node(slab, [f1, f2])
-    # print(node_1.check_flexure())
-    # node_1.flexure_results_detailed()
-    node_1.check_shear()
-    node_1.shear_results_detailed()
-    slab.plot()
-
-
-if __name__ == "__main__":
-    slab_metric()
-    # slab_imperial()

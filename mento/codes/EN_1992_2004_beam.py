@@ -497,12 +497,12 @@ def _design_flexure_EN_1992_2004(
 
             # Design bottom reinforcement
             section_rebar_bot = Rebar(self)
-            section_rebar_bot.longitudinal_rebar_EN_1992_2004(self._A_s_bot)
+            section_rebar_bot.longitudinal_rebar(self._A_s_bot)
             best_design_bot = section_rebar_bot.longitudinal_rebar_design
 
             if self._A_s_top > 0:
                 section_rebar_top = Rebar(self)
-                section_rebar_top.longitudinal_rebar_EN_1992_2004(self._A_s_top)
+                section_rebar_top.longitudinal_rebar(self._A_s_top)
                 best_design_top = section_rebar_top.longitudinal_rebar_design
             else:
                 best_design_top = None

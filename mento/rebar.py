@@ -178,10 +178,6 @@ class Rebar:
             valid_diameters, s_max_l, s_max_w = self.transverse_rebar_CIRSOC_201_25(V_s_req)
         elif self.beam.concrete.design_code == "EN 1992-2004":
             valid_diameters, s_max_l, s_max_w = self.transverse_rebar_EN_1992_2004(alpha)
-        else:
-            raise ValueError(
-                f"Shear design method not implemented for concrete type: {type(self.beam.concrete).__name__}"
-            )
 
         # Iterate through available diameters
         for d_b in valid_diameters:
@@ -229,9 +225,6 @@ class Rebar:
                     if s_l < 5 * cm:  # If spacing is less than 5 cm, increase 1 stirrup
                         n_legs += 2
                         s_l = math.floor(s_max_l.to("cm").magnitude) * cm  # Reset s_l to the max allowed spacing
-                    # Break the loop if legs exceed the limit of legs or max stirrup diameter
-                    if n_legs > 6:
-                        break
                 else:
                     # Check if the calculated A_v meets or exceeds the required A_v
                     if A_v >= A_v_req:
@@ -255,9 +248,6 @@ class Rebar:
                     if s_l < 2 * inch:  # If spacing is less than 2 inch, increase 1 stirrup
                         n_legs += 2
                         s_l = math.floor(s_max_l.to("inch").magnitude) * inch  # Reset s_l to the max allowed spacing
-                    # Break the loop if legs exceed the limit of legs or max stirrup diameter
-                    if n_legs > 6:
-                        break
 
         # Create a DataFrame with all valid combinations
         df_combinations = pd.DataFrame(valid_combinations)
@@ -367,9 +357,6 @@ class Rebar:
                 for d_b3 in [d for d in valid_rebar_diameters if d <= d_b2]:
                     for d_b4 in [d for d in valid_rebar_diameters if d <= d_b3]:
                         # Condition 5: |d_b1 - d_b2| and |d_b3 - d_b4| must not exceed max_diameter_diff
-                        # Ensure all diameter combinations satisfy the ordering constraint
-                        if not (d_b1 >= d_b2 >= d_b3 >= d_b4):
-                            continue  # Skip combinations that do not meet the ordering condition
                         # Apply diameter difference condition across all combinations
                         # Ensure that no two bars exceed `max_diameter_diff`
                         diameters = [d_b1, d_b2, d_b3, d_b4]
@@ -433,7 +420,7 @@ class Rebar:
                                 )
                             else:
                                 # Track the combination with the maximum possible area (fallback)
-                                if A_s_layer_1 > max_fallback_area:
+                                if A_s_layer_1 > max_fallback_area and A_s_layer_1 <= max_limit:
                                     max_fallback_area = A_s_layer_1
                                     best_fallback_combination = {
                                         "n_1": n1,
@@ -501,7 +488,7 @@ class Rebar:
                                         )
                                     else:
                                         # Track fallback combination with maximum As
-                                        if total_as > max_fallback_area:
+                                        if total_as > max_fallback_area and total_as <= max_limit:
                                             max_fallback_area = total_as
                                             best_fallback_combination = {
                                                 "n_1": n1,
@@ -559,7 +546,7 @@ class Rebar:
                                                 }
                                             )
                                         else:
-                                            if total_as > max_fallback_area:
+                                            if total_as > max_fallback_area and total_as <= max_limit:
                                                 max_fallback_area = total_as
                                                 best_fallback_combination = {
                                                     "n_1": n1,
@@ -579,36 +566,26 @@ class Rebar:
         df = pd.DataFrame(valid_combinations)
         # Drop duplicate rows based on the specified columns
         df = df.drop_duplicates(subset=["n_1", "d_b1", "n_2", "d_b2", "n_3", "d_b3", "n_4", "d_b4"])
+
         # If no valid combinations satisfy A_s_req, use the best fallback combination
         if df.empty and best_fallback_combination is not None:
             df = pd.DataFrame([best_fallback_combination])
 
-        modified_df = self._calculate_penalties_long_rebar(df)
-        # Sort by 'Functional' to sort by the best options
-        modified_df.sort_values(by=["functional"], inplace=True)
-        modified_df.reset_index(drop=True, inplace=True)
-
-        self._long_combos_df = modified_df
-
-        return modified_df.head(10)
+        # Only calculate penalties if we have valid combinations
+        if not df.empty:
+            modified_df = self._calculate_penalties_long_rebar(df)
+            # Sort by 'Functional' to sort by the best options
+            modified_df.sort_values(by=["functional"], inplace=True)
+            modified_df.reset_index(drop=True, inplace=True)
+            self._long_combos_df = modified_df
+            return modified_df.head(10)
+        else:
+            # Return empty DataFrame with expected structure if no combinations found
+            self._long_combos_df = df
+            return df
 
     def longitudinal_rebar_EN_1992_2004(self, A_s_req: Quantity) -> None:
         self.longitudinal_rebar_ACI_318_19(A_s_req)  # TODO WE HAVE TO CHANGE THIS
-
-    def _estimate_mechanical_cover(self, row: pd.Series) -> "Quantity":
-        """
-        Estimate the total mechanical cover (bottom fiber to centroid of tension steel)
-        based on the bar diameters and number of layers.
-        """
-        # first layer centroid = c_c + stirrup + 0.5 * db1
-        cover = self.beam.c_c + self.beam._stirrup_d_b + 0.5 * row["d_b1"]
-
-        # if there is a second layer, add one bar diameter + clear vertical spacing
-        if (row["n_3"] + row["n_4"]) > 0:
-            # conservative vertical gap between layers
-            v_clear = max(self.beam.settings.layers_spacing, row["d_b1"])
-            cover += row["d_b1"] + v_clear + 0.5 * (row["d_b3"] or row["d_b1"])
-        return cover
 
     def _check_spacing(
         self,
@@ -639,11 +616,8 @@ class Rebar:
 
         total_bars = n1 + n2
 
-        if total_bars <= 1:
-            clear_mm = eff_mm - max(d1_mm, d2_mm)
-        else:
-            total_bar_width_mm = n1 * d1_mm + n2 * d2_mm
-            clear_mm = (eff_mm - total_bar_width_mm) / (total_bars - 1)
+        total_bar_width_mm = n1 * d1_mm + n2 * d2_mm
+        clear_mm = (eff_mm - total_bar_width_mm) / (total_bars - 1)
 
         # Store as Quantity for reporting
         self._clear_spacing = clear_mm * mm
@@ -808,27 +782,5 @@ class Rebar:
         """
         if self.beam.concrete.design_code == "ACI 318-19" or self.beam.concrete.design_code == "CIRSOC 201-25":
             return self.longitudinal_rebar_ACI_318_19(A_s_req, A_s_max)
-        # elif self.beam.concrete.design_code=="EN 1992":
-        #     return self.beam_longitudinal_rebar_EN_1992(A_s_req)
-        # elif self.beam.concrete.design_code=="EHE-08":
-        #     return self.beam_longitudinal_rebar_EHE_08(A_s_req)
-        else:
-            raise ValueError(
-                f"Longitudinal design method not implemented \
-                             for concrete type: {type(self.beam.concrete).__name__}"
-            )
-
-    # Factory method to select the longitudinal rebar method
-    # def transverse_rebar(self, A_v_req: Quantity, V_s_req: Quantity) -> DataFrame:
-    #     """
-    #     Selects the appropriate transverse rebar method based on the design code.
-    #     """
-    #     if self.beam.concrete.design_code=="ACI 318-19":
-    #         return self.transverse_rebar_ACI_318_19(A_v_req, V_s_req)
-    #     # elif self.beam.concrete.design_code=="EN 1992":
-    #     #     return self.beam_transverse_rebar_EN_1992(A_v_req, V_s_req)
-    #     # elif self.beam.concrete.design_code=="EHE-08":
-    #     #     return self.beam_transverse_rebar_EHE_08(A_v_req, V_s_req)
-    #     else:
-    #         raise ValueError(f"Shear design method not implemented \
-    #                          for concrete type: {type(self.beam.concrete).__name__}")
+        elif self.beam.concrete.design_code == "EN 1992-2004":
+            return self.longitudinal_rebar_EN_1992_2004(A_s_req)
