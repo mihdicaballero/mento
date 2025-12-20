@@ -28,6 +28,8 @@ The development is structured around key milestones, with ongoing tasks that aim
 - [x] Rectangular concrete beam section check and design for EN 1992-2004.
 - [x] One way concrete slab check and design for ACI 318-19 and CIRSOC 201-25.
 - [x] One way concrete slab check and design for EN 1992-2004.
+- [ ] Slab shear punching check and design for ACI 318-19 and CIRSOC 201-25.
+- [ ] Slab shear punching check and design for EN 1992-2004.
 
 Each milestone incorporates rigorous testing and continuous integration to ensure code quality and reliability.
 
