@@ -19,19 +19,6 @@ from mento import Forces, RectangularBeam, Node, OneWaySlab
 from mento.rebar import Rebar
 from mento.summary import BeamSummary
 
-
-#######################################################################################
-def clear_console() -> None:
-    """
-    Auxiliar function for clear console
-    Clears the console based on the operating system.
-    """
-    if os.name == "nt":  # For Windows
-        os.system("cls")
-    else:  # For macOS and Linux
-        os.system("clear")
-
-
 #######################################################################################
 
 
@@ -167,7 +154,7 @@ def shear_ACI_318_19_imperial() -> None:
     node.shear_results_detailed_doc()
 
 
-def shear_ACI_318_19_slab() -> None:
+def shear_ACI_318_19_slab_imperial() -> None:
     concrete = Concrete_ACI_318_19(name="C4", f_c=4 * ksi)
     steelBar = SteelBar(name="ADN 420", f_y=60 * ksi)
     slab = OneWaySlab(
@@ -190,6 +177,33 @@ def shear_ACI_318_19_slab() -> None:
     # print(slab.shear_design_results)
     node.shear_results_detailed()
     node.shear_results_detailed_doc()
+
+
+def shear_ACI_318_19_slab_metric() -> None:
+    concrete = Concrete_CIRSOC_201_25(name="H35", f_c=35 * MPa)
+    steelBar = SteelBar(name="ADN 420", f_y=420 * MPa)
+    slab = OneWaySlab(
+        concrete=concrete,
+        steel_bar=steelBar,
+        c_c=40 * mm,
+        width=100 * cm,
+        height=35 * cm,
+        label="Test",
+    )
+
+    f1 = Forces(label="ELU_01", V_z=388 * kN, M_y=420 * kNm)
+    f2 = Forces(label="ELU_02", V_z=388 * kN, M_y=-385 * kNm)
+    node = Node(section=slab, forces=[f1, f2])
+    slab.set_slab_longitudinal_rebar_bot(d_b1=20 * mm, s_b1=7.5 * cm)
+    slab.set_slab_longitudinal_rebar_top(d_b1=20 * mm, s_b1=7.5 * cm)
+    slab.set_transverse_rebar(n_stirrups=3, d_b=8 * mm, s_l=10 * cm)
+    node.check()
+    # results = node.design_shear()
+    print(node.check_shear())
+    print(node.check_flexure())
+    slab.plot(show=True)
+    slab.shear_results_detailed_doc()
+    slab.flexure_results_detailed_doc()
 
 
 def shear_CIRSOC_201_2025() -> None:
@@ -225,7 +239,6 @@ def shear_CIRSOC_201_2025() -> None:
 
 
 def check_flexure_ACI_318_19_imperial() -> None:
-    clear_console()
     concrete = Concrete_ACI_318_19(name="C4", f_c=4000 * psi)
     steelBar = SteelBar(name="ADN 420", f_y=60 * ksi)
     section = RectangularBeam(
@@ -315,7 +328,6 @@ def flexure_ACI_318_19_metric_slab() -> None:
 
 
 def check_flexure_EN_1992_2004_TEST_01() -> None:
-    clear_console()
     concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
     steelBar = SteelBar(name="B500S", f_y=500 * MPa)
     BEAM_TEST_01 = RectangularBeam(
@@ -355,7 +367,6 @@ def check_flexure_EN_1992_2004_TEST_01() -> None:
 
 
 def check_flexure_EN_1992_2004_TEST_02() -> None:
-    clear_console()
     concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
     steelBar = SteelBar(name="B500S", f_y=500 * MPa)
     BEAM_TEST_01 = RectangularBeam(
@@ -395,7 +406,6 @@ def check_flexure_EN_1992_2004_TEST_02() -> None:
 
 
 def check_flexure_EN_1992_2004_TEST_04() -> None:
-    clear_console()
     concrete = Concrete_EN_1992_2004(name="C60", f_c=60 * MPa)
     steelBar = SteelBar(name="B400S", f_y=400 * MPa)
     BEAM_TEST_03 = RectangularBeam(
@@ -794,7 +804,7 @@ def batch_test_beam_plots() -> None:
 ############################################################################################
 
 if __name__ == "__main__":
-    design_CIRSOC_201_25_flexure()
+    # design_CIRSOC_201_25_flexure()
     # units()
     # settings()
     # material()
@@ -816,3 +826,4 @@ if __name__ == "__main__":
     # summary_ACI()
     # summary_EN_1992()
     # batch_test_beam_plots()
+    shear_ACI_318_19_slab_metric()
