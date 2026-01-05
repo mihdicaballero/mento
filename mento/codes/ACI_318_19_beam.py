@@ -276,8 +276,6 @@ def _check_shear_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.DataFr
         results = _compile_results_ACI_shear(self, force)
         _initialize_dicts_ACI_318_19_shear(self)
         return results
-    else:
-        raise ValueError("Concrete type is not compatible with ACI 318-19 shear check.")
 
 
 def _design_shear_ACI_318_19(self: "RectangularBeam", force: Forces) -> None:
@@ -325,35 +323,37 @@ def _compile_results_ACI_shear(self: "RectangularBeam", force: Forces) -> pd.Dat
     return pd.DataFrame([results], index=[0])
 
 
-def _calculate_phi_ACI_318_19(self: "RectangularBeam", epsilon_most_strained: float) -> float:
-    """
-    Calculates the strength reduction factor (φ) for flexural design
-    based on ACI 318-19.
-    It is used for columns; for beams, it is not required since beams
-    are always designed to be tension-controlled, with φ=0.9.
+# TODO: Delete this method since is not used
 
-    Parameters:
-        epsilon_most_strained (float): Strain in the most strained steel fiber.
+# def _calculate_phi_ACI_318_19(self: "RectangularBeam", epsilon_most_strained: float) -> float:
+#     """
+#     Calculates the strength reduction factor (φ) for flexural design
+#     based on ACI 318-19.
+#     It is used for columns; for beams, it is not required since beams
+#     are always designed to be tension-controlled, with φ=0.9.
 
-    Returns:
-        float: The strength reduction factor (φ), ranging from 0.65 to 0.9.
+#     Parameters:
+#         epsilon_most_strained (float): Strain in the most strained steel fiber.
 
-    Description:
-        - φ = 0.65 if ε_most_strained ≤ ε_y (yield strain).
-        - φ transitions linearly from 0.65 to 0.9 if ε_y < ε_most_strained ≤ ε_y + ε_c
-        (concrete crushing strain).
-        - φ = 0.9 if ε_most_strained > ε_y + ε_c.
-    """
-    # Retrieve concrete crushing strain (ε_c)
-    epsilon_c = self.concrete.get_properties()["epsilon_c"]
+#     Returns:
+#         float: The strength reduction factor (φ), ranging from 0.65 to 0.9.
 
-    # Calculate φ based on ε_most_strained
-    if epsilon_most_strained <= self.steel_bar.epsilon_y:
-        return 0.65
-    elif epsilon_most_strained <= self.steel_bar.epsilon_y + epsilon_c:
-        return (0.9 - 0.65) * (epsilon_most_strained - self.steel_bar.epsilon_y) / epsilon_c + 0.65
-    else:
-        return 0.9
+#     Description:
+#         - φ = 0.65 if ε_most_strained ≤ ε_y (yield strain).
+#         - φ transitions linearly from 0.65 to 0.9 if ε_y < ε_most_strained ≤ ε_y + ε_c
+#         (concrete crushing strain).
+#         - φ = 0.9 if ε_most_strained > ε_y + ε_c.
+#     """
+#     # Retrieve concrete crushing strain (ε_c)
+#     epsilon_c = self.concrete.get_properties()["epsilon_c"]
+
+#     # Calculate φ based on ε_most_strained
+#     if epsilon_most_strained <= self.steel_bar.epsilon_y:
+#         return 0.65
+#     elif epsilon_most_strained <= self.steel_bar.epsilon_y + epsilon_c:
+#         return (0.9 - 0.65) * (epsilon_most_strained - self.steel_bar.epsilon_y) / epsilon_c + 0.65
+#     else:
+#         return 0.9
 
 
 ##########################################################
@@ -498,7 +498,6 @@ def _calculate_flexural_reinforcement_ACI_318_19(
     # Verify if the value under the square root is negative
     sqrt_value = 1 - 2 * R_n / (0.85 * self.concrete.f_c)
     if sqrt_value < 0:
-        # Raise exception if the square root is negative;
         # Here we assign A_s_max so that the calculation does not break,
         # resulting in a DCR greater than 1.
         A_s_calc = A_s_max
@@ -571,11 +570,6 @@ def _calculate_flexural_reinforcement_ACI_318_19(
         f_s_prima = min(0.003 * self.steel_bar.E_s * (1 - d_prima / c_t), self.steel_bar.f_y)
         A_s_comp = M_n_prima / (f_s_prima * (d - d_prima))
         A_s_final = rho * b * d + A_s_comp
-
-    if sqrt_value < 0:
-        # In the case where the quadratic equation fails (negative square root),
-        # use an approximate value to provide an estimate.
-        A_s_final = M_u / (concrete_aci._phi_t * 0.9 * d * self.steel_bar.f_y)
 
     return A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool
 
@@ -1288,16 +1282,14 @@ def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
 
         checks = []
         for i, (curr, min_val, max_val) in enumerate(zip(current_values, min_values, max_values)):
-            # Generate check marks based on the range conditions
-            for i, (curr, min_val, max_val) in enumerate(zip(current_values, min_values, max_values)):
-                # --- EXCEPTION FOR DOUBLY REINFORCED SECTIONS ---
-                # If doubly reinforced, ignore maximum limits for top (i=0) and bottom (i=2)
-                if self._doubly_reinforced and i in (0, 2):
-                    # If it passes min, we give the special tag
-                    if min_val is None or curr >= min_val:
-                        checks.append("✔️ D.R.")
-                        continue
-                    # If it fails min, let the normal logic handle it (fall through)
+            # --- EXCEPTION FOR DOUBLY REINFORCED SECTIONS ---
+            # If doubly reinforced, ignore maximum limits for top (i=0) and bottom (i=2)
+            if self._doubly_reinforced and i in (0, 2):
+                # If it passes min, we give the special tag
+                if min_val is None or curr >= min_val:
+                    checks.append("✔️ D.R.")
+                    continue
+                # If it fails min, let the normal logic handle it (fall through)
             # -------------------------------------------------
 
             passed = (min_val is None or curr >= min_val) and (max_val is None or curr <= max_val)
@@ -1410,8 +1402,8 @@ def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
                 "Effective height",
                 "Depth of equivalent strength block ratio",
                 "Minimum rebar reinforcing",
-                "Required rebar reinforcing bottom",
                 "Required rebar reinforcing top",
+                "Required rebar reinforcing bottom",
                 "Defined rebar reinforcing bottom",
                 "Longitudinal reinforcement ratio",
                 "Total flexural strength",

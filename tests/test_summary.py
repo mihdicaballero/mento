@@ -8,12 +8,16 @@ testing all methods, edge cases, and error conditions.
 import pytest
 import pandas as pd
 import copy
+import warnings
+from pathlib import Path
 
 from mento import MPa, mm, cm, kN, kNm, m
 from mento.summary import BeamSummary
 from mento.material import Concrete_ACI_318_19, SteelBar, Concrete_EN_1992_2004
 from mento.node import Node
 
+# Suppress the specific ACI warning for all tests
+pytestmark = pytest.mark.filterwarnings("ignore::UserWarning")
 
 # ============================================================================
 # FIXTURES
@@ -297,7 +301,9 @@ def test_check_method_returns_dataframe(beam_summary: BeamSummary) -> None:
 
 def test_check_method_capacity_check_false(beam_summary: BeamSummary) -> None:
     """Test check() with capacity_check=False (default)."""
-    result = beam_summary.check(capacity_check=False)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        result = beam_summary.check(capacity_check=False)
     assert isinstance(result, pd.DataFrame)
     # Check that required columns exist
     expected_columns = ["Beam", "b", "h", "cc", "As,top", "As,bot", "Av"]
@@ -307,7 +313,9 @@ def test_check_method_capacity_check_false(beam_summary: BeamSummary) -> None:
 
 def test_check_method_capacity_check_true(beam_summary: BeamSummary) -> None:
     """Test check() with capacity_check=True."""
-    result = beam_summary.check(capacity_check=True)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        result = beam_summary.check(capacity_check=True)
     assert isinstance(result, pd.DataFrame)
     # Check that result is a DataFrame with expected structure
     assert "Beam" in result.columns
@@ -508,7 +516,7 @@ def test_export_design_without_design_data(beam_summary: BeamSummary) -> None:
         beam_summary.export_design("/tmp/test.xlsx")
 
 
-def test_export_design_creates_file(beam_summary: BeamSummary, tmp_path) -> None:
+def test_export_design_creates_file(beam_summary: BeamSummary, tmp_path: Path) -> None:
     """Test export_design() creates an Excel file."""
     # First run design
     beam_summary.design()
@@ -521,7 +529,7 @@ def test_export_design_creates_file(beam_summary: BeamSummary, tmp_path) -> None
     assert export_path.exists()
 
 
-def test_export_design_includes_units_row(beam_summary: BeamSummary, tmp_path) -> None:
+def test_export_design_includes_units_row(beam_summary: BeamSummary, tmp_path: Path) -> None:
     """Test export_design() includes units row."""
     # Run design
     beam_summary.design()
@@ -537,7 +545,7 @@ def test_export_design_includes_units_row(beam_summary: BeamSummary, tmp_path) -
     assert len(reimported) == 5  # units + 4 data rows
 
 
-def test_export_design_converts_magnitudes(beam_summary: BeamSummary, tmp_path) -> None:
+def test_export_design_converts_magnitudes(beam_summary: BeamSummary, tmp_path: Path) -> None:
     """Test export_design() converts quantities to magnitudes."""
     # Run design
     beam_summary.design()
@@ -561,7 +569,7 @@ def test_export_design_converts_magnitudes(beam_summary: BeamSummary, tmp_path) 
 # ============================================================================
 
 
-def test_import_design_updates_beam_list(beam_summary: BeamSummary, tmp_path) -> None:
+def test_import_design_updates_beam_list(beam_summary: BeamSummary, tmp_path: Path) -> None:
     """Test import_design() updates beam_list."""
     # Export first
     beam_summary.design()
@@ -576,7 +584,7 @@ def test_import_design_updates_beam_list(beam_summary: BeamSummary, tmp_path) ->
     assert len(beam_summary.beam_list) == 5  # units + 4 beams
 
 
-def test_import_design_reprocesses_nodes(beam_summary: BeamSummary, tmp_path) -> None:
+def test_import_design_reprocesses_nodes(beam_summary: BeamSummary, tmp_path: Path) -> None:
     """Test import_design() recreates nodes."""
     # Get original node count
     original_node_count = len(beam_summary.nodes)
@@ -721,7 +729,7 @@ def test_beam_summary_with_different_units(
 
 def test_full_workflow_check_design_export_import(
     beam_summary: BeamSummary,
-    tmp_path,
+    tmp_path: Path,
 ) -> None:
     """Test complete workflow: check -> design -> export -> import."""
     # 1. Check

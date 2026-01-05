@@ -225,8 +225,6 @@ def _check_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> DataFra
         }
         _initialize_dicts_EN_1992_2004_shear(self)
         return pd.DataFrame([results], index=[0])
-    else:
-        raise ValueError("Concrete type is not compatible with EN 1992 shear check.")
 
 
 def _design_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> None:
@@ -242,8 +240,6 @@ def _design_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> None:
         _calculate_required_shear_reinforcement_EN_1992_2004(self)
 
         return None
-    else:
-        raise ValueError("Concrete type is not compatible with EN 1992 shear design.")
 
 
 ##########################################################
@@ -328,7 +324,7 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
 
         else:
             # Compressive reinforcement is required
-
+            self._doubly_reinforced = True
             # Limit tensile reinforcement area
             z = d - 0.5 * lambda_ * x_eff_lim
             A_s1_lim = (M_lim / (z * f_yd)).to("cm^2")
@@ -545,11 +541,6 @@ def _design_flexure_EN_1992_2004(
             rec_mec = c_mec_calc
             d_prima = d_prima_calc
 
-        if iteration_count >= max_iterations:
-            # Podés loguear un warning si querés:
-            Warning("Flexure EN 1992 did not converge within max_iterations")
-            pass
-
         # Return results as a DataFrame
         results = {
             "Bottom_As_adopted": self._A_s_bot.to("inch**2"),
@@ -558,8 +549,6 @@ def _design_flexure_EN_1992_2004(
             "Top separation of bars": self._available_s_top.to("inch"),
         }
         return pd.DataFrame([results], index=[0])
-    else:
-        raise ValueError("Concrete type is not compatible with EN 1992 flexure design.")
 
 
 def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> pd.DataFrame:
@@ -892,11 +881,24 @@ def _initialize_dicts_EN_1992_2004_flexure(self: "RectangularBeam") -> None:
         ]  # Current values to check
 
         # Generate check marks based on the range conditions
-        checks = [
-            "✔️" if (min_val is None or curr >= min_val) and (max_val is None or curr <= max_val) else "❌"
-            for curr, min_val, max_val in zip(current_values, min_values, max_values)
-        ]
-        self._all_flexure_checks_passed = all(check == "✔️" for check in checks)
+        checks = []
+        for i, (curr, min_val, max_val) in enumerate(zip(current_values, min_values, max_values)):
+            # --- EXCEPTION FOR DOUBLY REINFORCED SECTIONS ---
+            # If doubly reinforced, ignore maximum limits for top (i=0) and bottom (i=2)
+            if self._doubly_reinforced and i in (0, 2):
+                # If it passes min, we give the special tag
+                if min_val is None or curr >= min_val:
+                    checks.append("✔️ D.R.")
+                    continue
+                # If it fails min, let the normal logic handle it (fall through)
+            # -------------------------------------------------
+
+            passed = (min_val is None or curr >= min_val) and (max_val is None or curr <= max_val)
+            if passed:
+                checks.append("✔️")
+            else:
+                checks.append("❌")
+        self._all_flexure_checks_passed = not any(check in ("❌") for check in checks)
         self._data_min_max_flexure = {
             "Check": [
                 "Min/Max As rebar top",
@@ -988,8 +990,8 @@ def _initialize_dicts_EN_1992_2004_flexure(self: "RectangularBeam") -> None:
                 "Effective height",
                 "Depth of equivalent strength block ratio",
                 "Minimum rebar reinforcing",
-                "Required rebar reinforcing bottom",
                 "Required rebar reinforcing top",
+                "Required rebar reinforcing bottom",
                 "Defined rebar reinforcing bottom",
                 "Longitudinal reinforcement ratio",
                 "Total flexural strength",
