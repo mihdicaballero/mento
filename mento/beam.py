@@ -538,10 +538,6 @@ class RectangularBeam(RectangularSection):
             _design_flexure_ACI_318_19(self, max_M_y_bot, max_M_y_top)
         elif self.concrete.design_code == "EN 1992-2004":
             _design_flexure_EN_1992_2004(self, max_M_y_bot, max_M_y_top)
-        else:
-            raise ValueError(
-                f"Longitudinal design method not implemented " f"for concrete type: {type(self.concrete).__name__}"
-            )
 
         # Check flexural capacity for all forces with the assigned reinforcement
         all_results = self.check_flexure(forces)
@@ -566,10 +562,6 @@ class RectangularBeam(RectangularSection):
                 result = _check_flexure_ACI_318_19(self, force)
             elif self.concrete.design_code == "EN 1992-2004":
                 result = _check_flexure_EN_1992_2004(self, force)
-            else:
-                raise ValueError(
-                    f"Flexure design method not implemented for concrete type: {type(self.concrete).__name__}"
-                )  # noqa: E501
             self._flexure_results_list.append(result)
 
             # Store detailed results for this force
@@ -632,10 +624,6 @@ class RectangularBeam(RectangularSection):
                 _design_shear_ACI_318_19(self, force)
             elif self.concrete.design_code == "EN 1992-2004":
                 _design_shear_EN_1992_2004(self, force)
-            else:
-                raise ValueError(
-                    f"Shear design method not implemented for concrete type:" f"{type(self.concrete).__name__}"
-                )
             # Check if this result is the limiting case
             current_A_v_req = self._A_v_req
             if current_A_v_req >= max_A_v_req:
@@ -676,10 +664,6 @@ class RectangularBeam(RectangularSection):
                 result = _check_shear_ACI_318_19(self, force)
             elif self.concrete.design_code == "EN 1992-2004":
                 result = _check_shear_EN_1992_2004(self, force)
-            else:
-                raise ValueError(
-                    f"Shear design method not implemented for concrete type: {type(self.concrete).__name__}"
-                )  # noqa: E501
 
             self._shear_results_list.append(result)
 
