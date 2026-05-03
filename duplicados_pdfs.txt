@@ -1,0 +1,8 @@
+LISTA DE PDFs DUPLICADOS:
+
+=== GRUPO 1 ===
+Hash: c148dc991328e7c6eb13f4c3eceee118519445af2631ea0ca7aab2889d6c78ae
+  - C:\Users\juanp\Desktop\PRUEBA\Código Técnico de la Edificación - Protección acustica.pdf
+  - C:\Users\juanp\Desktop\PRUEBA\asdsad\asdsadadsada\Código Técnico de la Edificación - Protección acustica.pdf
+  - C:\Users\juanp\Desktop\PRUEBA\asdsad\asdsadadsada\sadasdas\asdasdadsadasd.pdf
+
