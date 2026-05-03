@@ -777,19 +777,23 @@ def test_check_flexure_ACI_318_19_3(beam_example_flexure_ACI: RectangularBeam) -
     assert results.iloc[1]["As"] == pytest.approx(20.15, rel=1e-3)
     assert results.iloc[1]["ØMn"] == pytest.approx(364.37, rel=1e-3)
 
-
 # def test_design_flexure_ACI_318_19_1(beam_example_flexure_ACI: RectangularBeam) -> None:
-#     f = Forces(label='Test_01', M_y=400*kip*ft)
-#     forces=[f]
-#     results = beam_example_flexure_ACI._design_flexure(forces)
+#     # Testing the check of the reinforced beam with a large moment that requires compression reinforcement, the moment being positive
+#     # # See calcpad: ACI 318-19 Beam Flexure 02-TEST_1.cpd
+#     f = Forces(label="Test_01", M_y=400 * kip * ft)
+#     node = Node(section=beam_example_flexure_ACI, forces=f)
+#     results = node.design_flexure()
+#     assert beam_example_flexure_ACI._d_bot.to("inch").magnitude == pytest.approx(20.3719, rel=1e-3)
+#     assert results.iloc[1]["Label"] == "B-12x24"
+#     assert results.iloc[1]["Comb."] == "Test_01"
+#     assert results.iloc[1]["Position"] == "Bottom"
+#     assert results.iloc[1]["As,min"] == pytest.approx(5.257, rel=1e-2)
+#     assert results.iloc[1]["As,req bot"] == pytest.approx(33.17, rel=1e-3)
+#     assert results.iloc[1]["As,req top"] == pytest.approx(4.93, rel=1e-3)
+#     assert results.iloc[1]["As"] == pytest.approx(36.49, rel=1e-2)
+#     assert results.iloc[1]["Mu"] == pytest.approx(542.33, rel=1e-3)
+#     assert results.iloc[1]["ØMn"] == pytest.approx(588.73, rel=1e-3)
 
-#     assert results.iloc[0]['Label'] == 'B-12x24'
-#     assert results.iloc[0]['Load Combo']  == 'Test_01'
-#     assert results.iloc[0]['Position'] == 'Bottom'
-#     assert results.iloc[0]['As,min'].to(cm**2).magnitude == pytest.approx(5.26, rel=1e-2)
-#     assert results.iloc[0]['As,req bot'].to(cm**2).magnitude == pytest.approx(33.17, rel=1e-3)
-#     assert results.iloc[0]['As,req top'].to(cm**2).magnitude == pytest.approx(4.93, rel=1e-2)
-#     assert results.iloc[0]['As'].to(inch**2).magnitude == pytest.approx(5.66, rel=1e-2)
 
 
 def testing_determine_nominal_moment_ACI_318_19(
