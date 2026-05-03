@@ -156,27 +156,65 @@ def test_aci_initialization_imperial(
     # For beta_1, f_c must be in MPa. 4000 psi = 27.579 MPa.
     # 17 <= 27.579 <= 28, so beta_1 should be 0.85
     assert pytest.approx(aci_imperial_concrete.beta_1) == 0.85
-
-
-# Test __beta_1 calculation ranges
+# Test __beta_1 calculation ranges - metric
 @pytest.mark.parametrize(
     "f_c_value, expected_beta_1",
     [
-        (17 * MPa, 0.85),
-        (28 * MPa, 0.85),
-        (20 * MPa, 0.85),  # In the first range
-        (30 * MPa, 0.85 - 0.05 / 7 * (30 - 28)),  # 28 < fc <= 55 range
+        (10 * MPa, 0.85),   # fc < 17 MPa → else branch (0.85)
+        (17 * MPa, 0.85),   # boundary inferior de la zona plana
+        (20 * MPa, 0.85),   # zona plana
+        (28 * MPa, 0.85),   # boundary exacto 28 MPa
+        (30 * MPa, 0.85 - 0.05 / 7 * (30 - 28)),  # 28 < fc ≤ 55 MPa
         (40 * MPa, 0.85 - 0.05 / 7 * (40 - 28)),
-        (55 * MPa, 0.85 - 0.05 / 7 * (55 - 28)),
-        (60 * MPa, 0.65),  # fc > 55 range
+        (55 * MPa, 0.85 - 0.05 / 7 * (55 - 28)),  # boundary del cap
+        (60 * MPa, 0.65),   # fc > 55 MPa → cap mínimo
         (70 * MPa, 0.65),
-        (10 * MPa, 0.85),  # fc < 17 MPa, falls into the else branch (0.85)
     ],
 )
-def test_aci_beta_1_calculation(f_c_value: Quantity, expected_beta_1: float) -> None:
-    concrete = Concrete_ACI_318_19(name="C4", f_c=f_c_value)
+def test_aci_beta_1_metric(f_c_value: Quantity, expected_beta_1: float) -> None:
+    """
+    Verifica β₁ para hormigones métricos (MPa) según ACI 318-19.
+
+    ACI 318-19 métrico: β₁ = 0.85 para fc ≤ 28 MPa,
+    decrece 0.05 por cada 7 MPa sobre 28, con mínimo 0.65 (fc ≥ 55 MPa).
+    Cubre todos los tramos de la fórmula: zona plana, zona descendente y cap.
+    """
+    concrete = Concrete_ACI_318_19(name="C_metric", f_c=f_c_value)
     assert pytest.approx(concrete.beta_1) == expected_beta_1
 
+    
+@pytest.mark.parametrize(
+    "fc_psi, expected_beta_1",
+    [
+        # fc <= 4000 psi → β₁ = 0.85 (zona plana)
+        (2500, 0.85),
+        (3000, 0.85),
+        (4000, 0.85),   # boundary exacto
+        # 4000 < fc <= 8000 psi → β₁ = 0.85 - 0.05/1000 * (fc - 4000)
+        (5000, 0.80),
+        (6000, 0.75),   # el caso que fallaba en Test_Etabs_05
+        (7000, 0.70),
+        (8000, 0.65),   # boundary exacto del cap
+        # fc > 8000 psi → β₁ = 0.65 (mínimo)
+        (9000, 0.65),
+        (12000, 0.65),
+    ],
+)
+
+def test_aci_beta_1_imperial(fc_psi: float, expected_beta_1: float) -> None:
+    """
+    Verifica β₁ para hormigones imperiales (psi) según ACI 318-19.
+    Agregado: 2026-05-03
+
+    ACI 318-19 imperial: β₁ = 0.85 para fc ≤ 4000 psi,
+    decrece 0.05 por cada 1000 psi sobre 4000, con mínimo 0.65.
+    Estos tests FALLAN con el código actual de material.py (bug β₁ imperial):
+    material.py usa la fórmula métrica siempre, lo que da valores incorrectos
+    para hormigones imperiales con fc > 4000 psi.
+    Deben pasar una vez aplicado el fix en __beta_1.
+    """
+    concrete = Concrete_ACI_318_19(name=f"fc{fc_psi}", f_c=fc_psi * psi)
+    assert pytest.approx(concrete.beta_1, rel=1e-3) == expected_beta_1
 
 def test_aci_get_properties(aci_metric_concrete: Concrete_ACI_318_19) -> None:
     """Test get_properties for ACI concrete."""
