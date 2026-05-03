@@ -777,6 +777,155 @@ def test_check_flexure_ACI_318_19_3(beam_example_flexure_ACI: RectangularBeam) -
     assert results.iloc[1]["As"] == pytest.approx(20.15, rel=1e-3)
     assert results.iloc[1]["ØMn"] == pytest.approx(364.37, rel=1e-3)
 
+
+
+
+def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_05() -> None:
+    """
+    Test_Etabs_05: b=16", h=30", fc=6000psi, fy=60ksi, Mu=200 kip.ft
+    Agregado: 2026-05-03
+    Singly reinforced. As_min governs over As_calc.
+    Excel/ETABS: As_req = 1.7041 in² (= 11.00 cm²)
+
+    Se testea _calculate_flexural_reinforcement_ACI_318_19 directamente
+    con los inputs conocidos del Excel (d y d_prima fijos), aislando el
+    cálculo de acero requerido de la selección discreta de barras y de la
+    iteración del recubrimiento mecánico.
+
+    El caso es representativo del escenario donde el momento aplicado es
+    bajo respecto a la sección (As_calc < As_min), por lo que el mínimo
+    normativo de ACI 318-19 gobierna el diseño. Se verifica además que
+    la sección es simple (sin acero de compresión) y que el flag A_s_bool
+    está activo, indicando que se aplicó la regla del 4/3 de ACI 9.6.1.3.
+    """
+    from mento.codes.ACI_318_19_beam import _calculate_flexural_reinforcement_ACI_318_19
+    concrete = Concrete_ACI_318_19(name="fc6000", f_c=6000 * psi)
+    steel = SteelBar(name="fy60", f_y=60 * ksi)
+    beam = RectangularBeam(
+        label="Test_Etabs_05",
+        concrete=concrete,
+        steel_bar=steel,
+        width=16 * inch,
+        height=30 * inch,
+        c_c=1.5 * inch,
+    )
+    beam.set_transverse_rebar(n_stirrups=1, d_b=0.375 * inch, s_l=12 * inch)
+
+    # Inputs directos del Excel (rec mec conocido = 2.5 in)
+    d = 27.5 * inch
+    d_prima = 2.5 * inch
+    Mu = 200 * kip * ft
+
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = \
+        _calculate_flexural_reinforcement_ACI_318_19(beam, Mu, d, d_prima)
+
+    # As_min gobierna: As_final debe ser ≈ 1.7041 in² = 11.00 cm²
+    assert A_s_final.to("cm**2").magnitude == pytest.approx(11.00, rel=1e-2)
+    # Sección simple: sin acero de compresión
+    assert A_s_comp.to("cm**2").magnitude == pytest.approx(0.0, abs=0.01)
+    # Flag 4/3 activo porque As_calc < As_min
+    assert A_s_bool is False
+    
+def test_maximum_flexural_reinforcement_ratio_ACI_318_19_Test_Etabs_05() -> None:
+    """
+    Test_Etabs_05: b=16", h=30", fc=6000psi, fy=60ksi.
+    Agregado: 2026-05-03
+
+    Se testea _maximum_flexural_reinforcement_ratio_ACI_318_19 directamente.
+    ρ_max determina el umbral entre sección simple y doblemente armada —
+    si esta fórmula falla, todo el diseño doble puede fallar silenciosamente.
+
+    El caso usa fc=6000 psi donde β1=0.75 (no el 0.85 default para fc≤4000 psi),
+    lo que ejercita el cálculo de β1 reducido.
+
+    Excel col S: As_max = 10.4288 in²
+    → ρ_max = As_max / (b × d) = 10.4288 / (16 × 27.5) = 0.02370
+    """
+    from mento.codes.ACI_318_19_beam import _maximum_flexural_reinforcement_ratio_ACI_318_19
+
+    concrete = Concrete_ACI_318_19(name="fc6000", f_c=6000 * psi)
+    steel = SteelBar(name="fy60", f_y=60 * ksi)
+    beam = RectangularBeam(
+        label="Test_Etabs_05",
+        concrete=concrete,
+        steel_bar=steel,
+        width=16 * inch,
+        height=30 * inch,
+        c_c=1.5 * inch,
+    )
+
+    rho_max = _maximum_flexural_reinforcement_ratio_ACI_318_19(beam)
+
+    # Verificación directa contra Excel: As_max = ρ_max × b × d
+    d = 27.5 * inch
+    As_max = rho_max * beam.width * d
+    assert As_max.to("inch**2").magnitude == pytest.approx(10.4288, rel=1e-3)
+
+def test_minimum_flexural_reinforcement_ratio_ACI_318_19_Test_Etabs_05() -> None:
+    """
+    Test_Etabs_05: b=16", h=30", fc=6000psi, fy=60ksi, Mu=200 kip.ft
+    Agregado: 2026-05-03
+
+    Se testea _minimum_flexural_reinforcement_ratio_ACI_318_19 directamente.
+    ρ_min define el piso de armado — si esta fórmula falla, secciones con
+    momento bajo quedan con menos acero del que exige la norma.
+
+    Para fc=6000 psi gobierna 3√fc/fy sobre 200/fy:
+    ρ_min = 3√6000/60000 = 0.003873
+
+    Excel col R: As_min = 1.7041 in²
+    → ρ_min = As_min / (b × d) = 1.7041 / (16 × 27.5) = 0.003873
+    """
+    from mento.codes.ACI_318_19_beam import _minimum_flexural_reinforcement_ratio_ACI_318_19
+
+    concrete = Concrete_ACI_318_19(name="fc6000", f_c=6000 * psi)
+    steel = SteelBar(name="fy60", f_y=60 * ksi)
+    beam = RectangularBeam(
+        label="Test_Etabs_05",
+        concrete=concrete,
+        steel_bar=steel,
+        width=16 * inch,
+        height=30 * inch,
+        c_c=1.5 * inch,
+    )
+
+    Mu = 200 * kip * ft
+    rho_min = _minimum_flexural_reinforcement_ratio_ACI_318_19(beam, Mu)
+
+    # Verificación directa contra Excel: As_min = ρ_min × b × d
+    d = 27.5 * inch
+    As_min = rho_min * beam.width * d
+    assert As_min.to("inch**2").magnitude == pytest.approx(1.7041, rel=1e-3)
+
+
+def test_design_flexure_ACI_318_19_Test_Etabs_01() -> None:
+    """
+    Test_Etabs_01 del Excel BEAM-01-Flexure-Rectangle ACI 318-19-v6.
+    Sección doblemente armada.
+    ETABS: As inf = 3.0045 in² (19.39 cm²), As sup = 0.7628 in² (4.92 cm²)
+    """
+    concrete = Concrete_ACI_318_19(name="fc2500", f_c=2500 * psi)
+    steel = SteelBar(name="fy60", f_y=60 * ksi)
+    beam = RectangularBeam(
+        label="Test_Etabs_01",
+        concrete=concrete,
+        steel_bar=steel,
+        width=12 * inch,
+        height=20 * inch,
+        c_c=1.5 * inch,
+    )
+    beam.set_transverse_rebar(n_stirrups=1, d_b=0.375 * inch, s_l=12 * inch)
+
+    f = Forces(label="Test_Etabs_01", M_y=200 * kip * ft)
+    node = Node(section=beam, forces=f)
+    results = node.design_flexure()
+
+    assert isinstance(results, pd.DataFrame)
+    assert beam._doubly_reinforced is True
+    # Acero diseñado debe cubrir lo requerido por ETABS (tolerancia por diferencia en rec mec)
+    assert beam._A_s_bot.to("cm**2").magnitude >= 19.0
+    assert beam._A_s_top.to("cm**2").magnitude >= 4.8
+
 # def test_design_flexure_ACI_318_19_1(beam_example_flexure_ACI: RectangularBeam) -> None:
 #     # Testing the check of the reinforced beam with a large moment that requires compression reinforcement, the moment being positive
 #     # # See calcpad: ACI 318-19 Beam Flexure 02-TEST_1.cpd

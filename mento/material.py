@@ -116,7 +116,7 @@ class Concrete_ACI_318_19(Concrete):
         properties["phi_c"] = self._phi_c
         properties["phi_t"] = self._phi_t
         return properties
-
+    '''
     def __beta_1(self) -> float:
         # Table 22.2.2.4.3—Values of β1 for equivalent rectangular concrete stress distribution
         # Page 399
@@ -130,6 +130,24 @@ class Concrete_ACI_318_19(Concrete):
         else:
             # Handle case where f_c / MPa < 17
             return 0.85
+    '''
+    def __beta_1(self) -> float:
+        if self.unit_system == "metric":
+            fc_MPa = self.f_c.to("MPa").magnitude
+            if fc_MPa <= 28:
+                return 0.85
+            elif fc_MPa <= 55:
+                return 0.85 - 0.05 / 7 * (fc_MPa - 28)
+            else:
+                return 0.65
+        else:
+            fc_psi = self.f_c.to("psi").magnitude
+            if fc_psi <= 4000:
+                return 0.85
+            elif fc_psi <= 8000:
+                return 0.85 - 0.05 / 1000 * (fc_psi - 4000)
+            else:
+                return 0.65
 
     @property
     def E_c(self) -> Quantity:
