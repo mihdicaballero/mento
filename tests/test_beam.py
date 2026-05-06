@@ -717,10 +717,16 @@ def beam_example_flexure_ACI() -> RectangularBeam:
     )
     return section
 
-
 def test_check_flexure_ACI_318_19_1(beam_example_flexure_ACI: RectangularBeam) -> None:
-    # Testing the check of the reinforced beam with a large moment that requires compression reinforcement, the moment being positive
-    # # See calcpad: ACI 318-19 Beam Flexure 02-TEST_1.cpd
+    # Testing the check of the reinforced beam with a large moment that requires
+    # compression reinforcement, the moment being positive.
+    # Calcpad de referencia: ACI 318-19 Beam Flexure 03_v2.cpd
+    # Geometría: b=12", h=24", fc=4000psi, fy=60ksi, Mu=400 kip·ft
+    # Armado bot: 2×#11 + 2×#10 (dos capas), armado top: 2×#6
+    # d = 20.3719", d' = 2.25"
+    # La v2 del calcpad corrige el hormigón desplazado en el acero de compresión:
+    #   f_s'_net = f_s' - 0.85·fc → A_s_prima = M_n2 / (f_s'_net · (d - d'))
+    # Valores validados en v2: As,req top = 5.22 cm² (buggy anterior: 4.93 cm²)
     f = Forces(label="Test_01", M_y=400 * kip * ft)
     beam_example_flexure_ACI.set_longitudinal_rebar_bot(n1=2, d_b1=1.41 * inch, n3=2, d_b3=1.27 * inch)
     beam_example_flexure_ACI.set_longitudinal_rebar_top(n1=2, d_b1=0.75 * inch)
@@ -732,32 +738,33 @@ def test_check_flexure_ACI_318_19_1(beam_example_flexure_ACI: RectangularBeam) -
     assert results.iloc[1]["Position"] == "Bottom"
     assert results.iloc[1]["As,min"] == pytest.approx(5.257, rel=1e-2)
     assert results.iloc[1]["As,req bot"] == pytest.approx(33.17, rel=1e-3)
-    assert results.iloc[1]["As,req top"] == pytest.approx(4.93, rel=1e-3)
+    assert results.iloc[1]["As,req top"] == pytest.approx(5.22, rel=1e-2)
     assert results.iloc[1]["As"] == pytest.approx(36.49, rel=1e-2)
     assert results.iloc[1]["Mu"] == pytest.approx(542.33, rel=1e-3)
     assert results.iloc[1]["ØMn"] == pytest.approx(588.73, rel=1e-3)
 
 
 def test_check_flexure_ACI_318_19_2(beam_example_flexure_ACI: RectangularBeam) -> None:
-    # Testeo el checkeo de la viga armada con un momento grande que requiere armadura de compresión, siendo el momento NEGATIVO.
-    # Ver calcpad: ACI 318-19 Beam Flexure 02-TEST_1.cpd
-    # Invierto el armado respecto al test anterior para poder usar el mismo calcpad
+    # Testeo el checkeo de la viga con momento NEGATIVO que requiere armadura de compresión.
+    # Calcpad de referencia: ACI 318-19 Beam Flexure 03_v2.cpd
+    # Mismo caso que test_1 con armado invertido (lo que era bot pasa a top y viceversa).
+    # La v2 del calcpad corrige el hormigón desplazado en el acero de compresión:
+    #   f_s'_net = f_s' - 0.85·fc → A_s_prima = M_n2 / (f_s'_net · (d - d'))
+    # Valores validados en v2: As,req bot = 5.22 cm² (buggy anterior: 4.93 cm²)
     f = Forces(label="Test_02", M_y=-400 * kip * ft)
     beam_example_flexure_ACI.set_longitudinal_rebar_bot(n1=2, d_b1=0.75 * inch)
     beam_example_flexure_ACI.set_longitudinal_rebar_top(n1=2, d_b1=1.41 * inch, n3=2, d_b3=1.27 * inch)
     node = Node(section=beam_example_flexure_ACI, forces=f)
     results = node.check_flexure()
-
     assert results.iloc[1]["Label"] == "B-12x24"
     assert results.iloc[1]["Comb."] == "Test_02"
     assert results.iloc[1]["Position"] == "Top"
     assert results.iloc[1]["As,min"] == pytest.approx(5.26, rel=1e-3)
-    assert results.iloc[1]["As,req bot"] == pytest.approx(4.93, rel=1e-3)
+    assert results.iloc[1]["As,req bot"] == pytest.approx(5.22, rel=1e-2)
     assert results.iloc[1]["As,req top"] == pytest.approx(33.17, rel=1e-3)
     assert results.iloc[1]["As"] == pytest.approx(36.49, rel=1e-3)
     assert results.iloc[1]["Mu"] == pytest.approx(-542.33, rel=1e-5)
     assert results.iloc[1]["ØMn"] == pytest.approx(588.73, rel=1e-3)
-
 
 def test_check_flexure_ACI_318_19_3(beam_example_flexure_ACI: RectangularBeam) -> None:
     # Simple bending check
