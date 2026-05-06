@@ -568,8 +568,9 @@ def _calculate_flexural_reinforcement_ACI_318_19(
         c_t = 0.003 * d / (self.steel_bar.epsilon_y + 0.006)
         c_d = clean_zero(c_t / d)
         f_s_prima = min(0.003 * self.steel_bar.E_s * (1 - d_prima / c_t), self.steel_bar.f_y)
-        A_s_comp = M_n_prima / (f_s_prima * (d - d_prima))
-        A_s_final = rho * b * d + A_s_comp
+        f_s_prima_net = f_s_prima - 0.85 * self.concrete.f_c
+        A_s_comp = M_n_prima / (f_s_prima_net * (d - d_prima))
+        A_s_final = rho * b * d + A_s_comp * f_s_prima_net / self.steel_bar.f_y
 
     return A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool
 
@@ -907,13 +908,16 @@ def _design_flexure_ACI_318_19(self: "RectangularBeam", max_M_y_bot: Quantity, m
 
         # --- Discrete design for each face (independent first pass) ---------------
         if A_req_bot >= 0 * (cm**2):
+            A_cap_bot = self._A_s_max_bot if A_req_bot <= self._A_s_max_bot else None
             self.flexure_design_results_bot = _design_longitudinal_for_area(
-                A_req_bot, self._A_s_max_bot, self._c_mec_bot
+                A_req_bot, A_cap_bot, self._c_mec_bot
             )
+
         self.flexure_design_results_top = None
         if A_req_top >= 0 * (cm**2):
+            A_cap_top = self._A_s_max_top if A_req_top <= self._A_s_max_top else None
             self.flexure_design_results_top = _design_longitudinal_for_area(
-                A_req_top, self._A_s_max_top, self._c_mec_top
+                A_req_top, A_cap_top, self._c_mec_top
             )
 
         # --- Apply both faces (hard overwrite) -----------------------------------
@@ -938,8 +942,9 @@ def _design_flexure_ACI_318_19(self: "RectangularBeam", max_M_y_bot: Quantity, m
 
         # If compression from top (A_s_comp_bot) exceeds what bottom provides, re-upgrade bottom
         if A_s_comp_bot > A_prov_bot:
+            A_cap_bot = self._A_s_max_bot if A_s_comp_bot <= self._A_s_max_bot else None
             self.flexure_design_results_bot = _design_longitudinal_for_area(
-                A_s_comp_bot, self._A_s_max_bot, self._c_mec_bot
+                A_s_comp_bot, A_cap_bot, self._c_mec_bot
             )
             self._apply_longitudinal_design_bot(self.flexure_design_results_bot)
             A_prov_bot = self.flexure_design_results_bot.get("total_as", A_s_comp_bot)
@@ -947,8 +952,9 @@ def _design_flexure_ACI_318_19(self: "RectangularBeam", max_M_y_bot: Quantity, m
         # If compression from bottom (A_s_comp_top) exceeds what top provides, re-upgrade top
         if A_s_comp_top > A_prov_top:
             if A_s_comp_top > 0 * (cm**2):
+                A_cap_top = self._A_s_max_top if A_s_comp_top <= self._A_s_max_top else None
                 self.flexure_design_results_top = _design_longitudinal_for_area(
-                    A_s_comp_top, self._A_s_max_top, self._c_mec_top
+                    A_s_comp_top, A_cap_top, self._c_mec_top
                 )
                 self._apply_longitudinal_design_top(self.flexure_design_results_top)
                 A_prov_top = self.flexure_design_results_top.get("total_as", A_s_comp_top)
