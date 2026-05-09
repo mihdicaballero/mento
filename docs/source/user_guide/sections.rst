@@ -52,6 +52,7 @@ Usage Notes
 You can access the section properties directly in a `RectangularBeam` object.
 
 .. code-block:: python
+
   section = RectangularBeam(
       label="101",
       concrete=concrete,

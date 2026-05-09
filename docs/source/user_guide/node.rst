@@ -7,7 +7,7 @@ A `Node` connects a `Section` (e.g., a rectangular concrete beam or column) with
 
 - Add one or more forces to the node.
 - Retrieve the list of forces applied to the node.
-- Reset all forces to zero.
+- Clear all forces from the node.
 - Check for shear or flexure.
 - Design for shear or flexure.
 
@@ -76,11 +76,12 @@ created for all the forces assigned and store the limiting case for shear and to
 Each method will return a Pandas DataFrame with all the check results for each Load Case in the Force object assigned to the Node, both for shear and flexure analysis.
 
 3. Jupyter Notebook Results
-******************
+***************************
 
 After performing the checks, you can view the results in a formatted way in a Notebook.
 
 When you run `node.results`:
+
 .. code-block:: python
 
     beam.results
@@ -98,7 +99,7 @@ See the `Beam` section for more information on how to display results.
 The results are presented in a user-friendly format, with color-coded Demand-Capacity Ratios (DCR) for quick assessment.
 
 4. Design the section
-********************
+*********************
 
 If you don't assign transverse or longitudinal rebar, you can ask *Mento* to design for shear and flexure.
 *Mento* will apply corresponding design code formulas depending on the type of `Concrete` object
@@ -177,7 +178,7 @@ The `Node` class provides the following methods for changing the Forces assigned
 
 - **Add a force**: Use `add_forces(forces)`.
 - **Get list of forces**: Use `get_forces_list()`.
-- **Reset forces to zero**: Use `reset_forces()`.
+- **Clear forces**: Use `clear_forces()`.
 
 .. code-block:: python
 

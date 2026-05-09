@@ -96,13 +96,13 @@ Once the beam is defined and forces are assigned in a `Node` object, you can per
 See the `Node` section for more information on how to create a Node and check the section.
 
 5. Design the section
-********************
+*********************
 
 If you don't assign transverse or longitudinal rebar, you can ask *Mento* to design for shear and flexure.
 See the `Node` section for more information on how to create a Node and design the section.
 
 6. Jupyter Notebook Results
-******************
+***************************
 
 After performing the checks, you can view the results in a formatted way in a Notebook.
 

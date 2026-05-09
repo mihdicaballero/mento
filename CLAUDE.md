@@ -131,6 +131,11 @@ tests/
 - `TablePrinter`: renders pandas DataFrames as styled tables (Markdown/IPython).
 - `DocumentBuilder`: builds Word (python-docx) report documents.
 - `BeamSummary`: aggregates design results across multiple `RectangularBeam` instances.
+  - `.check(capacity_check=False)` — DCR summary table for all beams; set `capacity_check=True` to zero forces and report capacities (MRd,top/bot or ØMn,top/bot) instead.
+  - `.design()` — runs flexure + shear design for every beam and fills rebar columns.
+  - `.flexure_results(capacity_check=False)` / `.shear_results(capacity_check=False)` — per-beam detailed check tables; `capacity_check=True` adds code-specific capacity columns.
+  - `.results_detailed_doc(index=1)` — exports a Word document (`Beam_Summary_{design_code}.docx`) with full flexure/shear detail for the selected beam (1-based index) followed by summary tables for all beams. Saves to the current working directory.
+  - `.export_design(path)` / `.import_design(path)` — round-trip the designed rebar to/from Excel.
 
 ---
 

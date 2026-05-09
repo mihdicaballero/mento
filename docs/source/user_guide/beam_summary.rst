@@ -1,56 +1,71 @@
 Beam Summary
-==========
+============
 
-The `BeamSummary` let you work with a list of `Sections` and perform several calculations at the same time.
+The ``BeamSummary`` class lets you work with a list of beam sections and perform
+checks, design, and report generation for all of them at once.
 
 Creating Concrete and Steel Materials
--------------------------------------
+--------------------------------------
 
-The first step is to define the concrete and steel materials that will be used in your beam design:
+Define the concrete and steel materials to be used across all beams:
 
 .. code-block:: python
 
-    conc = Concrete_ACI_318_19(name="C25", f_c=25*MPa)
-    steel = SteelBar(name="ADN 420", f_y=420*MPa)
+    from mento.material import Concrete_ACI_318_19, Concrete_EN_1992_2004, SteelBar
+    from mento import MPa
 
-These materials are required for all beam designs. For now, ACI 318-19 and CIRSOC 201-25 are only supported.
+    # ACI 318-19
+    conc = Concrete_ACI_318_19(name="C25", f_c=25 * MPa)
+
+    # or EN 1992-2004
+    conc = Concrete_EN_1992_2004(name="C25/30", f_c=25 * MPa)
+
+    steel = SteelBar(name="ADN 420", f_y=420 * MPa)
+
+Supported design codes: **ACI 318-19**, **EN 1992-2004**, and **CIRSOC 201-25**.
 
 Loading Input Data from Excel
------------------------------
+------------------------------
 
-The beam dimensions, forces, and reinforcement details are typically loaded from an Excel input file. The file should have a specific format and units, as shown below:
+The beam dimensions, forces, and reinforcement details are typically loaded from
+an Excel input file. The file should have a specific format and units, as shown below:
 
 .. figure:: ../_static/summary/beam_summary.png
    :alt: Beam summary input.
    :align: center
    :width: 100%
 
-The recommended way to read the excel file is with Pandas.
+The recommended way to read the Excel file is with pandas:
 
 .. code-block:: python
+
+    import pandas as pd
 
     input_df = pd.read_excel('Mento-Input.xlsx', sheet_name='Beams', usecols='B:S', skiprows=4)
 
 The Excel file should contain the following columns:
 
 - **Label**: Beam identifier (e.g., V101, V102).
+- **Comb.**: Load combination label.
 - **b**: Beam width in cm.
 - **h**: Beam height in cm.
-- **cc**: Beam stirrup clear cover.
+- **cc**: Stirrup clear cover in mm.
 - **Nx**: Axial force in kN.
 - **Vz**: Shear force in kN.
 - **My**: Moment in kNm.
-- **ns**: Number of shear reinforcement bars.
-- **dbs**: Diameter of shear reinforcement bars in mm.
-- **sl**: Spacing of shear reinforcement bars in cm.
-- **n1, n2, n3, n4**: Number of longitudinal reinforcement bars in each layer.
-- **db1, db2, db3, db4**: Diameter of longitudinal reinforcement bars in mm.
+- **ns**: Number of stirrup legs.
+- **dbs**: Stirrup diameter in mm.
+- **sl**: Stirrup spacing in cm.
+- **n1, n2, n3, n4**: Number of longitudinal bars per group.
+- **db1, db2, db3, db4**: Diameter of longitudinal bars in mm.
 
-Consider that bottom reinforcement will be checked against positive bending moments and top reinforcement against negative bending moments.
+Bottom reinforcement is checked against positive bending moments; top reinforcement
+against negative bending moments.
 
-FOr a simple test, you can create a DataFrame manually like this:
+For a quick test you can build the DataFrame manually:
+
 .. code-block:: python
-    import pandas as pd
+
     data = {
         "Label": ["", "V101", "V102", "V103", "V104"],
         "Comb.": ["", "ELU 1", "ELU 2", "ELU 3", "ELU 4"],
@@ -73,73 +88,128 @@ FOr a simple test, you can create a DataFrame manually like this:
         "db4": ["mm", 0, 0, 0, 0],
     }
     input_df = pd.DataFrame(data)
-    input_df
 
 Creating the BeamSummary Object
--------------------------------
+---------------------------------
 
-Once the input data is loaded, you can create a `BeamSummary` object:
+Once the input data is ready, create a ``BeamSummary`` object:
 
 .. code-block:: python
 
+    from mento.summary import BeamSummary
+
     beam_summary = BeamSummary(concrete=conc, steel_bar=steel, beam_list=input_df)
 
-To verify that the data was imported correctly with units, you can inspect the `data` attribute:
+To verify that units were applied correctly, inspect the ``data`` attribute:
 
 .. code-block:: python
 
     beam_summary.data
 
 Checking Beam Capacity
-----------------------
+-----------------------
 
-The `BeamSummary` class allows you to check the capacity of the beam sections. There are two ways to perform this check:
+Use ``check()`` to get a summary table with DCR (Demand-Capacity Ratio) values for
+all beams. Two modes are available:
 
-1. **Capacity Check Without Forces**: This checks the capacity of the sections based on the provided reinforcement details only.
-
-.. code-block:: python
-
-    beam_summary.check(capacity_check=True)
-
-2. **Capacity Check With Forces**: This checks the capacity of the sections for the forces specified in the input data.
+**Check with applied forces** (uses the forces in the input data):
 
 .. code-block:: python
 
     beam_summary.check()
 
-Exporting Results
------------------
-
-To export the results of the capacity check to an Excel file, use the following code:
+**Capacity check** (zeros all forces to report section capacity only):
 
 .. code-block:: python
 
-    beam_summary.check().to_excel('results.xlsx', index=False)
+    beam_summary.check(capacity_check=True)
+
+The result is a DataFrame with identification, reinforcement, DCR columns, and a
+pass/fail status (✅ / ❌). For EN 1992-2004 concrete, code-specific capacity columns
+(``MRd,top``, ``MRd,bot``, ``VRd``) are added automatically; for ACI 318-19 and
+CIRSOC 201-25 the equivalent columns are ``ØMn,top``, ``ØMn,bot``, ``ØVn``.
 
 Viewing Detailed Results
+-------------------------
+
+For a full breakdown per beam use ``flexure_results()`` and ``shear_results()``.
+Both methods accept an optional ``index`` (1-based) to retrieve results for a single
+beam, and a ``capacity_check`` flag:
+
+.. code-block:: python
+
+    # All beams — forces from input
+    beam_summary.flexure_results()
+    beam_summary.shear_results()
+
+    # All beams — capacity check (adds MRd,top / MRd,bot or ØMn,top / ØMn,bot columns)
+    beam_summary.flexure_results(capacity_check=True)
+    beam_summary.shear_results(capacity_check=True)
+
+    # Single beam (1-based index)
+    beam_summary.flexure_results(index=2)
+    beam_summary.shear_results(index=2)
+
+For step-by-step detail of a specific beam you can also access the node directly:
+
+.. code-block:: python
+
+    beam_summary.nodes[2].check_shear()
+    beam_summary.nodes[2].check_flexure()
+
+Designing Reinforcement
 ------------------------
 
-For a detailed breakdown of the results, you can use the `shear_results` or `flexure_results` method.
-Thess methods provide a DataFrame with detailed results for each beam:
-
-- **Without Capacity Check**:
+``design()`` runs automatic flexure and shear design for every beam and returns a
+DataFrame with the filled rebar columns (``n1``–``n4``, ``db1``–``db4``, ``ns``, ``dbs``, ``sl``):
 
 .. code-block:: python
 
-    beam_summary.shear_results(capacity_check=False)
-    beam_summary.flexure_results(capacity_check=False)
+    designed_df = beam_summary.design()
 
-- **With Capacity Check**:
+Exporting and Importing a Design
+----------------------------------
 
-.. code-block:: python
-
-    beam_summary.shear_results(capacity_check=True)
-    beam_summary.flexure_results(capacity_check=True)
-
-You can also see a more detailed and complete result for a specific beam of the summmary table indicating the item in the list of beams.
-For example, detailed shear or flexure results for row number 3 of the summary are accesses like this:
+After running ``design()``, save the result to Excel so it can be reviewed or edited:
 
 .. code-block:: python
 
-    beam_summary.nodes[2].shear_results_detailed()
-    beam_summary.nodes[2].flexure_results_detailed()
+    beam_summary.export_design("BeamDesign.xlsx")
+
+To reload an edited file and rebuild the summary with the new reinforcement:
+
+.. code-block:: python
+
+    beam_summary.import_design("BeamDesign.xlsx")
+
+Exporting Results to Excel
+----------------------------
+
+The DataFrames returned by ``check()``, ``flexure_results()``, and ``shear_results()``
+can be written to Excel directly:
+
+.. code-block:: python
+
+    beam_summary.check().to_excel("results.xlsx", index=False)
+
+Detailed Word Report
+---------------------
+
+``results_detailed_doc()`` generates a Word document (``.docx``) that contains:
+
+- Full flexure and shear detail for one selected beam.
+- Summary tables (beam data, flexure results, shear results, DCR check) for all beams.
+
+The document is saved to the current working directory with the name
+``Beam_Summary_{design_code}.docx`` (e.g. ``Beam_Summary_ACI 318-19.docx``).
+
+.. code-block:: python
+
+    # Detailed report with beam 1 as the reference beam (default)
+    beam_summary.results_detailed_doc()
+
+    # Use beam 3 as the reference beam
+    beam_summary.results_detailed_doc(index=3)
+
+The ``index`` parameter is 1-based and must be within the range of beams in the
+summary. An ``IndexError`` is raised for out-of-range values.
