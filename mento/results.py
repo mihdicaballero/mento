@@ -297,6 +297,7 @@ class DocumentBuilder:
         self.font_size = font_size
         self.set_document_style()
         self.set_page_size()
+        self.set_margins()
 
     def set_document_style(self) -> None:
         """
@@ -306,10 +307,10 @@ class DocumentBuilder:
         --------
         None
         """
+        # Normal text style
         style = self.doc.styles["Normal"]
-        font = style.font
-        font.name = self.font_name
-        font.size = Pt(self.font_size)
+        style.font.name = self.font_name
+        style.font.size = Pt(self.font_size)
 
     def set_page_size(self) -> None:
         """
@@ -323,7 +324,22 @@ class DocumentBuilder:
         section.page_height = Cm(29.7)
         section.page_width = Cm(21.0)
 
-    def add_heading(self, text: str, level: int) -> None:
+    def set_margins(self, top: float = 3.5, bottom: float = 2.5, left: float = 1.6, right: float = 1.6) -> None:
+        """
+        Set page margins in centimeters.
+
+        Parameters
+        ----------
+        top, bottom, left, right : float
+            Margins in centimeters. Default is 1 cm for all.
+        """
+        for section in self.doc.sections:
+            section.top_margin = Cm(top)
+            section.bottom_margin = Cm(bottom)
+            section.left_margin = Cm(left)
+            section.right_margin = Cm(right)
+
+    def add_heading(self, text: str, level: int, font_size: Optional[float] = 10) -> None:
         """
         Adds a heading to the document at the specified level.
 
@@ -331,16 +347,22 @@ class DocumentBuilder:
         -----------
         text : str
             The text for the heading.
-
         level : int
             The heading level (e.g., 0 for title, 1 for main headings, etc.).
+        font_size : float, optional
+            Font size in points. Default is 10 pt.
 
         Returns:
         --------
         None
         """
         heading = self.doc.add_heading(text, level=level)
-        heading.paragraph_format.space_before = Pt(0)  # Remove space after the paragraph
+        heading.paragraph_format.space_before = Pt(0)
+
+        # Set font size for all runs in heading
+        for run in heading.runs:
+            run.font.size = Pt(font_size)
+            run.font.name = self.font_name
 
     def add_text(self, text: str) -> None:
         """Adds a paragraph to the document"""
@@ -426,9 +448,8 @@ class DocumentBuilder:
 
         return table
 
-    def add_table_data(self, df: pd.DataFrame) -> None:
-        column_widths = [Cm(12), Cm(2), Cm(2), Cm(2)]
-        self.add_table(df, column_widths)
+    def add_table_data(self, df: pd.DataFrame, column_widths=[Cm(12), Cm(2), Cm(2), Cm(2)]) -> None:
+        self.add_table(df, column_widths, font_size=self.font_size)
 
     def add_table_dcr(self, df: pd.DataFrame) -> None:
         """
@@ -438,7 +459,7 @@ class DocumentBuilder:
         - Red if DCR >= 1
         """
         column_widths = [Cm(12), Cm(2), Cm(2), Cm(2)]
-        self.add_table(df, column_widths)
+        self.add_table(df, column_widths, font_size=self.font_size)
         # Get the last table added to the document
         table = self.doc.tables[-1]  # Retrieve the most recent table
 
@@ -464,8 +485,8 @@ class DocumentBuilder:
                     run.font.color.rgb = RGBColor.from_string(font_color)
 
     def add_table_min_max(self, df: pd.DataFrame) -> None:
-        column_widths = [Cm(10), Cm(2), Cm(2), Cm(2), Cm(2), Cm(1)]
-        self.add_table(df, column_widths)
+        column_widths = [Cm(9), Cm(2), Cm(2), Cm(2), Cm(2), Cm(1)]
+        self.add_table(df, column_widths, font_size=self.font_size)
 
     def add_figure(self, fig: "plt.Figure", width: float = 16) -> None:
         """

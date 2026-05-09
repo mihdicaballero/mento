@@ -1403,10 +1403,10 @@ def test_doubly_reinforced_ignores_max_limits() -> None:
     # Check flexure
     node.design()
 
-    # Check for "✔️ D.R." in the checks
+    # Check for "✅  D.R." in the checks
     checks = beam._data_min_max_flexure["Ok?"]
-    # Either position 0 (top) or position 2 (bottom) should have "✔️ D.R."
-    assert "✔️ D.R." in checks[0] or "✔️ D.R." in checks[2]
+    # Either position 0 (top) or position 2 (bottom) should have "✅  D.R."
+    assert "✅ D.R." in checks[0] or "✅ D.R." in checks[2]
 
 
 ## BEAM RESULTS TESTS

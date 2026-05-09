@@ -15,6 +15,7 @@ from mento import MPa, mm, cm, kN, kNm, m
 from mento.summary import BeamSummary
 from mento.material import Concrete_ACI_318_19, SteelBar, Concrete_EN_1992_2004
 from mento.node import Node
+from mento.results import DocumentBuilder
 
 # Suppress the specific ACI warning for all tests
 pytestmark = pytest.mark.filterwarnings("ignore::UserWarning")
@@ -306,7 +307,7 @@ def test_check_method_capacity_check_false(beam_summary: BeamSummary) -> None:
         result = beam_summary.check(capacity_check=False)
     assert isinstance(result, pd.DataFrame)
     # Check that required columns exist
-    expected_columns = ["Beam", "b", "h", "cc", "As,top", "As,bot", "Av"]
+    expected_columns = ["Beam", "b", "h", "As,top", "As,bot", "Av"]
     for col in expected_columns:
         assert col in result.columns
 
@@ -935,13 +936,14 @@ def test_check_with_en1992_capacity_check(
         beam_list=sample_input_dataframe,
     )
 
-    result = summary.check(capacity_check=True)
+    flexure_result = summary.flexure_results(capacity_check=True)
+    shear_result = summary.shear_results(capacity_check=True)
 
     # Should return DataFrame with EN 1992 columns
-    assert isinstance(result, pd.DataFrame)
-    assert "MRd,top" in result.columns
-    assert "MRd,bot" in result.columns
-    assert "VRd" in result.columns
+    assert isinstance(flexure_result, pd.DataFrame)
+    assert "MRd,top" in flexure_result.columns
+    assert "MRd,bot" in flexure_result.columns
+    assert "VRd" in shear_result.columns
 
 
 def test_en1992_vs_aci_column_differences(
@@ -956,7 +958,7 @@ def test_en1992_vs_aci_column_differences(
         steel_bar=sample_steel,
         beam_list=sample_input_dataframe,
     )
-    result_aci = summary_aci.check()
+    result_aci = summary_aci.flexure_results(capacity_check=True)
 
     # EN 1992 concrete
     concrete_en = Concrete_EN_1992_2004(name="C25/30", f_c=25 * MPa)
@@ -965,10 +967,61 @@ def test_en1992_vs_aci_column_differences(
         steel_bar=sample_steel,
         beam_list=sample_input_dataframe,
     )
-    result_en = summary_en.check()
+    result_en = summary_en.flexure_results(capacity_check=True)
 
     # EN 1992 should have MRd columns, ACI should have ØMn columns
     assert "MRd,top" in result_en.columns
     assert "MRd,top" not in result_aci.columns
     assert "ØMn,top" in result_aci.columns
     assert "ØMn,top" not in result_en.columns
+
+
+def test_check_capacity_true_with_en1992_concrete(
+    sample_steel: SteelBar,
+    sample_input_dataframe: pd.DataFrame,
+) -> None:
+    """Test check(capacity_check=True) with EN 1992 includes code-specific capacity columns."""
+    concrete_en = Concrete_EN_1992_2004(name="C25/30", f_c=25 * MPa)
+    summary = BeamSummary(
+        concrete=concrete_en,
+        steel_bar=sample_steel,
+        beam_list=sample_input_dataframe,
+    )
+    result = summary.check(capacity_check=True)
+    assert isinstance(result, pd.DataFrame)
+    assert "MRd,top" in result.columns
+    assert "MRd,bot" in result.columns
+    assert "VRd" in result.columns
+
+
+def test_results_detailed_doc_invalid_index(beam_summary: BeamSummary) -> None:
+    """Test results_detailed_doc() raises IndexError for out-of-range index."""
+    with pytest.raises(IndexError):
+        beam_summary.results_detailed_doc(index=0)
+    with pytest.raises(IndexError):
+        beam_summary.results_detailed_doc(index=100)
+
+
+def test_results_detailed_doc_aci(
+    beam_summary: BeamSummary,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test results_detailed_doc() runs without error for ACI concrete (non-EN 1992 shear branch)."""
+    monkeypatch.setattr(DocumentBuilder, "save", lambda *_: None)
+    beam_summary.results_detailed_doc(index=1)
+
+
+def test_results_detailed_doc_en1992(
+    sample_steel: SteelBar,
+    sample_input_dataframe: pd.DataFrame,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test results_detailed_doc() runs without error for EN 1992 concrete (EN 1992 shear branch)."""
+    concrete_en = Concrete_EN_1992_2004(name="C25/30", f_c=25 * MPa)
+    summary = BeamSummary(
+        concrete=concrete_en,
+        steel_bar=sample_steel,
+        beam_list=sample_input_dataframe,
+    )
+    monkeypatch.setattr(DocumentBuilder, "save", lambda *_: None)
+    summary.results_detailed_doc(index=1)
