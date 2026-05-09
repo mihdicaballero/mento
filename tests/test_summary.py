@@ -15,6 +15,7 @@ from mento import MPa, mm, cm, kN, kNm, m
 from mento.summary import BeamSummary
 from mento.material import Concrete_ACI_318_19, SteelBar, Concrete_EN_1992_2004
 from mento.node import Node
+from mento.results import DocumentBuilder
 
 # Suppress the specific ACI warning for all tests
 pytestmark = pytest.mark.filterwarnings("ignore::UserWarning")
@@ -973,3 +974,54 @@ def test_en1992_vs_aci_column_differences(
     assert "MRd,top" not in result_aci.columns
     assert "ØMn,top" in result_aci.columns
     assert "ØMn,top" not in result_en.columns
+
+
+def test_check_capacity_true_with_en1992_concrete(
+    sample_steel: SteelBar,
+    sample_input_dataframe: pd.DataFrame,
+) -> None:
+    """Test check(capacity_check=True) with EN 1992 includes code-specific capacity columns."""
+    concrete_en = Concrete_EN_1992_2004(name="C25/30", f_c=25 * MPa)
+    summary = BeamSummary(
+        concrete=concrete_en,
+        steel_bar=sample_steel,
+        beam_list=sample_input_dataframe,
+    )
+    result = summary.check(capacity_check=True)
+    assert isinstance(result, pd.DataFrame)
+    assert "MRd,top" in result.columns
+    assert "MRd,bot" in result.columns
+    assert "VRd" in result.columns
+
+
+def test_results_detailed_doc_invalid_index(beam_summary: BeamSummary) -> None:
+    """Test results_detailed_doc() raises IndexError for out-of-range index."""
+    with pytest.raises(IndexError):
+        beam_summary.results_detailed_doc(index=0)
+    with pytest.raises(IndexError):
+        beam_summary.results_detailed_doc(index=100)
+
+
+def test_results_detailed_doc_aci(
+    beam_summary: BeamSummary,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test results_detailed_doc() runs without error for ACI concrete (non-EN 1992 shear branch)."""
+    monkeypatch.setattr(DocumentBuilder, "save", lambda *_: None)
+    beam_summary.results_detailed_doc(index=1)
+
+
+def test_results_detailed_doc_en1992(
+    sample_steel: SteelBar,
+    sample_input_dataframe: pd.DataFrame,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test results_detailed_doc() runs without error for EN 1992 concrete (EN 1992 shear branch)."""
+    concrete_en = Concrete_EN_1992_2004(name="C25/30", f_c=25 * MPa)
+    summary = BeamSummary(
+        concrete=concrete_en,
+        steel_bar=sample_steel,
+        beam_list=sample_input_dataframe,
+    )
+    monkeypatch.setattr(DocumentBuilder, "save", lambda *_: None)
+    summary.results_detailed_doc(index=1)

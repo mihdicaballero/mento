@@ -17,8 +17,6 @@ from mento.node import Node
 from mento.results import DocumentBuilder
 from mento._version import __version__ as MENTO_VERSION
 
-pd.set_option("future.no_silent_downcasting", True)
-
 
 class BeamSummary:
     def __init__(self, concrete: Concrete, steel_bar: SteelBar, beam_list: DataFrame) -> None:
@@ -282,6 +280,18 @@ class BeamSummary:
                     }
                 )
 
+                # Code-specific capacity columns
+                if isinstance(self.concrete, Concrete_EN_1992_2004):
+                    results_dict["MRd,top"] = round(beam._M_Rd_top.to("kN*m").magnitude, 1)
+                    results_dict["MRd,bot"] = round(beam._M_Rd_bot.to("kN*m").magnitude, 1)
+                    results_dict["VRd"] = round(shear_results["VRd"][0], 1)
+                    code_units: dict = {"MRd,top": "kNm", "MRd,bot": "kNm", "VRd": "kN"}
+                else:
+                    results_dict["ØMn,top"] = round(beam._phi_M_n_top.to("kN*m").magnitude, 1)
+                    results_dict["ØMn,bot"] = round(beam._phi_M_n_bot.to("kN*m").magnitude, 1)
+                    results_dict["ØVn"] = round(shear_results["ØVn"][0], 1)
+                    code_units = {"ØMn,top": "kNm", "ØMn,bot": "kNm", "ØVn": "kN"}
+
                 # Units row
                 units_row = pd.DataFrame(
                     [
@@ -296,50 +306,13 @@ class BeamSummary:
                                 "DCRb,top": "",
                                 "DCRb,bot": "",
                                 "DCRv": "",
+                                **code_units,
                                 "Status": "",
                             }
                         )
                     ]
                 )
 
-                # # Code-specific data
-                # if isinstance(self.concrete, Concrete_EN_1992_2004):  # TODO
-                #     code_specific_data = {
-                #         "MEd": round(flexure_results["MEd"][0], 1),
-                #         "VEd": round(shear_results["VEd,2"][0], 1),
-                #         "NEd": round(shear_results["NEd"][0], 1),
-                #         "MRd,top": round(beam._M_Rd_top.to("kN*m").magnitude, 1),
-                #         "MRd,bot": round(beam._M_Rd_bot.to("kN*m").magnitude, 1),
-                #         "VRd": round(shear_results["VRd"][0], 1),
-                #     }
-                #     code_specific_units = {
-                #         "MEd": "kNm",
-                #         "VEd": "kN",
-                #         "NEd": "kN",
-                #         "MRd,top": "kNm",
-                #         "MRd,bot": "kNm",
-                #         "VRd": "kN",
-                #     }
-                # else:  # ACI 318-19 or CIRSOC 201-25 design code
-                #     code_specific_data = {
-                #         "Mu": round(flexure_results["Mu"][0], 1),
-                #         "Vu": round(shear_results["Vu"][0], 1),
-                #         "Nu": round(shear_results["Nu"][0], 1),
-                #         "ØMn,top": round(beam._phi_M_n_top.to("kN*m").magnitude, 1),
-                #         "ØMn,bot": round(beam._phi_M_n_bot.to("kN*m").magnitude, 1),
-                #         "ØVn": round(shear_results["ØVn"][0], 1),
-                #     }
-                #     code_specific_units = {
-                #         "Mu": "kNm",
-                #         "Vu": "kN",
-                #         "Nu": "kN",
-                #         "ØMn,top": "kNm",
-                #         "ØMn,bot": "kNm",
-                #         "ØVn": "kN",
-                #     }
-
-                # # Merge data dictionaries
-                # merged_data = {**common_data, **code_specific_data}
                 # Determine status
                 dcr_values = [results_dict["DCRb,top"], results_dict["DCRb,bot"], results_dict["DCRv"]]
                 all_dcrs_ok = all(v < 1 for v in dcr_values)
@@ -502,6 +475,16 @@ class BeamSummary:
             results = node.check_flexure().iloc[1:].reset_index(drop=True)
         else:
             raise ValueError("check_type must be either 'shear' or 'flexure'")
+
+        # Add code-specific capacity columns after a capacity flexure check
+        if capacity_check and check_type == "flexure":
+            beam: RectangularBeam = node.section  # type: ignore
+            if isinstance(self.concrete, Concrete_EN_1992_2004):
+                results["MRd,top"] = round(beam._M_Rd_top.to("kN*m").magnitude, 1)
+                results["MRd,bot"] = round(beam._M_Rd_bot.to("kN*m").magnitude, 1)
+            else:
+                results["ØMn,top"] = round(beam._phi_M_n_top.to("kN*m").magnitude, 1)
+                results["ØMn,bot"] = round(beam._phi_M_n_bot.to("kN*m").magnitude, 1)
 
         # Restore original forces if we did a capacity check
         if capacity_check:
