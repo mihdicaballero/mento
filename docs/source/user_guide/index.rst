@@ -14,6 +14,7 @@ User Guide
    settings
    sections
    beams
+   slabs
    node
    beam_summary
 

@@ -726,10 +726,10 @@ def _initialize_dicts_EN_1992_2004_shear(self: "RectangularBeam") -> None:
 
         # Generate check marks based on the range conditions
         checks = [
-            "✔️" if (min_val is None or curr >= min_val) and (max_val is None or curr <= max_val) else "❌"
+            "✅" if (min_val is None or curr >= min_val) and (max_val is None or curr <= max_val) else "❌"
             for curr, min_val, max_val in zip(current_values, min_values, max_values)
         ]
-        self._all_shear_checks_passed = all(check == "✔️" for check in checks)
+        self._all_shear_checks_passed = all(check == "✅" for check in checks)
         self._data_min_max_shear = {
             "Check": [
                 "Stirrup spacing along length",
@@ -774,8 +774,8 @@ def _initialize_dicts_EN_1992_2004_shear(self: "RectangularBeam") -> None:
             ],
             "Unit": ["", "mm", "cm", "cm", "cm²/m", "cm²/m", "cm²/m", "kN"],
         }
-        check_max = "✔️" if self._max_shear_ok else "❌"
-        check_DCR = "✔️" if self._DCRv < 1 else "❌"
+        check_max = "✅" if self._max_shear_ok else "❌"
+        check_DCR = "✅" if self._DCRv < 1 else "❌"
         rho_l = self._rho_l_bot if self._M_Ed >= 0 * kNm else self._rho_l_top
         self._shear_concrete = {
             "Shear strength": [
@@ -888,14 +888,14 @@ def _initialize_dicts_EN_1992_2004_flexure(self: "RectangularBeam") -> None:
             if self._doubly_reinforced and i in (0, 2):
                 # If it passes min, we give the special tag
                 if min_val is None or curr >= min_val:
-                    checks.append("✔️ D.R.")
+                    checks.append("✅ D.R.")
                     continue
                 # If it fails min, let the normal logic handle it (fall through)
             # -------------------------------------------------
 
             passed = (min_val is None or curr >= min_val) and (max_val is None or curr <= max_val)
             if passed:
-                checks.append("✔️")
+                checks.append("✅")
             else:
                 checks.append("❌")
         self._all_flexure_checks_passed = not any(check in ("❌") for check in checks)
@@ -927,8 +927,8 @@ def _initialize_dicts_EN_1992_2004_flexure(self: "RectangularBeam") -> None:
             ],
             "Ok?": checks,
         }
-        check_DCR_top = "✔️" if self._DCRb_top < 1 else "❌"
-        check_DCR_bot = "✔️" if self._DCRb_bot < 1 else "❌"
+        check_DCR_top = "✅" if self._DCRb_top < 1 else "❌"
+        check_DCR_bot = "✅" if self._DCRb_bot < 1 else "❌"
         self._flexure_capacity_top = {
             "Top reinforcement check": [
                 "First layer bars",
@@ -1037,4 +1037,6 @@ def _initialize_dicts_EN_1992_2004_flexure(self: "RectangularBeam") -> None:
                 check_DCR_bot,
             ],
         }
-        self._flexure_all_checks = self._all_flexure_checks_passed and (check_DCR_bot == "✔️") and (check_DCR_top == "✔️")
+        self._flexure_all_checks = (
+            self._all_flexure_checks_passed and (check_DCR_bot == "✅") and (check_DCR_top == "✅")
+        )

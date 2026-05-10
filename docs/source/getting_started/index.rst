@@ -27,7 +27,7 @@ You can install Mento via ``pip``, the Python package manager. Simply run the fo
 This will install the latest stable version of the Mento package, along with any necessary dependencies.
 
 Try Mento without installation (Google Colab)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 If you don't have Python installed or want to quickly try Mento, you can use Google Colab:
 

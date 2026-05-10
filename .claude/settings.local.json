@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(& \"C:\\Users\\mihdi\\anaconda3\\envs\\py312\\python.exe\" -m pytest tests/ --override-ini=\"addopts=\" -v --no-header)",
+      "Bash(& \"C:\\Users\\mihdi\\anaconda3\\envs\\py312\\python.exe\" -m pytest tests/ --override-ini=\"addopts=\" -q --no-header)",
+      "Bash(& \"C:\\Users\\mihdi\\anaconda3\\envs\\py312\\python.exe\" -m pytest tests/ --override-ini=\"addopts=\" --cov=mento --cov-report=term-missing -q)",
+      "Bash(& \"C:\\Users\\mihdi\\anaconda3\\envs\\py312\\python.exe\" -m pytest tests/*.py --override-ini=\"addopts=\" -v --no-header)",
+      "Bash(& \"C:\\Users\\mihdi\\anaconda3\\envs\\py312\\python.exe\" -m pytest tests/*.py --override-ini=\"addopts=\" -q --no-header)",
+      "Bash(& \"C:\\Users\\mihdi\\anaconda3\\envs\\py312\\python.exe\" -m pytest tests/*.py --override-ini=\"addopts=\" --cov=mento --cov-report=term-missing -q)",
+      "Bash(& \"C:\\Users\\mihdi\\anaconda3\\envs\\py312\\python.exe\" -m ruff check . --fix)",
+      "Bash(& \"C:\\Users\\mihdi\\anaconda3\\envs\\py312\\python.exe\" -m ruff format .)",
+      "Bash(& \"C:\\Users\\mihdi\\anaconda3\\envs\\py312\\python.exe\" -m mypy mento/)"
+    ]
+  }
+}

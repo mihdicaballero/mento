@@ -34,27 +34,29 @@ Usage Scenarios
    calculations can proceed without requiring additional input from the user.
    All these settings are used when designing the reinforcement of beams.
 
-   Defaut settings change based on the metric system selected.
+   Default settings change based on the metric system selected.
 
    **Default settings for metric system include**:
 
-   * Clear spacing: 20 mm
+   * Clear spacing: 25 mm
    * Stirrup diameter: 8 mm
    * Minimum longitudinal bar diameter: 8 mm
+   * Maximum longitudinal bar diameter: 32 mm
    * Vibrator size: 30 mm
    * Layers spacing: 25 mm
    * Maximum diameter difference: 5 mm
-   * Maximum bars per layer: 5
+   * Maximum bars per layer: 12
 
    **Default settings for imperial system include**:
 
    * Clear spacing: 1 inch
    * Stirrup diameter: 3/8 inch
    * Minimum longitudinal bar diameter: 3/8 inch
+   * Maximum longitudinal bar diameter: 1.693 inch
    * Vibrator size: 1.25 inch
    * Layers spacing: 1 inch
-   * Maximum diameter difference: 2/8 inch
-   * Maximum bars per layer: 5
+   * Maximum diameter difference: 1/4 inch
+   * Maximum bars per layer: 12
 
 .. note::
     The default values are used to calculate effective heights when designing a concrete section,
@@ -135,4 +137,5 @@ The attributes of the settings class are as follows:
   - layers_spacing
   - max_diameter_diff
   - minimum_longitudinal_diameter
+  - max_longitudinal_diameter
   - max_bars_per_layer

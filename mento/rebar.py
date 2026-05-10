@@ -373,9 +373,6 @@ class Rebar:
                             if n1 + n2 > self.beam.settings.max_bars_per_layer:
                                 continue  # Skip if the total bars in layer 1 exceed the limit
 
-                            spacing_ok = True
-
-                            # ALWAYS compute spacing for this layer-1 combo
                             if not self._check_spacing(n1, n2, d_b1, d_b2, effective_width):
                                 continue
 
@@ -383,12 +380,6 @@ class Rebar:
                             A_s_layer_1 = n1 * self.rebar_areas[d_b1] + (
                                 n2 * self.rebar_areas[d_b2] if n2 > 0 else 0 * cm**2
                             )
-
-                            # Condition 6 and 7: Check clear spacing in layer 1
-                            if n2 > 0:
-                                spacing_ok = self._check_spacing(n1, n2, d_b1, d_b2, effective_width)
-                                if not spacing_ok:
-                                    continue
 
                             max_limit = 10 * A_s_req
                             if A_s_max is not None:
@@ -459,14 +450,6 @@ class Rebar:
                                         n4 * self.rebar_areas[d_b4] if n4 > 0 else 0 * cm**2
                                     )
 
-                                    # Condition 4: area of layer 1 ≥ area of layer 2
-                                    if A_s_layer_1 < A_s_layer_2:
-                                        continue
-
-                                    # Condition 6 and 7: check clear spacing in layer 2
-                                    if n4 > 0 and not self._check_spacing(n3, n4, d_b3, d_b4, effective_width):
-                                        continue
-
                                     # --- Compute total reinforcement and evaluate -----------
                                     total_as = A_s_layer_1 + A_s_layer_2
                                     if total_as >= A_s_req and total_as <= max_limit:
@@ -515,17 +498,9 @@ class Rebar:
                                             continue
                                         if n3 == 0 and n4 > 0:
                                             continue
-                                        if n3 + n4 > self.beam.settings.max_bars_per_layer:
-                                            continue
-
                                         A_s_layer_2 = n3 * self.rebar_areas[d_b3] + (
                                             n4 * self.rebar_areas[d_b4] if n4 > 0 else 0 * cm**2
                                         )
-
-                                        if A_s_layer_1 < A_s_layer_2:
-                                            continue
-                                        if n4 > 0 and not self._check_spacing(n3, n4, d_b3, d_b4, effective_width):
-                                            continue
 
                                         total_as = A_s_layer_1 + A_s_layer_2
                                         if total_as >= A_s_req and total_as <= max_limit:
