@@ -14,13 +14,9 @@ from mento.beam import RectangularBeam
 from mento import mm, cm, kN, MPa, m, inch, ft, kNm
 from mento.node import Node
 
-pd.set_option("future.no_silent_downcasting", True)
-
 
 class BeamSummary:
-    def __init__(
-        self, concrete: Concrete, steel_bar: SteelBar, beam_list: DataFrame
-    ) -> None:
+    def __init__(self, concrete: Concrete, steel_bar: SteelBar, beam_list: DataFrame) -> None:
         self.concrete: Concrete = concrete
         self.steel_bar: SteelBar = steel_bar
         self.beam_list: DataFrame = beam_list
@@ -34,9 +30,7 @@ class BeamSummary:
     def check_and_process_input(self) -> None:
         # Separate the header, units, and data
         self.units_row = self.beam_list.iloc[0].tolist()  # Second row (units)
-        data = self.beam_list.iloc[
-            1:
-        ].copy()  # Data rows (after removing the units row)
+        data = self.beam_list.iloc[1:].copy()  # Data rows (after removing the units row)
 
         # Convert NaN in units to "dimensionless"
         self.units_row = ["" if pd.isna(unit) else unit for unit in self.units_row]
@@ -53,9 +47,7 @@ class BeamSummary:
                 data[col] = data[col].astype(int)
 
         # Apply units to the corresponding columns, skipping the first column
-        for i in range(
-            1, len(self.units_row)
-        ):  # Start from the second column (index 1)
+        for i in range(1, len(self.units_row)):  # Start from the second column (index 1)
             unit_str = self.units_row[i]
             if unit_str != "":
                 unit = self.get_unit_variable(unit_str)
@@ -71,9 +63,7 @@ class BeamSummary:
         valid_units = {"m", "mm", "cm", "inch", "ft", "kN", "kNm", ""}
         for unit_str in units_row:
             if unit_str and unit_str not in valid_units:
-                raise ValueError(
-                    f"Invalid unit '{unit_str}' detected. Allowed units: {valid_units}"
-                )
+                raise ValueError(f"Invalid unit '{unit_str}' detected. Allowed units: {valid_units}")
         # print("Processed Units: Ok")
 
     def get_unit_variable(self, unit_str: str) -> Dict:
@@ -139,13 +129,9 @@ class BeamSummary:
             d_b4 = row["db4"]  # Diameter in mm
             if n1 != 0:
                 if M_y >= 0 * kNm:
-                    beam.set_longitudinal_rebar_bot(
-                        n1, d_b1, n2, d_b2, n3, d_b3, n4, d_b4
-                    )
+                    beam.set_longitudinal_rebar_bot(n1, d_b1, n2, d_b2, n3, d_b3, n4, d_b4)
                 else:
-                    beam.set_longitudinal_rebar_top(
-                        n1, d_b1, n2, d_b2, n3, d_b3, n4, d_b4
-                    )
+                    beam.set_longitudinal_rebar_top(n1, d_b1, n2, d_b2, n3, d_b3, n4, d_b4)
             # Create a Node for each pair of beam and forces
             node = Node(section=beam, forces=forces)
 
@@ -274,12 +260,8 @@ class BeamSummary:
                 node.add_forces(original_forces)
             else:
                 # Perform the shear check
-                shear_results = (
-                    node.check_shear().iloc[1:].reset_index(drop=True)
-                )  # Skip the first row (units)
-                flexure_results = (
-                    node.check_flexure().iloc[1:].reset_index(drop=True)
-                )  # Skip the first row (units)
+                shear_results = node.check_shear().iloc[1:].reset_index(drop=True)  # Skip the first row (units)
+                flexure_results = node.check_flexure().iloc[1:].reset_index(drop=True)  # Skip the first row (units)
                 # Common data that doesn't change between codes
                 common_data = {
                     "Beam": beam.label,
@@ -406,33 +388,21 @@ class BeamSummary:
                 design_df.loc[i, "n1"] = flex_result["n_1"]
                 design_df.loc[i, "db1"] = flex_result["d_b1"]
                 design_df.loc[i, "n2"] = flex_result["n_2"]
-                design_df.loc[i, "db2"] = (
-                    flex_result["d_b2"] if flex_result["d_b2"] is not None else 0
-                )
+                design_df.loc[i, "db2"] = flex_result["d_b2"] if flex_result["d_b2"] is not None else 0
                 design_df.loc[i, "n3"] = flex_result["n_3"]
-                design_df.loc[i, "db3"] = (
-                    flex_result["d_b3"] if flex_result["d_b3"] is not None else 0
-                )
+                design_df.loc[i, "db3"] = flex_result["d_b3"] if flex_result["d_b3"] is not None else 0
                 design_df.loc[i, "n4"] = flex_result["n_4"]
-                design_df.loc[i, "db4"] = (
-                    flex_result["d_b4"] if flex_result["d_b4"] is not None else 0
-                )
+                design_df.loc[i, "db4"] = flex_result["d_b4"] if flex_result["d_b4"] is not None else 0
             else:  # tension at top face
                 flex_result = beam.flexure_design_results_top
                 design_df.loc[i, "n1"] = flex_result["n_1"]
                 design_df.loc[i, "db1"] = flex_result["d_b1"]
                 design_df.loc[i, "n2"] = flex_result["n_2"]
-                design_df.loc[i, "db2"] = (
-                    flex_result["d_b2"] if flex_result["d_b2"] is not None else 0
-                )
+                design_df.loc[i, "db2"] = flex_result["d_b2"] if flex_result["d_b2"] is not None else 0
                 design_df.loc[i, "n3"] = flex_result["n_3"]
-                design_df.loc[i, "db3"] = (
-                    flex_result["d_b3"] if flex_result["d_b3"] is not None else 0
-                )
+                design_df.loc[i, "db3"] = flex_result["d_b3"] if flex_result["d_b3"] is not None else 0
                 design_df.loc[i, "n4"] = flex_result["n_4"]
-                design_df.loc[i, "db4"] = (
-                    flex_result["d_b4"] if flex_result["d_b4"] is not None else 0
-                )
+                design_df.loc[i, "db4"] = flex_result["d_b4"] if flex_result["d_b4"] is not None else 0
 
             # --- SHEAR DESIGN ---
             node.design_shear()
@@ -447,9 +417,7 @@ class BeamSummary:
         print("✅ Beam design completed for all beams in Summary.")
         return design_df
 
-    def shear_results(
-        self, index: Optional[int] = None, capacity_check: bool = False
-    ) -> DataFrame:
+    def shear_results(self, index: Optional[int] = None, capacity_check: bool = False) -> DataFrame:
         """
         Get shear results for one or all beams.
         Includes a units row only once at the top.
@@ -483,9 +451,7 @@ class BeamSummary:
         df_final = pd.concat([units_row, data_rows], ignore_index=True)
         return df_final
 
-    def flexure_results(
-        self, index: Optional[int] = None, capacity_check: bool = False
-    ) -> DataFrame:
+    def flexure_results(self, index: Optional[int] = None, capacity_check: bool = False) -> DataFrame:
         """
         Get flexure results for one or all beams.
         Includes a units row only once at the top.
@@ -519,9 +485,7 @@ class BeamSummary:
         df_final = pd.concat([units_row, data_rows], ignore_index=True)
         return df_final
 
-    def _process_beam_for_check(
-        self, node: Node, check_type: str, capacity_check: bool
-    ) -> DataFrame:
+    def _process_beam_for_check(self, node: Node, check_type: str, capacity_check: bool) -> DataFrame:
         """
         Shared method to process beam for either shear or flexure checks.
 
@@ -565,15 +529,11 @@ class BeamSummary:
             Path to the Excel file to create.
         """
         if not hasattr(self, "design_data"):
-            raise AttributeError(
-                "No design data found. Run .design() before exporting."
-            )
+            raise AttributeError("No design data found. Run .design() before exporting.")
 
         df_numeric = self.design_data.copy()
         for col in df_numeric.columns:
-            df_numeric[col] = df_numeric[col].apply(
-                lambda x: x.magnitude if hasattr(x, "magnitude") else x
-            )
+            df_numeric[col] = df_numeric[col].apply(lambda x: x.magnitude if hasattr(x, "magnitude") else x)
         # Recombine units + data before exporting
         df_export = pd.concat(
             [

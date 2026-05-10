@@ -37,6 +37,7 @@ class Forces:
     _N_x: Quantity = field(default=0 * kN)  # Ensure you use the correct unit type here
     _V_z: Quantity = field(default=0 * kN)
     _M_y: Quantity = field(default=0 * kNm)
+    _M_x: Quantity = field(default=0 * kNm)
     unit_system: str = field(default="metric")  # Add unit_system as a field
 
     def __init__(
@@ -45,6 +46,7 @@ class Forces:
         N_x: Quantity = 0 * kN,
         V_z: Quantity = 0 * kN,
         M_y: Quantity = 0 * kNm,
+        M_x: Quantity = 0 * kNm,
         unit_system: str = "metric",
     ) -> None:
         # Increment the class variable for the next unique ID
@@ -56,7 +58,7 @@ class Forces:
         self.unit_system = unit_system  # Set the unit system
 
         # Set the forces upon initialization
-        self.set_forces(N_x, V_z, M_y)
+        self.set_forces(N_x, V_z, M_y, M_x)
 
     @property
     def id(self) -> int:
@@ -92,26 +94,43 @@ class Forces:
         else:
             return self._M_y.to("ft*kip")
 
+    @property
+    def M_x(self) -> Quantity:
+        """Bending moment about the x-axis — used for biaxial punching shear (default is 0 kN*m)."""
+        if self.unit_system == "metric":
+            return self._M_x.to("kN*m")
+        else:
+            return self._M_x.to("ft*kip")
+
     def get_forces(self) -> Dict[str, Quantity]:
-        """Returns the forces as a dictionary with keys 'N_x', 'V_z', and 'M_y'."""
+        """Returns the forces as a dictionary with keys 'N_x', 'V_z', 'M_y', and 'M_x'."""
         if self.unit_system == "metric":
             return {
                 "N_x": self._N_x.to("kN"),
                 "V_z": self._V_z.to("kN"),
                 "M_y": self._M_y.to("kN*m"),
+                "M_x": self._M_x.to("kN*m"),
             }
         else:
             return {
                 "N_x": self._N_x.to("kip"),
                 "V_z": self._V_z.to("kip"),
                 "M_y": self._M_y.to("ft*kip"),
+                "M_x": self._M_x.to("ft*kip"),
             }
 
-    def set_forces(self, N_x: Quantity = 0 * kN, V_z: Quantity = 0 * kN, M_y: Quantity = 0 * kNm) -> None:
+    def set_forces(
+        self,
+        N_x: Quantity = 0 * kN,
+        V_z: Quantity = 0 * kN,
+        M_y: Quantity = 0 * kNm,
+        M_x: Quantity = 0 * kNm,
+    ) -> None:
         """Sets the forces in the object."""
         self._N_x = N_x
         self._V_z = V_z
         self._M_y = M_y
+        self._M_x = M_x
 
     def compare_to(self, other: "Forces", by: str = "V_z") -> bool:
         """Compares this force with another force based on a selected attribute.
@@ -121,16 +140,19 @@ class Forces:
         other : Forces
             Another Forces instance to compare with.
         by : str
-            The attribute to compare by ('N_x', 'V_z', or 'M_y').
+            The attribute to compare by ('N_x', 'V_z', 'M_y', or 'M_x').
 
         Returns
         -------
         bool
             True if this force is greater than the other force by the selected attribute.
         """
-        if by not in ["N_x", "V_z", "M_y"]:
-            raise ValueError("Comparison attribute must be one of 'N_x', 'V_z', or 'M_y'")
+        if by not in ["N_x", "V_z", "M_y", "M_x"]:
+            raise ValueError("Comparison attribute must be one of 'N_x', 'V_z', 'M_y', or 'M_x'")
         return getattr(self, by).magnitude > getattr(other, by).magnitude
 
     def __str__(self) -> str:
-        return f"Force ID: {self.id}, Label: {self.label}, " f"N_x: {self.N_x}, V_z: {self.V_z}, M_y: {self.M_y}"
+        base = f"Force ID: {self.id}, Label: {self.label}, N_x: {self.N_x}, V_z: {self.V_z}, M_y: {self.M_y}"
+        if self._M_x.magnitude != 0:
+            base += f", M_x: {self.M_x}"
+        return base

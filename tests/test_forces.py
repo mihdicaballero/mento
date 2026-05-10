@@ -16,9 +16,7 @@ def assert_quantity_equal(
     atol: float = 1e-12,
 ) -> None:
     """Asserts two Pint Quantities are numerically and unit-wise equal."""
-    assert (
-        q1.units == q2.units
-    ), f"Units mismatch: {q1.units} (actual) vs {q2.units} (expected)"
+    assert q1.units == q2.units, f"Units mismatch: {q1.units} (actual) vs {q2.units} (expected)"
     assert (
         pytest.approx(q1.magnitude, rel=rtol, abs=atol) == q2.magnitude
     ), f"Magnitudes mismatch: {q1.magnitude} (actual) vs {q2.magnitude} (expected) with units {q1.units}"
@@ -33,9 +31,7 @@ def reset_forces_id_counter() -> Generator[None, None, None]:
     original_last_id = Forces._last_id
     Forces._last_id = 0
     yield  # Allow the test to run
-    Forces._last_id = (
-        original_last_id  # Restore if needed, though usually not critical after tests
-    )
+    Forces._last_id = original_last_id  # Restore if needed, though usually not critical after tests
 
 
 @pytest.fixture
@@ -83,9 +79,7 @@ def test_forces_custom_initialization_metric(custom_metric_forces: Forces) -> No
     assert_quantity_equal(custom_metric_forces._V_z, 50 * kN)
     assert_quantity_equal(custom_metric_forces._M_y, 200 * kNm)
     assert custom_metric_forces.unit_system == "metric"
-    assert (
-        custom_metric_forces.id == 1
-    )  # First instance for this test (due to reset fixture)
+    assert custom_metric_forces.id == 1  # First instance for this test (due to reset fixture)
 
 
 def test_forces_custom_initialization_imperial(custom_imperial_forces: Forces) -> None:
@@ -94,9 +88,7 @@ def test_forces_custom_initialization_imperial(custom_imperial_forces: Forces) -
     assert_quantity_equal(custom_imperial_forces._N_x, 20 * kip)
     assert_quantity_equal(custom_imperial_forces._V_z, 10 * kip)
     # 150 kNm to ft*kip: 150 kN*m * (0.224809 kip/kN) * (3.28084 ft/m) = 110.63 ft*kip approx
-    assert_quantity_equal(
-        custom_imperial_forces._M_y, 150 * kNm
-    )  # Stored internally as kNm
+    assert_quantity_equal(custom_imperial_forces._M_y, 150 * kNm)  # Stored internally as kNm
     assert custom_imperial_forces.unit_system == "imperial"
     assert custom_imperial_forces.id == 1
 
@@ -114,10 +106,8 @@ def test_forces_id_incrementing() -> None:
 
 def test_forces_id_is_read_only(default_metric_forces: Forces) -> None:
     """Test that the 'id' property is read-only."""
-    with pytest.raises(
-        AttributeError, match="property 'id' of 'Forces' object has no setter"
-    ):
-        default_metric_forces.id = 99  # type: ignore [misc]
+    with pytest.raises(AttributeError, match="property 'id' of 'Forces' object has no setter"):
+        default_metric_forces.id = 99  # type: ignore[assignment]
 
 
 # --- Tests for Properties (`N_x`, `V_z`, `M_y`) ---
@@ -231,16 +221,12 @@ def test_compare_to_different_units(custom_metric_forces: Forces) -> None:
     """Test compare_to with Forces objects having different internal units."""
     # custom_metric_forces.V_z is 50 kN
     other_forces_imperial = Forces(V_z=10 * kip)  # 10 kip = 44.48 kN
-    assert (
-        custom_metric_forces.compare_to(other_forces_imperial, by="V_z") is True
-    )  # 50 kN > 44.48 kN
+    assert custom_metric_forces.compare_to(other_forces_imperial, by="V_z") is True  # 50 kN > 44.48 kN
 
 
 def test_compare_to_invalid_attribute(custom_metric_forces: Forces) -> None:
     """Test compare_to raises ValueError for invalid attribute."""
-    with pytest.raises(
-        ValueError, match="Comparison attribute must be one of 'N_x', 'V_z', or 'M_y'"
-    ):
+    with pytest.raises(ValueError, match="Comparison attribute must be one of 'N_x', 'V_z', 'M_y', or 'M_x'"):
         custom_metric_forces.compare_to(Forces(), by="invalid_attr")
 
 
@@ -267,3 +253,19 @@ def test_str_representation_imperial(custom_imperial_forces: Forces) -> None:
     # M_y needs careful checking due to potential floating point and pint's default format.
     # The {custom_imperial_forces.M_y:.1f~P} format specifier ensures it's formatted as pint would do for `str()`
     # and matches the expected output including units with unicode mu for 'micro'.
+
+
+def test_M_x_property_imperial() -> None:
+    """Test M_x property returns ft*kip in imperial unit system (covers lines 100-103)."""
+    f = Forces(label="Biaxial Imperial", V_z=10 * kip, M_x=150 * kNm, unit_system="imperial")
+    result = f.M_x
+    expected = (150 * kNm).to("ft*kip")
+    assert result.to("ft*kip").magnitude == pytest.approx(expected.magnitude)
+
+
+def test_str_with_nonzero_M_x() -> None:
+    """Test __str__ includes M_x when it is non-zero (covers line 157)."""
+    f = Forces(label="Biaxial", V_z=300 * kN, M_x=20 * kNm)
+    s = str(f)
+    assert "M_x" in s
+    assert "20" in s
