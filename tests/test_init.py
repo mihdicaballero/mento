@@ -236,6 +236,11 @@ def test_all_exports_in_all() -> None:
         "ACI_318_19_beam",
         "BeamSettings",
         "BeamSummary",
+        "Column",
+        "PunchingSlab",
+        "Opening",
+        "Capital",
+        "PunchingNode",
     ]
 
     assert set(mento.__all__) == set(expected_exports)

@@ -264,54 +264,81 @@ class BeamSummary:
             else:
                 # Perform the shear check
                 shear_results = node.check_shear().iloc[1:].reset_index(drop=True)  # Skip the first row (units)
-                node.check_flexure().iloc[1:].reset_index(drop=True)  # Skip the first row (units)
-                # Slim data - only identification, rebar, and DCRs
-                results_dict = OrderedDict(
-                    {
-                        "Beam": beam.label,
-                        "b": int(beam.width.magnitude),
-                        "h": int(beam.height.magnitude),
-                        "As,top": rebar_f_top,
-                        "As,bot": rebar_f_bot,
-                        "Av": rebar_v,
-                        "DCRb,top": round(beam._DCRb_top, 2),
-                        "DCRb,bot": round(beam._DCRb_bot, 2),
-                        "DCRv": round(shear_results["DCR"][0], 2),
+                flexure_results = node.check_flexure().iloc[1:].reset_index(drop=True)  # Skip the first row (units)
+                # Common data that doesn't change between codes
+                common_data = {
+                    "Beam": beam.label,
+                    "b": int(beam.width.magnitude),
+                    "h": int(beam.height.magnitude),
+                    "cc": int(beam.c_c.magnitude),
+                    "As,top": rebar_f_top,
+                    "As,bot": rebar_f_bot,
+                    "Av": rebar_v,
+                    "As,req,top": round(beam._A_s_req_top.to("cm**2").magnitude, 1),
+                    "As,req,bot": round(beam._A_s_req_bot.to("cm**2").magnitude, 1),
+                    "Av,req": round(shear_results["Av,req"][0], 2),
+                    "Av,real": round(shear_results["Av"][0], 2),
+                    "DCRb,top": round(beam._DCRb_top, 3),
+                    "DCRb,bot": round(beam._DCRb_bot, 3),
+                    "DCRv": shear_results["DCR"][0],
+                }
+
+                common_units = {
+                    "Beam": "",
+                    "b": "cm",
+                    "h": "cm",
+                    "cc": "mm",
+                    "As,top": "",
+                    "As,bot": "",
+                    "Av": "",
+                    "As,req,top": "cm²/m",
+                    "As,req,bot": "cm²/m",
+                    "Av,req": "cm²/m",
+                    "Av,real": "cm²/m",
+                    "DCRb,top": "",
+                    "DCRb,bot": "",
+                    "DCRv": "",
+                }
+
+                # Code-specific data
+                if isinstance(self.concrete, Concrete_EN_1992_2004):  # TODO
+                    code_specific_data = {
+                        "MEd": round(flexure_results["MEd"][0], 1),
+                        "VEd": round(shear_results["VEd,2"][0], 1),
+                        "NEd": round(shear_results["NEd"][0], 1),
+                        "MRd,top": round(beam._M_Rd_top.to("kN*m").magnitude, 1),
+                        "MRd,bot": round(beam._M_Rd_bot.to("kN*m").magnitude, 1),
+                        "VRd": round(shear_results["VRd"][0], 1),
                     }
-                )
+                    code_specific_units = {
+                        "MEd": "kNm",
+                        "VEd": "kN",
+                        "NEd": "kN",
+                        "MRd,top": "kNm",
+                        "MRd,bot": "kNm",
+                        "VRd": "kN",
+                    }
+                else:  # ACI 318-19 or CIRSOC 201-25 design code
+                    code_specific_data = {
+                        "Mu": round(flexure_results["Mu"][0], 1),
+                        "Vu": round(shear_results["Vu"][0], 1),
+                        "Nu": round(shear_results["Nu"][0], 1),
+                        "ØMn,top": round(beam._phi_M_n_top.to("kN*m").magnitude, 1),
+                        "ØMn,bot": round(beam._phi_M_n_bot.to("kN*m").magnitude, 1),
+                        "ØVn": round(shear_results["ØVn"][0], 1),
+                    }
+                    code_specific_units = {
+                        "Mu": "kNm",
+                        "Vu": "kN",
+                        "Nu": "kN",
+                        "ØMn,top": "kNm",
+                        "ØMn,bot": "kNm",
+                        "ØVn": "kN",
+                    }
 
-                # Code-specific capacity columns
-                if isinstance(self.concrete, Concrete_EN_1992_2004):
-                    results_dict["MRd,top"] = round(beam._M_Rd_top.to("kN*m").magnitude, 1)
-                    results_dict["MRd,bot"] = round(beam._M_Rd_bot.to("kN*m").magnitude, 1)
-                    results_dict["VRd"] = round(shear_results["VRd"][0], 1)
-                    code_units: dict = {"MRd,top": "kNm", "MRd,bot": "kNm", "VRd": "kN"}
-                else:
-                    results_dict["ØMn,top"] = round(beam._phi_M_n_top.to("kN*m").magnitude, 1)
-                    results_dict["ØMn,bot"] = round(beam._phi_M_n_bot.to("kN*m").magnitude, 1)
-                    results_dict["ØVn"] = round(shear_results["ØVn"][0], 1)
-                    code_units = {"ØMn,top": "kNm", "ØMn,bot": "kNm", "ØVn": "kN"}
-
-                # Units row
-                units_row = pd.DataFrame(
-                    [
-                        OrderedDict(
-                            {
-                                "Beam": "",
-                                "b": "cm",
-                                "h": "cm",
-                                "As,top": "",
-                                "As,bot": "",
-                                "Av": "",
-                                "DCRb,top": "",
-                                "DCRb,bot": "",
-                                "DCRv": "",
-                                **code_units,
-                                "Status": "",
-                            }
-                        )
-                    ]
-                )
+                # Assemble results_dict and units_row from the split dicts
+                results_dict = OrderedDict({**common_data, **code_specific_data})
+                units_row = pd.DataFrame([OrderedDict({**common_units, **code_specific_units, "Status": ""})])
 
                 # Determine status
                 dcr_values = [results_dict["DCRb,top"], results_dict["DCRb,bot"], results_dict["DCRv"]]
