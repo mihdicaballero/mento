@@ -336,38 +336,9 @@ class BeamSummary:
                         "ØVn": "kN",
                     }
 
-                # Code-specific capacity columns
-                if isinstance(self.concrete, Concrete_EN_1992_2004):
-                    results_dict["MRd,top"] = round(beam._M_Rd_top.to("kN*m").magnitude, 1)
-                    results_dict["MRd,bot"] = round(beam._M_Rd_bot.to("kN*m").magnitude, 1)
-                    results_dict["VRd"] = round(shear_results["VRd"][0], 1)
-                    code_units: dict = {"MRd,top": "kNm", "MRd,bot": "kNm", "VRd": "kN"}
-                else:
-                    results_dict["ØMn,top"] = round(beam._phi_M_n_top.to("kN*m").magnitude, 1)
-                    results_dict["ØMn,bot"] = round(beam._phi_M_n_bot.to("kN*m").magnitude, 1)
-                    results_dict["ØVn"] = round(shear_results["ØVn"][0], 1)
-                    code_units = {"ØMn,top": "kNm", "ØMn,bot": "kNm", "ØVn": "kN"}
-
-                # Units row
-                units_row = pd.DataFrame(
-                    [
-                        OrderedDict(
-                            {
-                                "Beam": "",
-                                "b": "cm",
-                                "h": "cm",
-                                "As,top": "",
-                                "As,bot": "",
-                                "Av": "",
-                                "DCRb,top": "",
-                                "DCRb,bot": "",
-                                "DCRv": "",
-                                **code_units,
-                                "Status": "",
-                            }
-                        )
-                    ]
-                )
+                # Assemble results_dict and units_row from the split dicts
+                results_dict = OrderedDict({**common_data, **code_specific_data})
+                units_row = pd.DataFrame([OrderedDict({**common_units, **code_specific_units, "Status": ""})])
 
                 # Determine status
                 dcr_values = [results_dict["DCRb,top"], results_dict["DCRb,bot"], results_dict["DCRv"]]
