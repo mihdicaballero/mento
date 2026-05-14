@@ -8,3 +8,7 @@ from .ACI_318_19_beam import (
     _check_flexure_ACI_318_19,  # noqa: F401
     _design_flexure_ACI_318_19,  # noqa: F401
 )  # noqa: F401
+from .ACI_318_19_wall import (
+    _check_shear_ACI_318_19_wall,  # noqa: F401
+    _design_shear_ACI_318_19_wall,  # noqa: F401
+)  # noqa: F401

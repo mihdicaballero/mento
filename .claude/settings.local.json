@@ -1,6 +1,7 @@
 {
   "permissions": {
     "allow": [
+<<<<<<< Updated upstream
       "Bash(& \"C:\\Users\\mihdi\\anaconda3\\envs\\py312\\python.exe\" -m pytest tests/ --override-ini=\"addopts=\" -v --no-header)",
       "Bash(& \"C:\\Users\\mihdi\\anaconda3\\envs\\py312\\python.exe\" -m pytest tests/ --override-ini=\"addopts=\" -q --no-header)",
       "Bash(& \"C:\\Users\\mihdi\\anaconda3\\envs\\py312\\python.exe\" -m pytest tests/ --override-ini=\"addopts=\" --cov=mento --cov-report=term-missing -q)",
@@ -10,6 +11,43 @@
       "Bash(& \"C:\\Users\\mihdi\\anaconda3\\envs\\py312\\python.exe\" -m ruff check . --fix)",
       "Bash(& \"C:\\Users\\mihdi\\anaconda3\\envs\\py312\\python.exe\" -m ruff format .)",
       "Bash(& \"C:\\Users\\mihdi\\anaconda3\\envs\\py312\\python.exe\" -m mypy mento/)"
+=======
+      "Bash(python -m pytest tests/foundations/test_footings.py -v)",
+      "Bash(uv run pytest tests/foundations/test_footings.py -v)",
+      "Bash(python3 -m pytest tests/foundations/test_footings.py -v)",
+      "Bash(/c/Users/mihdi/anaconda3/envs/rame-env/Scripts/pytest.exe tests/foundations/test_footings.py -v)",
+      "Bash(/c/Users/mihdi/anaconda3/envs/rame-env/Scripts/pytest.exe tests/test_quantities.py::test_merge_positions_across_XY -v)",
+      "Bash(/c/Users/mihdi/anaconda3/envs/rame-env/Scripts/pytest.exe tests/test_quantities.py -v)",
+      "Bash(dotnet build *)",
+      "Bash(cat .python-version)",
+      "Bash(ls .venv/)",
+      "Bash(ls venv/)",
+      "Bash(pip show *)",
+      "Bash(\"/c/Users/mihdi/anaconda3/envs/rame-env/python.exe\" -c \"import matplotlib, mento; print\\('ok'\\)\")",
+      "Bash(\"/c/Users/mihdi/anaconda3/envs/rame-env/python.exe\" _notebooks/design_animation.py)",
+      "Bash(where python *)",
+      "Bash(where conda *)",
+      "Bash(where jupyter *)",
+      "Read(//c/Users/mihdi/anaconda3/**)",
+      "Read(//c/Users/mihdi/miniconda3/**)",
+      "Bash(\"c:/Users/mihdi/anaconda3/envs/rame-env/python.exe\" -c \"from mako.foundations.footing import Footing; from mako.foundations.pile_cap import PileCap; print\\('imports OK'\\)\")",
+      "Bash(\"c:/Users/mihdi/anaconda3/envs/rame-env/python.exe\" -m pytest \"c:/Users/mihdi/Documents/GitHub/mako/mako/tests/\" -x -q)",
+      "Bash(\"c:/Users/mihdi/anaconda3/envs/rame-env/python.exe\" -m pytest \"c:/Users/mihdi/Documents/GitHub/mako/tests/foundations/\" -x -q)",
+      "Bash(\"c:/Users/mihdi/anaconda3/envs/rame-env/python.exe\" -m pytest \"c:/Users/mihdi/Documents/GitHub/mako/tests/foundations/test_pilecaps.py::test_print_critical_details_runs_without_error\" -v)",
+      "Bash(\"c:/Users/mihdi/anaconda3/envs/rame-env/python.exe\" -m pytest \"c:/Users/mihdi/Documents/GitHub/mako/tests/foundations/test_pilecaps.py::test_print_critical_details_runs_without_error\" -v --no-cov --tb=short)",
+      "Bash(\"c:/Users/mihdi/anaconda3/envs/rame-env/python.exe\" -m pytest \"c:/Users/mihdi/Documents/GitHub/mako/tests/foundations/\" -x -q --no-cov)",
+      "Bash(\"c:/Users/mihdi/anaconda3/envs/rame-env/python.exe\" -m pytest \"c:/Users/mihdi/Documents/GitHub/mako/tests/foundations/test_pilecaps.py::test_print_critical_details_runs_without_error\" --no-cov --tb=long)",
+      "Bash(\"c:/Users/mihdi/anaconda3/envs/rame-env/python.exe\" -c \"from tabulate import tabulate; print\\('tabulate OK'\\)\")",
+      "Bash(\"c:/Users/mihdi/anaconda3/envs/rame-env/python.exe\" -m pytest \"c:/Users/mihdi/Documents/GitHub/mako/tests/foundations/\" -q --no-cov)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\mihdi\\\\Documents\\\\GitHub\\\\mako\\\\tests\" -Recurse -Name)",
+      "Bash(Select-String \"quantities\")",
+      "Bash(python -c \"import xlsxwriter; print\\('xlsxwriter version:', xlsxwriter.__version__\\)\")",
+      "PowerShell(& \"c:\\\\Users\\\\mihdi\\\\anaconda3\\\\python.exe\" -c \"import xlsxwriter, openpyxl, pandas; print\\('xlsxwriter:', xlsxwriter.__version__, 'openpyxl:', openpyxl.__version__, 'pandas:', pandas.__version__\\)\" 2>&1)",
+      "PowerShell(& \"c:\\\\Users\\\\mihdi\\\\anaconda3\\\\python.exe\" -m pytest \"c:\\\\Users\\\\mihdi\\\\Documents\\\\GitHub\\\\mako\\\\tests\\\\quantities\\\\test_bbs_slab.py\" -v --no-header 2>&1)",
+      "PowerShell(& \"c:\\\\Users\\\\mihdi\\\\anaconda3\\\\python.exe\" -m pytest \"c:\\\\Users\\\\mihdi\\\\Documents\\\\GitHub\\\\mako\\\\tests\\\\quantities\\\\test_bbs_slab.py\" -v --no-header -p no:cacheprovider --override-ini=\"addopts=\" 2>&1)",
+      "PowerShell(& \"c:\\\\Users\\\\mihdi\\\\anaconda3\\\\python.exe\" -c \"import sys; sys.path.insert\\(0, 'c:/Users/mihdi/Documents/GitHub/mako'\\); import mako; print\\(mako.__file__\\)\" 2>&1)",
+      "PowerShell(where.exe pytest 2>&1; Get-Item \\(where.exe pytest 2>&1 | Select-Object -First 1\\) 2>&1)"
+>>>>>>> Stashed changes
     ]
   }
 }

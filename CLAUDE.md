@@ -1,3 +1,7 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # CLAUDE.md — mento
 
 Reinforced concrete design Python package. Covers beams, slabs, sections, materials, rebar, and design code implementations (ACI 318-19, EN 1992-2004, CIRSOC 201-25). Uses strict mypy typing, ruff formatting, and pytest with coverage.
@@ -60,7 +64,7 @@ mento/
 ├── __init__.py           Lazy-import public API via __getattr__
 ├── _version.py           Package version
 ├── units.py              Pint unit registry (m, cm, mm, kN, kNm, MPa, kip, psi, etc.)
-├── material.py           Concrete_ACI_318_19, Concrete_EN_1992_2004, Concrete_CIRSOC_201_25, SteelBar
+├── material.py           Concrete_ACI_318_19, Concrete_EN_1992_2004, Concrete_CIRSOC_201_25, SteelBar, SteelStrand
 ├── rebar.py              Rebar — bar database and selection logic
 ├── section.py            Section base class
 ├── rectangular.py        RectangularSection — geometry and cover calculations
@@ -71,6 +75,8 @@ mento/
 ├── settings.py           BeamSettings — metric/imperial defaults for design rules
 ├── results.py            Formatter, TablePrinter, DocumentBuilder — output and plotting
 ├── summary.py            BeamSummary — aggregate results for multiple beams
+├── column.py             Column — geometry (shape, position, edge distances) for punching shear
+├── punching.py           PunchingSlab — two-way punching shear check per ACI/EN
 └── codes/
     ├── ACI_318_19_beam.py    Shear and flexure checks/design per ACI 318-19
     └── EN_1992_2004_beam.py  Shear and flexure checks/design per EN 1992-2004
@@ -100,6 +106,25 @@ tests/
 
 ---
 
+## Architecture & key patterns
+
+**Class hierarchy:**
+```
+Section → RectangularSection → RectangularBeam
+                             → OneWaySlab
+PunchingSlab (standalone dataclass, uses Column)
+```
+
+**Unit-system detection:** `Concrete` auto-detects metric vs. imperial from `f_c` units (MPa → metric, psi → imperial). This propagates through `BeamSettings` and all `Forces` objects — never hard-code unit assumptions.
+
+**Design code delegation:** `codes/ACI_318_19_beam.py` and `codes/EN_1992_2004_beam.py` contain module-level functions typed as `self: RectangularBeam`; `RectangularBeam` imports and calls them directly. `Concrete_CIRSOC_201_25` subclasses `Concrete_ACI_318_19` (same formulas, metric only, `design_code = "CIRSOC 201-25"`).
+
+**`BeamSettings` sentinel pattern:** Unset fields use `_NOT_SET` so `__post_init__` can apply metric or imperial defaults conditionally based on the detected unit system.
+
+**`__init__.py` lazy loading:** Public API uses `__getattr__` so submodules are only imported on first attribute access. `TYPE_CHECKING` guards prevent circular imports.
+
+---
+
 ## Key module notes
 
 ### beam
@@ -119,6 +144,12 @@ tests/
 
 - `OneWaySlab` covers one-way slab flexure and shear design.
 - Shares the same material and unit infrastructure as beam.
+
+### punching
+
+- `PunchingSlab` takes `(concrete, steel_bar, h, c_c, rho_x, rho_y)`.
+- `d_avg` is computed as `h - c_c - 16 mm` (metric) or `h - c_c - 5/8 in` (imperial); override after construction if needed: `slab.d_avg = custom_value`.
+- Requires a `Column` instance describing `shape` (`"rectangular"` / `"circular"`), `position` (`"interior"` / `"edge"` / `"corner"`), and edge distances when applicable.
 
 ### units
 

@@ -71,6 +71,7 @@ __all__ = [
     "Opening",
     "Capital",
     "PunchingNode",
+    "ShearWall",
 ]
 
 if TYPE_CHECKING:
@@ -90,6 +91,7 @@ if TYPE_CHECKING:
     from mento.summary import BeamSummary
     from mento.column import Column
     from mento.punching import Capital, Opening, PunchingNode, PunchingSlab
+    from mento.shear_wall import ShearWall
 
 
 def __getattr__(name: str) -> object:
@@ -115,6 +117,7 @@ def __getattr__(name: str) -> object:
         "Opening": "punching",
         "Capital": "punching",
         "PunchingNode": "punching",
+        "ShearWall": "shear_wall",
     }
 
     if name in module_mapping:

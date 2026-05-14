@@ -12,6 +12,14 @@ mento.codes.ACI\_318\_19\_beam module
    :undoc-members:
    :show-inheritance:
 
+mento.codes.ACI\_318\_19\_wall module
+-------------------------------------
+
+.. automodule:: mento.codes.ACI_318_19_wall
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 mento.codes.EN\_1992\_2004\_beam module
 ---------------------------------------
 
