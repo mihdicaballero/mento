@@ -241,6 +241,7 @@ def test_all_exports_in_all() -> None:
         "Opening",
         "Capital",
         "PunchingNode",
+        "ShearWall",
     ]
 
     assert set(mento.__all__) == set(expected_exports)

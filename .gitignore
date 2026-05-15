@@ -98,3 +98,4 @@ static/
 *.so
 *.dylib
 *.dll
+.claude/worktrees/objective-napier-e4fd64/

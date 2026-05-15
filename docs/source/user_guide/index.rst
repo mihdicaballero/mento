@@ -15,6 +15,7 @@ User Guide
    sections
    beams
    slabs
+   shear_wall
    node
    beam_summary
 
