@@ -2,21 +2,25 @@ Shear Wall
 ==========
 
 The `ShearWall` class models a reinforced-concrete structural wall for **in-plane
-shear analysis and design** per ACI 318-19 Chapter 11. It is a child of
-`RectangularBeam` and reuses the underlying materials, geometry, settings, and
-units infrastructure. Compared to a beam, the shear formulas, the minimum
-reinforcement, and the reinforcement layout differ:
+shear analysis and design** per ACI 318-19 Chapter 11.
 
 - Concrete shear capacity follows ACI 318-19 §11.5.4.6 with the aspect-ratio
   factor ``α_c``, instead of a longitudinal-reinforcement term.
 - Reinforcement is **distributed mesh** in two orthogonal directions
-  (``ρt`` horizontal, ``ρl`` vertical), not stirrups.
-- Minimum ratios follow §11.6.1 (``ρt,min = ρl,min = 0.0025``), with the
-  additional rule ``ρl ≥ ρt`` when ``hw / lw ≤ 2.0``.
+  (``ρt`` horizontal, ``ρl`` vertical), placed on **both faces** of the wall
+  (E.F. — each face), not stirrups.
+- The minimum horizontal ratio is ``ρt,min = 0.0025`` (§11.6.1). The minimum
+  vertical ratio follows the §11.6.2 interpolation
+  ``ρl,min = max(0.0025, 0.0025 + 0.5·(2.5 − hw/lw)·(ρt,req − 0.0025))``,
+  with ``hw/lw`` clamped to ``[0.5, 2.5]``.
+
+The same shear provisions serve both **ACI 318-19** and **CIRSOC 201-25**;
+CIRSOC differs only in the reinforcing-bar catalogue used for design (it
+allows Ø6 mm for the transverse mesh and Ø10 mm minimum for the vertical mesh).
 
 .. note::
 
-    Phase 0 of the module covers **shear check and design only**. Flexure design
+    The module covers **shear check and design only**. Flexure design
     for shear walls is not implemented yet. Inherited flexure methods from
     ``RectangularBeam`` are not validated for wall geometry and should not be
     used.
@@ -24,7 +28,7 @@ reinforcement, and the reinforcement layout differ:
 Key Concepts
 ------------
 
-- **Geometry** (wall-friendly naming, mapped to the parent ``RectangularBeam`` fields):
+- **Geometry**:
 
   - ``thickness`` (*t*) — out-of-plane dimension
   - ``length`` (*lw*) — in-plane length, resists in-plane shear
@@ -37,9 +41,9 @@ Key Concepts
 - **Reinforcement**: distributed bars defined by **bar diameter + spacing**
   in each direction.
 
-- **Forces**: a list of ``Forces`` objects passed directly to ``check_shear()``
-  or ``design_shear()``. ``V_z`` is the in-plane lateral shear demand at the
-  section. (Walls do not currently route through a ``Node``.)
+- **Forces**: a list of ``Forces`` objects passed to ``check_shear()`` or
+  ``design_shear()`` — either directly on the wall or through a ``Node``.
+  ``V_z`` is the in-plane lateral shear demand at the section.
 
 Usage
 -----
@@ -78,8 +82,9 @@ After construction, the dimensions are accessible as ``wall.thickness``,
 
 Use ``set_horizontal_rebar(d_b, s)`` for the horizontal (transverse) mesh that
 resists in-plane shear, and ``set_vertical_rebar(d_b, s)`` for the vertical
-(longitudinal) mesh. The corresponding ratios are computed internally as
-``ρ = Ab / (t × s)``.
+(longitudinal) mesh. The mesh is placed on **both faces** of the wall (E.F. —
+each face), so the reinforcement ratio counts both curtains:
+``ρ = 2 · Ab / (t × s)``.
 
 .. code-block:: python
 
@@ -90,18 +95,24 @@ resists in-plane shear, and ``set_vertical_rebar(d_b, s)`` for the vertical
 3. Performing the Shear Check
 *****************************
 
-Call ``check_shear()`` directly on the wall with a list of ``Forces``. The
-returned DataFrame has one header row (units) followed by one row per
-combination.
+Call ``check_shear()`` with a list of ``Forces`` — either directly on the wall
+or through a ``Node``. The returned DataFrame has one header row (units)
+followed by one row per combination.
 
 .. code-block:: python
 
-    from mento import Forces, kN
+    from mento import Forces, Node, kN
 
     f1 = Forces(label="1.2D+1.0E", V_z=800  * kN)
     f2 = Forces(label="0.9D+1.0E", V_z=1200 * kN)
 
+    # Directly on the wall ...
     wall.check_shear([f1, f2])
+
+    # ... or via a Node (recommended — enables results / detailed reports)
+    node = Node(section=wall, forces=[f1, f2])
+    node.check()
+    node.results
 
 Returned columns:
 
@@ -134,17 +145,37 @@ Returned columns:
 4. Designing the Shear Reinforcement
 ************************************
 
-``design_shear()`` runs the check for every combination and stores the worst
-case ``ρt,req`` on the wall instance. In Phase 0 the caller picks a bar
-diameter and spacing satisfying both ``ρt,req`` and the §11.7.3 spacing
-limits, then calls ``set_horizontal_rebar()``.
+``design()`` is fully automatic: it sizes **both** meshes against the
+worst-case force combination, applies them to the wall, and returns the
+re-evaluated check DataFrame.
 
 .. code-block:: python
 
-    wall.design_shear([f1, f2])
-    print(wall._rho_t_req.to("").magnitude)   # required horizontal ratio
-    print(wall._s_h_max.to("mm").magnitude)    # spacing limit, horizontal bars
-    print(wall._s_v_max.to("mm").magnitude)    # spacing limit, vertical bars
+    result = wall.design([f1, f2])
+    # The wall now carries a designed mesh:
+    print(wall._d_b_h, wall._s_h)   # horizontal (shear) bar + spacing
+    print(wall._d_b_v, wall._s_v)   # vertical (minimum) bar + spacing
+
+What it does:
+
+1. Runs the check for every force and tracks the worst-case ``ρt,req``.
+2. Derives the worst-case ``ρl,min`` from §11.6.2.
+3. Selects a bar diameter and spacing for the **horizontal mesh** (against
+   ``ρt,req``) and the **vertical mesh** (against ``ρl,min``).
+4. Applies both via ``set_horizontal_rebar`` / ``set_vertical_rebar`` and
+   re-runs the check.
+
+
+**Vertical mesh.** Because for now *mento* does not check flexure, the vertical mesh
+is always sized to the §11.6.2 *minimum* — it is reported and plotted as
+"Minimum vertical rebar".
+
+.. note::
+
+    For **CIRSOC 201-25**, ``design`` automatically uses the CIRSOC bar
+    catalogue (Ø6 mm minimum transverse, Ø10 mm minimum vertical). No extra
+    configuration is needed — the design code is read from the ``Concrete``
+    object.
 
 5. Inspecting Intermediate Quantities
 *************************************
@@ -171,6 +202,21 @@ attributes on the wall:
 +----------------------+----------------------------------------------+
 | ``_DCRv_wall``       | Demand-to-capacity ratio for shear           |
 +----------------------+----------------------------------------------+
+| ``_rho_t_req``       | Required horizontal reinforcement ratio      |
++----------------------+----------------------------------------------+
+| ``_rho_l_min``       | Minimum vertical reinforcement ratio         |
++----------------------+----------------------------------------------+
+| ``_s_h_max``         | §11.7.3 horizontal spacing limit             |
++----------------------+----------------------------------------------+
+| ``_s_v_max``         | §11.7.3 vertical spacing limit               |
++----------------------+----------------------------------------------+
+| ``_d_b_h`` / ``_s_h``| Designed horizontal bar diameter / spacing   |
++----------------------+----------------------------------------------+
+| ``_d_b_v`` / ``_s_v``| Designed vertical bar diameter / spacing     |
++----------------------+----------------------------------------------+
+
+All reinforcement ratios (``ρt``, ``ρl``) account for the mesh on **both
+faces** — ``ρ = 2 · Ab / (t · s)``.
 
 A worked example with full output is available in the
 :doc:`Shear Wall ACI 318-19 example </examples/shear_wall_check_ACI_318-19>`.

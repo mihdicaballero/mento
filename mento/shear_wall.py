@@ -18,10 +18,7 @@ from mento.results import CUSTOM_COLORS, DocumentBuilder, Formatter, TablePrinte
 from mento.settings import BeamSettings
 from mento.units import cm, dimensionless, kN, mm
 
-from mento.codes.ACI_318_19_wall import (
-    _check_shear_ACI_318_19_wall,
-    _design_shear_ACI_318_19_wall,
-)
+from mento.codes.ACI_318_19_wall import _check_shear_ACI_318_19_wall
 
 
 class ShearWall(RectangularBeam):
@@ -110,6 +107,11 @@ class ShearWall(RectangularBeam):
     def _initialize_wall_attributes(self) -> None:
         self.mode = "shear_wall"
 
+        # Distributed mesh is placed on BOTH faces of the wall (each face = E.F.).
+        # The reinforcement ratio counts the bars from every curtain:
+        #   ρ = n_curtains · A_b / (t · s)
+        self._n_curtains: int = 2
+
         # Horizontal (transverse) distributed rebar
         self._d_b_h: Quantity = 0 * mm
         self._s_h: Quantity = 0 * mm
@@ -160,22 +162,22 @@ class ShearWall(RectangularBeam):
     def set_horizontal_rebar(self, d_b: Quantity, s: Quantity) -> None:
         """Set distributed horizontal (transverse) reinforcement.
 
-        ρt = Ab / (t × s_h)
+        Bars are placed on each face (E.F.):  ρt = n_curtains · Ab / (t × s_h)
         """
         self._d_b_h = d_b
         self._s_h = s
         A_b = math.pi / 4 * d_b**2
-        self._rho_t = (A_b / (self.thickness * s)).to("")
+        self._rho_t = (self._n_curtains * A_b / (self.thickness * s)).to("")
 
     def set_vertical_rebar(self, d_b: Quantity, s: Quantity) -> None:
         """Set distributed vertical reinforcement.
 
-        ρl = Ab / (t × s_v)
+        Bars are placed on each face (E.F.):  ρl = n_curtains · Ab / (t × s_v)
         """
         self._d_b_v = d_b
         self._s_v = s
         A_b = math.pi / 4 * d_b**2
-        self._rho_l = (A_b / (self.thickness * s)).to("")
+        self._rho_l = (self._n_curtains * A_b / (self.thickness * s)).to("")
 
     # ------------------------------------------------------------------
     # Shear check and design (override RectangularBeam)
@@ -219,25 +221,26 @@ class ShearWall(RectangularBeam):
         return all_results
 
     def design_shear(self, forces: list[Forces]) -> DataFrame:
-        """Compute required ρt for each force; return check results.
+        """Design the horizontal (shear) mesh and the minimum vertical mesh.
 
-        For Phase 0, rebar selection is the caller's responsibility:
-        read _rho_t_req after this call and use set_horizontal_rebar()
-        with a bar/spacing combination that satisfies the requirement.
+        Selects a bar diameter + spacing for both directions against the
+        worst-case force combination, applies them, and returns the
+        re-evaluated check results.
         """
-        max_rho_t_req: Quantity = 0 * dimensionless
+        if not forces:
+            raise ValueError("design_shear requires at least one Forces object.")
 
-        for force in forces:
-            if self.concrete.design_code == "ACI 318-19" or self.concrete.design_code == "CIRSOC 201-25":
-                _design_shear_ACI_318_19_wall(self, force)
-            else:
-                raise NotImplementedError(
-                    f"Shear wall design not implemented for design code: {self.concrete.design_code}"
-                )
-            if self._rho_t_req > max_rho_t_req:
-                max_rho_t_req = self._rho_t_req
+        code = self.concrete.design_code
+        if code == "ACI 318-19" or code == "CIRSOC 201-25":
+            # CIRSOC 201-25 reuses the ACI wall design; the code-specific bar
+            # catalogue is selected inside _design_shear_ACI_318_19_wall.
+            from mento.codes.ACI_318_19_wall import _design_shear_ACI_318_19_wall
 
-        self._rho_t_req = max_rho_t_req
+            _design_shear_ACI_318_19_wall(self, forces)
+        else:
+            raise NotImplementedError(f"Shear wall design not implemented for design code: {code}")
+
+        # Re-run the check so the returned DataFrame / detail dicts reflect the mesh.
         return self.check_shear(forces)
 
     # ------------------------------------------------------------------
@@ -339,19 +342,19 @@ class ShearWall(RectangularBeam):
         warning = "⚠️ Some checks failed, see detailed results." if not checks_pass else ""
 
         rebar_h = (
-            f"Ø{self._d_b_h.to('mm').magnitude:.0f}/{self._s_h.to('cm').magnitude:.f}"
+            f"Ø{self._d_b_h.to('mm').magnitude:.0f}/{self._s_h.to('cm').magnitude:.0f} cm E.F."
             if self._s_h.magnitude > 0
             else "not assigned"
         )
         rebar_v = (
-            f"Ø{self._d_b_v.to('mm').magnitude:.0f}/{self._s_v.to('cm').magnitude:.f}"
+            f"Ø{self._d_b_v.to('mm').magnitude:.0f}/{self._s_v.to('cm').magnitude:.0f} cm E.F."
             if self._s_v.magnitude > 0
             else "not assigned"
         )
 
         markdown_content = (
             f"Horizontal rebar: {rebar_h}, $\\rho_t$={rho_t}, "
-            f"Vertical rebar: {rebar_v}, $\\rho_l$={rho_l}, "
+            f"Minimum vertical rebar: {rebar_v}, $\\rho_l$={rho_l}, "
             f"$V_u$={Vu} kN, $\\phi V_n$={phi_Vn} kN → "
             f"{formatter.DCR(dcr)} {warning}"
         )
@@ -506,11 +509,11 @@ class ShearWall(RectangularBeam):
         def _fmt_rebar(d_b: Quantity, s: Quantity) -> str:
             if s.magnitude <= 0:
                 return "not assigned"
-            return f"Ø{d_b.to('mm').magnitude:.0f}/{s.to('cm').magnitude:.0f} cm"
+            return f"Ø{d_b.to('mm').magnitude:.0f}/{s.to('cm').magnitude:.0f} cm E.F."
 
         rebar_text = (
             f"Horizontal rebar: {_fmt_rebar(self._d_b_h, self._s_h)}\n"
-            f"Vertical rebar: {_fmt_rebar(self._d_b_v, self._s_v)}"
+            f"Minimum vertical rebar: {_fmt_rebar(self._d_b_v, self._s_v)}"
         )
         self._ax.text(
             lw_cm / 2,

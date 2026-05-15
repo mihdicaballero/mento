@@ -41,8 +41,11 @@ class BeamSummary:
         # Validate the units row
         self.validate_units(self.units_row)
 
-        # Convert NaN to 0 in the data rows
-        data.iloc[:, 2:] = data.iloc[:, 2:].fillna(0).astype(float)
+        # Convert NaN to 0 in the data rows.
+        # astype(float) first (object -> float, NaN preserved) so the
+        # subsequent fillna acts on a float frame and does not trigger the
+        # pandas "silent downcasting" FutureWarning.
+        data.iloc[:, 2:] = data.iloc[:, 2:].astype(float).fillna(0)
         # Convert specific columns to int and others to float
         columns_to_int = ["ns", "n1", "n2", "n3", "n4"]
         for col in columns_to_int:
