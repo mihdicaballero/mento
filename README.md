@@ -22,14 +22,28 @@ This repository provides a comprehensive package for the design and structural a
 - Ability to generate detailed calculation reports in Word.
 - Comprehensive testing for design code compliance, including ACI 318-19, EN 1992-2004, and CIRSOC 201-2025.
 
+#### Using mento at your company?
+
+mento is free and open-source under MIT. If your team wants help going further, we offer a few things on top:
+
+- **Team onboarding** — short remote sessions to get your engineers productive with Python, Jupyter, VS Code and Git, using mento as the starting point.
+- **Custom tools** — building specific workflows on top of mento (custom reports, integrations with Revit / ETABS / Robot, batch design tools, internal company libraries).
+- **Sponsored features** — if your firm needs a specific element type, design code, or check that's on the roadmap (or not), we can scope it as paid work and contribute it back.
+
+If any of that is useful for your team, fill out [this form](https://forms.gle/QoDzczQToLa78jMo7) and we'll follow up.
+
+Not looking for anything? A ⭐ on the repo or feedback in [Discussions](https://github.com/mihdicaballero/mento/discussions) is also genuinely appreciated.
+
 #### Roadmap
 The development is structured around key milestones, with ongoing tasks that aim to enhance functionality and compliance with design standards:
 - [x] Rectangular concrete beam section check and design for ACI 318-19 and CIRSOC 201-25.
 - [x] Rectangular concrete beam section check and design for EN 1992-2004.
 - [x] One way concrete slab check and design for ACI 318-19 and CIRSOC 201-25.
 - [x] One way concrete slab check and design for EN 1992-2004.
-- [ ] Slab shear punching check and design for ACI 318-19 and CIRSOC 201-25.
+- [ ] Slab shear punching check and design for ACI 318-19 and CIRSOC 201-25. (in progress)
+- [ ] Shear wall shear check and design for ACI 318-19 and CIRSOC 201-25. (in progress). 
 - [ ] Slab shear punching check and design for EN 1992-2004.
+- [ ] Shear wall shear check and design for EN 1992-2004. 
 
 Each milestone incorporates rigorous testing and continuous integration to ensure code quality and reliability.
 
