@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 # Standard reinforcing bar diameters for wall distributed mesh design.
 # ACI 318-19 uses the same catalogue for both mesh directions.
-_ACI_WALL_BARS_METRIC = [8 * mm, 10 * mm, 12 * mm, 16 * mm, 20 * mm, 25 * mm]
+_ACI_WALL_BARS_METRIC = [10 * mm, 12 * mm, 16 * mm, 20 * mm, 25 * mm]
 _ACI_WALL_BARS_IMPERIAL = [
     0.375 * inch,  # #3
     0.5 * inch,  # #4
