@@ -18,3 +18,5 @@ In this folder, you will find detailed examples of how to use mento.
    OneWaySlab_check_ACI_318-19
    shear_wall_check_ACI_318-19
    shear_wall_design_ACI_318-19
+   shear_wall_summary_ACI_318-19
+   shear_wall_summary_ACI_318-19 Design

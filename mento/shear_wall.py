@@ -46,8 +46,11 @@ class ShearWall(RectangularBeam):
         length: Quantity,
         height: Quantity,
         label: Optional[str] = None,
+        level: Optional[str] = None,
         settings: Optional[BeamSettings] = None,
     ) -> None:
+        self.level: Optional[str] = level
+
         # Pre-seed `_length` and `_wall_height` so parent's `__post_init__` can read
         # `self.length`/`self.height` (our properties) during cross-section computation.
         # `_wall_height` is bootstrapped to `length` so parent's `_A_x = width * height`
@@ -305,8 +308,9 @@ class ShearWall(RectangularBeam):
     @property
     def data(self) -> None:
         """Wall basic info as Markdown (length, thickness, story height, materials)."""
+        level_str = f"Level {self.level}, " if self.level else ""
         markdown_content = (
-            f"Shear Wall {self.label}, "
+            f"{level_str}Shear Wall {self.label}, "
             f"$l_w$={self.length.to('cm')}, "
             f"$t$={self.thickness.to('cm')}, "
             f"$h_w$={self.height.to('cm')}, "
