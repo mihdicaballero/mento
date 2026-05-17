@@ -10,7 +10,7 @@ Reinforced concrete design Python package. Covers beams, slabs, sections, materi
 
 ## Python environment
 
-**Always use the `py312` conda environment.** The base `anaconda3` env should never be used for mento.
+**Always use the `py312` or `rame-env` conda environment.** The base `anaconda3` env should never be used for mento.
 
 ```
 C:\Users\mihdi\anaconda3\envs\py312\python.exe
@@ -167,6 +167,91 @@ PunchingSlab (standalone dataclass, uses Column)
   - `.flexure_results(capacity_check=False)` / `.shear_results(capacity_check=False)` — per-beam detailed check tables; `capacity_check=True` adds code-specific capacity columns.
   - `.results_detailed_doc(index=1)` — exports a Word document (`Beam_Summary_{design_code}.docx`) with full flexure/shear detail for the selected beam (1-based index) followed by summary tables for all beams. Saves to the current working directory.
   - `.export_design(path)` / `.import_design(path)` — round-trip the designed rebar to/from Excel.
+
+---
+
+## Running mento interactively (design / check from the CLI)
+
+When asked to design or check a beam with mento, run a script via PowerShell with UTF-8 encoding to avoid unicode errors from special characters (≤, ✅, kN·m, etc.):
+
+```powershell
+$env:PYTHONIOENCODING="utf-8"
+C:\Users\mihdi\anaconda3\envs\py312\python.exe -c "..."
+```
+
+### Correct API pattern — RectangularBeam design
+
+```python
+from mento import Concrete_ACI_318_19, SteelBar, RectangularBeam, Node, Forces
+from mento import MPa, cm, mm, kN, kNm
+
+# 1. Materials
+conc  = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
+steel = SteelBar(name="ADN 420", f_y=420 * MPa)
+
+# 2. Section  — use `width` and `height`, NOT `b` and `h`
+beam = RectangularBeam(
+    label="101", concrete=conc, steel_bar=steel,
+    width=20 * cm, height=60 * cm, c_c=25 * mm,
+)
+
+# 3. Forces   — V_z for shear, M_y for flexure, N_x for axial
+f1 = Forces(label="1.4D",      V_z=80 * kN)
+f2 = Forces(label="1.2D+1.6L", M_y=100 * kNm)
+
+# 4. Node     — wraps section + forces; drives design/check
+node = Node(section=beam, forces=[f1, f2])
+node.design()   # runs flexure + shear design for the governing combination
+
+# 5. Results tables (DataFrame)
+node.check_flexure()   # per-combination flexure table
+node.check_shear()     # per-combination shear table
+node.results           # combined Markdown summary (IPython)
+```
+
+### Reading the designed rebar after `node.design()`
+
+```python
+# Longitudinal (flexure)
+beam._n1_b, beam._d_b1_b   # bottom layer 1: count, diameter (mm)
+beam._n2_b, beam._d_b2_b   # bottom layer 2
+beam._n1_t, beam._d_b1_t   # top layer 1
+beam._A_s_bot               # total As bottom (Quantity, cm²)
+beam._A_s_top               # total As top   (Quantity, cm²)
+beam._A_s_req_bot           # required As bottom
+beam._A_s_req_top           # required As top
+
+# Transverse (shear)
+beam._stirrup_n             # number of stirrup legs
+beam._stirrup_d_b           # stirrup diameter (mm)
+beam._stirrup_s_l           # longitudinal spacing (Quantity, cm)
+beam._A_v                   # Av provided (cm²/m)
+beam._A_v_req               # Av required (cm²/m)
+beam._A_v_min               # Av minimum  (cm²/m)
+```
+
+### Displaying results from CLI (not Jupyter)
+
+`node.results` uses `IPython.display.Markdown` — only renders in Jupyter notebooks. From PowerShell it produces nothing useful. Use these instead:
+
+```python
+node.shear_results_detailed()    # full shear table: materials, geometry, checks, DCR
+node.flexure_results_detailed()  # full flexure table: same
+node.check_flexure().to_string() # compact per-combination DataFrame as plain text
+node.check_shear().to_string()   # compact per-combination DataFrame as plain text
+```
+
+Always set `$env:PYTHONIOENCODING="utf-8"` before running to avoid codec errors from ≤, ·, ✅ etc.
+
+### API gotchas to remember
+
+- `RectangularBeam` uses `width`/`height`, **not** `b`/`h`.
+- `BeamSettings(unit_system="metric")` is optional — the beam works without it.
+- Forces are attached via `Node`, **not** via `beam.add_forces()` (that method does not exist).
+- `node.design()` returns `None`; results live on `node` and `beam` attributes.
+- Detailed text output: `node.shear_results_detailed()` / `node.flexure_results_detailed()`.
+- Export to Word: `node.shear_results_detailed_doc()` / `node.flexure_results_detailed_doc()`.
+- `check_flexure` / `check_shear` accept an optional `forces` list; when called after `design()` with no argument they use the node's forces.
 
 ---
 

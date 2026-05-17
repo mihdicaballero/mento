@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mento"
-version = "0.4.0"
+version = "0.4.1"
 description = "An intuitive tool for structural engineers to design concrete elements efficiently."
 readme = "README.md"
 authors = [
@@ -53,6 +53,11 @@ packages = ["mento"]
 python_version = "3.10"
 strict = true
 allow_any_generics = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
 
 [tool.pytest.ini_options]
 minversion = "6.0"
