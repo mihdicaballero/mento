@@ -42,24 +42,30 @@ class BeamSummary:
         self.validate_units(self.units_row)
 
         # Convert NaN to 0 in the data rows.
-        # astype(float) first (object -> float, NaN preserved) so the
-        # subsequent fillna acts on a float frame and does not trigger the
-        # pandas "silent downcasting" FutureWarning.
-        data.iloc[:, 2:] = data.iloc[:, 2:].astype(float).fillna(0)
+        # Assign per-column by label (replaces the column, including its dtype)
+        # rather than via `.iloc[:, 2:] =`, which writes in place and preserves
+        # the existing dtype. Under pandas 3.0, all-empty columns (e.g. a
+        # forces-only summary with no rebar yet) are inferred as the new `str`
+        # dtype, and writing floats into them in place raises a TypeError.
+        for col in data.columns[2:]:
+            data[col] = pd.to_numeric(data[col], errors="coerce").fillna(0)
         # Convert specific columns to int and others to float
         columns_to_int = ["ns", "n1", "n2", "n3", "n4"]
         for col in columns_to_int:
             if col in data.columns:
                 data[col] = data[col].astype(int)
 
-        # Apply units to the corresponding columns, skipping the first column
+        # Apply units to the corresponding columns, skipping the first column.
+        # Assign by column label (replaces the column with an object dtype
+        # holding pint Quantities) instead of `.iloc[:, i] =`, which writes in
+        # place and, under pandas 3.0, raises when storing Quantity objects in
+        # a numeric (int/float) column.
         for i in range(1, len(self.units_row)):  # Start from the second column (index 1)
             unit_str = self.units_row[i]
             if unit_str != "":
                 unit = self.get_unit_variable(unit_str)
-                if isinstance(data.iloc[:, i], pd.Series):
-                    # data.iloc[:, i] = data.iloc[:, i].apply(lambda x: x * unit)
-                    data.iloc[:, i] = data.iloc[:, i].apply(lambda x: x * unit)
+                col = data.columns[i]
+                data[col] = data[col].apply(lambda x: x * unit)
 
         # Store the processed data
         self.data = data

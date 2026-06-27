@@ -1,7 +1,6 @@
 {
   "permissions": {
     "allow": [
-<<<<<<< Updated upstream
       "Bash(& \"C:\\Users\\mihdi\\anaconda3\\envs\\py312\\python.exe\" -m pytest tests/ --override-ini=\"addopts=\" -v --no-header)",
       "Bash(& \"C:\\Users\\mihdi\\anaconda3\\envs\\py312\\python.exe\" -m pytest tests/ --override-ini=\"addopts=\" -q --no-header)",
       "Bash(& \"C:\\Users\\mihdi\\anaconda3\\envs\\py312\\python.exe\" -m pytest tests/ --override-ini=\"addopts=\" --cov=mento --cov-report=term-missing -q)",
@@ -10,8 +9,7 @@
       "Bash(& \"C:\\Users\\mihdi\\anaconda3\\envs\\py312\\python.exe\" -m pytest tests/*.py --override-ini=\"addopts=\" --cov=mento --cov-report=term-missing -q)",
       "Bash(& \"C:\\Users\\mihdi\\anaconda3\\envs\\py312\\python.exe\" -m ruff check . --fix)",
       "Bash(& \"C:\\Users\\mihdi\\anaconda3\\envs\\py312\\python.exe\" -m ruff format .)",
-      "Bash(& \"C:\\Users\\mihdi\\anaconda3\\envs\\py312\\python.exe\" -m mypy mento/)"
-=======
+      "Bash(& \"C:\\Users\\mihdi\\anaconda3\\envs\\py312\\python.exe\" -m mypy mento/)",
       "Bash(python -m pytest tests/foundations/test_footings.py -v)",
       "Bash(uv run pytest tests/foundations/test_footings.py -v)",
       "Bash(python3 -m pytest tests/foundations/test_footings.py -v)",
@@ -46,8 +44,8 @@
       "PowerShell(& \"c:\\\\Users\\\\mihdi\\\\anaconda3\\\\python.exe\" -m pytest \"c:\\\\Users\\\\mihdi\\\\Documents\\\\GitHub\\\\mako\\\\tests\\\\quantities\\\\test_bbs_slab.py\" -v --no-header 2>&1)",
       "PowerShell(& \"c:\\\\Users\\\\mihdi\\\\anaconda3\\\\python.exe\" -m pytest \"c:\\\\Users\\\\mihdi\\\\Documents\\\\GitHub\\\\mako\\\\tests\\\\quantities\\\\test_bbs_slab.py\" -v --no-header -p no:cacheprovider --override-ini=\"addopts=\" 2>&1)",
       "PowerShell(& \"c:\\\\Users\\\\mihdi\\\\anaconda3\\\\python.exe\" -c \"import sys; sys.path.insert\\(0, 'c:/Users/mihdi/Documents/GitHub/mako'\\); import mako; print\\(mako.__file__\\)\" 2>&1)",
-      "PowerShell(where.exe pytest 2>&1; Get-Item \\(where.exe pytest 2>&1 | Select-Object -First 1\\) 2>&1)"
->>>>>>> Stashed changes
+      "PowerShell(where.exe pytest 2>&1; Get-Item \\(where.exe pytest 2>&1 | Select-Object -First 1\\) 2>&1)",
+      "PowerShell($env:PYTHONIOENCODING=\"utf-8\"; C:\\\\Users\\\\mihdi\\\\anaconda3\\\\envs\\\\py312\\\\python.exe C:\\\\Users\\\\mihdi\\\\Documents\\\\GitHub\\\\mento\\\\_tmp_design.py)"
     ]
   }
 }
