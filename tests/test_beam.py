@@ -1576,6 +1576,109 @@ def test_design_flexure_ACI_318_19_Test_Etabs_01() -> None:
     assert phi_Mn >= 271.0
 
 
+def test_design_flexure_ACI_318_19_negative_moment_doubly_reinforced() -> None:
+    """
+    Mirror of Test_Etabs_01 with NEGATIVE moment: b=12", h=20", fc=2500psi,
+    fy=60ksi, Mu=-200 kip·ft. Tension is now on the top face and compression
+    on the bottom, so the design must place the governing tension steel on top
+    and reconcile the bottom face against the compression demand.
+
+    Exercises the negative-moment path of _design_flexure_ACI_318_19 (including
+    the bottom-face reconciliation branch) which mirrors the positive case.
+    """
+    concrete = Concrete_ACI_318_19(name="fc2500", f_c=2500 * psi)
+    steel = SteelBar(name="fy60", f_y=60 * ksi)
+    beam = RectangularBeam(
+        label="Test_Etabs_01_neg",
+        concrete=concrete,
+        steel_bar=steel,
+        width=12 * inch,
+        height=20 * inch,
+        c_c=1.5 * inch,
+    )
+    beam.set_transverse_rebar(n_stirrups=1, d_b=0.375 * inch, s_l=12 * inch)
+
+    f = Forces(label="Test_Etabs_01_neg", M_y=-200 * kip * ft)
+    node = Node(section=beam, forces=f)
+    results = node.design_flexure()
+
+    assert isinstance(results, pd.DataFrame)
+    assert beam._doubly_reinforced is True
+    # Tension governs on top for negative moment.
+    assert beam._A_s_top.to("cm**2").magnitude >= 19.0
+
+
+def test_design_flexure_ACI_318_19_large_negative_moment_doubly_reinforced() -> None:
+    """
+    Large negative moment forcing doubly reinforced design with compression
+    steel on the bottom face: b=30cm, h=50cm, fc=25MPa, fy=420MPa, Mu=-400 kN·m.
+    Tension governs on top; the bottom face carries compression steel.
+    Complements the smaller Mu=-200 negative case with a section that clearly
+    lands in the doubly reinforced regime.
+    """
+    concrete = Concrete_ACI_318_19(name="C25", f_c=25 * MPa)
+    steel = SteelBar(name="fy420", f_y=420 * MPa)
+    beam = RectangularBeam(
+        label="neg_bottom_reconc",
+        concrete=concrete,
+        steel_bar=steel,
+        width=30 * cm,
+        height=50 * cm,
+        c_c=2.5 * cm,
+    )
+    beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=20 * cm)
+    node = Node(section=beam, forces=Forces(M_y=-400 * kNm))
+    results = node.design_flexure()
+    assert isinstance(results, pd.DataFrame)
+    assert beam._doubly_reinforced is True
+    # Tension on top governs; compression steel present on the bottom face.
+    assert beam._A_s_top.to("cm**2").magnitude > beam._A_s_bot.to("cm**2").magnitude
+    assert beam._A_s_bot.to("cm**2").magnitude > 0
+
+
+def test_design_flexure_ACI_318_19_negative_moment_insufficient_section() -> None:
+    """
+    Negative moment on a section too small to resist it: b=15", h=15",
+    fc=20MPa, fy=500MPa, Mu=-120 kN·m. The design cannot find a top layout
+    that satisfies phi*Mn >= Mu, so the post-loop final verification falls back
+    to _select_safe_design on the top face (best-effort layout). The contract
+    is that design_flexure never raises; check_flexure downstream reports DCR>1.
+    """
+    concrete = Concrete_ACI_318_19(name="C20", f_c=20 * MPa)
+    steel = SteelBar(name="fy500", f_y=500 * MPa)
+    beam = RectangularBeam(
+        label="neg_insufficient",
+        concrete=concrete,
+        steel_bar=steel,
+        width=15 * cm,
+        height=15 * cm,
+        c_c=2 * cm,
+    )
+    node = Node(section=beam, forces=Forces(M_y=-120 * kNm))
+    results = node.design_flexure()
+    assert isinstance(results, pd.DataFrame)
+    # No crash = contract preserved. The section is undersized; the check would
+    # flag DCR>1, but the design still returns the best-effort layout.
+
+
+def test_check_flexure_ACI_318_19_negative_moment_no_top_steel(
+    beam_example_flexure_ACI: RectangularBeam,
+) -> None:
+    """
+    Check under NEGATIVE moment with no top steel: the top face has zero
+    capacity (M_n_negative = 0), so phi_M_n_top is clamped to 0.01 kN·m to
+    avoid a division-by-zero in the DCR, and the check reports a very high DCR.
+    Exercises the zero-capacity guard in the negative-moment check branch.
+    """
+    beam_example_flexure_ACI.set_longitudinal_rebar_bot(n1=2, d_b1=0.75 * inch)
+    beam_example_flexure_ACI.set_longitudinal_rebar_top(n1=0, d_b1=0 * inch)
+    f = Forces(label="neg_no_top", M_y=-100 * kip * ft)
+    node = Node(section=beam_example_flexure_ACI, forces=f)
+    results = node.check_flexure()
+    assert results.iloc[1]["Position"] == "Top"
+    # Zero top steel → essentially no negative capacity → DCR >> 1.
+    assert results.iloc[1]["DCR"] > 1.0
+
 
 def testing_determine_nominal_moment_ACI_318_19(
     beam_example_flexure_ACI: RectangularBeam,

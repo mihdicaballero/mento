@@ -1139,19 +1139,17 @@ def _design_flexure_ACI_318_19(self: "RectangularBeam", max_M_y_bot: Quantity, m
                 self._apply_longitudinal_design_bot(self.flexure_design_results_bot)
                 A_prov_bot = self.flexure_design_results_bot.get("total_as", A_s_comp_bot)
 
-        # If compression from bottom (A_s_comp_top) exceeds what top provides, re-upgrade top
+        # If compression from bottom (A_s_comp_top) exceeds what top provides, re-upgrade top.
+        # The outer guard implies A_s_comp_top > A_prov_top >= 0, hence A_s_comp_top > 0
+        # (mirrors the bottom-face reconciliation above).
         if A_s_comp_top > A_prov_top:
-            if A_s_comp_top > 0 * (cm**2):
-                A_cap_top = self._A_s_max_top if A_s_comp_top <= self._A_s_max_top else None
-                self.flexure_design_results_top = _design_longitudinal_for_area(
-                    A_s_comp_top, A_cap_top, self._c_mec_top
-                )
-                if self.flexure_design_results_top is not None:
-                    self._apply_longitudinal_design_top(self.flexure_design_results_top)
-                    A_prov_top = self.flexure_design_results_top.get("total_as", A_s_comp_top)
-            else:
-                self._clear_top_longitudinal()
-                A_prov_top = 0 * (cm**2)
+            A_cap_top = self._A_s_max_top if A_s_comp_top <= self._A_s_max_top else None
+            self.flexure_design_results_top = _design_longitudinal_for_area(
+                A_s_comp_top, A_cap_top, self._c_mec_top
+            )
+            if self.flexure_design_results_top is not None:
+                self._apply_longitudinal_design_top(self.flexure_design_results_top)
+                A_prov_top = self.flexure_design_results_top.get("total_as", A_s_comp_top)
 
         # --- Update geometry (centroids) for next iteration ----------------------
         c_mec_calc = self.c_c + self._stirrup_d_b + self._bot_rebar_centroid
