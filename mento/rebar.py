@@ -13,6 +13,16 @@ if TYPE_CHECKING:
     from pandas import DataFrame
 
 
+class RebarDesignInfeasibleError(Exception):
+    """Raised when no valid rebar combination fits the section geometry and
+    the code-imposed limits (A_s_req, A_s_max, bar diameter, spacing, layers).
+
+    Typical trigger: very narrow sections combined with high A_s_req (small
+    b + high fy or high Mu). Callers should catch this and either fall back
+    to "best-effort" behavior or surface the infeasibility to the user.
+    """
+
+
 class Rebar:
     def __init__(self, beam: RectangularBeam):
         """
@@ -59,6 +69,12 @@ class Rebar:
 
     @property
     def longitudinal_rebar_design(self) -> DataFrame:
+        if self._long_combos_df.empty:
+            raise RebarDesignInfeasibleError(
+                "No valid longitudinal rebar combination found — the required "
+                "steel area cannot be fit in the section given the geometry "
+                "(width, max diameter, layers, spacing limits)."
+            )
         return self._long_combos_df.iloc[0]
 
     @property
