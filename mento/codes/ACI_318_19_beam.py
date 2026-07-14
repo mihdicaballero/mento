@@ -7,7 +7,7 @@ import warnings
 # from devtools import debug
 
 from mento.material import Concrete_ACI_318_19
-from mento.rebar import Rebar
+from mento.rebar import Rebar, RebarDesignInfeasibleError
 from mento.units import MPa, mm, kN, inch, ksi, psi, cm, m, kNm, ft, kip, dimensionless
 from mento.forces import Forces
 
@@ -397,6 +397,43 @@ def _maximum_flexural_reinforcement_ratio_ACI_318_19(self: "RectangularBeam") ->
     return rho_max
 
 
+def _c_neutral_axis_at_ductility_limit_ACI_318_19(
+    self: "RectangularBeam", d: Quantity
+) -> Quantity:
+    """
+    Neutral axis depth at the ACI 318-19 tension-controlled boundary.
+
+    At the ductility limit, eps_t_min = eps_y + eps_cu. From strain
+    compatibility (c/d = eps_cu / (eps_cu + eps_t)):
+        c_t = 0.003 * d / (eps_y + 0.006)
+
+    Sections with c < c_t are ductile (tension-controlled); with c > c_t are
+    over-reinforced (brittle failure).
+    """
+    return 0.003 * d / (self.steel_bar.epsilon_y + 0.006)
+
+
+def _f_s_prime_net_at_ductility_limit_ACI_318_19(
+    self: "RectangularBeam", d: Quantity, d_prime: Quantity
+) -> Quantity:
+    """
+    Effective compression-steel stress at the ductility limit, corrected for
+    displaced concrete.
+
+    Evaluated at c_t (neutral axis at the ductility limit):
+        eps_s' = (c_t - d') / c_t * eps_cu
+        f_s'   = min(eps_s' * E_s, f_y)
+        f_s'_net = f_s' - 0.85 * f_c
+
+    The `- 0.85 * f_c` accounts for the concrete displaced by the bar: that
+    volume was already contributing to equilibrium via the 0.85·f_c·a·b
+    block, so it cannot be counted twice.
+    """
+    c_t = _c_neutral_axis_at_ductility_limit_ACI_318_19(self, d)
+    f_s_prime = min(0.003 * self.steel_bar.E_s * (1 - d_prime / c_t), self.steel_bar.f_y)
+    return f_s_prime - 0.85 * self.concrete.f_c
+
+
 def _minimum_flexural_reinforcement_ratio_ACI_318_19(self: "RectangularBeam", M_u: Quantity) -> Quantity:
     """
     Calculates the minimum flexural reinforcement ratio according to ACI 318-19
@@ -563,12 +600,16 @@ def _calculate_flexural_reinforcement_ACI_318_19(
             / self.steel_bar.f_y.to(psi).magnitude
             * (0.003 / (self.steel_bar.epsilon_y + 0.006))
         )
-        M_n_t = rho * self.steel_bar.f_y * (d - 0.59 * rho * self.steel_bar.f_y * d / self.concrete.f_c) * b * d
-        M_n_prima = M_u / concrete_aci._phi_t - M_n_t
-        c_t = 0.003 * d / (self.steel_bar.epsilon_y + 0.006)
+        # Whitney block depth at the ductility limit (exact, not approximated):
+        #     a_max = beta_1 * c_t
+        # This replaces the textbook shortcut d - 0.59 * rho * fy * d / fc,
+        # which relies on 0.59 ≈ 1/1.7 and drops ~0.3% of precision.
+        c_t = _c_neutral_axis_at_ductility_limit_ACI_318_19(self, d)
         c_d = clean_zero(c_t / d)
-        f_s_prima = min(0.003 * self.steel_bar.E_s * (1 - d_prima / c_t), self.steel_bar.f_y)
-        f_s_prima_net = f_s_prima - 0.85 * self.concrete.f_c
+        a_max = concrete_aci._beta_1 * c_t
+        M_n_t = rho * self.steel_bar.f_y * (d - a_max / 2) * b * d
+        M_n_prima = M_u / concrete_aci._phi_t - M_n_t
+        f_s_prima_net = _f_s_prime_net_at_ductility_limit_ACI_318_19(self, d, d_prima)
         A_s_comp = M_n_prima / (f_s_prima_net * (d - d_prima))
         A_s_final = rho * b * d + A_s_comp * f_s_prima_net / self.steel_bar.f_y
 
@@ -641,11 +682,14 @@ def _determine_nominal_moment_double_reinf_ACI_318_19(
     b = self.width
 
     # -------------------------------------------------------------------------
-    # Step 1: Assume that the compression steel is yielding (f_s_prime = f_y)
-    # Based on equilibrium:
-    #   0.85 * f_c * a * b + A_s_prime * f_y = A_s * f_y
-    # Solving for the neutral axis depth 'c_assumed':
-    c_assumed = (A_s * f_y - A_s_prime * f_y) / (0.85 * f_c * b * beta_1)
+    # Step 1: Assume that the compression steel is yielding (f_s_prime = f_y).
+    # Based on equilibrium WITH displaced-concrete correction:
+    #   A_s * f_y = 0.85 * f_c * a * b + A_s_prime * (f_y - 0.85 * f_c)
+    # The A_s_prime bar physically occupies a volume where the 0.85*f_c*a*b
+    # block already accounts for compression; the effective contribution of the
+    # compression steel is therefore (f_y - 0.85*f_c), not f_y.
+    # Solving for the neutral axis depth 'c_assumed' (a = beta_1 * c):
+    c_assumed = (A_s * f_y - A_s_prime * (f_y - 0.85 * f_c)) / (0.85 * f_c * b * beta_1)
 
     # Compute the strain in the compression reinforcement with the assumed c value:
     epsilon_s = (c_assumed - d_prime) / c_assumed * epsilon_c if c_assumed > 0 else 0
@@ -656,17 +700,25 @@ def _determine_nominal_moment_double_reinf_ACI_318_19(
     # Step 2: Check if the assumed compression steel strain exceeds the yield strain.
     if epsilon_s >= epsilon_y:
         # The assumption is valid (compression reinforcement yields).
+        # M_n uses (f_y - 0.85*f_c) for the compression-steel contribution to
+        # avoid double-counting the displaced concrete already included in the
+        # 0.85*f_c*a*b block.
         a_assumed = c_assumed * beta_1
-        M_n = 0.85 * f_c * a_assumed * b * (d - a_assumed / 2) + A_s_prime * f_y * (d - d_prime)
+        M_n = (
+            0.85 * f_c * a_assumed * b * (d - a_assumed / 2)
+            + A_s_prime * (f_y - 0.85 * f_c) * (d - d_prime)
+        )
         return M_n
     else:
-        # The assumption is invalid, so determine the actual neutral axis depth 'c' using the quadratic equation:
-        # Based on equilibrium:
-        #   A_s * f_y = 0.85 * f_c * b * beta_1 * c + A_s_prime * ( (c - d_prime) / c * epsilon_c * E_s )
-        # Rearranging into a quadratic form: A*c^2 + B*c + C = 0, where:
-
+        # The assumption is invalid, so determine the actual neutral axis depth
+        # 'c' using the quadratic equation.
+        # Based on equilibrium WITH displaced-concrete correction:
+        #   A_s * f_y = 0.85 * f_c * b * beta_1 * c
+        #             + A_s_prime * [ epsilon_c * E_s * (c - d_prime) / c
+        #                             - 0.85 * f_c ]
+        # Multiplying by c and rearranging into A*c^2 + B*c + C = 0:
         A = 0.85 * f_c * b * beta_1
-        B = A_s_prime * epsilon_c * E_s - A_s * f_y
+        B = A_s_prime * (epsilon_c * E_s - 0.85 * f_c) - A_s * f_y
         C = -d_prime * A_s_prime * epsilon_c * E_s
 
         # Solve for c using the quadratic formula:
@@ -675,18 +727,21 @@ def _determine_nominal_moment_double_reinf_ACI_318_19(
         # Compute the corresponding depth of the equivalent rectangular stress block:
         a = c * beta_1
 
-        # Recompute the strain and stress in the compression reinforcement:
+        # Recompute the strain and stress in the compression reinforcement,
+        # then apply the displaced-concrete correction:
         epsilon_s_prime = (c - d_prime) / c * epsilon_c
         f_s_prime = epsilon_s_prime * E_s
+        f_s_prime_net = f_s_prime - 0.85 * f_c
 
         # Determine the adjusted areas for tension reinforcement:
-        # A portion of the tensile reinforcement is balanced by the compression reinforcement.
-        A_s_2 = A_s_prime * f_s_prime / f_y
+        # a portion of the tensile reinforcement is balanced by the (net)
+        # compression reinforcement contribution.
+        A_s_2 = A_s_prime * f_s_prime_net / f_y
         A_s_1 = A_s - A_s_2
 
         # Calculate the nominal moment contributions:
         M_n_1 = A_s_1 * f_y * (d - a / 2)
-        M_n_2 = A_s_prime * f_s_prime * (d - d_prime)
+        M_n_2 = A_s_prime * f_s_prime_net * (d - d_prime)
         M_n = M_n_1 + M_n_2
 
         return M_n
@@ -723,29 +778,57 @@ def _determine_nominal_moment_ACI_318_19(self: "RectangularBeam", force: Forces)
     self._A_s_min_bot = rho_min_bot * self._d_bot * self.width
     self._A_s_max_bot = rho_max * self._d_bot * self.width
 
-    # Determine the nominal moment for positive moments
+    # Determine the nominal moment for positive moments.
+    # Three-branch dispatcher based on ductility:
+    #   1. Ductile section (A_s_bot <= A_s_max_bot): simple flexure with A_s real.
+    #   2. Over-reinforced but redeemed by compression steel: doubly reinforced
+    #      formula with A_s real. When A_s_top = 0, A_s_max_total collapses to
+    #      A_s_max_bot and this branch cannot be reached (goes to branch 3).
+    #   3. Over-reinforced beyond redemption: cap A_s to A_s_max_total and use
+    #      doubly reinforced formula. If A_s_top = 0, the doubly reinforced
+    #      formula degenerates to simple with A_s_max_bot.
     if self._A_s_bot <= self._A_s_max_bot:
-        M_n_positive = _determine_nominal_moment_simple_reinf_ACI_318_19(self, self._A_s_bot, self._d_bot)
-    elif self._A_s_top == 0 * cm**2:
-        M_n_positive = _determine_nominal_moment_simple_reinf_ACI_318_19(self, self._A_s_max_bot, self._d_bot)
+        M_n_positive = _determine_nominal_moment_simple_reinf_ACI_318_19(
+            self, self._A_s_bot, self._d_bot
+        )
     else:
+        # Compression steel contribution at the ductility limit determines how
+        # much the tension-steel cap can be extended:
+        #     A_s_max_total = A_s_max_bot + A_s_top * f_s'_net / f_y
+        f_s_prima_net = _f_s_prime_net_at_ductility_limit_ACI_318_19(
+            self, self._d_bot, self._c_mec_top
+        )
+        A_s_max_total = (
+            self._A_s_max_bot + self._A_s_top * f_s_prima_net / self.steel_bar.f_y
+        )
+        A_s_eff = self._A_s_bot if self._A_s_bot <= A_s_max_total else A_s_max_total
         M_n_positive = _determine_nominal_moment_double_reinf_ACI_318_19(
-            self, self._A_s_bot, self._d_bot, self._c_mec_top, self._A_s_top
+            self, A_s_eff, self._d_bot, self._c_mec_top, self._A_s_top
         )
 
     # Determine capacity for negative moment (tension at the top)
     self._A_s_min_top = rho_min_top * self._d_top * self.width
     self._A_s_max_top = rho_max * self._d_top * self.width
 
+    # Determine the nominal moment for negative moments (tension on top face).
+    # Mirror of the positive-moment dispatcher, plus the leading edge case of
+    # zero tension steel (no top → no negative capacity).
     if self._A_s_top == 0 * cm**2:
         M_n_negative = 0 * kNm
     elif self._A_s_top <= self._A_s_max_top:
-        M_n_negative = _determine_nominal_moment_simple_reinf_ACI_318_19(self, self._A_s_top, self._d_top)
-    elif self._A_s_bot == 0 * cm**2:
-        M_n_negative = _determine_nominal_moment_simple_reinf_ACI_318_19(self, self._A_s_max_top, self._d_top)
+        M_n_negative = _determine_nominal_moment_simple_reinf_ACI_318_19(
+            self, self._A_s_top, self._d_top
+        )
     else:
+        f_s_prima_net = _f_s_prime_net_at_ductility_limit_ACI_318_19(
+            self, self._d_top, self._c_mec_bot
+        )
+        A_s_max_total = (
+            self._A_s_max_top + self._A_s_bot * f_s_prima_net / self.steel_bar.f_y
+        )
+        A_s_eff = self._A_s_top if self._A_s_top <= A_s_max_total else A_s_max_total
         M_n_negative = _determine_nominal_moment_double_reinf_ACI_318_19(
-            self, self._A_s_top, self._d_top, self._c_mec_bot, self._A_s_bot
+            self, A_s_eff, self._d_top, self._c_mec_bot, self._A_s_bot
         )
 
     # Calculate the design moment capacities for both bottom and top reinforcement
@@ -840,19 +923,120 @@ def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.Data
     return pd.DataFrame([results], index=[0])
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Cycle-safe flexural design helpers
+# ──────────────────────────────────────────────────────────────────────────────
+MAX_FLEXURE_ITERATIONS = 30   # safety net for slow divergence without cycling
+
+
+def _rebar_design_fingerprint(rebar_design: dict) -> tuple:
+    """Canonical, hashable identifier of a discrete rebar layout.
+
+    Two iterations producing the same fingerprint mean the Picard (fixed-point
+    iteration) loop has cycled back to a previous configuration. The centroid/spacing are
+    intentionally excluded — they are derived from this tuple, not part of
+    its identity.
+    """
+    def _diam_mm(key):
+        q = rebar_design.get(key, 0 * mm)
+        return float(q.to("mm").magnitude) if q is not None else 0.0
+    return (
+        int(rebar_design.get("n_1", 0)), _diam_mm("d_b1"),
+        int(rebar_design.get("n_2", 0)), _diam_mm("d_b2"),
+        int(rebar_design.get("n_3", 0)), _diam_mm("d_b3"),
+        int(rebar_design.get("n_4", 0)), _diam_mm("d_b4"),
+    )
+
+
+def _select_safe_design(
+    self: "RectangularBeam",
+    candidate_designs: list,
+    M_demand: Quantity,
+    face: str,
+) -> dict:
+    """Among a set of candidate rebar designs — those visited during the
+    Picard (fixed-point iteration) loop — return the most appropriate one for the given face.
+
+    Selection priority:
+
+    1. Among candidates whose actual phi*Mn satisfies phi*Mn >= M_demand,
+       return the one with the smallest As (most economical valid layout).
+    2. If no candidate satisfies the check, return the one with the largest
+       phi*Mn (closest to passing). Downstream `check_flexure` will surface
+       DCR > 1 so the user is aware that the section is insufficient.
+
+    Never raises: keeping `design_flexure` total preserves the public
+    contract — summary, plot, shear design and check must keep working even
+    when the section is underdesigned.
+
+    Parameters
+    ----------
+    candidate_designs : list of dict
+        Each dict is a rebar_designer payload (keys n_1..n_4, d_b1..d_b4,
+        total_as, ...).
+    M_demand : Quantity
+        Required design moment on the face (positive magnitude).
+    face : {"bot", "top"}
+        Which face the layout governs.
+    """
+    M_demand_abs = abs(M_demand.to("kN*m"))
+
+    evaluated: list = []   # tuples of (As_provided, phi_Mn, design_dict)
+    for design in candidate_designs:
+        if face == "bot":
+            self._apply_longitudinal_design_bot(design)
+        else:
+            self._apply_longitudinal_design_top(design)
+        # Recompute phi_M_n with the just-applied layout (centroid included)
+        probe_force = Forces(M_y=(M_demand_abs if face == "bot" else -M_demand_abs))
+        _determine_nominal_moment_ACI_318_19(self, probe_force)
+        phi_M_n = self._phi_M_n_bot if face == "bot" else self._phi_M_n_top
+        evaluated.append((
+            design.get("total_as", 0 * (cm**2)),
+            phi_M_n.to("kN*m"),
+            design,
+        ))
+
+    # Primary criterion: candidates that satisfy the check
+    passing = [e for e in evaluated if e[1] >= M_demand_abs]
+    if passing:
+        passing.sort(key=lambda e: e[0])           # smallest As first
+        return passing[0][2]
+
+    # Fallback: no candidate passes — pick the one with the largest phi*Mn
+    # (closest to passing). The downstream check will report DCR > 1.
+    evaluated.sort(key=lambda e: -e[1])             # largest phi*Mn first
+    return evaluated[0][2]
+
+
 def _design_flexure_ACI_318_19(self: "RectangularBeam", max_M_y_bot: Quantity, max_M_y_top: Quantity) -> Dict[str, Any]:
     """
     Designs the flexural reinforcement for a beam cross-section according to ACI 318-19.
     Implements 'governing-face + reconciliation' so that each face's final layout covers
     tension on that face OR compression from the opposite face, whichever is larger.
+
+    The mechanical cover is solved by a Picard (fixed-point) iteration. The loop
+    is bounded by `MAX_FLEXURE_ITERATIONS` and includes per-face cycle detection:
+    if the same layout fingerprint reappears, the loop exits and a safe layout
+    is picked among the visited candidates by re-evaluating phi*Mn (see
+    `_select_safe_design`). This avoids infinite oscillation when two or more
+    discrete layouts alternate without converging in the strict tolerance.
     """
 
     # --- helpers -----------------------------------------------------------------
-    def _design_longitudinal_for_area(A_req: Quantity, A_max: Quantity, mech_cover: Quantity) -> pd.DataFrame:
-        """Run discrete design for a target area and return best_design dict."""
+    def _design_longitudinal_for_area(A_req: Quantity, A_max: Quantity, mech_cover: Quantity):
+        """Run discrete design for a target area and return best_design dict, or
+        None if the rebar designer cannot fit any combination in the section
+        geometry (RebarDesignInfeasibleError). Callers must handle the None
+        result — preserves the public contract that design_flexure never
+        crashes, delegating the "insufficient section" report to check_flexure
+        via DCR>1."""
         rebar = self._create_rebar_designer()
         _ = rebar.longitudinal_rebar_ACI_318_19(A_req, A_max, mech_cover)
-        return rebar.longitudinal_rebar_design  # expects keys: n_1..n_4, d_b1..d_b4, total_as, etc.
+        try:
+            return rebar.longitudinal_rebar_design
+        except RebarDesignInfeasibleError:
+            return None
 
     # --- initial guesses ----------------------------------------------------------
     rec_mec = self.c_c + self._stirrup_d_b + 1 * cm  # bottom mechanical cover to centroid (initial)
@@ -860,10 +1044,15 @@ def _design_flexure_ACI_318_19(self: "RectangularBeam", max_M_y_bot: Quantity, m
 
     tol = 0.01 * cm
     Err = 2 * tol
-    iteration_count = 0
 
-    while Err >= tol:
-        iteration_count += 1
+    # Cycle detection — store the layout payload for each fingerprint seen.
+    # Using a dict preserves insertion order (3.7+) so we can recover the full
+    # cycle later if needed for diagnostics.
+    bot_visited: Dict[tuple, dict] = {}
+    top_visited: Dict[tuple, dict] = {}
+    cycled = False
+
+    for iteration_count in range(1, MAX_FLEXURE_ITERATIONS + 1):
 
         # Effective depths for this iteration
         d = self.height - rec_mec
@@ -946,8 +1135,9 @@ def _design_flexure_ACI_318_19(self: "RectangularBeam", max_M_y_bot: Quantity, m
             self.flexure_design_results_bot = _design_longitudinal_for_area(
                 A_s_comp_bot, A_cap_bot, self._c_mec_bot
             )
-            self._apply_longitudinal_design_bot(self.flexure_design_results_bot)
-            A_prov_bot = self.flexure_design_results_bot.get("total_as", A_s_comp_bot)
+            if self.flexure_design_results_bot is not None:
+                self._apply_longitudinal_design_bot(self.flexure_design_results_bot)
+                A_prov_bot = self.flexure_design_results_bot.get("total_as", A_s_comp_bot)
 
         # If compression from bottom (A_s_comp_top) exceeds what top provides, re-upgrade top
         if A_s_comp_top > A_prov_top:
@@ -956,8 +1146,9 @@ def _design_flexure_ACI_318_19(self: "RectangularBeam", max_M_y_bot: Quantity, m
                 self.flexure_design_results_top = _design_longitudinal_for_area(
                     A_s_comp_top, A_cap_top, self._c_mec_top
                 )
-                self._apply_longitudinal_design_top(self.flexure_design_results_top)
-                A_prov_top = self.flexure_design_results_top.get("total_as", A_s_comp_top)
+                if self.flexure_design_results_top is not None:
+                    self._apply_longitudinal_design_top(self.flexure_design_results_top)
+                    A_prov_top = self.flexure_design_results_top.get("total_as", A_s_comp_top)
             else:
                 self._clear_top_longitudinal()
                 A_prov_top = 0 * (cm**2)
@@ -974,10 +1165,69 @@ def _design_flexure_ACI_318_19(self: "RectangularBeam", max_M_y_bot: Quantity, m
         )
         d_prima_calc = self.c_c + self._stirrup_d_b + self._top_rebar_centroid if has_top else d_prima
 
+        # --- Cycle detection ------------------------------------------------------
+        # A single `cycled` flag covers both faces on purpose. Bottom and top are
+        # coupled: bottom's layout drives `rec_mec`, which is fed back as the
+        # compression-side depth of the top design (and vice-versa). If one face
+        # repeats a layout it already visited, its centroid is oscillating
+        # periodically, so `rec_mec`/`d_prima` are too — and that periodic input
+        # forces the OTHER face into a limit cycle as well. Detecting recurrence
+        # on either face is enough evidence that the whole system is in a limit
+        # cycle; continuing would only waste iterations. We exit and let
+        # `_select_safe_design` pick the best layout among those visited.
+        if self.flexure_design_results_bot is not None:
+            fp_bot = _rebar_design_fingerprint(self.flexure_design_results_bot)
+            if fp_bot in bot_visited:
+                cycled = True
+            else:
+                bot_visited[fp_bot] = dict(self.flexure_design_results_bot)
+        if self.flexure_design_results_top is not None:
+            fp_top = _rebar_design_fingerprint(self.flexure_design_results_top)
+            if fp_top in top_visited:
+                cycled = True
+            else:
+                top_visited[fp_top] = dict(self.flexure_design_results_top)
+
         # --- Convergence update ---------------------------------------------------
         Err = max(abs(c_mec_calc - rec_mec), abs(d_prima_calc - d_prima))
         rec_mec = c_mec_calc
         d_prima = d_prima_calc
+
+        if Err < tol:
+            break
+        if cycled:
+            break
+
+    # --- Final capacity verification ----------------------------------------
+    # Whether the loop converged, cycled, or hit MAX_ITER, the active layout
+    # is NOT guaranteed to satisfy phi*Mn >= Mu. The Picard (fixed-point
+    # iteration) only ensures centroid consistency, not flexural capacity. So
+    # we always run a final check; if the active layout fails, we pick the
+    # safest one among the visited layouts (see `_select_safe_design`). If no
+    # visited layout passes either, we pick the closest one — the downstream
+    # `check_flexure` will surface DCR > 1 to signal that the section is
+    # insufficient.
+    def _final_phi_M_n_for(face: str) -> Quantity:
+        probe = Forces(M_y=(max_M_y_bot if face == "bot" else -abs(max_M_y_top)))
+        _determine_nominal_moment_ACI_318_19(self, probe)
+        return self._phi_M_n_bot if face == "bot" else self._phi_M_n_top
+
+    if max_M_y_bot > 0 * kNm:
+        phi_bot_active = _final_phi_M_n_for("bot")
+        if phi_bot_active < max_M_y_bot:
+            chosen_bot = _select_safe_design(
+                self, list(bot_visited.values()), max_M_y_bot, face="bot"
+            )
+            self._apply_longitudinal_design_bot(chosen_bot)
+
+    if max_M_y_top < 0 * kNm:
+        M_demand_top = abs(max_M_y_top)
+        phi_top_active = _final_phi_M_n_for("top")
+        if phi_top_active < M_demand_top:
+            chosen_top = _select_safe_design(
+                self, list(top_visited.values()), M_demand_top, face="top"
+            )
+            self._apply_longitudinal_design_top(chosen_top)
 
     # --- Results table ------------------------------------------------------------
     results = {

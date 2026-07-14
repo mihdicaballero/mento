@@ -1,5 +1,5 @@
 import pytest
-from mento.rebar import Rebar
+from mento.rebar import Rebar, RebarDesignInfeasibleError
 from mento.beam import RectangularBeam
 from mento.material import Concrete_ACI_318_19, SteelBar, Concrete_EN_1992_2004
 from mento.units import psi, kip, mm, inch, ksi, cm, MPa, kN
@@ -791,6 +791,34 @@ def test_longitudinal_rebar_metric_min_diameter_explicit() -> None:
             assert row["d_b3"] >= 10 * mm
         if row["d_b4"] is not None:
             assert row["d_b4"] >= 10 * mm
+
+
+def test_longitudinal_rebar_design_raises_infeasible_when_no_combo_fits() -> None:
+    """
+    When A_s_req cannot be fit into the section geometry given the bar catalog,
+    max diameters, layer count and clear-spacing limits, the internal combos
+    DataFrame ends up empty. `longitudinal_rebar_design` must raise
+    `RebarDesignInfeasibleError` instead of the bare `IndexError` that used to
+    come from `iloc[0]` on an empty DataFrame.
+
+    Repro: a very narrow section (10 cm wide) with a large A_s_req that no
+    combination of bars can accommodate.
+    """
+    concrete = Concrete_ACI_318_19(name="C20", f_c=20 * MPa)
+    steel = SteelBar(name="fy500", f_y=500 * MPa)
+    tiny_beam = RectangularBeam(
+        label="tiny-10x10",
+        concrete=concrete,
+        steel_bar=steel,
+        width=10 * cm,
+        height=10 * cm,
+        c_c=2 * cm,
+    )
+    beam_rebar = Rebar(tiny_beam)
+    # Ask for way more steel than any valid combination could provide in this section.
+    beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=100 * cm**2)
+    with pytest.raises(RebarDesignInfeasibleError):
+        _ = beam_rebar.longitudinal_rebar_design
 
 
 if __name__ == "__main__":
