@@ -2,12 +2,14 @@ import pytest
 import numpy as np
 import matplotlib
 import pandas as pd
+from pathlib import Path
+from pint import Quantity
 from unittest.mock import patch
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.colors import to_rgba
-from matplotlib.patches import Rectangle, FancyBboxPatch
+from matplotlib.patches import Circle, Rectangle, FancyBboxPatch
 
 from mento.node import Node
 from mento.beam import RectangularBeam
@@ -23,7 +25,7 @@ from mento.codes.ACI_318_19_beam import (
     _determine_nominal_moment_simple_reinf_ACI_318_19,
     _determine_nominal_moment_double_reinf_ACI_318_19,
 )
-from mento.results import CUSTOM_COLORS
+from mento.results import CUSTOM_COLORS, DocumentBuilder
 from mento.settings import BeamSettings
 from mento.rebar import Rebar
 
@@ -718,6 +720,7 @@ def beam_example_flexure_ACI() -> RectangularBeam:
     )
     return section
 
+
 def test_check_flexure_ACI_318_19_1(beam_example_flexure_ACI: RectangularBeam) -> None:
     # Testing the check of the reinforced beam with a large moment that requires
     # compression reinforcement, the moment being positive.
@@ -774,6 +777,7 @@ def test_check_flexure_ACI_318_19_2(beam_example_flexure_ACI: RectangularBeam) -
     # spColumn cuando esten disponibles.
     assert results.iloc[1]["ØMn"] == pytest.approx(550.34, rel=1e-3)
 
+
 def test_check_flexure_ACI_318_19_3(beam_example_flexure_ACI: RectangularBeam) -> None:
     # Simple bending check (Mu pequeño → sección simple, no cae en doble armadura).
     # Calcpad de referencia: ACI 318-19 Beam Flexure 03_v3 - test_3.cpd
@@ -792,8 +796,6 @@ def test_check_flexure_ACI_318_19_3(beam_example_flexure_ACI: RectangularBeam) -
     assert results.iloc[1]["As,req top"] == pytest.approx(0, rel=1e-3)
     assert results.iloc[1]["As"] == pytest.approx(20.15, rel=1e-3)
     assert results.iloc[1]["ØMn"] == pytest.approx(364.37, rel=1e-3)
-
-
 
 
 def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_05() -> None:
@@ -815,6 +817,7 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_05() -> None:
     está activo, indicando que se aplicó la regla del 4/3 de ACI 9.6.1.3.
     """
     from mento.codes.ACI_318_19_beam import _calculate_flexural_reinforcement_ACI_318_19
+
     concrete = Concrete_ACI_318_19(name="fc6000", f_c=6000 * psi)
     steel = SteelBar(name="fy60", f_y=60 * ksi)
     beam = RectangularBeam(
@@ -832,8 +835,9 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_05() -> None:
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
 
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = \
-        _calculate_flexural_reinforcement_ACI_318_19(beam, Mu, d, d_prima)
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+        beam, Mu, d, d_prima
+    )
 
     # As_min gobierna: As_final debe ser ≈ 1.7041 in² = 11.00 cm²
     assert A_s_final.to("cm**2").magnitude == pytest.approx(11.00, rel=1e-2)
@@ -841,7 +845,8 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_05() -> None:
     assert A_s_comp.to("cm**2").magnitude == pytest.approx(0.0, abs=0.01)
     # Flag 4/3 activo porque As_calc < As_min
     assert A_s_bool is False
-    
+
+
 def test_maximum_flexural_reinforcement_ratio_ACI_318_19_Test_Etabs_05() -> None:
     """
     Test_Etabs_05: b=16", h=30", fc=6000psi, fy=60ksi.
@@ -876,6 +881,7 @@ def test_maximum_flexural_reinforcement_ratio_ACI_318_19_Test_Etabs_05() -> None
     d = 27.5 * inch
     As_max = rho_max * beam.width * d
     assert As_max.to("inch**2").magnitude == pytest.approx(10.4288, rel=1e-3)
+
 
 def test_minimum_flexural_reinforcement_ratio_ACI_318_19_Test_Etabs_05() -> None:
     """
@@ -912,6 +918,7 @@ def test_minimum_flexural_reinforcement_ratio_ACI_318_19_Test_Etabs_05() -> None
     d = 27.5 * inch
     As_min = rho_min * beam.width * d
     assert As_min.to("inch**2").magnitude == pytest.approx(1.7041, rel=1e-3)
+
 
 def test_determine_nominal_moment_simple_reinf_ACI_318_19_Test_Etabs_03() -> None:
     """
@@ -950,6 +957,7 @@ def test_determine_nominal_moment_simple_reinf_ACI_318_19_Test_Etabs_03() -> Non
     phi = 0.9
     assert (phi * M_n).to("kip * ft").magnitude == pytest.approx(200.0, rel=1e-2)
 
+
 def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_03() -> None:
     """
     Test_Etabs_03: b=12", h=24", fc=4000psi, fy=60ksi, Mu=200 kip.ft
@@ -984,8 +992,9 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_03() -> None:
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
 
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = \
-        _calculate_flexural_reinforcement_ACI_318_19(beam, Mu, d, d_prima)
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+        beam, Mu, d, d_prima
+    )
 
     # As_calc governs: As_final ≈ 2.2386 in²
     assert A_s_final.to("inch**2").magnitude == pytest.approx(2.2386, rel=1e-2)
@@ -993,6 +1002,7 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_03() -> None:
     assert A_s_comp.to("cm**2").magnitude == pytest.approx(0.0, abs=0.01)
     # As_calc > As_min → regla del 4/3 no aplica
     assert A_s_bool is False
+
 
 def test_determine_nominal_moment_double_reinf_ACI_318_19_Test_Etabs_01() -> None:
     """
@@ -1034,6 +1044,7 @@ def test_determine_nominal_moment_double_reinf_ACI_318_19_Test_Etabs_01() -> Non
     phi = 0.9
     assert (phi * M_n).to("kip * ft").magnitude == pytest.approx(200.0, rel=1e-2)
 
+
 def test_calculate_flexural_reinforcement_ACI_318_19_doubly_reinforced_Test_Etabs_01() -> None:
     """
     Test_Etabs_01: b=12", h=20", fc=2500psi, fy=60ksi, Mu=200 kip.ft
@@ -1064,8 +1075,9 @@ def test_calculate_flexural_reinforcement_ACI_318_19_doubly_reinforced_Test_Etab
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
 
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = \
-        _calculate_flexural_reinforcement_ACI_318_19(beam, Mu, d, d_prima)
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+        beam, Mu, d, d_prima
+    )
 
     # Acero de tracción ≈ 3.0045 in²
     assert A_s_final.to("inch**2").magnitude == pytest.approx(3.0045, rel=1e-2)
@@ -1073,6 +1085,7 @@ def test_calculate_flexural_reinforcement_ACI_318_19_doubly_reinforced_Test_Etab
     assert A_s_comp.to("inch**2").magnitude == pytest.approx(0.7628, rel=1e-2)
     # As_calc > As_min → regla del 4/3 no aplica
     assert A_s_bool is False
+
 
 def test_calculate_flexural_reinforcement_ACI_318_19_doubly_reinforced_yielding_Test_Etabs_23() -> None:
     """
@@ -1083,19 +1096,23 @@ def test_calculate_flexural_reinforcement_ACI_318_19_doubly_reinforced_yielding_
     Excel/ETABS: As_req = 5.5828 in², As_comp = 0.5647 in²
     """
     from mento.codes.ACI_318_19_beam import _calculate_flexural_reinforcement_ACI_318_19
+
     concrete = Concrete_ACI_318_19(name="fc4000", f_c=4000 * psi)
     steel = SteelBar(name="fy60", f_y=60 * ksi)
-    beam = RectangularBeam(label="Test_Etabs_23", concrete=concrete, steel_bar=steel,
-                           width=12*inch, height=26*inch, c_c=1.5*inch)
-    beam.set_transverse_rebar(n_stirrups=1, d_b=0.375*inch, s_l=12*inch)
+    beam = RectangularBeam(
+        label="Test_Etabs_23", concrete=concrete, steel_bar=steel, width=12 * inch, height=26 * inch, c_c=1.5 * inch
+    )
+    beam.set_transverse_rebar(n_stirrups=1, d_b=0.375 * inch, s_l=12 * inch)
     d = 23.5 * inch
     d_prima = 2.5 * inch
     Mu = 500 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = \
-        _calculate_flexural_reinforcement_ACI_318_19(beam, Mu, d, d_prima)
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+        beam, Mu, d, d_prima
+    )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(5.5828, rel=1e-2)
     assert A_s_comp.to("inch**2").magnitude == pytest.approx(0.5647, rel=1e-2)
     assert A_s_bool is False
+
 
 def test_determine_nominal_moment_double_reinf_ACI_318_19_Test_Etabs_23_yielding() -> None:
     """
@@ -1106,10 +1123,12 @@ def test_determine_nominal_moment_double_reinf_ACI_318_19_Test_Etabs_23_yielding
     φMn ≈ Mu = 500 kip·ft (ETABS validado).
     """
     from mento.codes.ACI_318_19_beam import _determine_nominal_moment_double_reinf_ACI_318_19
+
     concrete = Concrete_ACI_318_19(name="fc4000", f_c=4000 * psi)
     steel = SteelBar(name="fy60", f_y=60 * ksi)
-    beam = RectangularBeam(label="Test_Etabs_23", concrete=concrete, steel_bar=steel,
-                           width=12*inch, height=26*inch, c_c=1.5*inch)
+    beam = RectangularBeam(
+        label="Test_Etabs_23", concrete=concrete, steel_bar=steel, width=12 * inch, height=26 * inch, c_c=1.5 * inch
+    )
     A_s = 5.582781 * inch**2
     A_s_prime = 0.56469 * inch**2
     d = 23.5 * inch
@@ -1117,6 +1136,7 @@ def test_determine_nominal_moment_double_reinf_ACI_318_19_Test_Etabs_23_yielding
     M_n = _determine_nominal_moment_double_reinf_ACI_318_19(beam, A_s, d, d_prime, A_s_prime)
     phi = 0.9
     assert (phi * M_n).to("kip * ft").magnitude == pytest.approx(500.0, rel=1e-2)
+
 
 def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_04() -> None:
     """
@@ -1127,16 +1147,19 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_04() -> None:
     Excel/ETABS: As_req = 1.6604 in², As_comp = 0.
     """
     from mento.codes.ACI_318_19_beam import _calculate_flexural_reinforcement_ACI_318_19
+
     concrete = Concrete_ACI_318_19(name="fc5000", f_c=5000 * psi)
     steel = SteelBar(name="fy60", f_y=60 * ksi)
-    beam = RectangularBeam(label="Test_Etabs_04", concrete=concrete, steel_bar=steel,
-                           width=16*inch, height=30*inch, c_c=1.5*inch)
-    beam.set_transverse_rebar(n_stirrups=1, d_b=0.375*inch, s_l=12*inch)
+    beam = RectangularBeam(
+        label="Test_Etabs_04", concrete=concrete, steel_bar=steel, width=16 * inch, height=30 * inch, c_c=1.5 * inch
+    )
+    beam.set_transverse_rebar(n_stirrups=1, d_b=0.375 * inch, s_l=12 * inch)
     d = 27.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = \
-        _calculate_flexural_reinforcement_ACI_318_19(beam, Mu, d, d_prima)
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+        beam, Mu, d, d_prima
+    )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(1.6604, rel=1e-2)
     assert A_s_comp.to("cm**2").magnitude == pytest.approx(0.0, abs=0.01)
     assert A_s_bool is False
@@ -1162,16 +1185,19 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_02() -> None:
     the 0.1*h default of 1.8".
     """
     from mento.codes.ACI_318_19_beam import _calculate_flexural_reinforcement_ACI_318_19
+
     concrete = Concrete_ACI_318_19(name="fc3000", f_c=3000 * psi)
     steel = SteelBar(name="fy60", f_y=60 * ksi)
-    beam = RectangularBeam(label="Test_Etabs_02", concrete=concrete, steel_bar=steel,
-                           width=12 * inch, height=18 * inch, c_c=1.5 * inch)
+    beam = RectangularBeam(
+        label="Test_Etabs_02", concrete=concrete, steel_bar=steel, width=12 * inch, height=18 * inch, c_c=1.5 * inch
+    )
     beam.set_transverse_rebar(n_stirrups=1, d_b=0.375 * inch, s_l=12 * inch)
     d = 15.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = \
-        _calculate_flexural_reinforcement_ACI_318_19(beam, Mu, d, d_prima)
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+        beam, Mu, d, d_prima
+    )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(3.4090, rel=1e-3)
     assert A_s_comp.to("inch**2").magnitude == pytest.approx(1.1701, rel=1e-3)
 
@@ -1182,16 +1208,19 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_06() -> None:
     Simple section, ETABS validated: A_s_final = 1.8407 in², A_s_comp = 0.
     """
     from mento.codes.ACI_318_19_beam import _calculate_flexural_reinforcement_ACI_318_19
+
     concrete = Concrete_ACI_318_19(name="fc7000", f_c=7000 * psi)
     steel = SteelBar(name="fy60", f_y=60 * ksi)
-    beam = RectangularBeam(label="Test_Etabs_06", concrete=concrete, steel_bar=steel,
-                           width=16 * inch, height=30 * inch, c_c=1.5 * inch)
+    beam = RectangularBeam(
+        label="Test_Etabs_06", concrete=concrete, steel_bar=steel, width=16 * inch, height=30 * inch, c_c=1.5 * inch
+    )
     beam.set_transverse_rebar(n_stirrups=1, d_b=0.375 * inch, s_l=12 * inch)
     d = 27.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = \
-        _calculate_flexural_reinforcement_ACI_318_19(beam, Mu, d, d_prima)
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+        beam, Mu, d, d_prima
+    )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(1.8407, rel=1e-3)
     assert A_s_comp.to("inch**2").magnitude == pytest.approx(0.0, abs=1e-3)
 
@@ -1205,16 +1234,19 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_07() -> None:
     Expected A_s_final = 4/3 * A_s_calc = 2.187 in² (ETABS uses A_s_min = 2.214).
     """
     from mento.codes.ACI_318_19_beam import _calculate_flexural_reinforcement_ACI_318_19
+
     concrete = Concrete_ACI_318_19(name="fc8000", f_c=8000 * psi)
     steel = SteelBar(name="fy60", f_y=60 * ksi)
-    beam = RectangularBeam(label="Test_Etabs_07", concrete=concrete, steel_bar=steel,
-                           width=18 * inch, height=30 * inch, c_c=1.5 * inch)
+    beam = RectangularBeam(
+        label="Test_Etabs_07", concrete=concrete, steel_bar=steel, width=18 * inch, height=30 * inch, c_c=1.5 * inch
+    )
     beam.set_transverse_rebar(n_stirrups=1, d_b=0.375 * inch, s_l=12 * inch)
     d = 27.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = \
-        _calculate_flexural_reinforcement_ACI_318_19(beam, Mu, d, d_prima)
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+        beam, Mu, d, d_prima
+    )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(2.1868, rel=1e-3)
     assert A_s_comp.to("inch**2").magnitude == pytest.approx(0.0, abs=1e-3)
     assert A_s_bool is True  # 4/3 rule was applied
@@ -1228,16 +1260,19 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_08() -> None:
     Expected A_s_final = 4/3 * A_s_calc = 2.180 in² (ETABS uses A_s_min = 2.609).
     """
     from mento.codes.ACI_318_19_beam import _calculate_flexural_reinforcement_ACI_318_19
+
     concrete = Concrete_ACI_318_19(name="fc9000", f_c=9000 * psi)
     steel = SteelBar(name="fy60", f_y=60 * ksi)
-    beam = RectangularBeam(label="Test_Etabs_08", concrete=concrete, steel_bar=steel,
-                           width=20 * inch, height=30 * inch, c_c=1.5 * inch)
+    beam = RectangularBeam(
+        label="Test_Etabs_08", concrete=concrete, steel_bar=steel, width=20 * inch, height=30 * inch, c_c=1.5 * inch
+    )
     beam.set_transverse_rebar(n_stirrups=1, d_b=0.375 * inch, s_l=12 * inch)
     d = 27.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = \
-        _calculate_flexural_reinforcement_ACI_318_19(beam, Mu, d, d_prima)
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+        beam, Mu, d, d_prima
+    )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(2.1803, rel=1e-3)
     assert A_s_comp.to("inch**2").magnitude == pytest.approx(0.0, abs=1e-3)
     assert A_s_bool is True  # 4/3 rule was applied
@@ -1251,16 +1286,19 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_09() -> None:
     Expected A_s_final = 4/3 * A_s_calc = 1.779 in² (ETABS uses A_s_min = 4.02).
     """
     from mento.codes.ACI_318_19_beam import _calculate_flexural_reinforcement_ACI_318_19
+
     concrete = Concrete_ACI_318_19(name="fc10000", f_c=10000 * psi)
     steel = SteelBar(name="fy60", f_y=60 * ksi)
-    beam = RectangularBeam(label="Test_Etabs_09", concrete=concrete, steel_bar=steel,
-                           width=24 * inch, height=36 * inch, c_c=1.5 * inch)
+    beam = RectangularBeam(
+        label="Test_Etabs_09", concrete=concrete, steel_bar=steel, width=24 * inch, height=36 * inch, c_c=1.5 * inch
+    )
     beam.set_transverse_rebar(n_stirrups=1, d_b=0.375 * inch, s_l=12 * inch)
     d = 33.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = \
-        _calculate_flexural_reinforcement_ACI_318_19(beam, Mu, d, d_prima)
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+        beam, Mu, d, d_prima
+    )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(1.7794, rel=1e-3)
     assert A_s_comp.to("inch**2").magnitude == pytest.approx(0.0, abs=1e-3)
     assert A_s_bool is True  # 4/3 rule was applied
@@ -1274,16 +1312,19 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_10() -> None:
     Expected A_s_final = 4/3 * A_s_calc = 1.778 in² (ETABS uses A_s_min = 4.216).
     """
     from mento.codes.ACI_318_19_beam import _calculate_flexural_reinforcement_ACI_318_19
+
     concrete = Concrete_ACI_318_19(name="fc11000", f_c=11000 * psi)
     steel = SteelBar(name="fy60", f_y=60 * ksi)
-    beam = RectangularBeam(label="Test_Etabs_10", concrete=concrete, steel_bar=steel,
-                           width=24 * inch, height=36 * inch, c_c=1.5 * inch)
+    beam = RectangularBeam(
+        label="Test_Etabs_10", concrete=concrete, steel_bar=steel, width=24 * inch, height=36 * inch, c_c=1.5 * inch
+    )
     beam.set_transverse_rebar(n_stirrups=1, d_b=0.375 * inch, s_l=12 * inch)
     d = 33.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = \
-        _calculate_flexural_reinforcement_ACI_318_19(beam, Mu, d, d_prima)
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+        beam, Mu, d, d_prima
+    )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(1.7784, rel=1e-3)
     assert A_s_comp.to("inch**2").magnitude == pytest.approx(0.0, abs=1e-3)
     assert A_s_bool is True  # 4/3 rule was applied
@@ -1295,16 +1336,19 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_11() -> None:
     Simple section, ETABS validated: A_s_final = 2.5865 in², A_s_comp = 0.
     """
     from mento.codes.ACI_318_19_beam import _calculate_flexural_reinforcement_ACI_318_19
+
     concrete = Concrete_ACI_318_19(name="fc12000", f_c=12000 * psi)
     steel = SteelBar(name="fy60", f_y=60 * ksi)
-    beam = RectangularBeam(label="Test_Etabs_11", concrete=concrete, steel_bar=steel,
-                           width=24 * inch, height=20 * inch, c_c=1.5 * inch)
+    beam = RectangularBeam(
+        label="Test_Etabs_11", concrete=concrete, steel_bar=steel, width=24 * inch, height=20 * inch, c_c=1.5 * inch
+    )
     beam.set_transverse_rebar(n_stirrups=1, d_b=0.375 * inch, s_l=12 * inch)
     d = 17.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = \
-        _calculate_flexural_reinforcement_ACI_318_19(beam, Mu, d, d_prima)
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+        beam, Mu, d, d_prima
+    )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(2.5865, rel=1e-3)
     assert A_s_comp.to("inch**2").magnitude == pytest.approx(0.0, abs=1e-3)
 
@@ -1318,16 +1362,19 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_12() -> None:
     the 0.1*h default of 2.4".
     """
     from mento.codes.ACI_318_19_beam import _calculate_flexural_reinforcement_ACI_318_19
+
     concrete = Concrete_ACI_318_19(name="fc2500", f_c=2500 * psi)
     steel = SteelBar(name="fy75", f_y=75 * ksi)
-    beam = RectangularBeam(label="Test_Etabs_12", concrete=concrete, steel_bar=steel,
-                           width=10 * inch, height=24 * inch, c_c=1.5 * inch)
+    beam = RectangularBeam(
+        label="Test_Etabs_12", concrete=concrete, steel_bar=steel, width=10 * inch, height=24 * inch, c_c=1.5 * inch
+    )
     beam.set_transverse_rebar(n_stirrups=1, d_b=0.375 * inch, s_l=12 * inch)
     d = 21.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = \
-        _calculate_flexural_reinforcement_ACI_318_19(beam, Mu, d, d_prima)
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+        beam, Mu, d, d_prima
+    )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(1.9373, rel=1e-3)
     # A_s_comp uses rel=2e-3 (0.2%) because with very low f_c (2500 psi) the
     # displaced-concrete correction (0.85 * f_c) is small, and any 4-decimal
@@ -1342,16 +1389,19 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_13() -> None:
     Simple section, ETABS validated: A_s_final = 1.9009 in², A_s_comp = 0.
     """
     from mento.codes.ACI_318_19_beam import _calculate_flexural_reinforcement_ACI_318_19
+
     concrete = Concrete_ACI_318_19(name="fc3000", f_c=3000 * psi)
     steel = SteelBar(name="fy75", f_y=75 * ksi)
-    beam = RectangularBeam(label="Test_Etabs_13", concrete=concrete, steel_bar=steel,
-                           width=10 * inch, height=24 * inch, c_c=1.5 * inch)
+    beam = RectangularBeam(
+        label="Test_Etabs_13", concrete=concrete, steel_bar=steel, width=10 * inch, height=24 * inch, c_c=1.5 * inch
+    )
     beam.set_transverse_rebar(n_stirrups=1, d_b=0.375 * inch, s_l=12 * inch)
     d = 21.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = \
-        _calculate_flexural_reinforcement_ACI_318_19(beam, Mu, d, d_prima)
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+        beam, Mu, d, d_prima
+    )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(1.9009, rel=1e-3)
     assert A_s_comp.to("inch**2").magnitude == pytest.approx(0.0, abs=1e-3)
 
@@ -1362,16 +1412,19 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_14() -> None:
     Simple section, ETABS validated: A_s_final = 1.8245 in², A_s_comp = 0.
     """
     from mento.codes.ACI_318_19_beam import _calculate_flexural_reinforcement_ACI_318_19
+
     concrete = Concrete_ACI_318_19(name="fc4000", f_c=4000 * psi)
     steel = SteelBar(name="fy75", f_y=75 * ksi)
-    beam = RectangularBeam(label="Test_Etabs_14", concrete=concrete, steel_bar=steel,
-                           width=10 * inch, height=24 * inch, c_c=1.5 * inch)
+    beam = RectangularBeam(
+        label="Test_Etabs_14", concrete=concrete, steel_bar=steel, width=10 * inch, height=24 * inch, c_c=1.5 * inch
+    )
     beam.set_transverse_rebar(n_stirrups=1, d_b=0.375 * inch, s_l=12 * inch)
     d = 21.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = \
-        _calculate_flexural_reinforcement_ACI_318_19(beam, Mu, d, d_prima)
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+        beam, Mu, d, d_prima
+    )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(1.8245, rel=1e-3)
     assert A_s_comp.to("inch**2").magnitude == pytest.approx(0.0, abs=1e-3)
 
@@ -1382,16 +1435,19 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_15() -> None:
     Simple section, ETABS validated: A_s_final = 2.5605 in², A_s_comp = 0.
     """
     from mento.codes.ACI_318_19_beam import _calculate_flexural_reinforcement_ACI_318_19
+
     concrete = Concrete_ACI_318_19(name="fc5000", f_c=5000 * psi)
     steel = SteelBar(name="fy75", f_y=75 * ksi)
-    beam = RectangularBeam(label="Test_Etabs_15", concrete=concrete, steel_bar=steel,
-                           width=14 * inch, height=18 * inch, c_c=1.5 * inch)
+    beam = RectangularBeam(
+        label="Test_Etabs_15", concrete=concrete, steel_bar=steel, width=14 * inch, height=18 * inch, c_c=1.5 * inch
+    )
     beam.set_transverse_rebar(n_stirrups=1, d_b=0.375 * inch, s_l=12 * inch)
     d = 15.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = \
-        _calculate_flexural_reinforcement_ACI_318_19(beam, Mu, d, d_prima)
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+        beam, Mu, d, d_prima
+    )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(2.5605, rel=1e-3)
     assert A_s_comp.to("inch**2").magnitude == pytest.approx(0.0, abs=1e-3)
 
@@ -1402,16 +1458,19 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_16() -> None:
     Simple section, ETABS validated: A_s_final = 2.1735 in², A_s_comp = 0.
     """
     from mento.codes.ACI_318_19_beam import _calculate_flexural_reinforcement_ACI_318_19
+
     concrete = Concrete_ACI_318_19(name="fc6000", f_c=6000 * psi)
     steel = SteelBar(name="fy75", f_y=75 * ksi)
-    beam = RectangularBeam(label="Test_Etabs_16", concrete=concrete, steel_bar=steel,
-                           width=14 * inch, height=20 * inch, c_c=1.5 * inch)
+    beam = RectangularBeam(
+        label="Test_Etabs_16", concrete=concrete, steel_bar=steel, width=14 * inch, height=20 * inch, c_c=1.5 * inch
+    )
     beam.set_transverse_rebar(n_stirrups=1, d_b=0.375 * inch, s_l=12 * inch)
     d = 17.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = \
-        _calculate_flexural_reinforcement_ACI_318_19(beam, Mu, d, d_prima)
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+        beam, Mu, d, d_prima
+    )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(2.1735, rel=1e-3)
     assert A_s_comp.to("inch**2").magnitude == pytest.approx(0.0, abs=1e-3)
 
@@ -1422,16 +1481,19 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_17() -> None:
     Simple section, ETABS validated: A_s_final = 2.2991 in², A_s_comp = 0.
     """
     from mento.codes.ACI_318_19_beam import _calculate_flexural_reinforcement_ACI_318_19
+
     concrete = Concrete_ACI_318_19(name="fc7000", f_c=7000 * psi)
     steel = SteelBar(name="fy75", f_y=75 * ksi)
-    beam = RectangularBeam(label="Test_Etabs_17", concrete=concrete, steel_bar=steel,
-                           width=14 * inch, height=19 * inch, c_c=1.5 * inch)
+    beam = RectangularBeam(
+        label="Test_Etabs_17", concrete=concrete, steel_bar=steel, width=14 * inch, height=19 * inch, c_c=1.5 * inch
+    )
     beam.set_transverse_rebar(n_stirrups=1, d_b=0.375 * inch, s_l=12 * inch)
     d = 16.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = \
-        _calculate_flexural_reinforcement_ACI_318_19(beam, Mu, d, d_prima)
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+        beam, Mu, d, d_prima
+    )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(2.2991, rel=1e-3)
     assert A_s_comp.to("inch**2").magnitude == pytest.approx(0.0, abs=1e-3)
 
@@ -1446,16 +1508,19 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_18() -> None:
     Expected A_s_final = A_s_geo_min = 1.728 in² (ETABS uses A_s_min = 3.292).
     """
     from mento.codes.ACI_318_19_beam import _calculate_flexural_reinforcement_ACI_318_19
+
     concrete = Concrete_ACI_318_19(name="fc8000", f_c=8000 * psi)
     steel = SteelBar(name="fy75", f_y=75 * ksi)
-    beam = RectangularBeam(label="Test_Etabs_18", concrete=concrete, steel_bar=steel,
-                           width=16 * inch, height=60 * inch, c_c=1.5 * inch)
+    beam = RectangularBeam(
+        label="Test_Etabs_18", concrete=concrete, steel_bar=steel, width=16 * inch, height=60 * inch, c_c=1.5 * inch
+    )
     beam.set_transverse_rebar(n_stirrups=1, d_b=0.375 * inch, s_l=12 * inch)
     d = 57.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = \
-        _calculate_flexural_reinforcement_ACI_318_19(beam, Mu, d, d_prima)
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+        beam, Mu, d, d_prima
+    )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(1.7280, rel=1e-3)
     assert A_s_comp.to("inch**2").magnitude == pytest.approx(0.0, abs=1e-3)
     assert A_s_bool is False  # 4/3 rule computed but geometric minimum governs
@@ -1467,16 +1532,19 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_19() -> None:
     Simple section, ETABS validated: A_s_final = 3.0764 in², A_s_comp = 0.
     """
     from mento.codes.ACI_318_19_beam import _calculate_flexural_reinforcement_ACI_318_19
+
     concrete = Concrete_ACI_318_19(name="fc9000", f_c=9000 * psi)
     steel = SteelBar(name="fy75", f_y=75 * ksi)
-    beam = RectangularBeam(label="Test_Etabs_19", concrete=concrete, steel_bar=steel,
-                           width=16 * inch, height=15 * inch, c_c=1.5 * inch)
+    beam = RectangularBeam(
+        label="Test_Etabs_19", concrete=concrete, steel_bar=steel, width=16 * inch, height=15 * inch, c_c=1.5 * inch
+    )
     beam.set_transverse_rebar(n_stirrups=1, d_b=0.375 * inch, s_l=12 * inch)
     d = 12.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = \
-        _calculate_flexural_reinforcement_ACI_318_19(beam, Mu, d, d_prima)
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+        beam, Mu, d, d_prima
+    )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(3.0764, rel=1e-3)
     assert A_s_comp.to("inch**2").magnitude == pytest.approx(0.0, abs=1e-3)
 
@@ -1487,24 +1555,29 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_20() -> None:
     Simple section (shallow, wide). ETABS validated: A_s_final = 4.1408 in², A_s_comp = 0.
     """
     from mento.codes.ACI_318_19_beam import _calculate_flexural_reinforcement_ACI_318_19
+
     concrete = Concrete_ACI_318_19(name="fc10000", f_c=10000 * psi)
     steel = SteelBar(name="fy75", f_y=75 * ksi)
-    beam = RectangularBeam(label="Test_Etabs_20", concrete=concrete, steel_bar=steel,
-                           width=20 * inch, height=12 * inch, c_c=1.5 * inch)
+    beam = RectangularBeam(
+        label="Test_Etabs_20", concrete=concrete, steel_bar=steel, width=20 * inch, height=12 * inch, c_c=1.5 * inch
+    )
     beam.set_transverse_rebar(n_stirrups=1, d_b=0.375 * inch, s_l=12 * inch)
     d = 9.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = \
-        _calculate_flexural_reinforcement_ACI_318_19(beam, Mu, d, d_prima)
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+        beam, Mu, d, d_prima
+    )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(4.1408, rel=1e-3)
     assert A_s_comp.to("inch**2").magnitude == pytest.approx(0.0, abs=1e-3)
 
 
-@pytest.mark.skip(reason="Extreme case: 12x12 section with fc=11000psi and Mu=200 kip.ft. "
-                         "ETABS does not report As inf (#¡VALOR! in spreadsheet). The required "
-                         "compression steel (7.40 in²) exceeds the tension steel (4.42 in²), "
-                         "indicating the section is structurally unreasonable.")
+@pytest.mark.skip(
+    reason="Extreme case: 12x12 section with fc=11000psi and Mu=200 kip.ft. "
+    "ETABS does not report As inf (#¡VALOR! in spreadsheet). The required "
+    "compression steel (7.40 in²) exceeds the tension steel (4.42 in²), "
+    "indicating the section is structurally unreasonable."
+)
 def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_21() -> None:
     """Test_Etabs_21: extreme case, skipped."""
     pass
@@ -1516,16 +1589,19 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_22() -> None:
     Simple section (shallow, very wide). ETABS validated: A_s_final = 3.9783 in², A_s_comp = 0.
     """
     from mento.codes.ACI_318_19_beam import _calculate_flexural_reinforcement_ACI_318_19
+
     concrete = Concrete_ACI_318_19(name="fc12000", f_c=12000 * psi)
     steel = SteelBar(name="fy75", f_y=75 * ksi)
-    beam = RectangularBeam(label="Test_Etabs_22", concrete=concrete, steel_bar=steel,
-                           width=26 * inch, height=12 * inch, c_c=1.5 * inch)
+    beam = RectangularBeam(
+        label="Test_Etabs_22", concrete=concrete, steel_bar=steel, width=26 * inch, height=12 * inch, c_c=1.5 * inch
+    )
     beam.set_transverse_rebar(n_stirrups=1, d_b=0.375 * inch, s_l=12 * inch)
     d = 9.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = \
-        _calculate_flexural_reinforcement_ACI_318_19(beam, Mu, d, d_prima)
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+        beam, Mu, d, d_prima
+    )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(3.9783, rel=1e-3)
     assert A_s_comp.to("inch**2").magnitude == pytest.approx(0.0, abs=1e-3)
 
@@ -1790,7 +1866,9 @@ def test_design_flexure_rebar_infeasible_does_not_crash() -> None:
         label="rebar-infeasible-15x15",
         concrete=Concrete_ACI_318_19(name="C20", f_c=20 * MPa),
         steel_bar=SteelBar(name="fy500", f_y=500 * MPa),
-        width=15 * cm, height=15 * cm, c_c=2 * cm,
+        width=15 * cm,
+        height=15 * cm,
+        c_c=2 * cm,
     )
     Node(section=section, forces=Forces(M_y=14 * kNm)).design_flexure()
     # If we got here without raising, the contract holds.
@@ -1822,6 +1900,7 @@ def test_check_flexure_ACI_318_19_over_reinforced_with_default_top(
     assert results.iloc[1]["Position"] == "Bottom"
     assert results.iloc[1]["Mu"] == pytest.approx(542.33, rel=1e-3)
     assert results.iloc[1]["ØMn"] == pytest.approx(531.15, rel=2e-3)
+
 
 def test_rectangular_section_plot_components(
     beam_example_flexure_ACI: RectangularBeam,
@@ -2278,6 +2357,417 @@ def test_flexure_results_detailed_invalid_force() -> None:
 
     with pytest.raises(ValueError, match="No results found for Forces object"):
         beam.flexure_results_detailed(force=forces2)
+
+
+##########################################################
+# WORD DOCUMENT EXPORTS (flexure / shear detailed doc)
+##########################################################
+
+
+def _build_checked_beam_doc() -> tuple[RectangularBeam, Forces]:
+    """Beam with flexure and shear already checked, ready for the _doc exports."""
+    concrete = Concrete_ACI_318_19(name="C25", f_c=25 * MPa)
+    steel = SteelBar(name="ADN420", f_y=420 * MPa)
+    beam = RectangularBeam(
+        label="DOC",
+        concrete=concrete,
+        steel_bar=steel,
+        width=20 * cm,
+        height=50 * cm,
+        c_c=2.5 * cm,
+    )
+    beam.set_longitudinal_rebar_bot(n1=4, d_b1=16 * mm)
+    beam.set_longitudinal_rebar_top(n1=2, d_b1=12 * mm)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=20 * cm)
+
+    forces = Forces(label="ELU", M_y=50 * kNm, V_z=80 * kN)
+    node = Node(beam, forces)
+    node.check_flexure()
+    node.check_shear()
+    return beam, forces
+
+
+@pytest.fixture()
+def saved_docs(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Intercepts DocumentBuilder.save so the doc exports run without writing files."""
+    saved: list[str] = []
+    monkeypatch.setattr(DocumentBuilder, "save", lambda self, filename: saved.append(filename))
+    return saved
+
+
+def test_flexure_results_detailed_doc_limiting_case(saved_docs: list[str]) -> None:
+    """Default call builds the doc from the top/bottom limiting cases."""
+    beam, _ = _build_checked_beam_doc()
+
+    beam.flexure_results_detailed_doc()
+
+    assert saved_docs == ["Beam DOC flexure check ACI 318-19.docx"]
+
+
+def test_flexure_results_detailed_doc_with_force(saved_docs: list[str]) -> None:
+    """Passing an explicit force uses that combination's stored results."""
+    beam, forces = _build_checked_beam_doc()
+
+    beam.flexure_results_detailed_doc(force=forces)
+
+    assert saved_docs == ["Beam DOC flexure check ACI 318-19.docx"]
+
+
+def test_flexure_results_detailed_doc_not_checked(saved_docs: list[str]) -> None:
+    """Without a previous check the method warns and does not build a document."""
+    concrete = Concrete_ACI_318_19(name="C25", f_c=25 * MPa)
+    steel = SteelBar(name="ADN420", f_y=420 * MPa)
+    beam = RectangularBeam(
+        label="DOC",
+        concrete=concrete,
+        steel_bar=steel,
+        width=20 * cm,
+        height=50 * cm,
+        c_c=2.5 * cm,
+    )
+
+    with pytest.warns(UserWarning, match="Flexural check has not been performed"):
+        beam.flexure_results_detailed_doc()
+
+    assert beam._md_flexure_results == "Flexural results are not available."
+    assert saved_docs == []
+
+
+def test_flexure_results_detailed_doc_invalid_force(saved_docs: list[str]) -> None:
+    beam, _ = _build_checked_beam_doc()
+    other_force = Forces(M_y=100 * kNm)
+
+    with pytest.raises(ValueError, match="No results found for Forces object"):
+        beam.flexure_results_detailed_doc(force=other_force)
+
+    assert saved_docs == []
+
+
+@pytest.mark.parametrize("missing_face", ["top", "bot"])
+def test_flexure_results_detailed_doc_missing_limiting_case(saved_docs: list[str], missing_face: str) -> None:
+    """A missing limiting case detail is reported instead of failing later on."""
+    beam, _ = _build_checked_beam_doc()
+    setattr(beam, f"_limiting_case_flexure_{missing_face}_details", None)
+
+    with pytest.raises(ValueError, match="limiting case details are not available"):
+        beam.flexure_results_detailed_doc()
+
+    assert saved_docs == []
+
+
+@pytest.mark.parametrize("missing_face", ["top", "bot"])
+def test_flexure_results_detailed_missing_limiting_case(missing_face: str) -> None:
+    """Same guard as the doc export, on the printed version."""
+    beam, _ = _build_checked_beam_doc()
+    setattr(beam, f"_limiting_case_flexure_{missing_face}_details", None)
+
+    with pytest.raises(ValueError, match="limiting case details are not available"):
+        beam.flexure_results_detailed()
+
+
+def test_shear_results_detailed_doc_limiting_case(saved_docs: list[str]) -> None:
+    beam, _ = _build_checked_beam_doc()
+
+    beam.shear_results_detailed_doc()
+
+    assert saved_docs == ["Beam DOC shear check ACI 318-19.docx"]
+
+
+def test_shear_results_detailed_doc_with_force(saved_docs: list[str]) -> None:
+    beam, forces = _build_checked_beam_doc()
+
+    beam.shear_results_detailed_doc(force=forces)
+
+    assert saved_docs == ["Beam DOC shear check ACI 318-19.docx"]
+
+
+def test_shear_results_detailed_doc_not_checked(saved_docs: list[str]) -> None:
+    concrete = Concrete_ACI_318_19(name="C25", f_c=25 * MPa)
+    steel = SteelBar(name="ADN420", f_y=420 * MPa)
+    beam = RectangularBeam(
+        label="DOC",
+        concrete=concrete,
+        steel_bar=steel,
+        width=20 * cm,
+        height=50 * cm,
+        c_c=2.5 * cm,
+    )
+
+    with pytest.warns(UserWarning, match="Shear check has not been performed"):
+        beam.shear_results_detailed_doc()
+
+    assert beam._md_shear_results == "Shear results are not available."
+    assert saved_docs == []
+
+
+def test_shear_results_detailed_doc_invalid_force(saved_docs: list[str]) -> None:
+    beam, _ = _build_checked_beam_doc()
+    other_force = Forces(V_z=200 * kN)
+
+    with pytest.raises(ValueError, match="No results found for Forces object"):
+        beam.shear_results_detailed_doc(force=other_force)
+
+    assert saved_docs == []
+
+
+def test_results_detailed_doc_write_real_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """End-to-end: the .docx files are actually written to the working directory."""
+    monkeypatch.chdir(tmp_path)
+    beam, _ = _build_checked_beam_doc()
+
+    beam.flexure_results_detailed_doc()
+    beam.shear_results_detailed_doc()
+
+    assert (tmp_path / "Beam DOC flexure check ACI 318-19.docx").is_file()
+    assert (tmp_path / "Beam DOC shear check ACI 318-19.docx").is_file()
+
+
+##########################################################
+# REBAR LABELS AND SECTION PLOT DETAILS
+##########################################################
+
+
+def _plot_beam(
+    n_stirrups: int = 1,
+    d_b_stirrup: Quantity = 8 * mm,
+    s_l: Quantity = 20 * cm,
+    **bottom_rebar: object,
+) -> RectangularBeam:
+    """Metric beam wide enough for intermediate bars, already plotted."""
+    concrete = Concrete_ACI_318_19(name="C25", f_c=25 * MPa)
+    steel = SteelBar(name="ADN420", f_y=420 * MPa)
+    beam = RectangularBeam(
+        label="PLOT",
+        concrete=concrete,
+        steel_bar=steel,
+        width=40 * cm,
+        height=50 * cm,
+        c_c=2.5 * cm,
+    )
+    if n_stirrups > 0:
+        beam.set_transverse_rebar(n_stirrups=n_stirrups, d_b=d_b_stirrup, s_l=s_l)
+    if bottom_rebar:
+        beam.set_longitudinal_rebar_bot(**bottom_rebar)  # type: ignore[arg-type]
+    beam.plot()
+    return beam
+
+
+def test_plot_draws_intermediate_bars() -> None:
+    """n2 > 0 adds the intermediate bars of the layer, with their own diameter."""
+    beam = _plot_beam(n1=2, d_b1=16 * mm, n2=2, d_b2=12 * mm)
+    circles = [p for p in beam._ax.patches if isinstance(p, Circle)]
+
+    radii = sorted(round(c.get_radius(), 4) for c in circles)
+    # 2 bottom side bars Ø16, 2 intermediate Ø12, plus the 2 default top Ø8 bars
+    assert radii == [0.4, 0.4, 0.6, 0.6, 0.8, 0.8]
+
+    texts = [t.get_text() for t in beam._ax.texts]
+    assert "2Ø16+2Ø12" in texts
+
+    plt.close()
+
+
+def test_plot_single_bar_layer_is_centered() -> None:
+    """A one-bar layer is centered instead of spread between the stirrup legs."""
+    beam = _plot_beam(n_stirrups=0, d_b_stirrup=0 * mm, s_l=0 * cm, n1=1, d_b1=16 * mm)
+    circles = [p for p in beam._ax.patches if isinstance(p, Circle)]
+
+    bottom_bar = next(c for c in circles if np.isclose(c.get_radius(), 0.8))
+    # centered on the section, plus the inward corner offset applied to the outermost bar
+    corner_offset = 0.43 * beam._stirrup_d_b.to("cm").magnitude
+    assert np.isclose(bottom_bar.get_center()[0], beam.width.to("cm").magnitude / 2 + corner_offset)
+
+    plt.close()
+
+
+def test_plot_annotates_stirrups_and_draws_two_legs() -> None:
+    beam = _plot_beam(n_stirrups=2, d_b_stirrup=6 * mm, s_l=20 * cm)
+
+    texts = [t.get_text() for t in beam._ax.texts]
+    assert "2eØ6/20" in texts
+
+    fancy_bboxes = [p for p in beam._ax.patches if isinstance(p, FancyBboxPatch)]
+    assert len(fancy_bboxes) == 4, "Two stirrups are drawn as two patches each (outer + inner line)."
+
+    plt.close()
+
+
+def test_plot_three_stirrups_adds_two_inner_ones() -> None:
+    beam = _plot_beam(n_stirrups=3, d_b_stirrup=6 * mm, s_l=15 * cm)
+
+    fancy_bboxes = [p for p in beam._ax.patches if isinstance(p, FancyBboxPatch)]
+    assert len(fancy_bboxes) == 6, "Outer stirrup plus two inner stirrups."
+
+    texts = [t.get_text() for t in beam._ax.texts]
+    assert "3eØ6/15" in texts
+
+    plt.close()
+
+
+def test_plot_without_stirrups_has_no_stirrup_text() -> None:
+    beam = _plot_beam(n_stirrups=0, d_b_stirrup=0 * mm, s_l=0 * cm)
+
+    texts = [t.get_text() for t in beam._ax.texts]
+    assert not any("eØ" in t for t in texts)
+
+    plt.close()
+
+
+def test_plot_show_true_calls_pyplot_show(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[bool] = []
+    monkeypatch.setattr(plt, "show", lambda *args, **kwargs: calls.append(True))
+
+    concrete = Concrete_ACI_318_19(name="C25", f_c=25 * MPa)
+    steel = SteelBar(name="ADN420", f_y=420 * MPa)
+    beam = RectangularBeam(
+        label="PLOT",
+        concrete=concrete,
+        steel_bar=steel,
+        width=20 * cm,
+        height=50 * cm,
+        c_c=2.5 * cm,
+    )
+    beam.plot(show=True)
+
+    assert calls == [True]
+
+    plt.close()
+
+
+@pytest.mark.parametrize(
+    ("args", "expected"),
+    [
+        ((3, 12 * mm, 2, 12 * mm), "5Ø12"),  # slab always merges both groups
+        ((0, None, 4, 10 * mm), "4Ø10"),  # only the second group has bars
+        ((0, None, 0, None), ""),  # nothing to draw
+        ((2, None, 0, None), ""),  # bars without a diameter are ignored
+    ],
+)
+def test_format_rebar_layer_text_slab_mode(args: tuple, expected: str) -> None:
+    beam = build_metric_beam()
+    beam.mode = "slab"
+
+    assert beam._format_rebar_layer_text(*args) == expected
+
+
+@pytest.mark.parametrize(
+    ("args", "expected"),
+    [
+        ((2, 16 * mm, 3, 16 * mm), "5Ø16"),  # same diameter -> merged
+        ((2, 16 * mm, 3, 12 * mm), "2Ø16+3Ø12"),  # different diameters -> both groups
+        ((2, 16 * mm, 0, None), "2Ø16"),
+        ((0, None, 0, None), ""),
+    ],
+)
+def test_format_rebar_layer_text_beam_mode(args: tuple, expected: str) -> None:
+    beam = build_metric_beam()
+
+    assert beam._format_rebar_layer_text(*args) == expected
+
+
+def test_format_longitudinal_rebar_string_only_second_group() -> None:
+    beam = build_metric_beam()
+
+    assert beam._format_longitudinal_rebar_string(0, 0 * mm, 2, 12 * mm) == "2Ø12"
+
+
+##########################################################
+# DEFENSIVE PATHS
+##########################################################
+
+
+def test_shear_results_detailed_with_force() -> None:
+    """The printed shear report can be asked for one specific combination."""
+    beam, forces = _build_checked_beam_doc()
+
+    beam.shear_results_detailed(force=forces)
+
+
+def test_shear_results_detailed_invalid_force() -> None:
+    beam, _ = _build_checked_beam_doc()
+
+    with pytest.raises(ValueError, match="No results found for Forces object"):
+        beam.shear_results_detailed(force=Forces(V_z=200 * kN))
+
+
+def test_flexure_results_markdown_without_top_details() -> None:
+    beam, _ = _build_checked_beam_doc()
+    beam._limiting_case_flexure_top_details = {}
+
+    beam.flexure_results
+
+    assert beam._md_flexure_results.startswith("No top moment to check.")
+
+
+def test_flexure_results_markdown_without_bottom_details() -> None:
+    beam, _ = _build_checked_beam_doc()
+    beam._limiting_case_flexure_bot_details = {}
+
+    beam.flexure_results
+
+    assert beam._md_flexure_results.endswith("No bottom moment to check.")
+
+
+def test_shear_results_markdown_EN_1992_without_stirrups(
+    beam_example_EN_1992_2004_01: RectangularBeam,
+) -> None:
+    """EN 1992 wording, and the 'not assigned' label when there is no transverse rebar."""
+    node = Node(section=beam_example_EN_1992_2004_01, forces=Forces(V_z=30 * kN))
+    node.check_shear()
+
+    beam_example_EN_1992_2004_01.shear_results
+
+    markdown = beam_example_EN_1992_2004_01._md_shear_results
+    assert "Shear reinforcing not assigned" in markdown
+    assert "V_{Rd}" in markdown
+
+
+def test_shear_results_markdown_without_limiting_case() -> None:
+    beam, _ = _build_checked_beam_doc()
+    beam._limiting_case_shear_details = {}
+
+    beam.shear_results
+
+    assert beam._md_shear_results == "No shear to check."
+
+
+def test_get_units_row_flexure_unknown_design_code() -> None:
+    beam = build_metric_beam()
+    beam.concrete.design_code = "NBR 6118-2014"
+
+    with pytest.raises(ValueError, match="Flexure design method not implemented"):
+        beam._get_units_row_flexure()
+
+
+def test_plot_annotates_second_rebar_layer() -> None:
+    """A second bottom layer gets its own label, shifted by the layer spacing."""
+    beam = _plot_beam(n1=2, d_b1=16 * mm, n3=2, d_b3=12 * mm)
+
+    texts = [t.get_text() for t in beam._ax.texts]
+    assert "2Ø16" in texts
+    assert "2Ø12" in texts
+
+    plt.close()
+
+
+def test_clear_top_longitudinal_imperial(beam_example_imperial: RectangularBeam) -> None:
+    beam_example_imperial._clear_top_longitudinal()
+
+    assert beam_example_imperial._n1_t == 0
+    assert beam_example_imperial._d_b1_t.to("inch").magnitude == 0
+
+
+def test_longitudinal_rebar_area_ignores_none_diameters() -> None:
+    """Diameters forced to None (not through the setters) count as zero area."""
+    beam = build_metric_beam()
+    beam.set_longitudinal_rebar_bot(n1=2, d_b1=16 * mm)
+    A_s_bot = beam._A_s_bot
+
+    beam._d_b2_b = None
+    beam._d_b3_b = None
+    beam._calculate_longitudinal_rebar_area()
+
+    assert beam._A_s_bot.magnitude == pytest.approx(A_s_bot.magnitude)
 
 
 # This is where pytest will collect the tests and run them
