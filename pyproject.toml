@@ -48,6 +48,12 @@ extend-exclude = ["build/", "dist/"]
 show-fixes = true
 line-length = 120
 
+[tool.ruff.lint]
+# Pinned explicitly so a new ruff release cannot change the rule set under CI.
+# These are the rules ruff enabled by default up to 0.15.x; 0.16 widened the
+# defaults to UP, RUF, I, B, RET, PL, SIM and more, which fails on this repo.
+select = ["E4", "E7", "E9", "F"]
+
 [tool.mypy]
 packages = ["mento"]
 python_version = "3.10"
