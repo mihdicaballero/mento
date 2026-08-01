@@ -1,0 +1,80 @@
+name: Bug report
+description: Something in mento does not work, or produces a result you believe is wrong
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug.
+
+        If the problem is an **incorrect design result**, please fill in the expected value
+        and its source below — that is what lets us turn your report into a regression test.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened
+      description: A clear description of the problem.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: How to reproduce it
+      description: >
+        A minimal snippet we can run, including materials, geometry and forces.
+      render: python
+      placeholder: |
+        from mento import Concrete_ACI_318_19, SteelBar, RectangularBeam, Node, Forces
+        from mento import MPa, cm, mm, kN
+
+        concrete = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
+        steel = SteelBar(name="ADN 420", f_y=420 * MPa)
+        beam = RectangularBeam(
+            label="101", concrete=concrete, steel_bar=steel,
+            width=20 * cm, height=60 * cm, c_c=25 * mm,
+        )
+        node = Node(section=beam, forces=[Forces(label="1.4D", V_z=80 * kN)])
+        node.check_shear()
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: >
+        For a wrong result, give the expected value **and where it comes from**: a code
+        clause, a design guide, or a worked textbook example.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: mento version
+      description: "Output of `python -c \"import mento; print(mento.__version__)\"`"
+      placeholder: "0.4.1"
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Python version and operating system
+      placeholder: "Python 3.12 on Windows 11"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: design_code
+    attributes:
+      label: Design code involved
+      options:
+        - ACI 318-19
+        - EN 1992-2004
+        - CIRSOC 201-25
+        - Not code specific / not sure
+    validations:
+      required: true

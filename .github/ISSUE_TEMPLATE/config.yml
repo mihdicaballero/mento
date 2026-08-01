@@ -1,0 +1,10 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question, idea or general discussion
+    url: https://github.com/mihdicaballero/mento/discussions
+    about: >
+      Ask how to do something with mento, share how you use it, or float an idea before it
+      becomes an issue.
+  - name: Documentation
+    url: https://mento-docs.readthedocs.io/
+    about: User guide, examples and API reference.

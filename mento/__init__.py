@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ._version import __version__
+
 # Expose units and Quantity directly to the user
 from .units import (
     GPa,
@@ -32,6 +34,7 @@ from .units import (
 
 # Re-export Quantity for user convenience
 __all__ = [
+    "__version__",
     "ureg",
     "m",
     "cm",

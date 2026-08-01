@@ -35,14 +35,6 @@ packages = ["mento", "mento.codes"]
 dependencies = { file = "requirements.txt" }
 
 
-[tool.pylint]
-disable = [
-    "too-many-locals",
-    "too-many-arguments",
-    "too-many-statements",
-]
-max-line-length = 120
-
 [tool.ruff]
 extend-exclude = ["build/", "dist/"]
 show-fixes = true
@@ -71,6 +63,3 @@ addopts = "-ra -q --cov=mento --cov-report=html --cov-report=term-missing -v"
 testpaths = [
     "tests",
 ]
-
-[tool.black]
-target-version = ['py310', 'py311', 'py312']

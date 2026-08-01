@@ -1,0 +1,29 @@
+cff-version: 1.2.0
+title: "mento: an intuitive tool for structural engineers to design concrete elements efficiently"
+message: "If you use mento in your work, please cite it using these metadata."
+type: software
+authors:
+  - family-names: Caballero
+    given-names: "Mehdí"
+    email: mihdicaballero@gmail.com
+  - family-names: Romaris
+    given-names: "Juan Pablo"
+    email: jpromaris@yahoo.com.ar
+repository-code: "https://github.com/mihdicaballero/mento"
+url: "https://mento-docs.readthedocs.io/"
+abstract: >-
+  mento is a Python package for the design and verification of reinforced concrete elements
+  — beams, one way slabs, shear walls and two way slab punching — according to ACI 318-19,
+  EN 1992-2004 and CIRSOC 201-2025. It provides unit aware calculations, results as pandas
+  DataFrames for batch work, and detailed calculation reports in Word.
+keywords:
+  - structural engineering
+  - reinforced concrete
+  - concrete design
+  - structural analysis
+  - ACI 318
+  - Eurocode 2
+  - CIRSOC 201
+  - Python
+license: MIT
+version: 0.4.1
