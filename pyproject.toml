@@ -99,7 +99,9 @@ select = ["E4", "E7", "E9", "F"]
 
 [tool.mypy]
 packages = ["mento"]
-python_version = "3.10"
+# 3.12 rather than the minimum supported 3.10: numpy 2.x ships stubs that use
+# PEP 695 `type` statements, which mypy cannot parse under an older target.
+python_version = "3.12"
 strict = true
 allow_any_generics = true
 ignore_missing_imports = true

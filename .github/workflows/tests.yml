@@ -84,6 +84,11 @@ jobs:
           python-version: "3.12"
           cache: "pip"
 
+      - name: Install pandoc
+        # nbsphinx shells out to pandoc to convert the markdown cells of the
+        # example notebooks; it is not a pip dependency.
+        run: sudo apt-get update && sudo apt-get install -y pandoc
+
       - name: Install package and docs dependencies
         run: |
           python -m pip install --upgrade pip
