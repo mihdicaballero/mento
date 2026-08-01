@@ -1,12 +1,18 @@
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace  # Removes trailing whitespace
       - id: end-of-file-fixer    # Ensures files end with a newline
       - id: check-yaml           # Validates YAML files
+      - id: check-toml           # Validates TOML files
+      - id: check-merge-conflict # Catches merge conflict markers
+      - id: check-added-large-files
+        args: ["--maxkb=2000"]
+  # Keep this version in the same series as the `ruff` pin in requirements_dev.txt,
+  # so the hook, CI and a local `ruff format` all agree on the formatting.
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.2  # update as needed
+    rev: v0.15.22
     hooks:
       - id: ruff
         args: ["--fix"]

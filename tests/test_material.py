@@ -17,14 +17,12 @@ from mento.units import kg, m, MPa, ksi, GPa, psi, Pa, lb, ft, kPa, mm
 
 
 # Helper to check if a quantity matches another, allowing for slight float differences
-def assert_quantity_equal(
-    q1: Quantity, q2: Quantity, rtol: float = 1e-6, atol: float = 1e-9
-) -> None:
+def assert_quantity_equal(q1: Quantity, q2: Quantity, rtol: float = 1e-6, atol: float = 1e-9) -> None:
     """Asserts two Pint Quantities are numerically and unit-wise equal."""
     assert q1.units == q2.units, f"Units mismatch: {q1.units} vs {q2.units}"
-    assert (
-        pytest.approx(q1.magnitude, rel=rtol, abs=atol) == q2.magnitude
-    ), f"Magnitudes mismatch: {q1.magnitude} (actual) vs {q2.magnitude} (expected) with units {q1.units}"
+    assert pytest.approx(q1.magnitude, rel=rtol, abs=atol) == q2.magnitude, (
+        f"Magnitudes mismatch: {q1.magnitude} (actual) vs {q2.magnitude} (expected) with units {q1.units}"
+    )
 
 
 # --- Tests for Material (Base Class) ---
@@ -93,9 +91,7 @@ def test_concrete_get_properties() -> None:
     props = concrete.get_properties()
     assert_quantity_equal(props["f_c"], 30 * MPa)
     assert_quantity_equal(props["density"], 2500 * kg / m**3)
-    assert (
-        "design_code" not in props
-    )  # Base get_properties only includes f_c and density
+    assert "design_code" not in props  # Base get_properties only includes f_c and density
 
 
 # --- Tests for Concrete_ACI_318_19 ---
@@ -131,9 +127,7 @@ def test_aci_initialization_metric(aci_metric_concrete: Concrete_ACI_318_19) -> 
     assert pytest.approx(aci_metric_concrete.lambda_factor) == 1.0  # Normalweight
     assert pytest.approx(aci_metric_concrete.phi_v) == 0.75
     assert pytest.approx(aci_metric_concrete.phi_c) == 0.65
-    assert (
-        pytest.approx(aci_metric_concrete.phi_y) == 0.90
-    )  # Note: property is phi_y but uses _phi_t
+    assert pytest.approx(aci_metric_concrete.phi_y) == 0.90  # Note: property is phi_y but uses _phi_t
 
 
 def test_aci_initialization_imperial(
@@ -148,26 +142,26 @@ def test_aci_initialization_imperial(
 
     # Expected values for 4000 psi concrete (imperial)
     # E_c = (155^1.5) * 33 * sqrt(4000) * psi = 1930.5 * 33 * 63.245 * psi = 4030635.7 psi ~ 4.03e6 psi
-    assert_quantity_equal(
-        aci_imperial_concrete.E_c, (155**1.5) * 33 * math.sqrt(4000) * psi
-    )
+    assert_quantity_equal(aci_imperial_concrete.E_c, (155**1.5) * 33 * math.sqrt(4000) * psi)
     # f_r = 7.5 * sqrt(4000) * psi = 7.5 * 63.245 * psi = 474.34 psi
     assert_quantity_equal(aci_imperial_concrete.f_r, 7.5 * math.sqrt(4000) * psi)
     # For beta_1, f_c must be in MPa. 4000 psi = 27.579 MPa.
     # 17 <= 27.579 <= 28, so beta_1 should be 0.85
     assert pytest.approx(aci_imperial_concrete.beta_1) == 0.85
+
+
 # Test __beta_1 calculation ranges - metric
 @pytest.mark.parametrize(
     "f_c_value, expected_beta_1",
     [
-        (10 * MPa, 0.85),   # fc < 17 MPa → else branch (0.85)
-        (17 * MPa, 0.85),   # boundary inferior de la zona plana
-        (20 * MPa, 0.85),   # zona plana
-        (28 * MPa, 0.85),   # boundary exacto 28 MPa
+        (10 * MPa, 0.85),  # fc < 17 MPa → else branch (0.85)
+        (17 * MPa, 0.85),  # boundary inferior de la zona plana
+        (20 * MPa, 0.85),  # zona plana
+        (28 * MPa, 0.85),  # boundary exacto 28 MPa
         (30 * MPa, 0.85 - 0.05 / 7 * (30 - 28)),  # 28 < fc ≤ 55 MPa
         (40 * MPa, 0.85 - 0.05 / 7 * (40 - 28)),
         (55 * MPa, 0.85 - 0.05 / 7 * (55 - 28)),  # boundary del cap
-        (60 * MPa, 0.65),   # fc > 55 MPa → cap mínimo
+        (60 * MPa, 0.65),  # fc > 55 MPa → cap mínimo
         (70 * MPa, 0.65),
     ],
 )
@@ -182,25 +176,24 @@ def test_aci_beta_1_metric(f_c_value: Quantity, expected_beta_1: float) -> None:
     concrete = Concrete_ACI_318_19(name="C_metric", f_c=f_c_value)
     assert pytest.approx(concrete.beta_1) == expected_beta_1
 
-    
+
 @pytest.mark.parametrize(
     "fc_psi, expected_beta_1",
     [
         # fc <= 4000 psi → β₁ = 0.85 (zona plana)
         (2500, 0.85),
         (3000, 0.85),
-        (4000, 0.85),   # boundary exacto
+        (4000, 0.85),  # boundary exacto
         # 4000 < fc <= 8000 psi → β₁ = 0.85 - 0.05/1000 * (fc - 4000)
         (5000, 0.80),
-        (6000, 0.75),   # el caso que fallaba en Test_Etabs_05
+        (6000, 0.75),  # el caso que fallaba en Test_Etabs_05
         (7000, 0.70),
-        (8000, 0.65),   # boundary exacto del cap
+        (8000, 0.65),  # boundary exacto del cap
         # fc > 8000 psi → β₁ = 0.65 (mínimo)
         (9000, 0.65),
         (12000, 0.65),
     ],
 )
-
 def test_aci_beta_1_imperial(fc_psi: float, expected_beta_1: float) -> None:
     """
     Verifica β₁ para hormigones imperiales (psi) según ACI 318-19.
@@ -216,6 +209,7 @@ def test_aci_beta_1_imperial(fc_psi: float, expected_beta_1: float) -> None:
     concrete = Concrete_ACI_318_19(name=f"fc{fc_psi}", f_c=fc_psi * psi)
     assert pytest.approx(concrete.beta_1, rel=1e-3) == expected_beta_1
 
+
 def test_aci_get_properties(aci_metric_concrete: Concrete_ACI_318_19) -> None:
     """Test get_properties for ACI concrete."""
     props = aci_metric_concrete.get_properties()
@@ -228,9 +222,7 @@ def test_aci_get_properties(aci_metric_concrete: Concrete_ACI_318_19) -> None:
     assert pytest.approx(props["lambda"]) == aci_metric_concrete.lambda_factor
     assert pytest.approx(props["phi_v"]) == aci_metric_concrete.phi_v
     assert pytest.approx(props["phi_c"]) == aci_metric_concrete.phi_c
-    assert (
-        pytest.approx(props["phi_t"]) == aci_metric_concrete.phi_y
-    )  # Check the name mapping
+    assert pytest.approx(props["phi_t"]) == aci_metric_concrete.phi_y  # Check the name mapping
 
 
 def test_aci_str_representation(aci_metric_concrete: Concrete_ACI_318_19) -> None:
@@ -246,9 +238,7 @@ def test_aci_str_representation(aci_metric_concrete: Concrete_ACI_318_19) -> Non
     assert f"  λ: {aci_metric_concrete.lambda_factor:.2f}" in s
     assert f"  phi_v: {aci_metric_concrete.phi_v:.2f}" in s
     assert f"  phi_c: {aci_metric_concrete.phi_c:.2f}" in s
-    assert (
-        f"  phi_t: {aci_metric_concrete.phi_y:.2f}" in s
-    )  # Using phi_y as per __str__ output
+    assert f"  phi_t: {aci_metric_concrete.phi_y:.2f}" in s  # Using phi_y as per __str__ output
 
 
 # --- Tests for Concrete_CIRSOC_201_25 ---
@@ -264,9 +254,7 @@ def test_cirsoc_initialization() -> None:
     assert_quantity_equal(concrete.density, 2500 * kg / m**3)
     # Verify inherited properties are calculated based on ACI logic
     assert_quantity_equal(concrete.E_c, ((2500**1.5) * 0.043 * math.sqrt(30)) * MPa)
-    assert pytest.approx(concrete.beta_1) == (
-        0.85 - 0.05 / 7 * (30 - 28)
-    )  # Should follow ACI beta_1 logic
+    assert pytest.approx(concrete.beta_1) == (0.85 - 0.05 / 7 * (30 - 28))  # Should follow ACI beta_1 logic
 
 
 # --- Tests for Concrete_EN_1992_2004 ---
@@ -294,9 +282,7 @@ def test_en_initialization_c30(en_concrete_c30: Concrete_EN_1992_2004) -> None:
 
     # Expected values for C30/37 (f_ck=30 MPa)
     assert_quantity_equal(en_concrete_c30.f_ck, 30 * MPa)
-    assert_quantity_equal(
-        en_concrete_c30.f_cm, 30 * MPa + 8 * MPa
-    )  # f_ck + 8 MPa = 38 MPa
+    assert_quantity_equal(en_concrete_c30.f_cm, 30 * MPa + 8 * MPa)  # f_ck + 8 MPa = 38 MPa
     # E_cm = 22000 * (38/10)^0.3 * MPa = 22000 * 3.8^0.3 * MPa = 22000 * 1.488 * MPa = 32736 MPa
     assert_quantity_equal(en_concrete_c30.E_cm, 22000 * (3.8) ** 0.3 * MPa)
     # f_ctm = 0.3 * (30)^(2/3) * MPa = 0.3 * 9.6548 * MPa = 2.89644 MPa
@@ -317,12 +303,8 @@ def test_en_initialization_c60(en_concrete_c60: Concrete_EN_1992_2004) -> None:
     # Expected values for C60/75 (f_ck=60 MPa)
     assert_quantity_equal(en_concrete_c60.f_ck, 60 * MPa)
     assert_quantity_equal(en_concrete_c60.f_cm, 60 * MPa + 8 * MPa)  # 68 MPa
-    assert pytest.approx(en_concrete_c60.Lambda_factor) == (
-        0.8 - (60 - 50) / 400
-    )  # 0.8 - 10/400 = 0.775
-    assert pytest.approx(en_concrete_c60.Eta_factor) == (
-        1.0 - (60 - 50) / 200
-    )  # 1.0 - 10/200 = 0.95
+    assert pytest.approx(en_concrete_c60.Lambda_factor) == (0.8 - (60 - 50) / 400)  # 0.8 - 10/400 = 0.775
+    assert pytest.approx(en_concrete_c60.Eta_factor) == (1.0 - (60 - 50) / 200)  # 1.0 - 10/200 = 0.95
 
 
 def test_en_get_properties(en_concrete_c30: Concrete_EN_1992_2004) -> None:
@@ -407,9 +389,7 @@ def test_steel_bar_initialization_imperial(steel_bar_grade60: SteelBar) -> None:
     """Test SteelBar initialization in imperial."""
     assert steel_bar_grade60.name == "Grade 60"
     assert_quantity_equal(steel_bar_grade60.f_y, 60 * ksi)
-    assert_quantity_equal(
-        steel_bar_grade60.E_s, 200 * GPa
-    )  # E_s is hardcoded to 200 GPa
+    assert_quantity_equal(steel_bar_grade60.E_s, 200 * GPa)  # E_s is hardcoded to 200 GPa
     # Convert E_s to psi for comparison: 200 GPa = 200e9 Pa = 29007550 psi ~ 29000 ksi
     # epsilon_y = 60 ksi / 29007.55 ksi = 0.002068
     expected_epsilon_y = (60 * ksi) / (200 * GPa).to("ksi")

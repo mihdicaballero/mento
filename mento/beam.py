@@ -826,7 +826,7 @@ class RectangularBeam(RectangularSection):
     def flexure_results(self) -> None:
         if not self._flexure_checked:
             warnings.warn(
-                "Flexural design has not been performed yet. Call _check_flexure() or " "design_flexure() first.",
+                "Flexural design has not been performed yet. Call _check_flexure() or design_flexure() first.",
                 UserWarning,
             )
             self._md_flexure_results = "Flexural results are not available."
@@ -899,7 +899,7 @@ class RectangularBeam(RectangularSection):
     def shear_results(self) -> None:
         if not self._shear_checked:
             warnings.warn(
-                "Shear design has not been performed yet. Call check_shear() or " "design_shear() first.",
+                "Shear design has not been performed yet. Call check_shear() or design_shear() first.",
                 UserWarning,
             )
             self._md_shear_results = "Shear results are not available."
@@ -972,7 +972,7 @@ class RectangularBeam(RectangularSection):
         """
         if not self._flexure_checked:
             warnings.warn(
-                "Flexural check has not been performed yet. Call _check_flexure or " "design_flexure first.",
+                "Flexural check has not been performed yet. Call _check_flexure or design_flexure first.",
                 UserWarning,
             )
             self._md_flexure_results = "Flexure results are not available."
@@ -1087,7 +1087,7 @@ class RectangularBeam(RectangularSection):
         """
         if not self._flexure_checked:
             warnings.warn(
-                "Flexural check has not been performed yet. Call _check_flexure or " "design_flexure first.",
+                "Flexural check has not been performed yet. Call _check_flexure or design_flexure first.",
                 UserWarning,
             )
             self._md_flexure_results = "Flexural results are not available."
@@ -1218,7 +1218,7 @@ class RectangularBeam(RectangularSection):
         """
         if not self._shear_checked:
             warnings.warn(
-                "Shear check has not been performed yet. Call check_shear or " "design_shear first.",
+                "Shear check has not been performed yet. Call check_shear or design_shear first.",
                 UserWarning,
             )
             self._md_shear_results = "Shear results are not available."
@@ -1259,7 +1259,7 @@ class RectangularBeam(RectangularSection):
         """
         if not self._shear_checked:
             warnings.warn(
-                "Shear check has not been performed yet. Call check_shear or " "design_shear first.",
+                "Shear check has not been performed yet. Call check_shear or design_shear first.",
                 UserWarning,
             )
             self._md_shear_results = "Shear results are not available."

@@ -467,7 +467,7 @@ def _select_wall_mesh(
     result = _best(capped) or _best(bar_list)  # tier 1, then fallback
     if result is None:
         raise ValueError(
-            f"No standard bar can satisfy ρ ≥ {rho_req:.5f} " f"with spacing in [{s_floor:.0f~P}, {s_max:.0f~P}]."
+            f"No standard bar can satisfy ρ ≥ {rho_req:.5f} with spacing in [{s_floor:.0f~P}, {s_max:.0f~P}]."
         )
     return result[1], result[2]
 

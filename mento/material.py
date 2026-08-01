@@ -81,29 +81,17 @@ class Concrete_ACI_318_19(Concrete):
         super().__post_init__()
         # Adjust calculations based on unit system
         if self.unit_system == "metric":
-            self._E_c = (
-                ((self.density / (kg / m**3)) ** 1.5)
-                * 0.043
-                * math.sqrt(self.f_c / MPa)
-                * MPa
-            )
+            self._E_c = ((self.density / (kg / m**3)) ** 1.5) * 0.043 * math.sqrt(self.f_c / MPa) * MPa
             self._f_r = 0.625 * math.sqrt(self.f_c / MPa) * MPa
         else:  # imperial
-            self._E_c = (
-                ((self.density / (lb / ft**3)) ** 1.5)
-                * 33
-                * math.sqrt(self.f_c / psi)
-                * psi
-            )
+            self._E_c = ((self.density / (lb / ft**3)) ** 1.5) * 33 * math.sqrt(self.f_c / psi) * psi
             self._f_r = 7.5 * math.sqrt(self.f_c / psi) * psi
         self._beta_1 = self.__beta_1()
         self._lambda = 1  # Normalweight concrete
         self._phi_v = 0.75  # Shear strength reduction factor
         self._phi_c = 0.65  # Compression controlled strength reduction factor
         self._phi_t = 0.90  # Tension controlled strength reduction factor
-        self._flexural_min_reduction = (
-            True  # True selects 4/3 of calculated steel if it's less than minimum
-        )
+        self._flexural_min_reduction = True  # True selects 4/3 of calculated steel if it's less than minimum
 
     def get_properties(self) -> Dict[str, Any]:
         properties = super().get_properties()
@@ -116,7 +104,8 @@ class Concrete_ACI_318_19(Concrete):
         properties["phi_c"] = self._phi_c
         properties["phi_t"] = self._phi_t
         return properties
-    '''
+
+    """
     def __beta_1(self) -> float:
         # Table 22.2.2.4.3—Values of β1 for equivalent rectangular concrete stress distribution
         # Page 399
@@ -130,7 +119,8 @@ class Concrete_ACI_318_19(Concrete):
         else:
             # Handle case where f_c / MPa < 17
             return 0.85
-    '''
+    """
+
     def __beta_1(self) -> float:
         if self.unit_system == "metric":
             fc_MPa = self.f_c.to("MPa").magnitude
@@ -245,29 +235,19 @@ class Concrete_EN_1992_2004(Concrete):
         self._E_cm = 22000 * (self._f_cm.to("MPa").magnitude / 10) ** 0.3 * MPa
         self._f_ctm = 0.3 * (self._f_ck.to("MPa").magnitude) ** (2 / 3) * MPa
         self._epsilon_cu1 = (
-            2.8 + 27 * ((98 - self._f_cm.to("MPa").magnitude) / 100) ** 4
-            if self._f_ck >= 50 * MPa
-            else 3.5
+            2.8 + 27 * ((98 - self._f_cm.to("MPa").magnitude) / 100) ** 4 if self._f_ck >= 50 * MPa else 3.5
         ) * 1e-3
         self._epsilon_c2 = (
-            2.0 + 0.085 * ((self._f_ck.to("MPa").magnitude - 50)) ** 0.53
-            if self._f_ck >= 50 * MPa
-            else 2.0
+            2.0 + 0.085 * (self._f_ck.to("MPa").magnitude - 50) ** 0.53 if self._f_ck >= 50 * MPa else 2.0
         ) * 1e-3
         self._epsilon_cu2 = (
-            2.6 + 35 * ((90 - self._f_ck.to("MPa").magnitude) / 100) ** 4
-            if self._f_ck >= 50 * MPa
-            else 3.5
+            2.6 + 35 * ((90 - self._f_ck.to("MPa").magnitude) / 100) ** 4 if self._f_ck >= 50 * MPa else 3.5
         ) * 1e-3
         self._epsilon_c3 = (
-            1.75 + 0.55 * ((self._f_ck.to("MPa").magnitude - 50) / 40)
-            if self._f_ck >= 50 * MPa
-            else 1.75
+            1.75 + 0.55 * ((self._f_ck.to("MPa").magnitude - 50) / 40) if self._f_ck >= 50 * MPa else 1.75
         ) * 1e-3
         self._epsilon_cu3 = (
-            2.6 + 35 * ((90 - self._f_ck.to("MPa").magnitude) / 100) ** 4
-            if self._f_ck >= 50 * MPa
-            else 3.5
+            2.6 + 35 * ((90 - self._f_ck.to("MPa").magnitude) / 100) ** 4 if self._f_ck >= 50 * MPa else 3.5
         ) * 1e-3
         self._gamma_c = 1.5
         self._gamma_s = 1.15
@@ -417,9 +397,7 @@ class SteelBar(Steel):
     _E_s: Quantity = field(default=200 * GPa)
     _epsilon_y: Quantity = field(init=False)
 
-    def __init__(
-        self, name: str, f_y: Quantity, density: Quantity = 7850 * kg / m**3
-    ):
+    def __init__(self, name: str, f_y: Quantity, density: Quantity = 7850 * kg / m**3):
         super().__init__(name, f_y, density)
         self._epsilon_y = f_y.to("MPa") / (self._E_s.to("MPa"))  # 21.2.2.1 - Page 392
 
@@ -458,9 +436,7 @@ class SteelStrand(Steel):
     prestress_stress: Quantity = field(default=0 * MPa)
     _epsilon_y: Quantity = field(init=False)
 
-    def __init__(
-        self, name: str, f_y: Quantity, density: Quantity = 7850 * kg / m**3
-    ):
+    def __init__(self, name: str, f_y: Quantity, density: Quantity = 7850 * kg / m**3):
         super().__init__(name, f_y, density)
         self._epsilon_y = self._f_y / self._E_s
 

@@ -10,9 +10,9 @@ from mento.units import mm, inch
 def assert_quantity_equal(q1: Quantity, q2: Quantity, rtol: float = 1e-9) -> None:
     """Asserts two Pint Quantities are numerically and unit-wise equal."""
     assert q1.units == q2.units, f"Units mismatch: {q1.units} vs {q2.units}"
-    assert (
-        pytest.approx(q1.magnitude, rel=rtol) == q2.magnitude
-    ), f"Magnitudes mismatch: {q1.magnitude} vs {q2.magnitude}"
+    assert pytest.approx(q1.magnitude, rel=rtol) == q2.magnitude, (
+        f"Magnitudes mismatch: {q1.magnitude} vs {q2.magnitude}"
+    )
 
 
 # --- Fixtures ---
