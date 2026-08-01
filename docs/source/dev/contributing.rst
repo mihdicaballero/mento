@@ -52,9 +52,11 @@ Mento requires Python 3.10 or newer.
     $ cd mento
     $ python -m venv venv
     $ source venv/bin/activate      # Windows: venv\Scripts\activate
-    $ pip install -e .
-    $ pip install -r requirements_dev.txt
+    $ pip install -e ".[dev]"
     $ pre-commit install
+
+The ``[dev]`` extra brings in the test suite, ruff, mypy and pre-commit. There is also
+``[docs]`` for building the documentation, and ``[test]`` if you only need to run tests.
 
 Development workflow
 --------------------
@@ -84,7 +86,7 @@ To build the documentation:
 
 .. code-block:: bash
 
-    $ pip install -r docs/requirements_docs.txt
+    $ pip install -e ".[docs]"
     $ cd docs
     $ make html
 

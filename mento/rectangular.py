@@ -1,7 +1,7 @@
 from typing import Optional
 from dataclasses import dataclass, field
 from pint import Quantity
-import matplotlib.pyplot as plt
+from matplotlib.axes import Axes
 
 from mento.section import Section
 
@@ -29,7 +29,7 @@ class RectangularSection(Section):
     # Fields unique to RectangularSection
     width: Quantity = field(kw_only=True)
     height: Quantity = field(kw_only=True)
-    _ax: Optional[plt.Axes] = field(default=None, init=False, repr=False)
+    _ax: Optional[Axes] = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         super().__post_init__()

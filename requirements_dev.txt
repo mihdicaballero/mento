@@ -1,22 +1,10 @@
-devtools
-ruff
-pint
-pytest
-pytest-cov
-numpy==1.26.4
-pandas
-IPython
-mypy
-tabulate
-python-docx
-jinja2
-seaborn
-sphinx
-nbsphinx
-sphinx_book_theme
-sphinx_design
-sphinx-copybutton
-pre-commit
-matplotlib
-openpyxl
-types-tabulate
+# Development dependencies are declared in pyproject.toml, under the [dev]
+# extra. This file installs them, and is kept so that existing setups that
+# reference it keep working.
+#
+#     pip install -r requirements_dev.txt
+#
+# is equivalent to
+#
+#     pip install -e ".[dev]"
+-e .[dev]

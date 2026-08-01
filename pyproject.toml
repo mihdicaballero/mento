@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "mento"
-version = "0.4.1"
+version = "0.5.0"
 description = "An intuitive tool for structural engineers to design concrete elements efficiently."
 readme = "README.md"
 authors = [
@@ -13,27 +13,78 @@ authors = [
 ]
 license = {text = "MIT"}
 classifiers = [
-    "Programming Language :: Python :: 3",
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Typing :: Typed",
 ]
-dynamic = ["dependencies"]
 requires-python = ">=3.10"
 keywords = [
     "concrete design",
     "structural engineering",
     "structural analysis",
+    "reinforced concrete",
+    "ACI 318",
+    "Eurocode 2",
+    "CIRSOC 201",
+]
+dependencies = [
+    "pint>=0.24",
+    "numpy>=1.26",
+    "pandas>=2.0",
+    "matplotlib>=3.8",
+    "seaborn>=0.13",
+    "tabulate>=0.9",
+    "python-docx>=1.1",
+    "openpyxl>=3.1",
+    "jinja2>=3.1",
+    "IPython>=8.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+]
+dev = [
+    "mento[test]",
+    "ruff>=0.15.22,<0.16",
+    "mypy>=1.15",
+    "pandas-stubs",
+    "types-tabulate",
+    "pre-commit",
+    "devtools",
+    "ipykernel",
+]
+docs = [
+    "sphinx>=7.2",
+    "nbsphinx>=0.9",
+    "sphinx-book-theme>=1.1",
+    "sphinx-copybutton",
+    "sphinx-design",
+    "ipykernel",
+    "jupyter-client",
+    "pygments>=2.4",
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/mihdicaballero/mento"
+Homepage = "https://github.com/mihdicaballero/mento"
+Documentation = "https://mento-docs.readthedocs.io/"
+Repository = "https://github.com/mihdicaballero/mento"
+Issues = "https://github.com/mihdicaballero/mento/issues"
+Changelog = "https://github.com/mihdicaballero/mento/blob/main/CHANGELOG.md"
 
 [tool.setuptools]
 packages = ["mento", "mento.codes"]
-
-[tool.setuptools.dynamic]
-dependencies = { file = "requirements.txt" }
-
 
 [tool.ruff]
 extend-exclude = ["build/", "dist/"]
@@ -51,6 +102,30 @@ packages = ["mento"]
 python_version = "3.10"
 strict = true
 allow_any_generics = true
+ignore_missing_imports = true
+# pint's arithmetic on Quantity is typed as returning Any, so nearly every
+# property that computes a physical quantity would trip warn_return_any.
+warn_return_any = false
+
+# Modules that do not pass strict type checking yet. Continuous integration
+# enforces mypy on everything else, so already-clean modules cannot regress.
+# When you clean one of these up, delete its entry — do not add new ones.
+[[tool.mypy.overrides]]
+module = [
+    "mento.beam",
+    "mento.codes.ACI_318_19_beam",
+    "mento.codes.ACI_318_19_wall",
+    "mento.codes.EN_1992_2004_beam",
+    "mento.node",
+    "mento.punching",
+    "mento.rebar",
+    "mento.results",
+    "mento.shear_wall",
+    "mento.slab",
+    "mento.summary",
+    "mento.units",
+]
+ignore_errors = true
 
 [[tool.mypy.overrides]]
 module = "tests.*"

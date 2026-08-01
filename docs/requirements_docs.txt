@@ -1,25 +1,10 @@
-sphinx==7.2.0
-nbsphinx==0.9.1
-ipython==8.27.0
-matplotlib
-mip>=1.13
-numpy
-pytest
-jupyter_client
-ipykernel
-ipython
-graphviz
-xarray
-pooch
-sparse
-dask[complete]
-setuptools>=41.2
-Serialize
-pygments>=2.4
-sphinx-book-theme>=1.1.0
-sphinx_copybutton
-sphinx_design
-typing_extensions
-doc8
-rstcheck
-devtools
+# Documentation dependencies are declared in pyproject.toml, under the [docs]
+# extra. Read the Docs installs that extra directly (see .readthedocs.yaml);
+# this file is kept for local builds.
+#
+#     pip install -r docs/requirements_docs.txt
+#
+# is equivalent to
+#
+#     pip install -e ".[docs]"
+-e ..[docs]

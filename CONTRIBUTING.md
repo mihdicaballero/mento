@@ -47,8 +47,7 @@ git clone https://github.com/mihdicaballero/mento.git
 cd mento
 python -m venv venv
 source venv/bin/activate      # Windows: venv\Scripts\activate
-pip install -e .
-pip install -r requirements_dev.txt
+pip install -e ".[dev]"
 pre-commit install
 ```
 
@@ -57,10 +56,12 @@ Conda works equally well if you prefer it:
 ```bash
 conda create -n mento python=3.12
 conda activate mento
-pip install -e .
-pip install -r requirements_dev.txt
+pip install -e ".[dev]"
 pre-commit install
 ```
+
+The `[dev]` extra brings in the test suite, ruff, mypy and pre-commit. There is also
+`[docs]` for building the documentation, and `[test]` if you only need to run tests.
 
 ## Development workflow
 
@@ -110,9 +111,15 @@ ruff format .          # format
 mypy mento/            # strict type checking
 ```
 
-mento is fully typed and mypy runs in `strict` mode. New code needs complete type
-annotations, including for pint quantities. Tests are exempt from requiring annotations,
-but the package itself is not.
+mento is typed and mypy runs in `strict` mode. New code needs complete type annotations,
+including for pint quantities. Tests are exempt from requiring annotations, but the package
+itself is not.
+
+Some modules do not pass strict checking yet; they are listed explicitly in the `[tool.mypy]`
+overrides in `pyproject.toml`. Everything else is enforced in CI, so a clean module cannot
+regress. Cleaning up one of the listed modules and deleting its entry from that list is a
+genuinely useful contribution — please do it in a pull request of its own, separate from any
+behaviour change.
 
 The line limit is 120 characters. `pre-commit` runs ruff and the formatter automatically on
 commit, and continuous integration runs the same checks without auto-fixing.
@@ -122,7 +129,7 @@ commit, and continuous integration runs the same checks without auto-fixing.
 Documentation lives in `docs/source` and is built with Sphinx.
 
 ```bash
-pip install -r docs/requirements_docs.txt
+pip install -e ".[docs]"
 cd docs
 make html
 ```

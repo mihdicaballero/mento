@@ -43,8 +43,9 @@ If you don't have Python installed or want to quickly try Mento, you can use Goo
 
    You can find detailed examples in the `Examples` section of the documentation:
 
-   - :ref:`Beam Summary <examples/beam_summary>`
-   - :ref:`Rectangular Beam Check <examples/rectangular_beam_check>`
+   - :doc:`Rectangular Beam Check <../examples/rectangular_beam_check_ACI_318-19>`
+   - :doc:`Rectangular Beam Design <../examples/rectangular_beam_design_ACI_318-19>`
+   - :doc:`Beam Summary <../examples/beam_summary_ACI_318-19>`
 
 5. **Run your code**: Press :kbd:`Shift` + :kbd:`Enter` to execute each cell
 
