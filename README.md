@@ -40,13 +40,6 @@ result: given a section, its materials and a set of load combinations, it return
 required reinforcement, the demand-to-capacity ratios, and a calculation report you can hand
 to a reviewer.
 
-That is a different job from general section analysis. If you need moment-curvature
-response, interaction diagrams or stress analysis of arbitrary cross sections,
-[concrete-properties](https://github.com/robbievanleeuwen/concrete-properties) is the tool
-for that, and the two are complementary. For frame analysis to obtain the forces you feed
-into mento, look at [anaStruct](https://github.com/anastruct/anaStruct) or
-[PlaneSections](https://github.com/cslotboom/planesections).
-
 mento is also, as far as we know, the only open source package that implements
 **CIRSOC 201-2025**, the Argentinian concrete design standard.
 
