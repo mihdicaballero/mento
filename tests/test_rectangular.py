@@ -17,9 +17,7 @@ def steel_b500s() -> SteelBar:
 
 
 @pytest.fixture()
-def basic_rectangular_section(
-    concrete_c25: Concrete, steel_b500s: SteelBar
-) -> RectangularSection:
+def basic_rectangular_section(concrete_c25: Concrete, steel_b500s: SteelBar) -> RectangularSection:
     """Fixture for a basic RectangularSection instance."""
     return RectangularSection(
         label="R101",

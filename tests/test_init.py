@@ -202,6 +202,7 @@ def test_all_exports_in_all() -> None:
     import mento
 
     expected_exports = [
+        "__version__",
         "ureg",
         "m",
         "cm",
@@ -246,6 +247,14 @@ def test_all_exports_in_all() -> None:
     ]
 
     assert set(mento.__all__) == set(expected_exports)
+
+
+def test_version_is_exposed() -> None:
+    """The package version is reachable as mento.__version__."""
+    import mento
+
+    assert isinstance(mento.__version__, str)
+    assert mento.__version__
 
 
 def test_lazy_loading_caches_imports() -> None:

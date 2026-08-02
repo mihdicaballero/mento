@@ -66,7 +66,7 @@ class Formatter:
         else:
             color = self.red
 
-        return f"$\\color{{{color}}}{{\\text{{DCR}}={round(DCR,2)}}}$"
+        return f"$\\color{{{color}}}{{\\text{{DCR}}={round(DCR, 2)}}}$"
 
     def DCR_value(self, DCR: float) -> str:
         # Determine color based on DCR value
@@ -77,7 +77,7 @@ class Formatter:
         else:
             color = self.red
 
-        return f"$\\color{{{color}}}{{{round(DCR,2)}}}$"
+        return f"$\\color{{{color}}}{{{round(DCR, 2)}}}$"
 
     def is_lower(self, value1: float, value2: float) -> str:
         # Compare two values and return the appropriate formatted output

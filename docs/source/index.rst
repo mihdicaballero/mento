@@ -67,3 +67,16 @@ If you are new to Mento, check out our :ref:`Getting Started <getting_started/in
       :margin: 2 2 auto auto
 
       Learn how to contribute to Mento.
+
+.. raw:: html
+
+   <hr>
+
+Disclaimer
+----------
+
+Mento is a tool to assist structural engineers, not a replacement for engineering judgement.
+Results must be reviewed and accepted by a qualified engineer, who takes responsibility for
+the design. The software is provided "as is", without warranty of any kind, and the authors
+accept no liability for its use. Always verify the output against the applicable design code
+before relying on it for a real structure.

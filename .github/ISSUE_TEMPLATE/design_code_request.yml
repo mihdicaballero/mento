@@ -1,0 +1,96 @@
+name: Design code or check request
+description: Ask for a new design code, a new clause, or a check mento does not cover yet
+labels: ["design-code", "enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        mento implements design codes clause by clause, and every calculation has to be
+        validated against a published example before it is merged. The more of the
+        information below you can give us, the faster this can be picked up — by us or by
+        another contributor.
+
+  - type: input
+    id: standard
+    attributes:
+      label: Standard
+      description: Full name and edition.
+      placeholder: "EN 1992-1-1:2004, ACI 318-19, CIRSOC 201-2025, NBR 6118:2014 ..."
+    validations:
+      required: true
+
+  - type: input
+    id: clause
+    attributes:
+      label: Clause or section
+      placeholder: "EN 1992-1-1 §6.4 — Punching shear"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: element
+    attributes:
+      label: Element type
+      options:
+        - Rectangular beam
+        - One way slab
+        - Two way slab / punching
+        - Shear wall
+        - Column
+        - Other / new element type
+    validations:
+      required: true
+
+  - type: dropdown
+    id: check_type
+    attributes:
+      label: What kind of calculation
+      multiple: true
+      options:
+        - Flexure
+        - Shear
+        - Torsion
+        - Axial / combined
+        - Punching
+        - Serviceability (deflection, crack width)
+        - Detailing / rebar rules
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What the check should do
+      description: >
+        Describe the calculation in engineering terms: inputs, the criterion being verified,
+        and what the output should be.
+    validations:
+      required: true
+
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation reference
+      description: >
+        A worked example we can check the implementation against — the design code itself,
+        an official design guide, or a recognised textbook, with the example number and
+        page. This is required before an implementation can be merged.
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: >
+        National annexes, unit system, parameters that vary by country, or edge cases the
+        implementation needs to handle.
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Would you like to work on this?
+      options:
+        - label: I am interested in implementing this myself, with guidance
+        - label: I can provide the CalcPad validation, even if I do not write the Python code

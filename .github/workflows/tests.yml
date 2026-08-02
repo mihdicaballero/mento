@@ -8,51 +8,93 @@ on:
 
 jobs:
   tests:
-    name: ${{ matrix.session }} ${{ matrix.python }} / ${{ matrix.os }}
+    name: tests ${{ matrix.python }} / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { python: "3.12", os: "ubuntu-latest", session: "tests" }
-          - { python: "3.11", os: "ubuntu-latest", session: "tests" }
-          - { python: "3.10", os: "ubuntu-latest", session: "tests" }
-          - { python: "3.12", os: "windows-latest", session: "tests" }
-          - { python: "3.11", os: "windows-latest", session: "tests" }
-          - { python: "3.10", os: "windows-latest", session: "tests" }
+        python: ["3.10", "3.11", "3.12", "3.13"]
+        os: ["ubuntu-latest", "windows-latest"]
 
     env:
-      NOXSESSION: ${{ matrix.session }}
       FORCE_COLOR: "1"
-      PRE_COMMIT_COLOR: "always"
+      MPLBACKEND: "Agg"
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python ${{ matrix.python }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}
+          cache: "pip"
 
-      - name: Install dependencies
+      - name: Install package and test dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install pytest pytest-cov
-          if [ -f requirements.txt ]; then pip install -r requirements_dev.txt; fi
-        shell: bash
-
-      - name: Lint with Ruff
-        run: |
-          # Lint (CI mode: no auto-fix)
-          ruff check .
+          python -m pip install -e ".[test]"
 
       - name: Run tests
-        if: matrix.session == 'tests'
         run: pytest --cov=mento --cov-config=.coveragerc --cov-report=xml
-        shell: bash
 
       - name: Upload results to Codecov
-        uses: codecov/codecov-action@v4
+        if: matrix.python == '3.12' && matrix.os == 'ubuntu-latest'
+        uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  lint:
+    name: lint and type check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install package and dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Ruff lint
+        run: ruff check .
+
+      - name: Ruff format check
+        run: ruff format --check .
+
+      - name: Mypy
+        run: mypy mento/
+
+  docs:
+    name: docs build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install pandoc
+        # nbsphinx shells out to pandoc to convert the markdown cells of the
+        # example notebooks; it is not a pip dependency.
+        run: sudo apt-get update && sudo apt-get install -y pandoc
+
+      - name: Install package and docs dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[docs]"
+
+      - name: Build documentation
+        env:
+          MPLBACKEND: "Agg"
+        run: sphinx-build -b html docs/source docs/build/html

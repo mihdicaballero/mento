@@ -709,7 +709,7 @@ class Rebar:
             return 0  # No penalty if only the first layer is used
 
         # Calculate penalties and add them as columns
-        df["area_penalty"] = df.apply(lambda row: (alpha * row["total_as"] / min_as), axis=1)
+        df["area_penalty"] = df.apply(lambda row: alpha * row["total_as"] / min_as, axis=1)
         # Prefer moderate bar counts, where very high or very low will be penalized
         df["bars_penalty"] = beta * ((df["total_bars"] - min_bars) / min_bars) ** 2
         df["diameter_penalty"] = gamma * df.apply(diameter_difference_penalty, axis=1)
@@ -740,9 +740,11 @@ class Rebar:
         if getattr(self, "mode", "beam") == "slab":
             max_spacing_allowed = 300  # mm
             df["spacing_penalty"] = df["clear_spacing"].apply(
-                lambda s: 0
-                if s.magnitude <= max_spacing_allowed
-                else (s.magnitude - max_spacing_allowed) / max_spacing_allowed
+                lambda s: (
+                    0
+                    if s.magnitude <= max_spacing_allowed
+                    else (s.magnitude - max_spacing_allowed) / max_spacing_allowed
+                )
             )
         else:
             df["spacing_penalty"] = 0

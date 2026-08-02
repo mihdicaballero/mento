@@ -17,9 +17,9 @@ def assert_quantity_equal(
 ) -> None:
     """Asserts two Pint Quantities are numerically and unit-wise equal."""
     assert q1.units == q2.units, f"Units mismatch: {q1.units} (actual) vs {q2.units} (expected)"
-    assert (
-        pytest.approx(q1.magnitude, rel=rtol, abs=atol) == q2.magnitude
-    ), f"Magnitudes mismatch: {q1.magnitude} (actual) vs {q2.magnitude} (expected) with units {q1.units}"
+    assert pytest.approx(q1.magnitude, rel=rtol, abs=atol) == q2.magnitude, (
+        f"Magnitudes mismatch: {q1.magnitude} (actual) vs {q2.magnitude} (expected) with units {q1.units}"
+    )
 
 
 # --- Fixtures ---

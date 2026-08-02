@@ -315,4 +315,4 @@ class PunchingNode:
         else:
             cap = ""
         op = f", openings={n_openings}" if n_openings else ""
-        return f"PunchingNode(id={self._id}, {self.column!r}, " f"forces={n_forces}{op}{cap})"
+        return f"PunchingNode(id={self._id}, {self.column!r}, forces={n_forces}{op}{cap})"

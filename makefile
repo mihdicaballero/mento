@@ -8,7 +8,7 @@ all: mypy ruff test
 
 mypy:
 	@echo "Running mypy..."
-	mypy . --exclude build
+	mypy $(PACKAGE_NAME)/
 
 ruff:
 	@echo "Running ruff..."

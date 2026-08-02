@@ -397,9 +397,7 @@ def _maximum_flexural_reinforcement_ratio_ACI_318_19(self: "RectangularBeam") ->
     return rho_max
 
 
-def _c_neutral_axis_at_ductility_limit_ACI_318_19(
-    self: "RectangularBeam", d: Quantity
-) -> Quantity:
+def _c_neutral_axis_at_ductility_limit_ACI_318_19(self: "RectangularBeam", d: Quantity) -> Quantity:
     """
     Neutral axis depth at the ACI 318-19 tension-controlled boundary.
 
@@ -413,9 +411,7 @@ def _c_neutral_axis_at_ductility_limit_ACI_318_19(
     return 0.003 * d / (self.steel_bar.epsilon_y + 0.006)
 
 
-def _f_s_prime_net_at_ductility_limit_ACI_318_19(
-    self: "RectangularBeam", d: Quantity, d_prime: Quantity
-) -> Quantity:
+def _f_s_prime_net_at_ductility_limit_ACI_318_19(self: "RectangularBeam", d: Quantity, d_prime: Quantity) -> Quantity:
     """
     Effective compression-steel stress at the ductility limit, corrected for
     displaced concrete.
@@ -704,10 +700,7 @@ def _determine_nominal_moment_double_reinf_ACI_318_19(
         # avoid double-counting the displaced concrete already included in the
         # 0.85*f_c*a*b block.
         a_assumed = c_assumed * beta_1
-        M_n = (
-            0.85 * f_c * a_assumed * b * (d - a_assumed / 2)
-            + A_s_prime * (f_y - 0.85 * f_c) * (d - d_prime)
-        )
+        M_n = 0.85 * f_c * a_assumed * b * (d - a_assumed / 2) + A_s_prime * (f_y - 0.85 * f_c) * (d - d_prime)
         return M_n
     else:
         # The assumption is invalid, so determine the actual neutral axis depth
@@ -788,19 +781,13 @@ def _determine_nominal_moment_ACI_318_19(self: "RectangularBeam", force: Forces)
     #      doubly reinforced formula. If A_s_top = 0, the doubly reinforced
     #      formula degenerates to simple with A_s_max_bot.
     if self._A_s_bot <= self._A_s_max_bot:
-        M_n_positive = _determine_nominal_moment_simple_reinf_ACI_318_19(
-            self, self._A_s_bot, self._d_bot
-        )
+        M_n_positive = _determine_nominal_moment_simple_reinf_ACI_318_19(self, self._A_s_bot, self._d_bot)
     else:
         # Compression steel contribution at the ductility limit determines how
         # much the tension-steel cap can be extended:
         #     A_s_max_total = A_s_max_bot + A_s_top * f_s'_net / f_y
-        f_s_prima_net = _f_s_prime_net_at_ductility_limit_ACI_318_19(
-            self, self._d_bot, self._c_mec_top
-        )
-        A_s_max_total = (
-            self._A_s_max_bot + self._A_s_top * f_s_prima_net / self.steel_bar.f_y
-        )
+        f_s_prima_net = _f_s_prime_net_at_ductility_limit_ACI_318_19(self, self._d_bot, self._c_mec_top)
+        A_s_max_total = self._A_s_max_bot + self._A_s_top * f_s_prima_net / self.steel_bar.f_y
         A_s_eff = self._A_s_bot if self._A_s_bot <= A_s_max_total else A_s_max_total
         M_n_positive = _determine_nominal_moment_double_reinf_ACI_318_19(
             self, A_s_eff, self._d_bot, self._c_mec_top, self._A_s_top
@@ -816,16 +803,10 @@ def _determine_nominal_moment_ACI_318_19(self: "RectangularBeam", force: Forces)
     if self._A_s_top == 0 * cm**2:
         M_n_negative = 0 * kNm
     elif self._A_s_top <= self._A_s_max_top:
-        M_n_negative = _determine_nominal_moment_simple_reinf_ACI_318_19(
-            self, self._A_s_top, self._d_top
-        )
+        M_n_negative = _determine_nominal_moment_simple_reinf_ACI_318_19(self, self._A_s_top, self._d_top)
     else:
-        f_s_prima_net = _f_s_prime_net_at_ductility_limit_ACI_318_19(
-            self, self._d_top, self._c_mec_bot
-        )
-        A_s_max_total = (
-            self._A_s_max_top + self._A_s_bot * f_s_prima_net / self.steel_bar.f_y
-        )
+        f_s_prima_net = _f_s_prime_net_at_ductility_limit_ACI_318_19(self, self._d_top, self._c_mec_bot)
+        A_s_max_total = self._A_s_max_top + self._A_s_bot * f_s_prima_net / self.steel_bar.f_y
         A_s_eff = self._A_s_top if self._A_s_top <= A_s_max_total else A_s_max_total
         M_n_negative = _determine_nominal_moment_double_reinf_ACI_318_19(
             self, A_s_eff, self._d_top, self._c_mec_bot, self._A_s_bot
@@ -926,7 +907,7 @@ def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.Data
 # ──────────────────────────────────────────────────────────────────────────────
 # Cycle-safe flexural design helpers
 # ──────────────────────────────────────────────────────────────────────────────
-MAX_FLEXURE_ITERATIONS = 30   # safety net for slow divergence without cycling
+MAX_FLEXURE_ITERATIONS = 30  # safety net for slow divergence without cycling
 
 
 def _rebar_design_fingerprint(rebar_design: dict) -> tuple:
@@ -937,14 +918,20 @@ def _rebar_design_fingerprint(rebar_design: dict) -> tuple:
     intentionally excluded — they are derived from this tuple, not part of
     its identity.
     """
+
     def _diam_mm(key):
         q = rebar_design.get(key, 0 * mm)
         return float(q.to("mm").magnitude) if q is not None else 0.0
+
     return (
-        int(rebar_design.get("n_1", 0)), _diam_mm("d_b1"),
-        int(rebar_design.get("n_2", 0)), _diam_mm("d_b2"),
-        int(rebar_design.get("n_3", 0)), _diam_mm("d_b3"),
-        int(rebar_design.get("n_4", 0)), _diam_mm("d_b4"),
+        int(rebar_design.get("n_1", 0)),
+        _diam_mm("d_b1"),
+        int(rebar_design.get("n_2", 0)),
+        _diam_mm("d_b2"),
+        int(rebar_design.get("n_3", 0)),
+        _diam_mm("d_b3"),
+        int(rebar_design.get("n_4", 0)),
+        _diam_mm("d_b4"),
     )
 
 
@@ -981,7 +968,7 @@ def _select_safe_design(
     """
     M_demand_abs = abs(M_demand.to("kN*m"))
 
-    evaluated: list = []   # tuples of (As_provided, phi_Mn, design_dict)
+    evaluated: list = []  # tuples of (As_provided, phi_Mn, design_dict)
     for design in candidate_designs:
         if face == "bot":
             self._apply_longitudinal_design_bot(design)
@@ -991,21 +978,23 @@ def _select_safe_design(
         probe_force = Forces(M_y=(M_demand_abs if face == "bot" else -M_demand_abs))
         _determine_nominal_moment_ACI_318_19(self, probe_force)
         phi_M_n = self._phi_M_n_bot if face == "bot" else self._phi_M_n_top
-        evaluated.append((
-            design.get("total_as", 0 * (cm**2)),
-            phi_M_n.to("kN*m"),
-            design,
-        ))
+        evaluated.append(
+            (
+                design.get("total_as", 0 * (cm**2)),
+                phi_M_n.to("kN*m"),
+                design,
+            )
+        )
 
     # Primary criterion: candidates that satisfy the check
     passing = [e for e in evaluated if e[1] >= M_demand_abs]
     if passing:
-        passing.sort(key=lambda e: e[0])           # smallest As first
+        passing.sort(key=lambda e: e[0])  # smallest As first
         return passing[0][2]
 
     # Fallback: no candidate passes — pick the one with the largest phi*Mn
     # (closest to passing). The downstream check will report DCR > 1.
-    evaluated.sort(key=lambda e: -e[1])             # largest phi*Mn first
+    evaluated.sort(key=lambda e: -e[1])  # largest phi*Mn first
     return evaluated[0][2]
 
 
@@ -1053,7 +1042,6 @@ def _design_flexure_ACI_318_19(self: "RectangularBeam", max_M_y_bot: Quantity, m
     cycled = False
 
     for iteration_count in range(1, MAX_FLEXURE_ITERATIONS + 1):
-
         # Effective depths for this iteration
         d = self.height - rec_mec
 
@@ -1098,16 +1086,12 @@ def _design_flexure_ACI_318_19(self: "RectangularBeam", max_M_y_bot: Quantity, m
         # --- Discrete design for each face (independent first pass) ---------------
         if A_req_bot >= 0 * (cm**2):
             A_cap_bot = self._A_s_max_bot if A_req_bot <= self._A_s_max_bot else None
-            self.flexure_design_results_bot = _design_longitudinal_for_area(
-                A_req_bot, A_cap_bot, self._c_mec_bot
-            )
+            self.flexure_design_results_bot = _design_longitudinal_for_area(A_req_bot, A_cap_bot, self._c_mec_bot)
 
         self.flexure_design_results_top = None
         if A_req_top >= 0 * (cm**2):
             A_cap_top = self._A_s_max_top if A_req_top <= self._A_s_max_top else None
-            self.flexure_design_results_top = _design_longitudinal_for_area(
-                A_req_top, A_cap_top, self._c_mec_top
-            )
+            self.flexure_design_results_top = _design_longitudinal_for_area(A_req_top, A_cap_top, self._c_mec_top)
 
         # --- Apply both faces (hard overwrite) -----------------------------------
         if self.flexure_design_results_bot is not None:
@@ -1132,9 +1116,7 @@ def _design_flexure_ACI_318_19(self: "RectangularBeam", max_M_y_bot: Quantity, m
         # If compression from top (A_s_comp_bot) exceeds what bottom provides, re-upgrade bottom
         if A_s_comp_bot > A_prov_bot:
             A_cap_bot = self._A_s_max_bot if A_s_comp_bot <= self._A_s_max_bot else None
-            self.flexure_design_results_bot = _design_longitudinal_for_area(
-                A_s_comp_bot, A_cap_bot, self._c_mec_bot
-            )
+            self.flexure_design_results_bot = _design_longitudinal_for_area(A_s_comp_bot, A_cap_bot, self._c_mec_bot)
             if self.flexure_design_results_bot is not None:
                 self._apply_longitudinal_design_bot(self.flexure_design_results_bot)
                 A_prov_bot = self.flexure_design_results_bot.get("total_as", A_s_comp_bot)
@@ -1144,9 +1126,7 @@ def _design_flexure_ACI_318_19(self: "RectangularBeam", max_M_y_bot: Quantity, m
         # (mirrors the bottom-face reconciliation above).
         if A_s_comp_top > A_prov_top:
             A_cap_top = self._A_s_max_top if A_s_comp_top <= self._A_s_max_top else None
-            self.flexure_design_results_top = _design_longitudinal_for_area(
-                A_s_comp_top, A_cap_top, self._c_mec_top
-            )
+            self.flexure_design_results_top = _design_longitudinal_for_area(A_s_comp_top, A_cap_top, self._c_mec_top)
             if self.flexure_design_results_top is not None:
                 self._apply_longitudinal_design_top(self.flexure_design_results_top)
                 A_prov_top = self.flexure_design_results_top.get("total_as", A_s_comp_top)
@@ -1213,18 +1193,14 @@ def _design_flexure_ACI_318_19(self: "RectangularBeam", max_M_y_bot: Quantity, m
     if max_M_y_bot > 0 * kNm:
         phi_bot_active = _final_phi_M_n_for("bot")
         if phi_bot_active < max_M_y_bot:
-            chosen_bot = _select_safe_design(
-                self, list(bot_visited.values()), max_M_y_bot, face="bot"
-            )
+            chosen_bot = _select_safe_design(self, list(bot_visited.values()), max_M_y_bot, face="bot")
             self._apply_longitudinal_design_bot(chosen_bot)
 
     if max_M_y_top < 0 * kNm:
         M_demand_top = abs(max_M_y_top)
         phi_top_active = _final_phi_M_n_for("top")
         if phi_top_active < M_demand_top:
-            chosen_top = _select_safe_design(
-                self, list(top_visited.values()), M_demand_top, face="top"
-            )
+            chosen_top = _select_safe_design(self, list(top_visited.values()), M_demand_top, face="top")
             self._apply_longitudinal_design_top(chosen_top)
 
     # --- Results table ------------------------------------------------------------

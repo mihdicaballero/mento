@@ -1,0 +1,47 @@
+name: Feature request
+description: Suggest a new capability or an improvement to an existing one
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If you are asking for a **new design code, clause or check**, please use the
+        *Design code or check request* template instead — it asks for the references we
+        need to implement and validate it.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve
+      description: >
+        Describe the engineering task you are trying to accomplish, not just the feature.
+        Knowing the workflow usually changes how we design the solution.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like mento to do
+    validations:
+      required: true
+
+  - type: textarea
+    id: usage
+    attributes:
+      label: How you imagine using it
+      description: Sketch the code you would like to write, if you have one in mind.
+      render: python
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you have considered
+      description: Other tools, workarounds, or spreadsheets you use for this today.
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Would you like to work on this?
+      options:
+        - label: I am interested in contributing this myself, with guidance
