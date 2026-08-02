@@ -9,6 +9,7 @@ import pandas as pd
 from pandas import DataFrame
 import math
 import warnings
+from numbers import Integral
 # from devtools import debug
 
 from mento.rectangular import RectangularSection
@@ -298,20 +299,47 @@ class RectangularBeam(RectangularSection):
 
     def set_transverse_rebar(
         self,
-        n_stirrups: int = 0,
-        d_b: Quantity = 0 * mm,
-        s_l: Quantity = 0 * cm,
+        n_stirrups: int,
+        d_b: Quantity,
+        s_l: Quantity,
     ) -> None:
-        """Sets the transverse rebar in the beam section."""
+        """Set the transverse reinforcement and update the beam properties."""
+
+        # Reject booleans and non-integer stirrup counts.
+        if isinstance(n_stirrups, bool) or not isinstance(n_stirrups, Integral):
+            raise TypeError("n_stirrups must be an integer.")
+        if n_stirrups <= 0:
+            raise ValueError("n_stirrups must be greater than zero.")
+
+        # Convert NumPy integer types to a standard Python integer.
+        n_stirrups = int(n_stirrups)
+
+        # Validate the stirrup diameter.
+        if not isinstance(d_b, Quantity) or not d_b.check("[length]"):
+            raise TypeError("d_b must be a length Quantity.")
+        if not math.isfinite(d_b.to("mm").magnitude) or d_b <= 0 * mm:
+            raise ValueError("d_b must be greater than zero.")
+
+        # Validate the longitudinal spacing.
+        if not isinstance(s_l, Quantity) or not s_l.check("[length]"):
+            raise TypeError("s_l must be a length Quantity.")
+        if not math.isfinite(s_l.to("mm").magnitude) or s_l <= 0 * mm:
+            raise ValueError("s_l must be greater than zero.")
+
+        # Store the inputs only after all validations pass.
         self._stirrup_n = n_stirrups
         self._stirrup_d_b = d_b
         self._stirrup_s_l = s_l
-        n_legs = n_stirrups * 2
-        A_db = (d_b**2) * math.pi / 4  # Area of one stirrup leg
-        A_vs = n_legs * A_db  # Total area of stirrups
-        self._A_v = A_vs / s_l  # Stirrup area per unit length
 
-        # Update effective heights
+        # A closed stirrup contributes two vertical legs.
+        n_legs = n_stirrups * 2
+        A_db = d_b**2 * math.pi / 4
+        A_vs = n_legs * A_db
+
+        # Calculate the transverse reinforcement area per unit length.
+        self._A_v = A_vs / s_l
+
+        # Recalculate effective depths using the new stirrup diameter.
         self._update_effective_heights()
 
     def _len_unit(self) -> Quantity:
