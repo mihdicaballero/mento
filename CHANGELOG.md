@@ -23,6 +23,8 @@ from the release history and are summaries rather than complete lists.
 - A conda recipe under `conda-recipe/`, kept in step with `pyproject.toml`, ready to be
   submitted to conda-forge. The submission and update procedure, and the one-time Zenodo
   setup that gives releases a DOI, are documented in CONTRIBUTING.
+- Two example notebooks in Spanish, design and check of a rectangular beam under
+  CIRSOC 201-2025.
 
 ### Changed
 
