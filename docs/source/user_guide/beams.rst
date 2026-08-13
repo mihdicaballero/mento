@@ -10,7 +10,7 @@ Key Concepts
 - **Beam Geometry**: Defined by `width` and `height`.
 - **Material Properties**: Requires a `Concrete` object (e.g., `Concrete_ACI_318_19`) and a `SteelBar` object for reinforcement.
 - **Reinforcement**: Longitudinal and transverse reinforcement can be defined using `set_longitudinal_rebar_bot`, `set_longitudinal_rebar_top`, and `set_transverse_rebar`.
-- **Custom settings**: A `Beam` object can have custom settings overriding the default settings of `mento.
+- **Custom settings**: A `Beam` object can have custom settings overriding the default settings of `mento`.
 
 Usage
 -----

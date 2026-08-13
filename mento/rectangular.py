@@ -22,6 +22,7 @@ class RectangularSection(Section):
         A_x (Quantity): Cross-sectional area, returned in cm².
         I_y (Quantity): Moment of inertia about the Y axis, returned in cm⁴.
         I_z (Quantity): Moment of inertia about the Z axis, returned in cm⁴.
+
     Methods:
         plot(): Plots the rectangular section with dimensions and stirrup representation, including rounded corners and thickness.
     """

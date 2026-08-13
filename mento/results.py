@@ -129,13 +129,13 @@ class TablePrinter:
     """
     A class for printing tables with customizable formatting options.
 
-    Attributes:
-    -----------
+    Attributes
+    ----------
     title : Optional[str]
         Optional title displayed above the printed table.
 
-    Methods:
-    --------
+    Methods
+    -------
     print_table_data(data: List[List[Any]], headers: List[str], tablefmt: str = "fancygrid", numalign: str = "right")
       -> None
         Prints table data with customizable formatting.
@@ -149,8 +149,8 @@ class TablePrinter:
         """
         Initializes the TablePrinter with an optional title.
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         title : Optional[str], default=None
             Title to be displayed above the table, if provided.
         """
@@ -166,8 +166,8 @@ class TablePrinter:
         """
         Prints table data with customizable formatting options.
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         data : List[List[Any]]
             The data to be printed in table format, where each inner list represents a row.
 
@@ -180,8 +180,8 @@ class TablePrinter:
         numalign : str, default="right"
             Number alignment in the table. Common options are "right", "center", or "left".
 
-        Returns:
-        --------
+        Returns
+        -------
         table:  Return the formatted table string
         """
         # if self.title:
@@ -208,8 +208,8 @@ class TablePrinter:
         """
         Prints table data with column alignment for minimum and maximum values.
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         data : List[List[Any]]
             The data to be printed in table format, where each inner list represents a row.
 
@@ -222,8 +222,8 @@ class TablePrinter:
         numalign : str, default="right"
             Number alignment in the table. Common options are "right", "center", or "left".
 
-        Returns:
-        --------
+        Returns
+        -------
         None
         """
         if self.title:
@@ -244,8 +244,8 @@ class DocumentBuilder:
     """
     A class to build and style a Word document, including adding headings and tables from data frames.
 
-    Attributes:
-    -----------
+    Attributes
+    ----------
     title : str
         Title of the document, displayed at the beginning.
 
@@ -258,8 +258,8 @@ class DocumentBuilder:
     doc : Document
         The Document object representing the Word document being built.
 
-    Methods:
-    --------
+    Methods
+    -------
     set_document_style() -> None
         Configures the document's default style with the specified font name and size.
 
@@ -280,8 +280,8 @@ class DocumentBuilder:
         """
         Initializes the DocumentBuilder with a title, font name, and font size.
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         title : str
             Title to be displayed in the document.
 
@@ -303,8 +303,8 @@ class DocumentBuilder:
         """
         Sets the default style of the document, applying the font name and size.
 
-        Returns:
-        --------
+        Returns
+        -------
         None
         """
         # Normal text style
@@ -316,8 +316,8 @@ class DocumentBuilder:
         """
         Sets the page size to A4 by default.
 
-        Returns:
-        --------
+        Returns
+        -------
         None
         """
         section = self.doc.sections[0]
@@ -343,8 +343,8 @@ class DocumentBuilder:
         """
         Adds a heading to the document at the specified level.
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         text : str
             The text for the heading.
         level : int
@@ -352,8 +352,8 @@ class DocumentBuilder:
         font_size : float, optional
             Font size in points. Default is 10 pt.
 
-        Returns:
-        --------
+        Returns
+        -------
         None
         """
         heading = self.doc.add_heading(text, level=level)
@@ -372,16 +372,16 @@ class DocumentBuilder:
         """
         Sets the width of each column in the table.
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         table : docx.table.Table
             The table object whose column widths need to be set.
 
         column_widths : List[Cm]
             List of widths for each column, in centimeters.
 
-        Returns:
-        --------
+        Returns
+        -------
         None
         """
         for row in table.rows:
@@ -538,13 +538,13 @@ class DocumentBuilder:
         """
         Saves the document to a specified file.
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         filename : str
             The filename (including path) where the document will be saved.
 
-        Returns:
-        --------
+        Returns
+        -------
         None
         """
         self.doc.save(filename)

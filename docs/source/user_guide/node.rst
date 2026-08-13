@@ -124,6 +124,7 @@ You can print those results from the previous method.
 - **Flexure Design**: Use `design_flexure()`.
 
 .. code-block:: python
+
     # Perform flexure design and show DataFrame with results
     flexure_results = node_1.design_flexure()
     flexure_results

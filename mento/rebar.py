@@ -90,15 +90,15 @@ class Rebar:
         Calculate the maximum allowable spacing across the length and width of the beam
         based on design requirements.
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         V_s_req : float
             Required shear force for the rebar.
         A_cv : float
             Effective shear area of the concrete section.
 
-        Returns:
-        --------
+        Returns
+        -------
         tuple
             (s_max_l, s_max_w): The maximum spacing across the length and width of the beam.
         """
@@ -132,12 +132,12 @@ class Rebar:
         Calculate the maximum allowable spacing across the length and width of the beam
         based on design requirements for EN 1992-2004.
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         alpha: stirrups angle
 
-        Returns:
-        --------
+        Returns
+        -------
         tuple
             (s_max_l, s_max_w): The maximum spacing along the length and width of the beam.
         """
