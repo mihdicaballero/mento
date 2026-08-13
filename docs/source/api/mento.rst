@@ -22,6 +22,30 @@ mento.beam module
    :undoc-members:
    :show-inheritance:
 
+mento.beam\_summary module
+--------------------------
+
+.. automodule:: mento.beam_summary
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+mento.column module
+-------------------
+
+.. automodule:: mento.column
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+mento.design\_results module
+----------------------------
+
+.. automodule:: mento.design_results
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 mento.forces module
 -------------------
 
@@ -42,6 +66,14 @@ mento.node module
 -----------------
 
 .. automodule:: mento.node
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+mento.punching module
+---------------------
+
+.. automodule:: mento.punching
    :members:
    :undoc-members:
    :show-inheritance:
@@ -94,10 +126,18 @@ mento.shear_wall module
    :undoc-members:
    :show-inheritance:
 
-mento.summary module
---------------------
+mento.shear\_wall\_summary module
+---------------------------------
 
-.. automodule:: mento.summary
+.. automodule:: mento.shear_wall_summary
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+mento.slab module
+-----------------
+
+.. automodule:: mento.slab
    :members:
    :undoc-members:
    :show-inheritance:

@@ -87,7 +87,10 @@ Changelog = "https://github.com/mihdicaballero/mento/blob/main/CHANGELOG.md"
 packages = ["mento", "mento.codes"]
 
 [tool.ruff]
-extend-exclude = ["build/", "dist/"]
+# Markdown is excluded because ruff 0.16 started formatting the python code
+# blocks inside it. The formatter is here for the package's source, and letting
+# a tool upgrade quietly start rewriting prose files is not what we want.
+extend-exclude = ["build/", "dist/", "*.md"]
 show-fixes = true
 line-length = 120
 
@@ -115,6 +118,7 @@ warn_return_any = false
 [[tool.mypy.overrides]]
 module = [
     "mento.beam",
+    "mento.beam_summary",
     "mento.codes.ACI_318_19_beam",
     "mento.codes.ACI_318_19_wall",
     "mento.codes.EN_1992_2004_beam",
@@ -124,7 +128,6 @@ module = [
     "mento.results",
     "mento.shear_wall",
     "mento.slab",
-    "mento.summary",
     "mento.units",
 ]
 ignore_errors = true
