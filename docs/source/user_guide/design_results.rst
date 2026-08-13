@@ -70,6 +70,25 @@ Shear
 
     str(shear)              # '1eØ10 mm/27 cm'
 
+Several load combinations
+-------------------------
+
+A section is normally checked against a list of combinations, and each face is often
+governed by a different one. The required areas and the DCRs are the envelope over the
+whole list, so they describe the combination that governs — not whichever one happened to
+be checked last:
+
+.. code-block:: python
+
+    node = Node(section=beam, forces=[f1, f2, f3])
+    node.design()
+
+    beam.flexure_design.bottom.DCR  # worst of the three on the bottom face
+    beam.shear_design.A_v_req       # largest stirrup requirement of the three
+
+The provided reinforcement — ``A_s``, the layers and the stirrup layout — describes the
+section itself and does not depend on the combination.
+
 Reading results too early
 -------------------------
 
