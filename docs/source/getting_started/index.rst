@@ -8,6 +8,7 @@ Getting Started
    :maxdepth: 2
 
    what_is_mento
+   citing
 
 The getting started guide aims to get you using mento productively as quickly as possible.
 

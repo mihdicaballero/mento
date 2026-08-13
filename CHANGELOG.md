@@ -18,6 +18,11 @@ from the release history and are summaries rather than complete lists.
   longer have to be read from private attributes such as `_A_s_bot` or `_stirrup_s_l`.
   Reading either before running a check raises `DesignNotRunError`. See
   [Design results](https://mento-docs.readthedocs.io/en/latest/user_guide/design_results.html).
+- A [citing guide](https://mento-docs.readthedocs.io/en/latest/getting_started/citing.html)
+  in the documentation, covering which version to cite and a BibTeX entry.
+- A conda recipe under `conda-recipe/`, kept in step with `pyproject.toml`, ready to be
+  submitted to conda-forge. The submission and update procedure, and the one-time Zenodo
+  setup that gives releases a DOI, are documented in CONTRIBUTING.
 
 ### Changed
 

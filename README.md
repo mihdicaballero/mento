@@ -80,7 +80,7 @@ Participation in this project is governed by our [Code of Conduct](CODE_OF_CONDU
 mento is a tool to assist structural engineers, not a replacement for engineering judgement. Results must be reviewed and accepted by a qualified engineer who takes responsibility for the design. The software is provided "as is", without warranty of any kind, and the authors accept no liability for its use. Verify the output against the applicable design code before relying on it for any real structure.
 
 #### Citing mento
-If mento supports your research or professional work, citation metadata is in [CITATION.cff](CITATION.cff), and GitHub's "Cite this repository" button will format it for you.
+If mento supports your research or professional work, citation metadata is in [CITATION.cff](CITATION.cff), and GitHub's "Cite this repository" button will format it for you. The [citing guide](https://mento-docs.readthedocs.io/en/latest/getting_started/citing.html) explains which version to cite and gives a BibTeX entry.
 
 #### License
 This project is licensed under the MIT License. See [LICENSE](LICENSE) for the full text.
