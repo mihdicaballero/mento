@@ -47,7 +47,8 @@
       "PowerShell(where.exe pytest 2>&1; Get-Item \\(where.exe pytest 2>&1 | Select-Object -First 1\\) 2>&1)",
       "PowerShell($env:PYTHONIOENCODING=\"utf-8\"; C:\\\\Users\\\\mihdi\\\\anaconda3\\\\envs\\\\py312\\\\python.exe C:\\\\Users\\\\mihdi\\\\Documents\\\\GitHub\\\\mento\\\\_tmp_design.py)",
       "PowerShell(& \"C:\\\\Users\\\\mihdi\\\\anaconda3\\\\envs\\\\py312\\\\python.exe\" -c \"import importlib.metadata as m, mento; print\\(m.version\\('mento'\\)\\); print\\(mento.__file__\\)\")",
-      "PowerShell(& \"C:\\\\Users\\\\mihdi\\\\anaconda3\\\\envs\\\\py312\\\\python.exe\" -m pip show mento)"
+      "PowerShell(& \"C:\\\\Users\\\\mihdi\\\\anaconda3\\\\envs\\\\py312\\\\python.exe\" -m pip show mento)",
+      "PowerShell(& \"C:\\\\Users\\\\mihdi\\\\anaconda3\\\\envs\\\\py312\\\\python.exe\" -c \"import mento, os; print\\(os.path.dirname\\(mento.__file__\\)\\)\")"
     ]
   }
 }
