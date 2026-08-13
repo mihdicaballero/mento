@@ -16,7 +16,7 @@ Installation
 ------------
 
 Install with pip
-^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^
 
 You can install Mento via ``pip``, the Python package manager. Simply run the following command in your terminal:
 

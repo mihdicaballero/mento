@@ -64,6 +64,24 @@ exclude_patterns = ["build"]
 
 autodoc_inherit_docstrings = True
 
+# Napoleon renders ``Attributes:`` and ``Methods:`` docstring sections as
+# ``.. attribute::`` / ``.. method::`` directives by default. Those collide with the
+# entries autodoc already emits for the same members via ``:members:``, which produced
+# ~33 "duplicate object description" warnings in the API reference. The autodoc entry
+# is the canonical one (it carries the signature and the source link), so the
+# docstring summaries are rendered as plain prose instead:
+#   - ``napoleon_use_ivar`` turns ``Attributes:`` into a ":ivar:" field list.
+#   - listing "Methods" in ``napoleon_custom_sections`` overrides Napoleon's built-in
+#     handler with the generic one, which emits a rubric plus a definition list.
+napoleon_use_ivar = True
+napoleon_custom_sections = ["Methods"]
+
+# Section titles repeat across the user guide ("Usage", "Key Concepts", ...) and across
+# the generated API pages ("Submodules"). Prefixing autosectionlabel targets with the
+# document name keeps them unique. Every ``:ref:`` in the docs points at an explicit
+# ``.. _label:`` target, so none of them are affected by this.
+autosectionlabel_prefix_document = True
+
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
@@ -79,8 +97,6 @@ html_theme_options = {
     "repository_branch": "main",
     "use_repository_button": True,
     "use_issues_button": True,
-    "logo_only": True,
-    "display_version": False,
 }
 
 # Output file base name for HTML help builder.
