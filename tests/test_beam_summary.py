@@ -1,5 +1,5 @@
 """
-Comprehensive tests for BeamSummary class in summary.py
+Comprehensive tests for BeamSummary class in beam_summary.py
 
 This test suite provides 100% coverage of the BeamSummary class,
 testing all methods, edge cases, and error conditions.
@@ -12,7 +12,7 @@ import warnings
 from pathlib import Path
 
 from mento import MPa, mm, cm, kN, kNm, m
-from mento.summary import BeamSummary
+from mento.beam_summary import BeamSummary
 from mento.material import Concrete_ACI_318_19, SteelBar, Concrete_EN_1992_2004
 from mento.node import Node
 from mento.results import DocumentBuilder
@@ -1025,3 +1025,20 @@ def test_results_detailed_doc_en1992(
     )
     monkeypatch.setattr(DocumentBuilder, "save", lambda *_: None)
     summary.results_detailed_doc(index=1)
+
+
+def test_deprecated_summary_module_still_exports_beam_summary():
+    """mento.summary is the pre-rename import path and must keep working."""
+    import importlib
+    import sys
+
+    # Drop the module so the shim body — and its warning — runs again.
+    sys.modules.pop("mento.summary", None)
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        legacy = importlib.import_module("mento.summary")
+
+    assert legacy.BeamSummary is BeamSummary
+    assert any(issubclass(w.category, DeprecationWarning) for w in caught)
+    assert any("beam_summary" in str(w.message) for w in caught)

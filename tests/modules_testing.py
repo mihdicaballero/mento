@@ -17,7 +17,7 @@ from mento.section import Section
 from mento.rectangular import RectangularSection
 from mento import Forces, RectangularBeam, Node, OneWaySlab
 from mento.rebar import Rebar
-from mento.summary import BeamSummary
+from mento.beam_summary import BeamSummary
 
 #######################################################################################
 
