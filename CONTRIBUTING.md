@@ -18,6 +18,7 @@ By participating in this project you agree to abide by our
 - [Calculation validation](#calculation-validation)
 - [Pull request checklist](#pull-request-checklist)
 - [Project structure](#project-structure)
+- [Making a release](#making-a-release)
 - [Tools we use](#tools-we-use)
 
 ## Ways to contribute
@@ -186,7 +187,8 @@ mento/
 ├── node.py         Node — binds a section to its forces, drives check/design
 ├── settings.py     BeamSettings — metric and imperial design defaults
 ├── results.py      Formatting, tables and Word report building
-├── summary.py      BeamSummary — results across many elements
+├── beam_summary.py        BeamSummary — results across many beams
+├── shear_wall_summary.py  ShearWallSummary — results across many walls
 ├── units.py        Shared pint unit registry
 └── codes/          Design code implementations (ACI 318-19, EN 1992-2004)
 ```
@@ -198,6 +200,29 @@ touching the element classes.
 `Concrete` detects the unit system from the units of `f_c` — MPa means metric, psi means
 imperial — and that choice propagates through settings, forces and results. Never hard-code
 a unit assumption in new code.
+
+## Making a release
+
+For maintainers. **Merging a pull request does not publish anything** — it only updates
+`main`. Publishing to PyPI is triggered by creating a GitHub Release, and nothing else.
+
+1. On a branch, bump `version` in `pyproject.toml` and move the `Unreleased` entries of
+   [CHANGELOG.md](CHANGELOG.md) under the new version number. Merge that branch.
+2. On GitHub, go to Releases → *Draft a new release*, create the tag `vX.Y.Z` against
+   `main` (the leading `v` matters), and publish it. "Generate release notes" gives a
+   starting point worth editing down to what users care about.
+3. Publishing the release starts [`publish.yml`](.github/workflows/publish.yml), which
+   builds the sdist and wheel, checks the metadata, refuses to continue if the tag does not
+   match the version in `pyproject.toml`, installs the wheel and imports it, and only then
+   uploads to PyPI.
+
+Authentication uses [PyPI trusted publishing](https://docs.pypi.org/trusted-publishers/),
+so there is no API token in the repository. It has to be configured once, on PyPI under the
+project's *Publishing* settings and as a GitHub environment named `pypi`; until that is
+done, the workflow builds everything correctly and then fails on the upload step.
+
+To rehearse the build without publishing, run the workflow manually from the Actions tab —
+`workflow_dispatch` runs the build job but skips the tag check and the upload.
 
 ## Tools we use
 

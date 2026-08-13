@@ -38,6 +38,14 @@ mento.column module
    :undoc-members:
    :show-inheritance:
 
+mento.design\_results module
+----------------------------
+
+.. automodule:: mento.design_results
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 mento.forces module
 -------------------
 

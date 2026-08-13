@@ -21,6 +21,12 @@ from mento.units import MPa, mm, inch, kN, m, cm, kNm, dimensionless
 from mento.results import Formatter, TablePrinter, DocumentBuilder, CUSTOM_COLORS
 from mento.forces import Forces
 from mento.settings import BeamSettings
+from mento.design_results import (
+    FlexureDesign,
+    ShearDesign,
+    build_flexure_design,
+    build_shear_design,
+)
 from mento._version import __version__ as MENTO_VERSION
 
 from mento.codes.EN_1992_2004_beam import (
@@ -806,6 +812,36 @@ class RectangularBeam(RectangularSection):
     ##########################################################
     # RESULTS
     ##########################################################
+
+    @property
+    def flexure_design(self) -> FlexureDesign:
+        """Longitudinal reinforcement of this beam, as plain data.
+
+        Available after a flexure check or design has been run. Unlike
+        :attr:`flexure_results`, which prints a table for a notebook, this
+        returns an object you can read values from::
+
+            beam.flexure_design.bottom.A_s
+            beam.flexure_design.bottom.layers[0].n
+
+        Raises:
+            DesignNotRunError: if no flexure check or design has been run.
+        """
+        return build_flexure_design(self)
+
+    @property
+    def shear_design(self) -> ShearDesign:
+        """Transverse reinforcement of this beam, as plain data.
+
+        Available after a shear check or design has been run::
+
+            beam.shear_design.s_l
+            beam.shear_design.A_v
+
+        Raises:
+            DesignNotRunError: if no shear check or design has been run.
+        """
+        return build_shear_design(self)
 
     # Beam results for Jupyter Notebook
     @property

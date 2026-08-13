@@ -11,6 +11,20 @@ from the release history and are summaries rather than complete lists.
 
 ## [Unreleased]
 
+### Added
+
+- Public design results API: `beam.flexure_design` and `beam.shear_design` return plain,
+  frozen data objects with the reinforcement a check or design produced, so results no
+  longer have to be read from private attributes such as `_A_s_bot` or `_stirrup_s_l`.
+  Reading either before running a check raises `DesignNotRunError`. See
+  [Design results](https://mento-docs.readthedocs.io/en/latest/user_guide/design_results.html).
+
+### Changed
+
+- `mento.summary` was renamed to `mento.beam_summary`, matching `mento.shear_wall_summary`.
+  The old module still works and emits a `DeprecationWarning`; `from mento import
+  BeamSummary` is unaffected.
+
 ## [0.5.0] - 2026-08-01
 
 Infrastructure release. No changes to the design calculations, and no changes to the public
