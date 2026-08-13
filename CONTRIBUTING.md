@@ -39,6 +39,12 @@ turn into documentation improvements.
 `help wanted`. If you plan to work on something substantial, open a Discussion or comment
 on the issue first so we can agree on the approach before you write code.
 
+**Implement a design code.** This is the contribution the codebase is organised around, and
+it has its own guide:
+[Adding a design code](https://mento-docs.readthedocs.io/en/latest/dev/adding_a_design_code.html)
+describes the four functions a new standard has to provide, where to wire them in, and what
+the tests and validation should cover.
+
 ## Setting up your environment
 
 mento requires Python 3.10 or newer.
