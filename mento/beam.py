@@ -302,14 +302,21 @@ class RectangularBeam(RectangularSection):
         d_b: Quantity = 0 * mm,
         s_l: Quantity = 0 * cm,
     ) -> None:
-        """Sets the transverse rebar in the beam section."""
+        """Sets the transverse rebar in the beam section.
+
+        A zero spacing means no stirrups, which clears the transverse reinforcement.
+        """
         self._stirrup_n = n_stirrups
         self._stirrup_d_b = d_b
         self._stirrup_s_l = s_l
-        n_legs = n_stirrups * 2
-        A_db = (d_b**2) * math.pi / 4  # Area of one stirrup leg
-        A_vs = n_legs * A_db  # Total area of stirrups
-        self._A_v = A_vs / s_l  # Stirrup area per unit length
+        if s_l == 0 * cm:
+            # No stirrups: same state as a section without transverse rebar
+            self._A_v = 0 * cm**2 / m
+        else:
+            n_legs = n_stirrups * 2
+            A_db = (d_b**2) * math.pi / 4  # Area of one stirrup leg
+            A_vs = n_legs * A_db  # Total area of stirrups
+            self._A_v = A_vs / s_l  # Stirrup area per unit length
 
         # Update effective heights
         self._update_effective_heights()

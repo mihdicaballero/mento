@@ -145,6 +145,33 @@ def test_initialize_longitudinal_rebar_attributes_metric_defaults() -> None:
     assert beam._d_b1_t.magnitude == pytest.approx(8)
 
 
+def test_set_transverse_rebar_zero_spacing_clears_stirrups() -> None:
+    beam = build_metric_beam()
+    beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=20 * cm)
+    assert beam._A_v.to("cm**2/m").magnitude > 0
+
+    # Clearing the stirrups must not divide by the zero spacing
+    beam.set_transverse_rebar(n_stirrups=0, d_b=0 * mm, s_l=0 * cm)
+
+    assert beam._stirrup_n == 0
+    assert beam._stirrup_d_b.to("mm").magnitude == 0
+    assert beam._stirrup_s_l.to("cm").magnitude == 0
+    assert beam._A_v.to("cm**2/m").magnitude == 0
+
+
+def test_set_transverse_rebar_defaults_clear_stirrups_imperial(
+    beam_example_imperial: RectangularBeam,
+) -> None:
+    beam_example_imperial.set_transverse_rebar(n_stirrups=1, d_b=0.5 * inch, s_l=6 * inch)
+    assert beam_example_imperial._A_v.to("inch**2/ft").magnitude > 0
+
+    beam_example_imperial.set_transverse_rebar()
+
+    assert beam_example_imperial._stirrup_n == 0
+    assert beam_example_imperial._stirrup_s_l.to("inch").magnitude == 0
+    assert beam_example_imperial._A_v.to("inch**2/ft").magnitude == 0
+
+
 def test_shear_check_EN_1992_2004_rebar_1(
     beam_example_EN_1992_2004_01: RectangularBeam,
 ) -> None:
