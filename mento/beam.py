@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from IPython.display import Markdown, display
-from typing import Optional, Dict
+from typing import Any, Optional, Dict
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle, Rectangle, FancyBboxPatch
 from pint import Quantity
@@ -136,6 +136,10 @@ class RectangularBeam(RectangularSection):
         self._DCRv: float = 0
         self._DCRb_top: float = 0
         self._DCRb_bot: float = 0
+        # Worst value of each per-combination quantity, kept by check_flexure and
+        # check_shear. The attributes above only hold the combination that ran last.
+        self._flexure_envelope: dict[str, dict[str, Any]] = {}
+        self._shear_envelope: dict[str, Any] = {}
         self._alpha: float = math.radians(90)
         self._V_s_req: Quantity = 0 * kN
 
@@ -556,6 +560,38 @@ class RectangularBeam(RectangularSection):
         all_results = self.check_flexure(forces)
         return all_results
 
+    def _update_flexure_envelope(self, suffix: str) -> None:
+        """Fold the flexure results of the current combination into the envelope.
+
+        The check functions leave the values of the combination they just ran on the
+        beam, so a reader of ``_A_s_req_bot`` after checking several combinations gets
+        whichever one happened to run last — zero, for a face that combination did not
+        put in tension. The envelope keeps the worst of each quantity instead, which is
+        what the public results in :mod:`mento.design_results` report.
+        """
+        face = self._flexure_envelope.setdefault(suffix, {})
+        for name in ("A_s_req", "A_s_min", "A_s_max"):
+            value = getattr(self, f"_{name}_{suffix}", None)
+            if value is None:
+                continue
+            current = face.get(name)
+            face[name] = value if current is None else max(current, value)
+        face["DCR"] = max(face.get("DCR", 0.0), getattr(self, f"_DCRb_{suffix}", 0.0))
+
+    def _update_shear_envelope(self) -> None:
+        """Fold the shear results of the current combination into the envelope.
+
+        Same reasoning as :meth:`_update_flexure_envelope`: ``_A_v_req`` and ``_DCRv``
+        describe the combination that ran last, not the one that governs.
+        """
+        for name in ("A_v_req", "A_v_min"):
+            value = getattr(self, f"_{name}", None)
+            if value is None:
+                continue
+            current = self._shear_envelope.get(name)
+            self._shear_envelope[name] = value if current is None else max(current, value)
+        self._shear_envelope["DCR"] = max(self._shear_envelope.get("DCR", 0.0), self._DCRv)
+
     def check_flexure(self, forces: list[Forces]) -> DataFrame:
         # Initialize variables to track limiting cases
         max_dcr_top: float = 0
@@ -568,6 +604,7 @@ class RectangularBeam(RectangularSection):
         # To compile results for all forces
         self._flexure_results_list = []  # Store individual results for each force
         self._flexure_results_detailed_list = {}  # Store detailed results by force ID
+        self._flexure_envelope = {}
 
         for force in forces:
             # Select the method based on design code
@@ -585,6 +622,11 @@ class RectangularBeam(RectangularSection):
                 "flexure_capacity_bot": self._flexure_capacity_bot.copy(),
                 "checks_pass": self._all_flexure_checks_passed,
             }
+
+            # Keep the worst value of each face across combinations, before the next
+            # one overwrites the attributes this combination just left on the beam.
+            self._update_flexure_envelope("bot")
+            self._update_flexure_envelope("top")
 
             # Extract the DCR values for top and bottom from the results
             current_dcr_top = self._DCRb_top
@@ -670,6 +712,7 @@ class RectangularBeam(RectangularSection):
         self._shear_results_detailed_list = {}  # Store detailed results by force ID
         max_dcr = 0  # Track the maximum DCR to identify the limiting case
         self._limiting_case_shear_details = None
+        self._shear_envelope = {}
 
         for force in forces:
             # Select the method based on design code
@@ -687,6 +730,10 @@ class RectangularBeam(RectangularSection):
                 "checks_pass": self._all_shear_checks_passed,
                 "shear_concrete": self._shear_concrete.copy(),
             }
+
+            # Keep the worst value across combinations, before the next one
+            # overwrites the attributes this combination just left on the beam.
+            self._update_shear_envelope()
 
             # Check if this result is the limiting case
             current_dcr = result["DCR"][0]

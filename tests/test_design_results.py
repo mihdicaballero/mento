@@ -3,9 +3,10 @@
 import math
 
 import pytest
+from pandas import DataFrame
 
 from mento import Concrete_ACI_318_19, Forces, Node, RectangularBeam, SteelBar
-from mento import MPa, cm, kN, kNm, mm
+from mento import MPa, cm, kN, kNm, m, mm
 from mento.design_results import (
     DesignNotRunError,
     FlexureDesign,
@@ -156,6 +157,101 @@ def test_shear_str_without_stirrups(beam: RectangularBeam) -> None:
     assert shear.n_legs == 0
     assert shear.A_v.magnitude == 0
     assert str(shear) == "no stirrups"
+
+
+# ============================================================================
+# Several load combinations: results are the envelope, not the last one checked
+# ============================================================================
+
+
+def _table_dcr(results: DataFrame) -> list[float]:
+    """DCR of every combination in a results table, dropping the units row."""
+    return [float(value) for value in results["DCR"][1:]]
+
+
+# The tables round the DCR to three decimals; the results API keeps full precision.
+TABLE_ROUNDING = 5e-4
+
+
+def _two_combinations() -> list[Forces]:
+    """Two combinations where the *first* governs both flexure and shear.
+
+    The second one puts the top face in tension and is mild in shear, so it leaves
+    the bottom face and the stirrup requirement at zero on its way out.
+    """
+    return [
+        Forces(label="C1", V_z=90 * kN, M_y=100 * kNm),
+        Forces(label="C2", V_z=20 * kN, M_y=-30 * kNm),
+    ]
+
+
+@pytest.fixture
+def beam_two_combinations(beam: RectangularBeam) -> RectangularBeam:
+    Node(section=beam, forces=_two_combinations()).design()
+    return beam
+
+
+def test_flexure_reports_the_combination_that_governs_each_face(
+    beam_two_combinations: RectangularBeam,
+) -> None:
+    beam = beam_two_combinations
+    worst = max(_table_dcr(beam.check_flexure(_two_combinations())))
+
+    flexure = beam.flexure_design
+
+    assert flexure.DCR == pytest.approx(worst, abs=TABLE_ROUNDING)
+    assert flexure.bottom.DCR == pytest.approx(worst, abs=TABLE_ROUNDING)
+    # The last combination checked required nothing at the bottom; the governing one
+    # is what the result has to describe.
+    assert flexure.bottom.A_s_req.magnitude > 0
+    assert flexure.bottom.A_s_min.magnitude > 0
+    assert flexure.bottom.A_s >= flexure.bottom.A_s_req
+
+
+def test_shear_reports_the_combination_that_governs(
+    beam_two_combinations: RectangularBeam,
+) -> None:
+    beam = beam_two_combinations
+    worst = max(_table_dcr(beam.check_shear(_two_combinations())))
+
+    shear = beam.shear_design
+
+    assert shear.DCR == pytest.approx(worst, abs=TABLE_ROUNDING)
+    assert shear.A_v_req.magnitude > 0
+    assert shear.A_v >= shear.A_v_req
+
+
+def test_envelope_skips_quantities_the_design_code_does_not_set() -> None:
+    """A design code that leaves a quantity unset must not break the envelope.
+
+    Both codes shipped today set all of them, so this is built directly rather than
+    through a check.
+    """
+    beam = object.__new__(RectangularBeam)
+    beam._flexure_envelope = {}
+    beam._shear_envelope = {}
+    beam._A_s_req_bot = 4 * cm**2  # _A_s_min_bot and _A_s_max_bot deliberately absent
+    beam._DCRb_bot = 0.5
+    beam._A_v_req = 3 * cm**2 / m
+    beam._DCRv = 0.4
+
+    beam._update_flexure_envelope("bot")
+    beam._update_shear_envelope()
+
+    assert beam._flexure_envelope["bot"] == {"A_s_req": 4 * cm**2, "DCR": 0.5}
+    assert beam._shear_envelope == {"A_v_req": 3 * cm**2 / m, "DCR": 0.4}
+
+
+def test_envelope_resets_between_checks(beam_two_combinations: RectangularBeam) -> None:
+    """Checking a milder set of forces afterwards must not keep the earlier worst case."""
+    beam = beam_two_combinations
+    mild = [Forces(label="C3", V_z=10 * kN, M_y=10 * kNm)]
+
+    beam.check_flexure(mild)
+    beam.check_shear(mild)
+
+    assert beam.flexure_design.DCR == pytest.approx(max(_table_dcr(beam.check_flexure(mild))), abs=TABLE_ROUNDING)
+    assert beam.shear_design.DCR == pytest.approx(max(_table_dcr(beam.check_shear(mild))), abs=TABLE_ROUNDING)
 
 
 # ============================================================================

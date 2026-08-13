@@ -16,7 +16,9 @@ from the release history and are summaries rather than complete lists.
 - Public design results API: `beam.flexure_design` and `beam.shear_design` return plain,
   frozen data objects with the reinforcement a check or design produced, so results no
   longer have to be read from private attributes such as `_A_s_bot` or `_stirrup_s_l`.
-  Reading either before running a check raises `DesignNotRunError`. See
+  Reading either before running a check raises `DesignNotRunError`. Required areas and
+  DCRs are the envelope over every load combination checked, so they describe the
+  combination that governs each face. See
   [Design results](https://mento-docs.readthedocs.io/en/latest/user_guide/design_results.html).
 - A [citing guide](https://mento-docs.readthedocs.io/en/latest/getting_started/citing.html)
   in the documentation, covering which version to cite and a BibTeX entry.

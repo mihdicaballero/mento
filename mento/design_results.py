@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 
 from pint import Quantity
 
@@ -53,6 +53,10 @@ class FlexureFaceDesign:
 
     ``layers`` only contains the layers that actually carry bars, so an
     empty tuple means no reinforcement was placed on this face.
+
+    ``A_s`` is what the section carries. ``A_s_req``, ``A_s_min``, ``A_s_max``
+    and ``DCR`` are the envelope over every load combination that was checked,
+    so ``DCR`` is the one of the combination that governs this face.
     """
 
     layers: Tuple[RebarLayer, ...]
@@ -95,6 +99,9 @@ class ShearDesign:
 
     ``n_stirrups`` counts the stirrups; ``n_legs`` counts the legs crossing
     the shear plane, which is what enters the ``A_v`` calculation.
+
+    ``A_v_req``, ``A_v_min`` and ``DCR`` are the envelope over every load
+    combination that was checked, so ``DCR`` is the governing one.
     """
 
     n_stirrups: int
@@ -132,18 +139,26 @@ def _face(beam: RectangularBeam, face: str) -> FlexureFaceDesign:
     # _A_s_bot is set when the section is built, so it always carries the area
     # unit of this beam and can seed the values a check may not have produced.
     zero: Quantity = 0 * beam._A_s_bot.units
+    # The envelope over every combination that was checked. The private attributes
+    # only describe the combination that ran last, which is not necessarily the one
+    # that governs this face.
+    envelope: Dict[str, Any] = getattr(beam, "_flexure_envelope", {}).get(suffix, {})
 
     def area(name: str) -> Quantity:
-        value: Optional[Quantity] = getattr(beam, name, None)
+        """Envelope value of a per-combination area, or the last one if there is none."""
+        value: Optional[Quantity] = envelope.get(name, getattr(beam, f"_{name}_{suffix}", None))
         return zero if value is None else value
+
+    # A_s is the reinforcement the section carries, not a per-combination result.
+    A_s: Optional[Quantity] = getattr(beam, f"_A_s_{suffix}", None)
 
     return FlexureFaceDesign(
         layers=_layers(beam, face),
-        A_s=area(f"_A_s_{suffix}"),
-        A_s_req=area(f"_A_s_req_{suffix}"),
-        A_s_min=area(f"_A_s_min_{suffix}"),
-        A_s_max=area(f"_A_s_max_{suffix}"),
-        DCR=float(getattr(beam, f"_DCRb_{suffix}", 0.0)),
+        A_s=zero if A_s is None else A_s,
+        A_s_req=area("A_s_req"),
+        A_s_min=area("A_s_min"),
+        A_s_max=area("A_s_max"),
+        DCR=float(envelope.get("DCR", getattr(beam, f"_DCRb_{suffix}", 0.0))),
     )
 
 
@@ -172,9 +187,13 @@ def build_shear_design(beam: RectangularBeam) -> ShearDesign:
         )
     A_v: Quantity = beam._A_v
     zero: Quantity = 0 * A_v.units
+    # As in _face: the private attributes describe the combination that ran last, the
+    # envelope describes every combination that was checked.
+    envelope: Dict[str, Any] = getattr(beam, "_shear_envelope", {})
 
     def area(name: str) -> Quantity:
-        value: Optional[Quantity] = getattr(beam, name, None)
+        """Envelope value of a per-combination area, or the last one if there is none."""
+        value: Optional[Quantity] = envelope.get(name, getattr(beam, f"_{name}", None))
         return zero if value is None else value
 
     return ShearDesign(
@@ -182,7 +201,7 @@ def build_shear_design(beam: RectangularBeam) -> ShearDesign:
         d_b=beam._stirrup_d_b,
         s_l=beam._stirrup_s_l,
         A_v=A_v,
-        A_v_req=area("_A_v_req"),
-        A_v_min=area("_A_v_min"),
-        DCR=float(getattr(beam, "_DCRv", 0.0)),
+        A_v_req=area("A_v_req"),
+        A_v_min=area("A_v_min"),
+        DCR=float(envelope.get("DCR", getattr(beam, "_DCRv", 0.0))),
     )
