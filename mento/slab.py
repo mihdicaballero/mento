@@ -72,11 +72,18 @@ class OneWaySlab(RectangularBeam):
         s_long: Quantity = 0 * cm,
         s_trans: Quantity = 0 * cm,
     ) -> None:
-        """Sets the transverse rebar in the slab section."""
+        """Sets the transverse rebar in the slab section.
+
+        A zero spacing means no stirrups, which clears the transverse reinforcement.
+        """
         self._stirrup_s_l = s_long
-        n_legs_per_unit_width = self.width / s_trans
-        A_db = (d_b**2) * math.pi / 4  # Area of one stirrup leg per unit width
-        self._A_v = A_db * n_legs_per_unit_width / s_long  # Legs area per unit length
+        if s_long == 0 * cm or s_trans == 0 * cm:
+            # No stirrups: same state as a section without transverse rebar
+            self._A_v = 0 * mm**2 / m
+        else:
+            n_legs_per_unit_width = self.width / s_trans
+            A_db = (d_b**2) * math.pi / 4  # Area of one stirrup leg per unit width
+            self._A_v = A_db * n_legs_per_unit_width / s_long  # Legs area per unit length
 
         # Update effective heights
         self._update_effective_heights()

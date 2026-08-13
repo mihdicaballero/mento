@@ -166,21 +166,29 @@ class ShearWall(RectangularBeam):
         """Set distributed horizontal (transverse) reinforcement.
 
         Bars are placed on each face (E.F.):  ρt = n_curtains · Ab / (t × s_h)
+        A zero spacing means no rebar, which clears the horizontal reinforcement.
         """
         self._d_b_h = d_b
         self._s_h = s
-        A_b = math.pi / 4 * d_b**2
-        self._rho_t = (self._n_curtains * A_b / (self.thickness * s)).to("")
+        if s == 0 * mm:
+            self._rho_t = 0 * dimensionless
+        else:
+            A_b = math.pi / 4 * d_b**2
+            self._rho_t = (self._n_curtains * A_b / (self.thickness * s)).to("")
 
     def set_vertical_rebar(self, d_b: Quantity, s: Quantity) -> None:
         """Set distributed vertical reinforcement.
 
         Bars are placed on each face (E.F.):  ρl = n_curtains · Ab / (t × s_v)
+        A zero spacing means no rebar, which clears the vertical reinforcement.
         """
         self._d_b_v = d_b
         self._s_v = s
-        A_b = math.pi / 4 * d_b**2
-        self._rho_l = (self._n_curtains * A_b / (self.thickness * s)).to("")
+        if s == 0 * mm:
+            self._rho_l = 0 * dimensionless
+        else:
+            A_b = math.pi / 4 * d_b**2
+            self._rho_l = (self._n_curtains * A_b / (self.thickness * s)).to("")
 
     # ------------------------------------------------------------------
     # Shear check and design (override RectangularBeam)

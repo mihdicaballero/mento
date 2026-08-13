@@ -109,6 +109,17 @@ class TestShearWallInit:
         expected = 2 * (math.pi / 4 * 12**2) / (250 * 150)
         assert wall_metric._rho_l.to("").magnitude == pytest.approx(expected, rel=1e-4)
 
+    def test_zero_spacing_clears_rebar_ratios(self, wall_metric: ShearWall) -> None:
+        wall_metric.set_horizontal_rebar(d_b=12 * mm, s=200 * mm)
+        wall_metric.set_vertical_rebar(d_b=12 * mm, s=150 * mm)
+
+        # Clearing the mesh must not divide by the zero spacing
+        wall_metric.set_horizontal_rebar(d_b=0 * mm, s=0 * mm)
+        wall_metric.set_vertical_rebar(d_b=0 * mm, s=0 * mm)
+
+        assert wall_metric._rho_t.to("").magnitude == 0
+        assert wall_metric._rho_l.to("").magnitude == 0
+
 
 # ---------------------------------------------------------------------------
 # α_c
