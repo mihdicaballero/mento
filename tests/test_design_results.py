@@ -6,7 +6,7 @@ import pytest
 from pandas import DataFrame
 
 from mento import Concrete_ACI_318_19, Forces, Node, RectangularBeam, SteelBar
-from mento import MPa, cm, kN, kNm, mm
+from mento import MPa, cm, kN, kNm, m, mm
 from mento.design_results import (
     DesignNotRunError,
     FlexureDesign,
@@ -219,6 +219,27 @@ def test_shear_reports_the_combination_that_governs(
     assert shear.DCR == pytest.approx(worst, abs=TABLE_ROUNDING)
     assert shear.A_v_req.magnitude > 0
     assert shear.A_v >= shear.A_v_req
+
+
+def test_envelope_skips_quantities_the_design_code_does_not_set() -> None:
+    """A design code that leaves a quantity unset must not break the envelope.
+
+    Both codes shipped today set all of them, so this is built directly rather than
+    through a check.
+    """
+    beam = object.__new__(RectangularBeam)
+    beam._flexure_envelope = {}
+    beam._shear_envelope = {}
+    beam._A_s_req_bot = 4 * cm**2  # _A_s_min_bot and _A_s_max_bot deliberately absent
+    beam._DCRb_bot = 0.5
+    beam._A_v_req = 3 * cm**2 / m
+    beam._DCRv = 0.4
+
+    beam._update_flexure_envelope("bot")
+    beam._update_shear_envelope()
+
+    assert beam._flexure_envelope["bot"] == {"A_s_req": 4 * cm**2, "DCR": 0.5}
+    assert beam._shear_envelope == {"A_v_req": 3 * cm**2 / m, "DCR": 0.4}
 
 
 def test_envelope_resets_between_checks(beam_two_combinations: RectangularBeam) -> None:
