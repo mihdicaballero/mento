@@ -20,6 +20,13 @@ from the release history and are summaries rather than complete lists.
   DCRs are the envelope over every load combination checked, so they describe the
   combination that governs each face. See
   [Design results](https://mento-docs.readthedocs.io/en/latest/user_guide/design_results.html).
+- A [citing guide](https://mento-docs.readthedocs.io/en/latest/getting_started/citing.html)
+  in the documentation, covering which version to cite and a BibTeX entry.
+- A conda recipe under `conda-recipe/`, kept in step with `pyproject.toml`, ready to be
+  submitted to conda-forge. The submission and update procedure, and the one-time Zenodo
+  setup that gives releases a DOI, are documented in CONTRIBUTING.
+- Two example notebooks in Spanish, design and check of a rectangular beam under
+  CIRSOC 201-2025.
 
 ### Changed
 

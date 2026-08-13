@@ -19,6 +19,8 @@ By participating in this project you agree to abide by our
 - [Pull request checklist](#pull-request-checklist)
 - [Project structure](#project-structure)
 - [Making a release](#making-a-release)
+- [Archiving on Zenodo](#archiving-on-zenodo)
+- [Publishing on conda-forge](#publishing-on-conda-forge)
 - [Tools we use](#tools-we-use)
 
 ## Ways to contribute
@@ -212,7 +214,8 @@ a unit assumption in new code.
 For maintainers. **Merging a pull request does not publish anything** — it only updates
 `main`. Publishing to PyPI is triggered by creating a GitHub Release, and nothing else.
 
-1. On a branch, bump `version` in `pyproject.toml` and move the `Unreleased` entries of
+1. On a branch, bump `version` in `pyproject.toml`, bump `version` and `date-released` in
+   [CITATION.cff](CITATION.cff), and move the `Unreleased` entries of
    [CHANGELOG.md](CHANGELOG.md) under the new version number. Merge that branch.
 2. On GitHub, go to Releases → *Draft a new release*, create the tag `vX.Y.Z` against
    `main` (the leading `v` matters), and publish it. "Generate release notes" gives a
@@ -229,6 +232,80 @@ done, the workflow builds everything correctly and then fails on the upload step
 
 To rehearse the build without publishing, run the workflow manually from the Actions tab —
 `workflow_dispatch` runs the build job but skips the tag check and the upload.
+
+Publishing a release also sets two things in motion that are not PyPI: Zenodo archives the
+release and mints a DOI, and conda-forge's bot proposes a feedstock update. Both are
+described below.
+
+## Archiving on Zenodo
+
+A DOI is what lets someone cite a specific version of mento in a paper or a technical report,
+and what makes the software findable outside GitHub. [Zenodo](https://zenodo.org/) mints one
+automatically for every GitHub Release, at no cost.
+
+**One-time setup, by a maintainer with admin rights on the repository:**
+
+1. Sign in to Zenodo with the GitHub account that owns the repository.
+2. Go to the [GitHub settings page](https://zenodo.org/account/settings/github/) on Zenodo
+   and flip the switch next to `mihdicaballero/mento`.
+3. Publish the next GitHub Release as usual. Zenodo receives the webhook, archives the
+   source at that tag, and issues the DOIs.
+
+Zenodo issues **two** DOIs: a *version DOI* for that specific release, and a *concept DOI*
+that always resolves to the latest version. The concept DOI is the one to advertise.
+
+**After the first archived release**, wire the DOI into the repository once:
+
+- In [CITATION.cff](CITATION.cff), add the concept DOI so GitHub's *Cite this repository*
+  button includes it:
+
+  ```yaml
+  identifiers:
+    - type: doi
+      value: 10.5281/zenodo.XXXXXXX
+      description: Concept DOI for all versions of mento
+  ```
+
+- In [README.md](README.md), add the badge Zenodo shows on the repository's Zenodo page,
+  next to the other badges:
+
+  ```markdown
+  [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXX)
+  ```
+
+Because the concept DOI does not change, this is done once and not per release. Only
+`version` and `date-released` in `CITATION.cff` move with each release, which is already part
+of the release procedure above.
+
+## Publishing on conda-forge
+
+Some engineering teams install everything through conda and cannot easily mix in pip.
+[conda-forge](https://conda-forge.org/) is how mento reaches them. The recipe lives in
+[`conda-recipe/`](conda-recipe/) so that it stays in step with `pyproject.toml`; conda-forge
+itself builds from a separate repository called a *feedstock*.
+
+**First submission** (once, to create the feedstock):
+
+1. Fork [conda-forge/staged-recipes](https://github.com/conda-forge/staged-recipes).
+2. Copy `conda-recipe/meta.yaml` and `conda-recipe/conda_build_config.yaml` into
+   `recipes/mento/` on a branch of your fork.
+3. Check that `version` and `sha256` in the recipe match the release you want packaged. The
+   checksum of the sdist on PyPI is:
+
+   ```bash
+   curl -sL https://pypi.org/packages/source/m/mento/mento-0.5.0.tar.gz | sha256sum
+   ```
+
+4. Open a pull request against `staged-recipes`. A conda-forge reviewer will comment; expect
+   a round or two on dependency names. When it merges, the bot creates
+   `conda-forge/mento-feedstock` and lists you as maintainer.
+
+**Every release after that** is mostly automatic: within a day of the sdist appearing on
+PyPI, `regro-cf-autotick-bot` opens a pull request on the feedstock with the new version and
+checksum. Review it — the bot updates the version but not the dependencies — and merge.
+
+When mento's runtime dependencies change in `pyproject.toml`, update `conda-recipe/meta.yaml`
+in the same pull request, so the copy here does not drift from what the feedstock needs.
 
 ## Tools we use
 
