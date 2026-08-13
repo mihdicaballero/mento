@@ -97,4 +97,7 @@ jobs:
       - name: Build documentation
         env:
           MPLBACKEND: "Agg"
-        run: sphinx-build -b html docs/source docs/build/html
+        # -W turns warnings into errors so the HTML build cannot regress back into
+        # the ~117 warnings it used to emit; --keep-going reports all of them at once
+        # instead of stopping at the first.
+        run: sphinx-build -b html -W --keep-going docs/source docs/build/html

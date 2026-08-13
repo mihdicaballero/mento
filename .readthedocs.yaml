@@ -16,6 +16,17 @@ python:
 
 sphinx:
   configuration: docs/source/conf.py
+  # The HTML build is warning-free and CI enforces that with `sphinx-build -W`.
+  # This stays false because Read the Docs applies fail_on_warning to *every*
+  # builder it runs, and `formats: [pdf]` below means it also runs the LaTeX
+  # builder. LaTeX cannot rasterise the "Open in Colab" SVG badge at the top of
+  # each example notebook, so it emits one
+  #   "a suitable image for latex builder not found: ['image/svg+xml']"
+  # warning per notebook. The PDF still builds (the badge is simply omitted from
+  # it), but turning warnings into errors here would fail it. Flipping this to
+  # true requires either dropping the pdf format or teaching the LaTeX builder to
+  # convert SVGs (e.g. sphinxcontrib-svg2pdfconverter, which needs a native
+  # cairo/Inkscape dependency).
   fail_on_warning: false
 
 formats:
