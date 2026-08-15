@@ -20,7 +20,6 @@ By participating in this project you agree to abide by our
 - [Project structure](#project-structure)
 - [Making a release](#making-a-release)
 - [Archiving on Zenodo](#archiving-on-zenodo)
-- [Publishing on conda-forge](#publishing-on-conda-forge)
 - [Tools we use](#tools-we-use)
 
 ## Ways to contribute
@@ -233,9 +232,8 @@ done, the workflow builds everything correctly and then fails on the upload step
 To rehearse the build without publishing, run the workflow manually from the Actions tab —
 `workflow_dispatch` runs the build job but skips the tag check and the upload.
 
-Publishing a release also sets two things in motion that are not PyPI: Zenodo archives the
-release and mints a DOI, and conda-forge's bot proposes a feedstock update. Both are
-described below.
+Publishing a release also sets something in motion that is not PyPI: Zenodo archives the
+release and mints a DOI, described below.
 
 ## Archiving on Zenodo
 
@@ -267,36 +265,6 @@ If a release ever fails to appear on Zenodo, check the webhook deliveries under 
 repository's *Settings → Webhooks*. GitHub sends `created`, `released` and `published` for
 the same release; Zenodo accepts the first with `202` and answers `409` to the other two,
 which is deduplication and not an error.
-
-## Publishing on conda-forge
-
-Some engineering teams install everything through conda and cannot easily mix in pip.
-[conda-forge](https://conda-forge.org/) is how mento reaches them. The recipe lives in
-[`conda-recipe/`](conda-recipe/) so that it stays in step with `pyproject.toml`; conda-forge
-itself builds from a separate repository called a *feedstock*.
-
-**First submission** (once, to create the feedstock):
-
-1. Fork [conda-forge/staged-recipes](https://github.com/conda-forge/staged-recipes).
-2. Copy `conda-recipe/meta.yaml` and `conda-recipe/conda_build_config.yaml` into
-   `recipes/mento/` on a branch of your fork.
-3. Check that `version` and `sha256` in the recipe match the release you want packaged. The
-   checksum of the sdist on PyPI is:
-
-   ```bash
-   curl -sL https://pypi.org/packages/source/m/mento/mento-0.5.0.tar.gz | sha256sum
-   ```
-
-4. Open a pull request against `staged-recipes`. A conda-forge reviewer will comment; expect
-   a round or two on dependency names. When it merges, the bot creates
-   `conda-forge/mento-feedstock` and lists you as maintainer.
-
-**Every release after that** is mostly automatic: within a day of the sdist appearing on
-PyPI, `regro-cf-autotick-bot` opens a pull request on the feedstock with the new version and
-checksum. Review it — the bot updates the version but not the dependencies — and merge.
-
-When mento's runtime dependencies change in `pyproject.toml`, update `conda-recipe/meta.yaml`
-in the same pull request, so the copy here does not drift from what the feedstock needs.
 
 ## Tools we use
 

@@ -17,9 +17,12 @@ from the release history and are summaries rather than complete lists.
   [10.5281/zenodo.21956634](https://doi.org/10.5281/zenodo.21956634) always resolves to the
   latest one. It is in `CITATION.cff`, in the README badge and in the citing guide.
 
-### Changed
+### Removed
 
-- The conda recipe is pinned to 0.5.1 and its checksum.
+- The conda recipe and the conda-forge instructions. mento installs with `pip`, and a second
+  install path was more surface — a recipe to keep in step, a feedstock to maintain, one more
+  choice for the reader — than a project this size needs. It was never submitted, so nothing
+  that existed on conda-forge went away.
 
 ## [0.5.1] - 2026-08-15
 

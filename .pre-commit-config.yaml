@@ -5,9 +5,6 @@ repos:
       - id: trailing-whitespace  # Removes trailing whitespace
       - id: end-of-file-fixer    # Ensures files end with a newline
       - id: check-yaml           # Validates YAML files
-        # The conda recipe is a Jinja template, not plain YAML — `{% set %}` at
-        # the top of the file is not something a YAML parser can read.
-        exclude: ^conda-recipe/meta\.yaml$
       - id: check-toml           # Validates TOML files
       - id: check-merge-conflict # Catches merge conflict markers
       - id: check-added-large-files
