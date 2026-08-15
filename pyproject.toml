@@ -47,7 +47,11 @@ dependencies = [
     "python-docx>=1.1",
     "openpyxl>=3.1",
     "jinja2>=3.1",
-    "IPython>=8.0",
+    # Google Colab pins ipython to 7.34.0, so a >=8.0 floor made `pip install mento`
+    # there either fail to resolve or force an upgrade that breaks the session. mento
+    # only uses IPython.display.Markdown and display, which have been stable for far
+    # longer than either bound.
+    "IPython>=7.34",
 ]
 
 [project.optional-dependencies]

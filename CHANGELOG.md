@@ -34,6 +34,13 @@ from the release history and are summaries rather than complete lists.
   The old module still works and emits a `DeprecationWarning`; `from mento import
   BeamSummary` is unaffected.
 
+### Fixed
+
+- **`pip install mento` on Google Colab.** The IPython requirement was `>=8.0`, while Colab
+  pins ipython to 7.34.0, so installing mento there could not resolve without upgrading
+  IPython out from under the running session. The floor is now `>=7.34`; mento only uses
+  `IPython.display.Markdown` and `display`, which both bounds cover.
+
 ## [0.5.0] - 2026-08-01
 
 Infrastructure release. No changes to the design calculations, and no changes to the public
