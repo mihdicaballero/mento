@@ -10,6 +10,8 @@ from docx.oxml.ns import nsdecls
 from io import BytesIO
 from pandas.io.formats.style import Styler
 
+from mento.i18n import DEFAULT_LANGUAGE, translate, translate_dataframe, translate_table
+
 CUSTOM_COLORS = {
     "blue": "#1f77b4",  # Default Matplotlib blue
     "red": "#d62728",  # Default Matplotlib red
@@ -145,7 +147,7 @@ class TablePrinter:
         Prints table data with column alignment for minimum and maximum values.
     """
 
-    def __init__(self, title: Optional[str] = None) -> None:
+    def __init__(self, title: Optional[str] = None, language: str = DEFAULT_LANGUAGE) -> None:
         """
         Initializes the TablePrinter with an optional title.
 
@@ -153,8 +155,13 @@ class TablePrinter:
         ----------
         title : Optional[str], default=None
             Title to be displayed above the table, if provided.
+
+        language : str, default="en"
+            Language the table is rendered in. Headers and row labels without a
+            translation are printed in English.
         """
-        self.title = title
+        self.language = language
+        self.title = translate(title, language) if title else title
 
     def print_table_data(
         self,
@@ -189,7 +196,7 @@ class TablePrinter:
 
         colalign = ("left", "center", "right", "left")
         table = tabulate(
-            data,
+            translate_table(data, self.language),
             headers=headers,
             tablefmt=tablefmt,
             numalign=numalign,
@@ -231,7 +238,7 @@ class TablePrinter:
 
         colalign = ("left", "center", "center", "center", "center", "center", "left")
         table = tabulate(
-            data,
+            translate_table(data, self.language),
             headers=headers,
             tablefmt=tablefmt,
             numalign=numalign,
@@ -276,7 +283,13 @@ class DocumentBuilder:
         Saves the document to a specified filename.
     """
 
-    def __init__(self, title: str, font_name: str = "Lato", font_size: int = 9) -> None:
+    def __init__(
+        self,
+        title: str,
+        font_name: str = "Lato",
+        font_size: int = 9,
+        language: str = DEFAULT_LANGUAGE,
+    ) -> None:
         """
         Initializes the DocumentBuilder with a title, font name, and font size.
 
@@ -290,9 +303,14 @@ class DocumentBuilder:
 
         font_size : int, default=9
             Font size for the document text.
+
+        language : str, default="en"
+            Language the document is written in. Headings, table headers and row
+            labels without a translation are written in English.
         """
         self.doc = Document()
-        self.title = title
+        self.language = language
+        self.title = translate(title, language)
         self.font_name = font_name
         self.font_size = font_size
         self.set_document_style()
@@ -339,24 +357,28 @@ class DocumentBuilder:
             section.left_margin = Cm(left)
             section.right_margin = Cm(right)
 
-    def add_heading(self, text: str, level: int, font_size: Optional[float] = 10) -> None:
+    def add_heading(self, text: str, level: int, font_size: Optional[float] = 10, **fields: Any) -> None:
         """
         Adds a heading to the document at the specified level.
 
         Parameters
         ----------
         text : str
-            The text for the heading.
+            The text for the heading, in English. It is looked up in the
+            document's language catalog before being written.
         level : int
             The heading level (e.g., 0 for title, 1 for main headings, etc.).
         font_size : float, optional
             Font size in points. Default is 10 pt.
+        **fields
+            Values for the ``{placeholders}`` of ``text``, filled in after the
+            translation so both languages can order them differently.
 
         Returns
         -------
         None
         """
-        heading = self.doc.add_heading(text, level=level)
+        heading = self.doc.add_heading(translate(text, self.language, **fields), level=level)
         heading.paragraph_format.space_before = Pt(0)
 
         # Set font size for all runs in heading
@@ -364,9 +386,12 @@ class DocumentBuilder:
             run.font.size = Pt(font_size)
             run.font.name = self.font_name
 
-    def add_text(self, text: str) -> None:
-        """Adds a paragraph to the document"""
-        self.doc.add_paragraph(text)
+    def add_text(self, text: str, **fields: Any) -> None:
+        """Adds a paragraph to the document, translated into its language.
+
+        ``text`` is the English string; ``fields`` fill its ``{placeholders}``.
+        """
+        self.doc.add_paragraph(translate(text, self.language, **fields))
 
     def set_col_widths(self, table: Any, column_widths: List[Cm]) -> None:
         """
@@ -412,6 +437,8 @@ class DocumentBuilder:
             The created table object.
         """
         from docx.shared import Pt
+
+        df = translate_dataframe(df, self.language)
 
         # --- Create and style table ---
         table = self.doc.add_table(rows=df.shape[0] + 1, cols=df.shape[1])

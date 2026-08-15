@@ -244,6 +244,9 @@ def test_all_exports_in_all() -> None:
         "PunchingNode",
         "ShearWall",
         "ShearWallSummary",
+        "set_language",
+        "get_language",
+        "available_languages",
     ]
 
     assert set(mento.__all__) == set(expected_exports)

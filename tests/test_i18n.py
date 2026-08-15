@@ -1,0 +1,466 @@
+"""Language of the detailed reports.
+
+The tests that matter most here are the coverage ones: they run real checks and
+assert the Spanish catalog carries every label the report builders emit, so a
+label added to ``mento/codes`` without a translation fails the suite instead of
+silently printing English inside a Spanish report.
+"""
+
+from typing import Any, Dict, Generator, List, Set
+
+import pandas as pd
+import pytest
+
+from mento import i18n
+from mento.beam import RectangularBeam
+from mento.forces import Forces
+from mento.i18n import (
+    ES,
+    available_languages,
+    get_language,
+    set_language,
+    translate,
+    translate_dataframe,
+    translate_table,
+)
+from mento.material import (
+    Concrete_ACI_318_19,
+    Concrete_CIRSOC_201_25,
+    Concrete_EN_1992_2004,
+    SteelBar,
+)
+from mento.node import Node
+from mento.results import DocumentBuilder, TablePrinter
+from mento.shear_wall import ShearWall
+from mento.slab import OneWaySlab
+from mento.units import MPa, cm, kN, kNm, m, mm
+
+
+@pytest.fixture(autouse=True)
+def restore_language() -> Generator[None, None, None]:
+    """Language is package-wide state; never let it leak into another test."""
+    previous = get_language()
+    yield
+    set_language(previous)
+
+
+# ---------------------------------------------------------------------------
+# set_language / get_language
+# ---------------------------------------------------------------------------
+
+
+class TestLanguageSelection:
+    def test_default_is_english(self) -> None:
+        assert get_language() == "en"
+
+    def test_set_language_switches(self) -> None:
+        set_language("es")
+        assert get_language() == "es"
+
+    def test_unknown_language_raises(self) -> None:
+        with pytest.raises(ValueError, match="Unknown language"):
+            set_language("fr")
+
+    def test_unknown_language_leaves_current_one(self) -> None:
+        set_language("es")
+        with pytest.raises(ValueError):
+            set_language("de")
+        assert get_language() == "es"
+
+    def test_available_languages(self) -> None:
+        assert available_languages() == ("en", "es")
+
+
+# ---------------------------------------------------------------------------
+# translate
+# ---------------------------------------------------------------------------
+
+
+class TestTranslate:
+    def test_translates_known_string(self) -> None:
+        assert translate("Section height", "es") == "Altura de la sección"
+
+    def test_unknown_string_falls_back_to_input(self) -> None:
+        assert translate("Torsional constant", "es") == "Torsional constant"
+
+    def test_english_returns_input(self) -> None:
+        assert translate("Section height", "en") == "Section height"
+
+    def test_uses_current_language_when_not_given(self) -> None:
+        set_language("es")
+        assert translate("Section height") == "Altura de la sección"
+
+    def test_fills_placeholders(self) -> None:
+        assert translate("Beam {label} shear check", "es", label="V12") == "Verificación a corte de viga V12"
+
+    def test_fills_placeholders_in_english(self) -> None:
+        assert translate("Beam {label} shear check", "en", label="V12") == "Beam V12 shear check"
+
+
+# ---------------------------------------------------------------------------
+# translate_table / translate_dataframe
+# ---------------------------------------------------------------------------
+
+
+def _table() -> Dict[str, List[Any]]:
+    return {
+        "Materials": ["Section height", "Concrete strength"],
+        "Variable": ["h", "fc"],
+        "Value": [50.0, 25.0],
+        "Unit": ["cm", "MPa"],
+    }
+
+
+class TestTranslateTable:
+    def test_translates_headers_and_label_column(self) -> None:
+        out = translate_table(_table(), "es")
+        assert list(out) == ["Materiales", "Variable", "Valor", "Unidad"]
+        assert out["Materiales"] == ["Altura de la sección", "Resistencia del hormigón"]
+
+    def test_leaves_values_and_units_alone(self) -> None:
+        out = translate_table(_table(), "es")
+        assert out["Valor"] == [50.0, 25.0]
+        assert out["Unidad"] == ["cm", "MPa"]
+
+    def test_does_not_mutate_the_input(self) -> None:
+        data = _table()
+        translate_table(data, "es")
+        assert data == _table()
+
+    def test_empty_table(self) -> None:
+        assert translate_table({}, "es") == {}
+
+    def test_non_string_labels_survive(self) -> None:
+        out = translate_table({"Check": [1, None, "Section height"]}, "es")
+        assert out["Verificación"] == [1, None, "Altura de la sección"]
+
+
+class TestTranslateDataframe:
+    def test_translates_headers_and_label_column(self) -> None:
+        out = translate_dataframe(pd.DataFrame(_table()), "es")
+        assert list(out.columns) == ["Materiales", "Variable", "Valor", "Unidad"]
+        assert list(out["Materiales"]) == ["Altura de la sección", "Resistencia del hormigón"]
+
+    def test_does_not_mutate_the_input(self) -> None:
+        df = pd.DataFrame(_table())
+        translate_dataframe(df, "es")
+        assert list(df.columns) == ["Materials", "Variable", "Value", "Unit"]
+        assert list(df["Materials"]) == ["Section height", "Concrete strength"]
+
+    def test_empty_dataframe(self) -> None:
+        df = pd.DataFrame()
+        assert translate_dataframe(df, "es").empty
+
+
+# ---------------------------------------------------------------------------
+# Presentation classes
+# ---------------------------------------------------------------------------
+
+
+class TestPresentationClasses:
+    def test_table_printer_defaults_to_english(self) -> None:
+        assert TablePrinter("MATERIALS").title == "MATERIALS"
+
+    def test_table_printer_translates_title(self) -> None:
+        assert TablePrinter("MATERIALS", "es").title == "MATERIALES"
+
+    def test_table_printer_prints_spanish(self, capsys: pytest.CaptureFixture) -> None:
+        TablePrinter("MATERIALS", "es").print_table_data(_table(), headers="keys")
+        out = capsys.readouterr().out
+        assert "Altura de la sección" in out
+        assert "Section height" not in out
+
+    def test_table_printer_prints_english_by_default(self, capsys: pytest.CaptureFixture) -> None:
+        TablePrinter("MATERIALS").print_table_data(_table(), headers="keys")
+        assert "Section height" in capsys.readouterr().out
+
+    def test_document_builder_defaults_to_english(self) -> None:
+        builder = DocumentBuilder(title="Concrete beam shear check")
+        builder.add_heading("Materials", level=2)
+        assert builder.doc.paragraphs[-1].text == "Materials"
+
+    def test_document_builder_translates_heading(self) -> None:
+        builder = DocumentBuilder(title="Concrete beam shear check", language="es")
+        builder.add_heading("Materials", level=2)
+        assert builder.doc.paragraphs[-1].text == "Materiales"
+
+    def test_document_builder_fills_heading_placeholders(self) -> None:
+        builder = DocumentBuilder(title="Concrete beam shear check", language="es")
+        builder.add_heading("Beam {label} shear check", level=1, label="V12")
+        assert builder.doc.paragraphs[-1].text == "Verificación a corte de viga V12"
+
+    def test_document_builder_translates_table(self) -> None:
+        builder = DocumentBuilder(title="Concrete beam shear check", language="es")
+        builder.add_table_data(pd.DataFrame(_table()))
+        table = builder.doc.tables[-1]
+        assert table.cell(0, 0).text == "Materiales"
+        assert table.cell(1, 0).text == "Altura de la sección"
+
+    def test_document_builder_table_untouched_in_english(self) -> None:
+        builder = DocumentBuilder(title="Concrete beam shear check")
+        builder.add_table_data(pd.DataFrame(_table()))
+        table = builder.doc.tables[-1]
+        assert table.cell(0, 0).text == "Materials"
+        assert table.cell(1, 0).text == "Section height"
+
+
+# ---------------------------------------------------------------------------
+# Catalog coverage against the real reports
+# ---------------------------------------------------------------------------
+
+STEEL = SteelBar(name="ADN 420", f_y=420 * MPa)
+
+
+def _beam(concrete: Any, label: str) -> RectangularBeam:
+    beam = RectangularBeam(
+        label=label,
+        concrete=concrete,
+        steel_bar=STEEL,
+        width=20 * cm,
+        height=50 * cm,
+        c_c=25 * mm,
+    )
+    Node(
+        section=beam,
+        forces=[
+            Forces(label="C1", V_z=100 * kN, M_y=150 * kNm),
+            Forces(label="C2", V_z=80 * kN, M_y=-100 * kNm),
+        ],
+    ).design()
+    return beam
+
+
+def _slab() -> OneWaySlab:
+    slab = OneWaySlab(
+        label="S1",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=STEEL,
+        width=100 * cm,
+        height=20 * cm,
+        c_c=25 * mm,
+    )
+    Node(section=slab, forces=[Forces(label="C1", V_z=40 * kN, M_y=30 * kNm)]).design()
+    return slab
+
+
+def _wall() -> ShearWall:
+    wall = ShearWall(
+        label="W1",
+        concrete=Concrete_ACI_318_19(name="C25", f_c=25 * MPa),
+        steel_bar=STEEL,
+        thickness=25 * cm,
+        length=4.0 * m,
+        height=3.5 * m,
+        c_c=20 * mm,
+    )
+    wall.set_horizontal_rebar(d_b=10 * mm, s=20 * cm)
+    wall.set_vertical_rebar(d_b=10 * mm, s=20 * cm)
+    wall.check_shear([Forces(label="C1", V_z=500 * kN)])
+    return wall
+
+
+def _rendered_strings(monkeypatch: pytest.MonkeyPatch, render: Any) -> Set[str]:
+    """Every string ``render`` would put in front of a user.
+
+    Stands in for TablePrinter and DocumentBuilder so nothing is printed or
+    written to disk, and records the headers, row labels, headings and
+    paragraphs the report asked for.
+    """
+    found: Set[str] = set()
+
+    def record(data: Dict[str, List[Any]]) -> None:
+        columns = list(data)
+        found.update(str(c) for c in columns)
+        if columns:
+            found.update(v for v in data[columns[0]] if isinstance(v, str) and v.strip())
+
+    def tp_init(self: Any, title: str = None, language: str = "en") -> None:  # type: ignore[assignment]
+        if title:
+            found.add(title)
+
+    def tp_print(self: Any, data: Dict[str, List[Any]], **kwargs: Any) -> None:
+        record(data)
+
+    def db_init(self: Any, title: str, font_name: str = "Lato", font_size: int = 9, language: str = "en") -> None:
+        found.add(title)
+
+    def db_heading(self: Any, text: str, level: int, font_size: float = 10, **fields: Any) -> None:
+        found.add(text)
+
+    def db_text(self: Any, text: str, **fields: Any) -> None:
+        found.add(text)
+
+    def db_table(self: Any, df: pd.DataFrame, *args: Any, **kwargs: Any) -> None:
+        record({str(c): list(df[c]) for c in df.columns})
+
+    monkeypatch.setattr(TablePrinter, "__init__", tp_init)
+    monkeypatch.setattr(TablePrinter, "print_table_data", tp_print)
+    monkeypatch.setattr(TablePrinter, "print_table_min_max", tp_print)
+    monkeypatch.setattr(DocumentBuilder, "__init__", db_init)
+    monkeypatch.setattr(DocumentBuilder, "add_heading", db_heading)
+    monkeypatch.setattr(DocumentBuilder, "add_text", db_text)
+    monkeypatch.setattr(DocumentBuilder, "add_table_data", db_table)
+    monkeypatch.setattr(DocumentBuilder, "add_table_dcr", db_table)
+    monkeypatch.setattr(DocumentBuilder, "add_table_min_max", db_table)
+    monkeypatch.setattr(DocumentBuilder, "save", lambda self, filename: None)
+
+    render()
+    return found
+
+
+def _report_all(section: Any, flexure: bool = True) -> None:
+    if flexure:
+        section.flexure_results_detailed()
+        section.flexure_results_detailed_doc()
+    section.shear_results_detailed()
+    section.shear_results_detailed_doc()
+
+
+CASES = [
+    pytest.param(lambda: _beam(Concrete_ACI_318_19(name="H25", f_c=25 * MPa), "B1"), True, id="beam-ACI"),
+    pytest.param(lambda: _beam(Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa), "B2"), True, id="beam-CIRSOC"),
+    pytest.param(lambda: _beam(Concrete_EN_1992_2004(name="C25", f_c=25 * MPa), "B3"), True, id="beam-EN"),
+    pytest.param(_slab, True, id="slab"),
+    pytest.param(_wall, False, id="shear-wall"),
+]
+
+
+class TestCatalogCoverage:
+    @pytest.mark.parametrize("build,flexure", CASES)
+    def test_spanish_catalog_covers_every_report_string(
+        self, build: Any, flexure: bool, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        section = build()
+        strings = _rendered_strings(monkeypatch, lambda: _report_all(section, flexure))
+        missing = sorted(s for s in strings if s not in ES)
+        assert not missing, f"No Spanish translation for: {missing}"
+
+    def test_the_harness_actually_sees_the_report(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Guard against a silently empty coverage test."""
+        section = _beam(Concrete_ACI_318_19(name="H25", f_c=25 * MPa), "B1")
+        strings = _rendered_strings(monkeypatch, lambda: _report_all(section))
+        assert "Section height" in strings
+        assert len(strings) > 50
+
+    def test_catalog_has_no_untranslated_entries(self) -> None:
+        """An entry mapping to itself is a leftover, unless the word is the same
+        in both languages — which has to be declared here on purpose."""
+        same_in_both = {"Variable"}
+        assert [k for k, v in ES.items() if k == v and k not in same_in_both] == []
+
+
+# ---------------------------------------------------------------------------
+# End to end
+# ---------------------------------------------------------------------------
+
+
+class TestEndToEnd:
+    def test_console_report_is_spanish(self, capsys: pytest.CaptureFixture) -> None:
+        beam = _beam(Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa), "V12")
+        capsys.readouterr()
+        set_language("es")
+        beam.shear_results_detailed()
+        out = capsys.readouterr().out
+        assert "RESULTADOS DETALLADOS DE CORTE DE VIGA" in out
+        assert "Resistencia del hormigón" in out
+        assert "Relación demanda-capacidad" in out
+        assert "Concrete strength" not in out
+        assert "Demand Capacity Ratio" not in out
+
+    def test_console_report_is_english_by_default(self, capsys: pytest.CaptureFixture) -> None:
+        beam = _beam(Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa), "V12")
+        capsys.readouterr()
+        beam.shear_results_detailed()
+        out = capsys.readouterr().out
+        assert "Concrete strength" in out
+        assert "Resistencia del hormigón" not in out
+
+    def test_word_report_is_spanish(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
+        beam = _beam(Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa), "V12")
+        saved: Dict[str, Any] = {}
+        monkeypatch.setattr(
+            DocumentBuilder, "save", lambda self, filename: saved.update(doc=self.doc, filename=filename)
+        )
+        set_language("es")
+        beam.shear_results_detailed_doc()
+
+        text = "\n".join(p.text for p in saved["doc"].paragraphs)
+        text += "\n" + "\n".join(c.text for t in saved["doc"].tables for r in t.rows for c in r.cells)
+        assert "Verificación a corte de viga V12" in text
+        assert "Generado con mento" in text
+        assert "Resistencia del hormigón" in text
+        assert "Concrete strength" not in text
+
+    def test_word_file_name_stays_english(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """File names are not translated, so a project keeps one naming scheme."""
+        beam = _beam(Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa), "V12")
+        saved: Dict[str, Any] = {}
+        monkeypatch.setattr(DocumentBuilder, "save", lambda self, filename: saved.update(filename=filename))
+        set_language("es")
+        beam.shear_results_detailed_doc()
+        assert saved["filename"] == "Beam V12 shear check CIRSOC 201-25.docx"
+
+    def test_slab_inherits_the_language(self, capsys: pytest.CaptureFixture) -> None:
+        slab = _slab()
+        capsys.readouterr()
+        set_language("es")
+        slab.flexure_results_detailed()
+        assert "Altura de la sección" in capsys.readouterr().out
+
+    def test_slab_is_reported_as_a_slab(self, capsys: pytest.CaptureFixture) -> None:
+        """A one-way slab must not be titled as a beam in either language."""
+        slab = _slab()
+        capsys.readouterr()
+        slab.flexure_results_detailed()
+        assert "===== SLAB FLEXURE DETAILED RESULTS =====" in capsys.readouterr().out
+
+        set_language("es")
+        slab.shear_results_detailed()
+        out = capsys.readouterr().out
+        assert "===== RESULTADOS DETALLADOS DE CORTE DE LOSA =====" in out
+        assert "VIGA" not in out
+
+    def test_slab_word_report_is_titled_as_a_slab(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        slab = _slab()
+        saved: Dict[str, Any] = {}
+        monkeypatch.setattr(
+            DocumentBuilder, "save", lambda self, filename: saved.update(doc=self.doc, filename=filename)
+        )
+        slab.flexure_results_detailed_doc()
+        assert saved["filename"] == "Slab S1 flexure check ACI 318-19.docx"
+        assert "Slab S1 flexure check" in "\n".join(p.text for p in saved["doc"].paragraphs)
+
+        set_language("es")
+        slab.flexure_results_detailed_doc()
+        assert saved["filename"] == "Slab S1 flexure check ACI 318-19.docx"
+        assert "Verificación a flexión de losa S1" in "\n".join(p.text for p in saved["doc"].paragraphs)
+
+    def test_beam_is_still_reported_as_a_beam(self, capsys: pytest.CaptureFixture) -> None:
+        beam = _beam(Concrete_ACI_318_19(name="H25", f_c=25 * MPa), "B1")
+        capsys.readouterr()
+        beam.flexure_results_detailed()
+        assert "===== BEAM FLEXURE DETAILED RESULTS =====" in capsys.readouterr().out
+
+    def test_flexure_forces_header_matches_the_shear_one(self, capsys: pytest.CaptureFixture) -> None:
+        """Both detailed tables spell the forces header the same way."""
+        beam = _beam(Concrete_ACI_318_19(name="H25", f_c=25 * MPa), "B1")
+        capsys.readouterr()
+        beam.flexure_results_detailed()
+        out = capsys.readouterr().out
+        assert "Design forces" in out
+        assert "Design_forces" not in out
+
+    def test_shear_wall_report_is_spanish(self, capsys: pytest.CaptureFixture) -> None:
+        wall = _wall()
+        capsys.readouterr()
+        set_language("es")
+        wall.shear_results_detailed()
+        out = capsys.readouterr().out
+        assert "RESULTADOS DETALLADOS DE TABIQUE" in out
+        assert "Espesor del tabique" in out
+        assert "Wall thickness" not in out
+
+    def test_summary_reports_stay_english(self) -> None:
+        """Summaries are out of scope; they must not pick the language up."""
+        set_language("es")
+        assert DocumentBuilder(title="Beam Summary Analysis", font_size=8).language == i18n.DEFAULT_LANGUAGE

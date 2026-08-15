@@ -54,6 +54,14 @@ mento.forces module
    :undoc-members:
    :show-inheritance:
 
+mento.i18n module
+-----------------
+
+.. automodule:: mento.i18n
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 mento.material module
 ---------------------
 

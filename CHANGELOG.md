@@ -13,6 +13,16 @@ from the release history and are summaries rather than complete lists.
 
 ### Added
 
+- Spanish detailed reports. `mento.set_language("es")` switches
+  `flexure_results_detailed()`, `shear_results_detailed()` and their `_doc()` counterparts
+  to Spanish, for beams, one-way slabs and shear walls, in the console and in the generated
+  Word documents. English remains the default, and `mento.get_language()` and
+  `mento.available_languages()` report the current and the available choices. Variable
+  names, units, the design code designation and the generated file names are not
+  translated. A label with no translation is written in English rather than raising. See
+  [Report language](https://mento-docs.readthedocs.io/en/latest/user_guide/language.html).
+  Closes [#79](https://github.com/mihdicaballero/mento/issues/79) and
+  [#126](https://github.com/mihdicaballero/mento/issues/126).
 - A DOI. Releases are archived on Zenodo, and
   [10.5281/zenodo.21956634](https://doi.org/10.5281/zenodo.21956634) always resolves to the
   latest one. It is in `CITATION.cff`, in the README badge and in the citing guide.
@@ -20,6 +30,18 @@ from the release history and are summaries rather than complete lists.
 ### Changed
 
 - The conda recipe is pinned to 0.5.1 and its checksum.
+
+### Fixed
+
+- A one-way slab is no longer reported as a beam. `OneWaySlab` inherited the titles of
+  `RectangularBeam`, so its detailed reports were headed `BEAM FLEXURE DETAILED RESULTS`
+  and its Word file named `Beam S1 flexure check ACI 318-19.docx`. Slabs now use their own
+  wording and file name; beams are unchanged.
+- The forces table of the detailed flexure report is headed `Design forces`, matching the
+  shear report and the Word output. It was `Design_forces` in the console output only.
+- The Word reports spell the `Limit checks` heading the same way everywhere. Flexure used
+  `Limit Checks` and shear used `Limit checks`, in both the element and the summary
+  documents.
 
 ## [0.5.1] - 2026-08-15
 

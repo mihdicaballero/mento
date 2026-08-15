@@ -666,7 +666,7 @@ class BeamSummary:
         doc_builder.add_table_data(df_flex_materials)
         doc_builder.add_table_data(df_flex_geometry)
         doc_builder.add_table_data(df_flex_forces)
-        doc_builder.add_heading("Limit Checks", level=3)
+        doc_builder.add_heading("Limit checks", level=3)
         doc_builder.add_table_data(df_flex_min_max)
         doc_builder.add_heading("Flexural Capacity Top", level=3)
         doc_builder.add_table_dcr(df_flex_capacity_top)
