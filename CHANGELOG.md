@@ -11,6 +11,8 @@ from the release history and are summaries rather than complete lists.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-08-15
+
 ### Added
 
 - Public design results API: `beam.flexure_design` and `beam.shear_design` return plain,
@@ -33,6 +35,13 @@ from the release history and are summaries rather than complete lists.
 - `mento.summary` was renamed to `mento.beam_summary`, matching `mento.shear_wall_summary`.
   The old module still works and emits a `DeprecationWarning`; `from mento import
   BeamSummary` is unaffected.
+
+### Fixed
+
+- **`pip install mento` on Google Colab.** The IPython requirement was `>=8.0`, while Colab
+  pins ipython to 7.34.0, so installing mento there could not resolve without upgrading
+  IPython out from under the running session. The floor is now `>=7.34`; mento only uses
+  `IPython.display.Markdown` and `display`, which both bounds cover.
 
 ## [0.5.0] - 2026-08-01
 
@@ -123,7 +132,8 @@ First public release on PyPI: rectangular concrete beam check and design for fle
 shear under ACI 318-19 and CIRSOC 201-25, unit aware calculations, results as pandas
 DataFrames, and Word calculation reports.
 
-[Unreleased]: https://github.com/mihdicaballero/mento/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/mihdicaballero/mento/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/mihdicaballero/mento/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/mihdicaballero/mento/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/mihdicaballero/mento/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/mihdicaballero/mento/compare/v0.3.6...v0.4.0
