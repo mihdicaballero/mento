@@ -4,6 +4,11 @@ The tests that matter most here are the coverage ones: they run real checks and
 assert the Spanish catalog carries every label the report builders emit, so a
 label added to ``mento/codes`` without a translation fails the suite instead of
 silently printing English inside a Spanish report.
+
+Assert a translated string as ``ES["<english>"]``, never as a Spanish literal.
+The wording of the catalog is data an engineer is expected to revise — pinning
+it here would turn every terminology fix into a broken test. What these tests
+own is that the string is *translated*, not how it reads.
 """
 
 from typing import Any, Dict, Generator, List, Set
@@ -162,12 +167,12 @@ class TestPresentationClasses:
         assert TablePrinter("MATERIALS").title == "MATERIALS"
 
     def test_table_printer_translates_title(self) -> None:
-        assert TablePrinter("MATERIALS", "es").title == "MATERIALES"
+        assert TablePrinter("MATERIALS", "es").title == ES["MATERIALS"]
 
     def test_table_printer_prints_spanish(self, capsys: pytest.CaptureFixture) -> None:
         TablePrinter("MATERIALS", "es").print_table_data(_table(), headers="keys")
         out = capsys.readouterr().out
-        assert "Altura de la sección" in out
+        assert ES["Section height"] in out
         assert "Section height" not in out
 
     def test_table_printer_prints_english_by_default(self, capsys: pytest.CaptureFixture) -> None:
@@ -361,9 +366,9 @@ class TestEndToEnd:
         set_language("es")
         beam.shear_results_detailed()
         out = capsys.readouterr().out
-        assert "RESULTADOS DETALLADOS DE CORTE DE VIGA" in out
-        assert "Resistencia del hormigón" in out
-        assert "Relación demanda-capacidad" in out
+        assert ES["===== BEAM SHEAR DETAILED RESULTS ====="] in out
+        assert ES["Concrete strength"] in out
+        assert ES["Demand Capacity Ratio"] in out
         assert "Concrete strength" not in out
         assert "Demand Capacity Ratio" not in out
 
@@ -373,7 +378,7 @@ class TestEndToEnd:
         beam.shear_results_detailed()
         out = capsys.readouterr().out
         assert "Concrete strength" in out
-        assert "Resistencia del hormigón" not in out
+        assert ES["Concrete strength"] not in out
 
     def test_word_report_is_spanish(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
         beam = _beam(Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa), "V12")
@@ -386,9 +391,9 @@ class TestEndToEnd:
 
         text = "\n".join(p.text for p in saved["doc"].paragraphs)
         text += "\n" + "\n".join(c.text for t in saved["doc"].tables for r in t.rows for c in r.cells)
-        assert "Verificación a corte de viga V12" in text
+        assert ES["Beam {label} shear check"].format(label="V12") in text
         assert "Generado con mento" in text
-        assert "Resistencia del hormigón" in text
+        assert ES["Concrete strength"] in text
         assert "Concrete strength" not in text
 
     def test_word_file_name_stays_english(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -405,7 +410,7 @@ class TestEndToEnd:
         capsys.readouterr()
         set_language("es")
         slab.flexure_results_detailed()
-        assert "Altura de la sección" in capsys.readouterr().out
+        assert ES["Section height"] in capsys.readouterr().out
 
     def test_slab_is_reported_as_a_slab(self, capsys: pytest.CaptureFixture) -> None:
         """A one-way slab must not be titled as a beam in either language."""
@@ -417,7 +422,7 @@ class TestEndToEnd:
         set_language("es")
         slab.shear_results_detailed()
         out = capsys.readouterr().out
-        assert "===== RESULTADOS DETALLADOS DE CORTE DE LOSA =====" in out
+        assert ES["===== SLAB SHEAR DETAILED RESULTS ====="] in out
         assert "VIGA" not in out
 
     def test_slab_word_report_is_titled_as_a_slab(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -433,7 +438,8 @@ class TestEndToEnd:
         set_language("es")
         slab.flexure_results_detailed_doc()
         assert saved["filename"] == "Slab S1 flexure check ACI 318-19.docx"
-        assert "Verificación a flexión de losa S1" in "\n".join(p.text for p in saved["doc"].paragraphs)
+        expected = ES["Slab {label} flexure check"].format(label="S1")
+        assert expected in "\n".join(p.text for p in saved["doc"].paragraphs)
 
     def test_beam_is_still_reported_as_a_beam(self, capsys: pytest.CaptureFixture) -> None:
         beam = _beam(Concrete_ACI_318_19(name="H25", f_c=25 * MPa), "B1")
