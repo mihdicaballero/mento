@@ -21,6 +21,20 @@ Always cite the version you actually ran. mento reports it:
 Calculations change between versions — a corrected clause or a new code edition can move a
 result — so the version is part of the reproducibility of whatever you report.
 
+DOI
+---
+
+Every release is archived on `Zenodo <https://zenodo.org/>`_, which issues a DOI for it. Cite
+
+.. code-block:: text
+
+   10.5281/zenodo.21956634
+
+which always resolves to the most recent release. Each release also has a DOI of its own,
+shown on its `Zenodo record <https://doi.org/10.5281/zenodo.21956634>`_, and that is the
+better one to cite when the exact version matters — which, for a tool that produces
+calculations, it usually does.
+
 Citation metadata
 -----------------
 
@@ -35,21 +49,18 @@ BibTeX
 .. code-block:: bibtex
 
    @software{mento,
-     author  = {Caballero, Mehdí and Romaris, Juan Pablo},
-     title   = {mento: an intuitive tool for structural engineers to design concrete
-                elements efficiently},
-     version = {0.5.0},
-     year    = {2026},
-     url     = {https://github.com/mihdicaballero/mento}
+     author    = {Caballero, Mehdí and Romaris, Juan Pablo},
+     title     = {mento: an intuitive tool for structural engineers to design concrete
+                  elements efficiently},
+     version   = {0.5.1},
+     year      = {2026},
+     doi       = {10.5281/zenodo.21956634},
+     publisher = {Zenodo},
+     url       = {https://doi.org/10.5281/zenodo.21956634}
    }
 
-Replace ``version`` and ``year`` with the release you used.
-
-.. note::
-
-   Releases are being archived on `Zenodo <https://zenodo.org/>`_, which issues a DOI for
-   each one. Once the first archived release is out, the DOI will be shown here and in
-   ``CITATION.cff``, and it is preferable to the plain repository URL in a formal citation.
+Replace ``version`` and ``year`` with the release you used, and swap the concept DOI for that
+release's own DOI if you want the citation to point at one specific version.
 
 Citing a design code
 --------------------

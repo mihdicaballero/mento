@@ -11,6 +11,16 @@ from the release history and are summaries rather than complete lists.
 
 ## [Unreleased]
 
+### Added
+
+- A DOI. Releases are archived on Zenodo, and
+  [10.5281/zenodo.21956634](https://doi.org/10.5281/zenodo.21956634) always resolves to the
+  latest one. It is in `CITATION.cff`, in the README badge and in the citing guide.
+
+### Changed
+
+- The conda recipe is pinned to 0.5.1 and its checksum.
+
 ## [0.5.1] - 2026-08-15
 
 ### Added

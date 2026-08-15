@@ -243,39 +243,30 @@ A DOI is what lets someone cite a specific version of mento in a paper or a tech
 and what makes the software findable outside GitHub. [Zenodo](https://zenodo.org/) mints one
 automatically for every GitHub Release, at no cost.
 
-**One-time setup, by a maintainer with admin rights on the repository:**
-
-1. Sign in to Zenodo with the GitHub account that owns the repository.
-2. Go to the [GitHub settings page](https://zenodo.org/account/settings/github/) on Zenodo
-   and flip the switch next to `mihdicaballero/mento`.
-3. Publish the next GitHub Release as usual. Zenodo receives the webhook, archives the
-   source at that tag, and issues the DOIs.
+**This is already set up and needs nothing per release.** The repository is enabled on
+Zenodo, so publishing a GitHub Release fires a webhook, Zenodo archives the source at that
+tag and issues the DOIs, and the record picks up its title, authors and licence from
+[CITATION.cff](CITATION.cff) — which is why keeping that file current matters.
 
 Zenodo issues **two** DOIs: a *version DOI* for that specific release, and a *concept DOI*
-that always resolves to the latest version. The concept DOI is the one to advertise.
+that always resolves to the latest version. mento's concept DOI is
+[10.5281/zenodo.21956634](https://doi.org/10.5281/zenodo.21956634); it does not change, and
+it is the one wired into `CITATION.cff` and the README badge. Only the concept DOI is
+recorded in the repository: a version DOI is not known until the release is published, so
+keeping one there would mean a chore after every release and a stale number whenever it is
+forgotten. Per release, only `version` and `date-released` in `CITATION.cff` move, which the
+release procedure above already covers.
 
-**After the first archived release**, wire the DOI into the repository once:
+To find the DOI of a release without opening Zenodo:
 
-- In [CITATION.cff](CITATION.cff), add the concept DOI so GitHub's *Cite this repository*
-  button includes it:
+```bash
+curl -sI https://zenodo.org/badge/latestdoi/699526716 | grep -i location
+```
 
-  ```yaml
-  identifiers:
-    - type: doi
-      value: 10.5281/zenodo.XXXXXXX
-      description: Concept DOI for all versions of mento
-  ```
-
-- In [README.md](README.md), add the badge Zenodo shows on the repository's Zenodo page,
-  next to the other badges:
-
-  ```markdown
-  [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXX)
-  ```
-
-Because the concept DOI does not change, this is done once and not per release. Only
-`version` and `date-released` in `CITATION.cff` move with each release, which is already part
-of the release procedure above.
+If a release ever fails to appear on Zenodo, check the webhook deliveries under the
+repository's *Settings → Webhooks*. GitHub sends `created`, `released` and `published` for
+the same release; Zenodo accepts the first with `202` and answers `409` to the other two,
+which is deduplication and not an error.
 
 ## Publishing on conda-forge
 

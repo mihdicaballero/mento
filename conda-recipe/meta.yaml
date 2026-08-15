@@ -1,5 +1,5 @@
 {% set name = "mento" %}
-{% set version = "0.5.0" %}
+{% set version = "0.5.1" %}
 
 package:
   name: {{ name|lower }}
@@ -7,7 +7,7 @@ package:
 
 source:
   url: https://pypi.org/packages/source/{{ name[0] }}/{{ name }}/{{ name }}-{{ version }}.tar.gz
-  sha256: d8a20ce32e0f25c1ab614755190fa80ae329cf342ee22ace5b34c7ece13c75e7
+  sha256: 360b80b2bbc0df1c462d4949c903ce5f5acefd8f217b281175be37cfb0822cfa
 
 build:
   noarch: python
