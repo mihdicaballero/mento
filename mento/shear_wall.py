@@ -14,6 +14,7 @@ from mento._version import __version__ as MENTO_VERSION
 from mento.beam import RectangularBeam
 from mento.forces import Forces
 from mento.material import Concrete, SteelBar
+from mento.i18n import get_language, translate
 from mento.results import CUSTOM_COLORS, DocumentBuilder, Formatter, TablePrinter
 from mento.settings import BeamSettings
 from mento.units import cm, dimensionless, kN, mm
@@ -166,21 +167,29 @@ class ShearWall(RectangularBeam):
         """Set distributed horizontal (transverse) reinforcement.
 
         Bars are placed on each face (E.F.):  ρt = n_curtains · Ab / (t × s_h)
+        A zero spacing means no rebar, which clears the horizontal reinforcement.
         """
         self._d_b_h = d_b
         self._s_h = s
-        A_b = math.pi / 4 * d_b**2
-        self._rho_t = (self._n_curtains * A_b / (self.thickness * s)).to("")
+        if s == 0 * mm:
+            self._rho_t = 0 * dimensionless
+        else:
+            A_b = math.pi / 4 * d_b**2
+            self._rho_t = (self._n_curtains * A_b / (self.thickness * s)).to("")
 
     def set_vertical_rebar(self, d_b: Quantity, s: Quantity) -> None:
         """Set distributed vertical reinforcement.
 
         Bars are placed on each face (E.F.):  ρl = n_curtains · Ab / (t × s_v)
+        A zero spacing means no rebar, which clears the vertical reinforcement.
         """
         self._d_b_v = d_b
         self._s_v = s
-        A_b = math.pi / 4 * d_b**2
-        self._rho_l = (self._n_curtains * A_b / (self.thickness * s)).to("")
+        if s == 0 * mm:
+            self._rho_l = 0 * dimensionless
+        else:
+            A_b = math.pi / 4 * d_b**2
+            self._rho_l = (self._n_curtains * A_b / (self.thickness * s)).to("")
 
     # ------------------------------------------------------------------
     # Shear check and design (override RectangularBeam)
@@ -389,12 +398,13 @@ class ShearWall(RectangularBeam):
         else:
             result_data = self._limiting_case_shear_details
 
-        print("===== SHEAR WALL DETAILED RESULTS =====")
-        TablePrinter("MATERIALS").print_table_data(self._materials_shear_wall, headers="keys")
-        TablePrinter("GEOMETRY").print_table_data(self._geometry_shear_wall, headers="keys")
-        TablePrinter("FORCES").print_table_data(result_data["forces"], headers="keys")
-        TablePrinter("MAX AND MIN LIMIT CHECKS").print_table_data(result_data["min_max"], headers="keys")
-        TablePrinter("SHEAR STRENGTH").print_table_data(result_data["shear_capacity"], headers="keys")
+        language = get_language()
+        print(translate("===== SHEAR WALL DETAILED RESULTS =====", language))
+        TablePrinter("MATERIALS", language).print_table_data(self._materials_shear_wall, headers="keys")
+        TablePrinter("GEOMETRY", language).print_table_data(self._geometry_shear_wall, headers="keys")
+        TablePrinter("FORCES", language).print_table_data(result_data["forces"], headers="keys")
+        TablePrinter("MAX AND MIN LIMIT CHECKS", language).print_table_data(result_data["min_max"], headers="keys")
+        TablePrinter("SHEAR STRENGTH", language).print_table_data(result_data["shear_capacity"], headers="keys")
 
     def shear_results_detailed_doc(self, force: Optional[Forces] = None) -> None:  # type: ignore[override]
         if not self._shear_wall_checked:
@@ -413,9 +423,13 @@ class ShearWall(RectangularBeam):
         df_min_max = pd.DataFrame(result_data["min_max"])
         df_capacity = pd.DataFrame(result_data["shear_capacity"])
 
-        doc_builder = DocumentBuilder(title="Concrete shear wall check")
-        doc_builder.add_heading(f"Shear Wall {self.label} shear check", level=1)
-        doc_builder.add_text(f"Made with mento {MENTO_VERSION}. Design code: {self.concrete.design_code}")
+        doc_builder = DocumentBuilder(title="Concrete shear wall check", language=get_language())
+        doc_builder.add_heading("Shear Wall {label} shear check", level=1, label=self.label)
+        doc_builder.add_text(
+            "Made with mento {version}. Design code: {design_code}",
+            version=MENTO_VERSION,
+            design_code=self.concrete.design_code,
+        )
         doc_builder.add_heading("Materials", level=2)
         doc_builder.add_table_data(df_materials)
         doc_builder.add_table_data(df_geometry)

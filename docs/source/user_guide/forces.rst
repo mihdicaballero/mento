@@ -24,7 +24,7 @@ Usage
 Below is a step-by-step guide on how to use the `Forces` class in your structural analysis workflows.
 
 1. Creating a Forces Object
-**********
+***************************
 
 To define the forces acting on a structural element, instantiate a `Forces` object. You can provide initial values for axial force (`N_x`), shear force (`V_z`), and bending moment (`M_y`). If no values are provided, the forces default to zero.
 The default unit_system for units display is *metric*.
@@ -38,7 +38,7 @@ The default unit_system for units display is *metric*.
     print(force)
 
 2. Accessing Forces
-**********
+*******************
 
 Once a `Forces` object is created, you can access individual forces using the respective properties `N_x`, `V_z`, and `M_y`. These properties will return the forces in metric system by default, making it easy to inspect the current state of forces in your structure.
 
@@ -58,7 +58,7 @@ If you want to display the Forces in *imperial system* just pass the input to th
     print(force.M_y)  # Output: 3.69 ft*kip
 
 3. Modifying Forces
-**********
+*******************
 
 Forces can be modified at any point by calling the `set_forces()` method. This method allows you to update the values of `N_x`, `V_z`, and `M_y`.
 
@@ -70,7 +70,7 @@ Forces can be modified at any point by calling the `set_forces()` method. This m
     print(force)
 
 4. Retrieving Forces as a Dictionary
-**********
+************************************
 
 You can retrieve the forces in the form of a dictionary for easy manipulation, storage, or reporting. The `get_forces()` method returns a dictionary where the keys are `N_x`, `V_z`, and `M_y`, with values corresponding to the respective forces in the unit system.
 
@@ -81,7 +81,7 @@ You can retrieve the forces in the form of a dictionary for easy manipulation, s
     # Output: {'N_x': 3.00 kN, 'V_z': 10.00 kN, 'M_y': 7.00 kN*m}
 
 5. Assigning a Label to a Force
-**********
+*******************************
 
 Optionally, you can assign a label to a force object to describe the specific load condition or scenario (e.g., "Crane load", "Wind load"). This is useful in complex models where multiple forces are acting on different elements.
 
@@ -91,7 +91,7 @@ Optionally, you can assign a label to a force object to describe the specific lo
     print(force.label)  # Output: Crane load
 
 6. Force Object ID
-**********
+******************
 
 Each `Forces` object is automatically assigned a unique ID, which can be accessed through the `id` property. This is helpful when tracking multiple force objects in more complex analyses.
 
@@ -100,7 +100,7 @@ Each `Forces` object is automatically assigned a unique ID, which can be accesse
     print(force.id)  # Output: Unique ID (e.g., 1, 2, etc.)
 
 7. Print Force complete properties
-**********
+**********************************
 
 Each `Forces` object con be printed in the terminal with `print(force)` method. This allows to quickly assess a Forces object.
 

@@ -82,6 +82,17 @@ def test_set_slab_transverse_rebar_computes_shear_area() -> None:
     assert slab._stirrup_s_l == 20 * cm
 
 
+def test_set_slab_transverse_rebar_zero_spacing_clears_shear_area() -> None:
+    slab = build_slab()
+    slab.set_slab_transverse_rebar(d_b=10 * mm, s_long=20 * cm, s_trans=25 * cm)
+
+    # Clearing the stirrups must not divide by the zero spacing
+    slab.set_slab_transverse_rebar()
+
+    assert slab._stirrup_s_l.magnitude == 0
+    assert slab._A_v.to("cm**2/m").magnitude == 0
+
+
 def test_longitudinal_rebar_spacing_updates_counts() -> None:
     slab = build_slab()
 

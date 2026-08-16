@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mento"
-version = "0.5.0"
+version = "0.5.1"
 description = "An intuitive tool for structural engineers to design concrete elements efficiently."
 readme = "README.md"
 authors = [
@@ -47,7 +47,11 @@ dependencies = [
     "python-docx>=1.1",
     "openpyxl>=3.1",
     "jinja2>=3.1",
-    "IPython>=8.0",
+    # Google Colab pins ipython to 7.34.0, so a >=8.0 floor made `pip install mento`
+    # there either fail to resolve or force an upgrade that breaks the session. mento
+    # only uses IPython.display.Markdown and display, which have been stable for far
+    # longer than either bound.
+    "IPython>=7.34",
 ]
 
 [project.optional-dependencies]
@@ -57,7 +61,7 @@ test = [
 ]
 dev = [
     "mento[test]",
-    "ruff>=0.15.22,<0.16",
+    "ruff>=0.15.22,<0.17",
     "mypy>=1.15",
     "pandas-stubs",
     "types-tabulate",
@@ -87,7 +91,10 @@ Changelog = "https://github.com/mihdicaballero/mento/blob/main/CHANGELOG.md"
 packages = ["mento", "mento.codes"]
 
 [tool.ruff]
-extend-exclude = ["build/", "dist/"]
+# Markdown is excluded because ruff 0.16 started formatting the python code
+# blocks inside it. The formatter is here for the package's source, and letting
+# a tool upgrade quietly start rewriting prose files is not what we want.
+extend-exclude = ["build/", "dist/", "*.md"]
 show-fixes = true
 line-length = 120
 
@@ -115,6 +122,7 @@ warn_return_any = false
 [[tool.mypy.overrides]]
 module = [
     "mento.beam",
+    "mento.beam_summary",
     "mento.codes.ACI_318_19_beam",
     "mento.codes.ACI_318_19_wall",
     "mento.codes.EN_1992_2004_beam",
@@ -124,7 +132,6 @@ module = [
     "mento.results",
     "mento.shear_wall",
     "mento.slab",
-    "mento.summary",
     "mento.units",
 ]
 ignore_errors = true

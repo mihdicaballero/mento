@@ -26,4 +26,11 @@ keywords:
   - CIRSOC 201
   - Python
 license: MIT
-version: 0.4.1
+version: 0.5.1
+date-released: "2026-08-15"
+identifiers:
+  # Concept DOI: always resolves to the latest release, so it never has to change here.
+  # The DOI of one specific release is on its own Zenodo record.
+  - type: doi
+    value: 10.5281/zenodo.21956634
+    description: Concept DOI for all versions of mento

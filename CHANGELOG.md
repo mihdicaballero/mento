@@ -11,6 +11,70 @@ from the release history and are summaries rather than complete lists.
 
 ## [Unreleased]
 
+### Added
+
+- Spanish detailed reports. `mento.set_language("es")` switches
+  `flexure_results_detailed()`, `shear_results_detailed()` and their `_doc()` counterparts
+  to Spanish, for beams, one-way slabs and shear walls, in the console and in the generated
+  Word documents. English remains the default, and `mento.get_language()` and
+  `mento.available_languages()` report the current and the available choices. Variable
+  names, units, the design code designation and the generated file names are not
+  translated. A label with no translation is written in English rather than raising. See
+  [Report language](https://mento-docs.readthedocs.io/en/latest/user_guide/language.html).
+  Closes [#79](https://github.com/mihdicaballero/mento/issues/79) and
+  [#126](https://github.com/mihdicaballero/mento/issues/126).
+- A DOI. Releases are archived on Zenodo, and
+  [10.5281/zenodo.21956634](https://doi.org/10.5281/zenodo.21956634) always resolves to the
+  latest one. It is in `CITATION.cff`, in the README badge and in the citing guide.
+
+### Changed
+
+- The conda recipe is pinned to 0.5.1 and its checksum.
+
+### Fixed
+
+- A one-way slab is no longer reported as a beam. `OneWaySlab` inherited the titles of
+  `RectangularBeam`, so its detailed reports were headed `BEAM FLEXURE DETAILED RESULTS`
+  and its Word file named `Beam S1 flexure check ACI 318-19.docx`. Slabs now use their own
+  wording and file name; beams are unchanged.
+- The forces table of the detailed flexure report is headed `Design forces`, matching the
+  shear report and the Word output. It was `Design_forces` in the console output only.
+- The Word reports spell the `Limit checks` heading the same way everywhere. Flexure used
+  `Limit Checks` and shear used `Limit checks`, in both the element and the summary
+  documents.
+
+## [0.5.1] - 2026-08-15
+
+### Added
+
+- Public design results API: `beam.flexure_design` and `beam.shear_design` return plain,
+  frozen data objects with the reinforcement a check or design produced, so results no
+  longer have to be read from private attributes such as `_A_s_bot` or `_stirrup_s_l`.
+  Reading either before running a check raises `DesignNotRunError`. Required areas and
+  DCRs are the envelope over every load combination checked, so they describe the
+  combination that governs each face. See
+  [Design results](https://mento-docs.readthedocs.io/en/latest/user_guide/design_results.html).
+- A [citing guide](https://mento-docs.readthedocs.io/en/latest/getting_started/citing.html)
+  in the documentation, covering which version to cite and a BibTeX entry.
+- A conda recipe under `conda-recipe/`, kept in step with `pyproject.toml`, ready to be
+  submitted to conda-forge. The submission and update procedure, and the one-time Zenodo
+  setup that gives releases a DOI, are documented in CONTRIBUTING.
+- Two example notebooks in Spanish, design and check of a rectangular beam under
+  CIRSOC 201-2025.
+
+### Changed
+
+- `mento.summary` was renamed to `mento.beam_summary`, matching `mento.shear_wall_summary`.
+  The old module still works and emits a `DeprecationWarning`; `from mento import
+  BeamSummary` is unaffected.
+
+### Fixed
+
+- **`pip install mento` on Google Colab.** The IPython requirement was `>=8.0`, while Colab
+  pins ipython to 7.34.0, so installing mento there could not resolve without upgrading
+  IPython out from under the running session. The floor is now `>=7.34`; mento only uses
+  `IPython.display.Markdown` and `display`, which both bounds cover.
+
 ## [0.5.0] - 2026-08-01
 
 Infrastructure release. No changes to the design calculations, and no changes to the public
@@ -100,7 +164,8 @@ First public release on PyPI: rectangular concrete beam check and design for fle
 shear under ACI 318-19 and CIRSOC 201-25, unit aware calculations, results as pandas
 DataFrames, and Word calculation reports.
 
-[Unreleased]: https://github.com/mihdicaballero/mento/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/mihdicaballero/mento/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/mihdicaballero/mento/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/mihdicaballero/mento/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/mihdicaballero/mento/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/mihdicaballero/mento/compare/v0.3.6...v0.4.0

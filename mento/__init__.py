@@ -76,6 +76,9 @@ __all__ = [
     "PunchingNode",
     "ShearWall",
     "ShearWallSummary",
+    "set_language",
+    "get_language",
+    "available_languages",
 ]
 
 if TYPE_CHECKING:
@@ -92,11 +95,12 @@ if TYPE_CHECKING:
     from mento.settings import BeamSettings
     from mento.node import Node
     from mento.results import DocumentBuilder, Formatter, TablePrinter
-    from mento.summary import BeamSummary
+    from mento.beam_summary import BeamSummary
     from mento.column import Column
     from mento.punching import Capital, Opening, PunchingNode, PunchingSlab
     from mento.shear_wall import ShearWall
     from mento.shear_wall_summary import ShearWallSummary
+    from mento.i18n import available_languages, get_language, set_language
 
 
 def __getattr__(name: str) -> object:
@@ -116,7 +120,7 @@ def __getattr__(name: str) -> object:
         "DocumentBuilder": "results",
         "EN_1992_2004_beam": "codes",
         "ACI_318_19_beam": "codes",
-        "BeamSummary": "summary",
+        "BeamSummary": "beam_summary",
         "Column": "column",
         "PunchingSlab": "punching",
         "Opening": "punching",
@@ -124,6 +128,9 @@ def __getattr__(name: str) -> object:
         "PunchingNode": "punching",
         "ShearWall": "shear_wall",
         "ShearWallSummary": "shear_wall_summary",
+        "set_language": "i18n",
+        "get_language": "i18n",
+        "available_languages": "i18n",
     }
 
     if name in module_mapping:

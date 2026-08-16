@@ -14,7 +14,7 @@ class BeamSettings:
     Can optionally be initialized with a `Concrete` material to determine the unit system.
 
     Available Parameters with Default Values:
-    --------------------------------------
+    -----------------------------------------
     Unit system: "metric" or "imperial"
 
     Metric Defaults:

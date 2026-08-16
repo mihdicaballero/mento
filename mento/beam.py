@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from IPython.display import Markdown, display
-from typing import Optional, Dict
+from typing import Any, Optional, Dict
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle, Rectangle, FancyBboxPatch
 from pint import Quantity
@@ -20,8 +20,15 @@ from mento.material import (
 from mento.rebar import Rebar
 from mento.units import MPa, mm, inch, kN, m, cm, kNm, dimensionless
 from mento.results import Formatter, TablePrinter, DocumentBuilder, CUSTOM_COLORS
+from mento.i18n import get_language, translate
 from mento.forces import Forces
 from mento.settings import BeamSettings
+from mento.design_results import (
+    FlexureDesign,
+    ShearDesign,
+    build_flexure_design,
+    build_shear_design,
+)
 from mento._version import __version__ as MENTO_VERSION
 
 from mento.codes.EN_1992_2004_beam import (
@@ -131,6 +138,10 @@ class RectangularBeam(RectangularSection):
         self._DCRv: float = 0
         self._DCRb_top: float = 0
         self._DCRb_bot: float = 0
+        # Worst value of each per-combination quantity, kept by check_flexure and
+        # check_shear. The attributes above only hold the combination that ran last.
+        self._flexure_envelope: dict[str, dict[str, Any]] = {}
+        self._shear_envelope: dict[str, Any] = {}
         self._alpha: float = math.radians(90)
         self._V_s_req: Quantity = 0 * kN
 
@@ -299,31 +310,45 @@ class RectangularBeam(RectangularSection):
 
     def set_transverse_rebar(
         self,
-        n_stirrups: int,
-        d_b: Quantity,
-        s_l: Quantity,
+        n_stirrups: int = 0,
+        d_b: Quantity = 0 * mm,
+        s_l: Quantity = 0 * cm,
     ) -> None:
-        """Set the transverse reinforcement and update the beam properties."""
+        """Set transverse reinforcement or clear it with an all-zero input."""
 
         # Reject booleans and non-integer stirrup counts.
         if isinstance(n_stirrups, bool) or not isinstance(n_stirrups, Integral):
             raise TypeError("n_stirrups must be an integer.")
-        if n_stirrups <= 0:
-            raise ValueError("n_stirrups must be greater than zero.")
-
-        # Convert NumPy integer types to a standard Python integer.
         n_stirrups = int(n_stirrups)
 
-        # Validate the stirrup diameter.
+        # Diameter and spacing must be physical lengths.
         if not isinstance(d_b, Quantity) or not d_b.check("[length]"):
             raise TypeError("d_b must be a length Quantity.")
-        if not math.isfinite(d_b.to("mm").magnitude) or d_b <= 0 * mm:
-            raise ValueError("d_b must be greater than zero.")
-
-        # Validate the longitudinal spacing.
         if not isinstance(s_l, Quantity) or not s_l.check("[length]"):
             raise TypeError("s_l must be a length Quantity.")
-        if not math.isfinite(s_l.to("mm").magnitude) or s_l <= 0 * mm:
+
+        diameter_mm = d_b.to("mm").magnitude
+        spacing_mm = s_l.to("mm").magnitude
+        if not math.isfinite(diameter_mm):
+            raise ValueError("d_b must be finite.")
+        if not math.isfinite(spacing_mm):
+            raise ValueError("s_l must be finite.")
+
+        # An all-zero input explicitly removes the transverse reinforcement.
+        if n_stirrups == 0 and diameter_mm == 0 and spacing_mm == 0:
+            self._stirrup_n = 0
+            self._stirrup_d_b = d_b
+            self._stirrup_s_l = s_l
+            self._A_v = 0 * cm**2 / m
+            self._update_effective_heights()
+            return
+
+        # Every non-empty reinforcement configuration must be strictly positive.
+        if n_stirrups <= 0:
+            raise ValueError("n_stirrups must be greater than zero.")
+        if diameter_mm <= 0:
+            raise ValueError("d_b must be greater than zero.")
+        if spacing_mm <= 0:
             raise ValueError("s_l must be greater than zero.")
 
         # Store the inputs only after all validations pass.
@@ -571,6 +596,38 @@ class RectangularBeam(RectangularSection):
         all_results = self.check_flexure(forces)
         return all_results
 
+    def _update_flexure_envelope(self, suffix: str) -> None:
+        """Fold the flexure results of the current combination into the envelope.
+
+        The check functions leave the values of the combination they just ran on the
+        beam, so a reader of ``_A_s_req_bot`` after checking several combinations gets
+        whichever one happened to run last — zero, for a face that combination did not
+        put in tension. The envelope keeps the worst of each quantity instead, which is
+        what the public results in :mod:`mento.design_results` report.
+        """
+        face = self._flexure_envelope.setdefault(suffix, {})
+        for name in ("A_s_req", "A_s_min", "A_s_max"):
+            value = getattr(self, f"_{name}_{suffix}", None)
+            if value is None:
+                continue
+            current = face.get(name)
+            face[name] = value if current is None else max(current, value)
+        face["DCR"] = max(face.get("DCR", 0.0), getattr(self, f"_DCRb_{suffix}", 0.0))
+
+    def _update_shear_envelope(self) -> None:
+        """Fold the shear results of the current combination into the envelope.
+
+        Same reasoning as :meth:`_update_flexure_envelope`: ``_A_v_req`` and ``_DCRv``
+        describe the combination that ran last, not the one that governs.
+        """
+        for name in ("A_v_req", "A_v_min"):
+            value = getattr(self, f"_{name}", None)
+            if value is None:
+                continue
+            current = self._shear_envelope.get(name)
+            self._shear_envelope[name] = value if current is None else max(current, value)
+        self._shear_envelope["DCR"] = max(self._shear_envelope.get("DCR", 0.0), self._DCRv)
+
     def check_flexure(self, forces: list[Forces]) -> DataFrame:
         # Initialize variables to track limiting cases
         max_dcr_top: float = 0
@@ -583,6 +640,7 @@ class RectangularBeam(RectangularSection):
         # To compile results for all forces
         self._flexure_results_list = []  # Store individual results for each force
         self._flexure_results_detailed_list = {}  # Store detailed results by force ID
+        self._flexure_envelope = {}
 
         for force in forces:
             # Select the method based on design code
@@ -600,6 +658,11 @@ class RectangularBeam(RectangularSection):
                 "flexure_capacity_bot": self._flexure_capacity_bot.copy(),
                 "checks_pass": self._all_flexure_checks_passed,
             }
+
+            # Keep the worst value of each face across combinations, before the next
+            # one overwrites the attributes this combination just left on the beam.
+            self._update_flexure_envelope("bot")
+            self._update_flexure_envelope("top")
 
             # Extract the DCR values for top and bottom from the results
             current_dcr_top = self._DCRb_top
@@ -685,6 +748,7 @@ class RectangularBeam(RectangularSection):
         self._shear_results_detailed_list = {}  # Store detailed results by force ID
         max_dcr = 0  # Track the maximum DCR to identify the limiting case
         self._limiting_case_shear_details = None
+        self._shear_envelope = {}
 
         for force in forces:
             # Select the method based on design code
@@ -702,6 +766,10 @@ class RectangularBeam(RectangularSection):
                 "checks_pass": self._all_shear_checks_passed,
                 "shear_concrete": self._shear_concrete.copy(),
             }
+
+            # Keep the worst value across combinations, before the next one
+            # overwrites the attributes this combination just left on the beam.
+            self._update_shear_envelope()
 
             # Check if this result is the limiting case
             current_dcr = result["DCR"][0]
@@ -834,6 +902,36 @@ class RectangularBeam(RectangularSection):
     ##########################################################
     # RESULTS
     ##########################################################
+
+    @property
+    def flexure_design(self) -> FlexureDesign:
+        """Longitudinal reinforcement of this beam, as plain data.
+
+        Available after a flexure check or design has been run. Unlike
+        :attr:`flexure_results`, which prints a table for a notebook, this
+        returns an object you can read values from::
+
+            beam.flexure_design.bottom.A_s
+            beam.flexure_design.bottom.layers[0].n
+
+        Raises:
+            DesignNotRunError: if no flexure check or design has been run.
+        """
+        return build_flexure_design(self)
+
+    @property
+    def shear_design(self) -> ShearDesign:
+        """Transverse reinforcement of this beam, as plain data.
+
+        Available after a shear check or design has been run::
+
+            beam.shear_design.s_l
+            beam.shear_design.A_v
+
+        Raises:
+            DesignNotRunError: if no shear check or design has been run.
+        """
+        return build_shear_design(self)
 
     # Beam results for Jupyter Notebook
     @property
@@ -986,6 +1084,41 @@ class RectangularBeam(RectangularSection):
             self.shear_results  # This will generate _md_shear_results
         return None
 
+    @property
+    def _report_text(self) -> Dict[str, str]:
+        """Report wording of this element, so a slab is not reported as a beam.
+
+        ``ShearWall`` overrides the detailed report methods with its own wording,
+        so only the beam and the slab are covered here. The strings double as the
+        keys of the language catalog in :mod:`mento.i18n`.
+        """
+        if self.mode == "slab":
+            return {
+                "flexure_banner": "===== SLAB FLEXURE DETAILED RESULTS =====",
+                "shear_banner": "===== SLAB SHEAR DETAILED RESULTS =====",
+                "flexure_doc_title": "Concrete slab flexure check",
+                "shear_doc_title": "Concrete slab shear check",
+                "flexure_heading": "Slab {label} flexure check",
+                "shear_heading": "Slab {label} shear check",
+            }
+        return {
+            "flexure_banner": "===== BEAM FLEXURE DETAILED RESULTS =====",
+            "shear_banner": "===== BEAM SHEAR DETAILED RESULTS =====",
+            "flexure_doc_title": "Concrete beam flexure check",
+            "shear_doc_title": "Concrete beam shear check",
+            "flexure_heading": "Beam {label} flexure check",
+            "shear_heading": "Beam {label} shear check",
+        }
+
+    def _report_file_name(self, heading_key: str) -> str:
+        """Name of the Word file of a report.
+
+        Built from the English heading whatever the report language is, so a
+        project keeps one naming scheme.
+        """
+        heading = self._report_text[heading_key].format(label=self.label)
+        return f"{heading} {self.concrete.design_code}.docx"
+
     def flexure_results_detailed(self, force: Optional[Forces] = None) -> None:
         """
         Displays detailed flexure results.
@@ -1024,7 +1157,7 @@ class RectangularBeam(RectangularSection):
             top_result_data = self._limiting_case_flexure_top_details["flexure_capacity_top"]
             bot_result_data = self._limiting_case_flexure_bot_details["flexure_capacity_bot"]
             forces_result = {
-                "Design_forces": [
+                "Design forces": [
                     "Top max moment",
                     "Bottom max moment",
                 ],
@@ -1086,22 +1219,23 @@ class RectangularBeam(RectangularSection):
             }
 
         # Create TablePrinter instances for detailed display
-        print("===== BEAM FLEXURE DETAILED RESULTS =====")
-        materials_printer = TablePrinter("MATERIALS")
+        language = get_language()
+        print(translate(self._report_text["flexure_banner"], language))
+        materials_printer = TablePrinter("MATERIALS", language)
         materials_printer.print_table_data(self._materials_flexure, headers="keys")
 
-        geometry_printer = TablePrinter("GEOMETRY")
+        geometry_printer = TablePrinter("GEOMETRY", language)
         geometry_printer.print_table_data(self._geometry_flexure, headers="keys")
 
-        forces_printer = TablePrinter("FORCES")
+        forces_printer = TablePrinter("FORCES", language)
         forces_printer.print_table_data(forces_result, headers="keys")
 
-        min_max_printer = TablePrinter("MAX AND MIN LIMIT CHECKS")
+        min_max_printer = TablePrinter("MAX AND MIN LIMIT CHECKS", language)
         min_max_printer.print_table_data(min_max_result, headers="keys")
 
-        capacity_printer = TablePrinter("FLEXURAL CAPACITY - TOP")
+        capacity_printer = TablePrinter("FLEXURAL CAPACITY - TOP", language)
         capacity_printer.print_table_data(top_result_data, headers="keys")
-        capacity_printer = TablePrinter("FLEXURAL CAPACITY - BOTTOM")
+        capacity_printer = TablePrinter("FLEXURAL CAPACITY - BOTTOM", language)
         capacity_printer.print_table_data(bot_result_data, headers="keys")
 
     def flexure_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
@@ -1209,18 +1343,22 @@ class RectangularBeam(RectangularSection):
         df_flexure_capacity_bottom = pd.DataFrame(bot_result_data)
 
         # Create a document builder instance
-        doc_builder = DocumentBuilder(title="Concrete beam flexure check")
+        doc_builder = DocumentBuilder(title=self._report_text["flexure_doc_title"], language=get_language())
 
         # Add first section and table
-        doc_builder.add_heading(f"Beam {self.label} flexure check", level=1)
-        doc_builder.add_text(f"Made with mento {MENTO_VERSION}. Design code: {self.concrete.design_code}")
+        doc_builder.add_heading(self._report_text["flexure_heading"], level=1, label=self.label)
+        doc_builder.add_text(
+            "Made with mento {version}. Design code: {design_code}",
+            version=MENTO_VERSION,
+            design_code=self.concrete.design_code,
+        )
         doc_builder.add_heading("Materials", level=2)
         doc_builder.add_table_data(df_materials)
         doc_builder.add_table_data(df_geometry)
         doc_builder.add_table_data(df_forces)
 
         # Add third section for limit checks
-        doc_builder.add_heading("Limit Checks", level=2)
+        doc_builder.add_heading("Limit checks", level=2)
         doc_builder.add_table_data(df_data_min_max)
 
         # Add second section for flexural checks
@@ -1230,7 +1368,7 @@ class RectangularBeam(RectangularSection):
         doc_builder.add_table_dcr(df_flexure_capacity_bottom)
 
         # Save the Word doc
-        doc_builder.save(f"Beam {self.label} flexure check {self.concrete.design_code}.docx")
+        doc_builder.save(self._report_file_name("flexure_heading"))
 
     def shear_results_detailed(self, force: Optional[Forces] = None) -> None:
         """
@@ -1262,18 +1400,19 @@ class RectangularBeam(RectangularSection):
             result_data = self._limiting_case_shear_details
 
         # Create a TablePrinter instance and display tables
-        print("===== BEAM SHEAR DETAILED RESULTS =====")
-        materials_printer = TablePrinter("MATERIALS")
+        language = get_language()
+        print(translate(self._report_text["shear_banner"], language))
+        materials_printer = TablePrinter("MATERIALS", language)
         materials_printer.print_table_data(self._materials_shear, headers="keys")
-        geometry_printer = TablePrinter("GEOMETRY")
+        geometry_printer = TablePrinter("GEOMETRY", language)
         geometry_printer.print_table_data(self._geometry_shear, headers="keys")
-        forces_printer = TablePrinter("FORCES")
+        forces_printer = TablePrinter("FORCES", language)
         forces_printer.print_table_data(result_data["forces"], headers="keys")
-        steel_printer = TablePrinter("SHEAR STRENGTH")
+        steel_printer = TablePrinter("SHEAR STRENGTH", language)
         steel_printer.print_table_data(result_data["shear_reinforcement"], headers="keys")
-        min_max_printer = TablePrinter("MAX AND MIN LIMIT CHECKS")
+        min_max_printer = TablePrinter("MAX AND MIN LIMIT CHECKS", language)
         min_max_printer.print_table_data(result_data["min_max"], headers="keys")
-        concrete_printer = TablePrinter("CONCRETE STRENGTH")
+        concrete_printer = TablePrinter("CONCRETE STRENGTH", language)
         concrete_printer.print_table_data(result_data["shear_concrete"], headers="keys")
 
     def shear_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
@@ -1311,11 +1450,15 @@ class RectangularBeam(RectangularSection):
         df_shear_concrete = pd.DataFrame(result_data["shear_concrete"])
 
         # Create a document builder instance
-        doc_builder = DocumentBuilder(title="Concrete beam shear check")
+        doc_builder = DocumentBuilder(title=self._report_text["shear_doc_title"], language=get_language())
 
         # Add first section and table
-        doc_builder.add_heading(f"Beam {self.label} shear check", level=1)
-        doc_builder.add_text(f"Made with mento {MENTO_VERSION}. Design code: {self.concrete.design_code}")
+        doc_builder.add_heading(self._report_text["shear_heading"], level=1, label=self.label)
+        doc_builder.add_text(
+            "Made with mento {version}. Design code: {design_code}",
+            version=MENTO_VERSION,
+            design_code=self.concrete.design_code,
+        )
         doc_builder.add_heading("Materials", level=2)
         doc_builder.add_table_data(df_materials)
         doc_builder.add_table_data(df_geometry)
@@ -1329,7 +1472,7 @@ class RectangularBeam(RectangularSection):
         doc_builder.add_table_dcr(df_shear_concrete)
 
         # Save the Word doc
-        doc_builder.save(f"Beam {self.label} shear check {self.concrete.design_code}.docx")
+        doc_builder.save(self._report_file_name("shear_heading"))
 
     def _format_longitudinal_rebar_string(self, n1: int, d_b1: Quantity, n2: int = 0, d_b2: Quantity = 0 * mm) -> str:
         """

@@ -63,6 +63,9 @@ jobs:
   publish:
     name: Publish to PyPI
     needs: build
+    # Only a published GitHub Release uploads to PyPI. Running the workflow by
+    # hand builds and verifies the distributions without publishing them.
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     environment:
       name: pypi

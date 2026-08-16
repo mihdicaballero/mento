@@ -17,6 +17,7 @@ An intuitive tool for structural engineers to design concrete elements efficient
    :caption: For Developers:
 
    dev/contributing
+   dev/adding_a_design_code
    dev/codeofconduct
 
 If you are new to Mento, check out our :ref:`Getting Started <getting_started/index>`, :ref:`Examples <examples/index>`, and the :ref:`API Reference <api-reference>`.

@@ -8,6 +8,7 @@
 [![PyPI](https://img.shields.io/pypi/v/mento.svg)](https://pypi.org/project/mento/)
 [![Python versions](https://img.shields.io/pypi/pyversions/mento.svg)](https://pypi.org/project/mento/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21956634.svg)](https://doi.org/10.5281/zenodo.21956634)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/charliermarsh/ruff/main/assets/badge/v2.json)][ruff]
 
 [tests]: https://github.com/mihdicaballero/mento/actions/workflows/tests.yml
@@ -80,7 +81,7 @@ Participation in this project is governed by our [Code of Conduct](CODE_OF_CONDU
 mento is a tool to assist structural engineers, not a replacement for engineering judgement. Results must be reviewed and accepted by a qualified engineer who takes responsibility for the design. The software is provided "as is", without warranty of any kind, and the authors accept no liability for its use. Verify the output against the applicable design code before relying on it for any real structure.
 
 #### Citing mento
-If mento supports your research or professional work, citation metadata is in [CITATION.cff](CITATION.cff), and GitHub's "Cite this repository" button will format it for you.
+If mento supports your research or professional work, cite it with the DOI [10.5281/zenodo.21956634](https://doi.org/10.5281/zenodo.21956634), which always resolves to the latest release. Citation metadata is in [CITATION.cff](CITATION.cff), and GitHub's "Cite this repository" button will format it for you. The [citing guide](https://mento-docs.readthedocs.io/en/latest/getting_started/citing.html) explains which version to cite and gives a BibTeX entry.
 
 #### License
 This project is licensed under the MIT License. See [LICENSE](LICENSE) for the full text.

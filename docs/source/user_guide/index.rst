@@ -17,6 +17,8 @@ User Guide
    slabs
    shear_wall
    node
+   design_results
+   language
    beam_summary
    shear_wall_summary
 
