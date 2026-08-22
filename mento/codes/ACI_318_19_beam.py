@@ -51,10 +51,14 @@ def _calculate_shear_reinforcement_aci(self: "RectangularBeam") -> None:
 def _calculate_effective_shear_area_aci(self: "RectangularBeam") -> None:
     self._A_cv = self.width * self._d_shear  # Effective shear area
     self._rho_w = self._A_s_tension.to("cm**2") / self._A_cv.to("cm**2")  # Longitudinal reinforcement ratio
+    # Size effect factor, ACI 318-19 Eq. 22.5.5.1.3. The <= 1.0 cap is part of
+    # the code equation: the factor exists to REDUCE V_c in deep members, so
+    # without the cap a shallow member (d < 250 mm / 10 in) would get
+    # lambda_s > 1 and an inflated V_c, the opposite of its purpose.
     if self.concrete.unit_system == "metric":
-        self._lambda_s = math.sqrt(2 / (1 + 0.004 * self._d_shear / mm))
+        self._lambda_s = min(math.sqrt(2 / (1 + 0.004 * self._d_shear / mm)), 1.0)
     else:
-        self._lambda_s = math.sqrt(2 / (1 + self._d_shear / (10 * inch)))
+        self._lambda_s = min(math.sqrt(2 / (1 + self._d_shear / (10 * inch))), 1.0)
 
 
 def _calculate_concrete_shear_strength_aci(self: "RectangularBeam") -> None:
