@@ -575,8 +575,17 @@ class Rebar:
             self._long_combos_df = df
             return df
 
-    def longitudinal_rebar_EN_1992_2004(self, A_s_req: Quantity) -> None:
-        self.longitudinal_rebar_ACI_318_19(A_s_req)  # TODO WE HAVE TO CHANGE THIS
+    def longitudinal_rebar_EN_1992_2004(
+        self,
+        A_s_req: Quantity,
+        A_s_max: Quantity | None = None,
+        mech_cover: Quantity | None = None,
+    ) -> None:
+        # The bar-selection strategy (fit the area with the fewest, most uniform
+        # bars that still respect spacing and layer limits) is geometry, not code
+        # provisions, so EN reuses the ACI selector. Only the areas fed into it
+        # come from EN 1992-2004.
+        self.longitudinal_rebar_ACI_318_19(A_s_req, A_s_max, mech_cover)
 
     def _check_spacing(
         self,
@@ -764,7 +773,12 @@ class Rebar:
 
         return df
 
-    def longitudinal_rebar(self, A_s_req: Quantity, A_s_max: Quantity | None = None) -> Dict[str, Any]:
+    def longitudinal_rebar(
+        self,
+        A_s_req: Quantity,
+        A_s_max: Quantity | None = None,
+        mech_cover: Quantity | None = None,
+    ) -> Dict[str, Any]:
         """
         Selects the appropriate longitudinal rebar method based on the design
         code.
@@ -772,8 +786,10 @@ class Rebar:
         Args:
             A_s_req: Required longitudinal rebar area.
             A_s_max: Optional maximum allowable longitudinal rebar area.
+            mech_cover: Optional mechanical cover to the bar centroid, used as
+                the starting geometry for the layer layout.
         """
         if self.beam.concrete.design_code == "ACI 318-19" or self.beam.concrete.design_code == "CIRSOC 201-25":
-            return self.longitudinal_rebar_ACI_318_19(A_s_req, A_s_max)
+            return self.longitudinal_rebar_ACI_318_19(A_s_req, A_s_max, mech_cover)
         elif self.beam.concrete.design_code == "EN 1992-2004":
-            return self.longitudinal_rebar_EN_1992_2004(A_s_req)
+            return self.longitudinal_rebar_EN_1992_2004(A_s_req, A_s_max, mech_cover)

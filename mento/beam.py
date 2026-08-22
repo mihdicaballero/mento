@@ -212,8 +212,13 @@ class RectangularBeam(RectangularSection):
         """Factory for the longitudinal reinforcement optimizer."""
         return Rebar(self)
 
-    def _apply_longitudinal_design_bot(self, design: dict) -> None:
-        """Apply a discrete design to the bottom reinforcement."""
+    def _apply_longitudinal_design_bot(self, design: Any) -> None:
+        """Apply a discrete design to the bottom reinforcement.
+
+        ``design`` is any mapping with the rebar-designer keys (n_1..n_4,
+        d_b1..d_b4); the designer hands back a pandas row, tests pass plain
+        dicts.
+        """
         self.set_longitudinal_rebar_bot(
             int(design.get("n_1", 0)),
             design.get("d_b1"),
@@ -225,8 +230,11 @@ class RectangularBeam(RectangularSection):
             design.get("d_b4"),
         )
 
-    def _apply_longitudinal_design_top(self, design: dict) -> None:
-        """Apply a discrete design to the top reinforcement."""
+    def _apply_longitudinal_design_top(self, design: Any) -> None:
+        """Apply a discrete design to the top reinforcement.
+
+        See :meth:`_apply_longitudinal_design_bot` for the accepted shape.
+        """
         self.set_longitudinal_rebar_top(
             int(design.get("n_1", 0)),
             design.get("d_b1"),
@@ -272,8 +280,8 @@ class RectangularBeam(RectangularSection):
             self._phi_M_n_top: Quantity = 0 * kNm
             self._d_b_max_bot: Quantity = 0 * mm
             self._d_b_max_top: Quantity = 0 * mm
-            self.flexure_design_results_bot: DataFrame = None
-            self.flexure_design_results_top: DataFrame = None
+            self.flexure_design_results_bot: Any = None
+            self.flexure_design_results_top: Any = None
             self._A_s_bool_bot: bool = False
             self._A_s_bool_top: bool = False
 
@@ -302,6 +310,14 @@ class RectangularBeam(RectangularSection):
             self._M_Rd_top: Quantity = 0 * kNm
             self._M_Ed_bot: Quantity = 0 * kNm
             self._M_Ed_top: Quantity = 0 * kNm
+            # Shared with the ACI branch: the flexural design driver and the
+            # results tables read these before any check has run.
+            self._A_s_min_bot: Quantity = 0 * cm**2
+            self._A_s_min_top: Quantity = 0 * cm**2
+            self._A_s_max_bot: Quantity = 0 * cm**2
+            self._A_s_max_top: Quantity = 0 * cm**2
+            self.flexure_design_results_bot: Any = None
+            self.flexure_design_results_top: Any = None
 
     ##########################################################
     # SET LONGITUDINAL AND TRANSVERSE REBAR AND UPDATE ATTRIBUTES

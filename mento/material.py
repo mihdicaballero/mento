@@ -253,12 +253,15 @@ class Concrete_EN_1992_2004(Concrete):
         self._gamma_s = 1.15
         self._alpha_cc = self._alpha_cc_calc()
         # Default values for k values EN_1992-1-1 - ART 5.5:
+        # k_1..k_4 bound the neutral axis ratio x_u/d in eqs. (5.10a)/(5.10b);
+        # k_5 and k_6 are plain lower bounds on the redistribution ratio delta
+        # itself (Class B/C and Class A reinforcement), so they are pure numbers.
         self._k_1 = 0.44
         self._k_2 = 1.25 * (0.6 + 0.0014 / self._epsilon_cu2)
         self._k_3 = 0.54
         self._k_4 = 1.25 * (0.6 + 0.0014 / self._epsilon_cu2)
         self._k_5 = 0.7
-        self._k_6 = 0.8 * self._epsilon_cu2
+        self._k_6 = 0.8
 
     def _alpha_cc_calc(self) -> float:
         # Implementation for alpha_cc, as per Eurocode EN 1992-1-1

@@ -1,3 +1,6 @@
+import math
+import warnings
+
 import pytest
 import numpy as np
 import matplotlib
@@ -25,6 +28,11 @@ from mento.codes.ACI_318_19_beam import (
     _determine_nominal_moment_simple_reinf_ACI_318_19,
     _determine_nominal_moment_double_reinf_ACI_318_19,
     _select_safe_design,
+)
+from mento.codes.EN_1992_2004_beam import (
+    _compression_zone_limits_EN_1992_2004,
+    _initialize_variables_EN_1992_2004,
+    _simple_determine_nominal_moment_EN_1992_2004,
 )
 from mento.results import CUSTOM_COLORS, DocumentBuilder
 from mento.settings import BeamSettings
@@ -524,11 +532,18 @@ def test_flexure_check_EN_1992_2004_01(
     assert results.iloc[1]["Label"] == "B_Example_EN_01"
     assert results.iloc[1]["Position"] == "Bottom"
     assert results.iloc[1]["As,min"] == pytest.approx(1.49, rel=1e-2)
-    assert results.iloc[1]["As,req bot"] == pytest.approx(6.656, rel=1e-3)
+    # Cross-checked against the Concise Eurocode 2 closed form (The Concrete
+    # Centre): K = M/(f_ck*b*d^2) = 0.09566, z/d = [1+sqrt(1-3.529K)]/2 -> z =
+    # 507.89 mm, A_s = M/(0.87*f_yk*z) = 6.79 cm^2. Pure ES=0/EM=0 equilibrium
+    # with the EC2 block gives the same. The previous 6.656 came from applying
+    # lambda twice to the lever arm.
+    assert results.iloc[1]["As,req bot"] == pytest.approx(6.79, rel=1e-3)
     assert results.iloc[1]["As,req top"] == pytest.approx(0, rel=1e-3)
     assert results.iloc[1]["As"] == pytest.approx(8.042, rel=1e-2)
-    assert results.iloc[1]["MRd"] == pytest.approx(178.56, rel=1e-3)
-    assert results.iloc[1]["DCR"] == pytest.approx(0.8400771633, rel=1e-3)
+    # M_Rd of the 4x16 provided: T = 804.2*434.78 = 349.7 kN, block depth
+    # u = T/(eta*f_cd*b) = 123.41 mm, z = d - u/2 = 498.3 mm -> 174.24 kNm.
+    assert results.iloc[1]["MRd"] == pytest.approx(174.24, rel=1e-3)
+    assert results.iloc[1]["DCR"] == pytest.approx(0.861, rel=1e-3)
 
 
 def test_flexure_check_EN_1992_2004_02(
@@ -544,11 +559,16 @@ def test_flexure_check_EN_1992_2004_02(
     assert results.iloc[1]["Label"] == "B_Example_EN_01"
     assert results.iloc[1]["Position"] == "Bottom"
     assert results.iloc[1]["As,min"] == pytest.approx(1.482, rel=1e-2)
-    assert results.iloc[1]["As,req bot"] == pytest.approx(20.77011560316, rel=1e-4)
-    assert results.iloc[1]["As,req top"] == pytest.approx(9.34, rel=1e-4)
+    # Doubly reinforced section. Both the required areas and M_Rd moved when the
+    # ductility limit was expressed consistently: x_u/d <= 0.328 is a NEUTRAL
+    # AXIS limit, so the equivalent block is lambda*x_u = 0.8*0.328*d, which
+    # lowers M_lim (243.6 -> 202.6 kNm for the 01 geometry) and pushes more of
+    # the demand onto the compression steel.
+    assert results.iloc[1]["As,req bot"] == pytest.approx(20.64, rel=1e-3)
+    assert results.iloc[1]["As,req top"] == pytest.approx(11.14, rel=1e-3)
     assert results.iloc[1]["As"] == pytest.approx(24.54, rel=1e-4)
-    assert results.iloc[1]["MRd"] == pytest.approx(385.156, rel=1e-2)
-    assert results.iloc[1]["DCR"] == pytest.approx(1.168, rel=1e-3)
+    assert results.iloc[1]["MRd"] == pytest.approx(326.55, rel=1e-3)
+    assert results.iloc[1]["DCR"] == pytest.approx(1.378, rel=1e-3)
 
 
 def test_flexure_check_EN_1992_2004_03(
@@ -563,7 +583,9 @@ def test_flexure_check_EN_1992_2004_03(
     assert results.iloc[1]["Label"] == "B_Example_EN_02"
     assert results.iloc[1]["Position"] == "Bottom"
     assert results.iloc[1]["As,min"] == pytest.approx(1.72, rel=1e-3)
-    assert results.iloc[1]["As,req bot"] == pytest.approx(8.69106875642, rel=1e-3)
+    # See test_flexure_check_EN_1992_2004_01 for the lever-arm correction:
+    # was 8.691 with the duplicated lambda, 8.87 with z = d - 0.5*x_eff.
+    assert results.iloc[1]["As,req bot"] == pytest.approx(8.87, rel=1e-3)
     assert results.iloc[1]["As,req top"] == pytest.approx(0, rel=1e-3)
 
 
@@ -580,7 +602,163 @@ def test_flexure_check_EN_1992_2004_04(
     assert results.iloc[1]["Label"] == "B_Example_EN_03"
     assert results.iloc[1]["Position"] == "Top"
     assert results.iloc[1]["As,min"] == pytest.approx(4.048, rel=1e-3)
-    assert results.iloc[1]["As,req top"] == pytest.approx(25.63866, rel=1e-3)
+    # f_ck = 60 MPa: lambda = 0.775, eta = 0.95. Same lever-arm correction as
+    # test_flexure_check_EN_1992_2004_01 (was 25.639).
+    assert results.iloc[1]["As,req top"] == pytest.approx(25.85, rel=1e-3)
+
+
+def test_flexure_EN_1992_2004_matches_concise_eurocode_closed_form() -> None:
+    """The required tension steel must match the published EC2 closed form.
+
+    Concise Eurocode 2 (The Concrete Centre), for a singly reinforced
+    rectangular section with alpha_cc = 0.85::
+
+        K   = M / (f_ck * b * d**2)
+        z/d = [1 + sqrt(1 - 3.529 * K)] / 2
+        A_s = M / (0.87 * f_yk * z)
+
+    That closed form is the inversion of ``z = d - 0.4x`` with the EC2
+    rectangular block (lambda = 0.8, eta = 1.0). It is computed here from
+    scratch, so the test does not depend on any mento formula.
+    """
+    f_ck, f_yk = 25.0, 500.0
+    b, d = 200.0, 560.0  # mm, matches beam_example_EN_1992_2004_01 with 4x16
+    M = 150e6  # N*mm
+
+    K = M / (f_ck * b * d**2)
+    z_ref = d * (1 + math.sqrt(1 - 3.529 * K)) / 2
+    A_s_ref = M / (0.87 * f_yk * z_ref) / 100  # cm2
+
+    beam = RectangularBeam(
+        label="concise_ec2",
+        concrete=Concrete_EN_1992_2004(name="C25", f_c=f_ck * MPa),
+        steel_bar=SteelBar(name="B500S", f_y=f_yk * MPa),
+        width=20 * cm,
+        height=60 * cm,
+        c_c=2.6 * cm,
+    )
+    beam.set_transverse_rebar(n_stirrups=1, d_b=6 * mm, s_l=15 * cm)
+    beam.set_longitudinal_rebar_bot(n1=4, d_b1=16 * mm)
+    beam.set_longitudinal_rebar_top(n1=0, d_b1=0 * mm)
+    assert beam._d_bot.to("mm").magnitude == pytest.approx(d, rel=1e-6)
+
+    results = Node(section=beam, forces=Forces(M_y=150 * kNm)).check_flexure()
+    assert results.iloc[1]["As,req bot"] == pytest.approx(A_s_ref, rel=2e-3)
+
+
+def test_compression_zone_limits_EN_1992_2004_are_expressed_on_the_neutral_axis() -> None:
+    """The ductility limits are on x_u/d; the block depth is lambda times that.
+
+    EN 1992-1-1 5.5(4) bounds ``x_u/d`` (the neutral axis), and so does the 0.45
+    cap. The equivalent rectangular block of 3.1.7(3) is ``lambda * x_u``. Both
+    used to be mixed: the redistribution limit was fed in as if it already were
+    a block depth, which put M_lim about 20% too high.
+    """
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    beam = RectangularBeam(
+        label="limits",
+        concrete=concrete,
+        steel_bar=SteelBar(name="B500S", f_y=500 * MPa),
+        width=20 * cm,
+        height=60 * cm,
+        c_c=2.6 * cm,
+    )
+    d = 560 * mm
+    x_u_lim, x_eff_lim = _compression_zone_limits_EN_1992_2004(beam, d)
+
+    xi_expected = min((concrete._delta - concrete._k_1) / concrete._k_2, 0.45)
+    assert xi_expected == pytest.approx(0.328, rel=1e-3)
+    assert (x_u_lim / d).to("dimensionless").magnitude == pytest.approx(xi_expected, rel=1e-9)
+    assert (x_eff_lim / x_u_lim).to("dimensionless").magnitude == pytest.approx(concrete._lambda_factor(), rel=1e-9)
+    # M_lim built on the block depth, per The Concrete Centre's K' = 0.453*xi*(1-0.4*xi)
+    f_cd = (concrete._alpha_cc * concrete.f_ck / concrete.gamma_c).to("MPa").magnitude
+    M_lim = (
+        concrete._eta_factor() * f_cd * 200 * x_eff_lim.to("mm").magnitude * (560 - 0.5 * x_eff_lim.to("mm").magnitude)
+    )
+    assert M_lim / 1e6 == pytest.approx(202.55, rel=1e-3)
+
+
+def test_design_flexure_EN_1992_2004_infeasible_does_not_crash() -> None:
+    """EN gained the "design_flexure never crashes" contract from the driver.
+
+    The EN design used to let ``RebarDesignInfeasibleError`` propagate; sharing
+    the driver with ACI means an unfittable section now degrades to whatever
+    layout it has, and check_flexure reports DCR > 1.
+    """
+    section = RectangularBeam(
+        label="en-infeasible-15x15",
+        concrete=Concrete_EN_1992_2004(name="C20", f_c=20 * MPa),
+        steel_bar=SteelBar(name="B500S", f_y=500 * MPa),
+        width=15 * cm,
+        height=15 * cm,
+        c_c=2 * cm,
+    )
+    Node(section=section, forces=Forces(M_y=14 * kNm)).design_flexure()
+    # If we got here without raising, the contract holds.
+
+
+def test_design_flexure_EN_1992_2004_layout_passes_its_own_check() -> None:
+    """
+    Regression test: a layout produced by design_flexure must pass check_flexure.
+
+    With a positive and a negative moment the discrete selector ended up placing
+    the SAME layout (2Ø16+1Ø12) on both faces. M_Rd then took the branch
+    ``A_s_prime >= A_s`` and moved the whole internal couple to the lever arm
+    ``d - d'``, which is shorter than the singly reinforced ``d - 0.5*lambda*x_eff``
+    used when sizing the steel -- so the beam came out with DCR = 1.02 right after
+    being designed. The section is far from needing compression reinforcement
+    (x_eff is well below x_eff_lim), so the compression bars must not enter the
+    resisting couple at all.
+    """
+    beam = RectangularBeam(
+        label="101",
+        concrete=Concrete_EN_1992_2004(name="C25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=20 * cm,
+        height=60 * cm,
+        c_c=25 * mm,
+    )
+    node = Node(
+        section=beam,
+        forces=[
+            Forces(label="1.4D", V_z=60 * kN, M_y=-80 * kNm),
+            Forces(label="1.2D+1.6L", M_y=100 * kNm),
+        ],
+    )
+    node.design()
+    results = node.check_flexure()
+
+    assert results.iloc[1:]["DCR"].astype(float).max() <= 1.0
+
+
+def test_nominal_moment_EN_1992_2004_is_monotonic_in_compression_steel() -> None:
+    """
+    M_Rd must never decrease when steel is added to the compression face.
+
+    The old formulation lost the concrete contribution as A_s' approached A_s,
+    so M_Rd fell from 100.65 to 98.39 kN·m over the sweep below -- adding steel
+    reduced the computed capacity.
+    """
+    beam = RectangularBeam(
+        label="monotonic",
+        concrete=Concrete_EN_1992_2004(name="C25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=20 * cm,
+        height=60 * cm,
+        c_c=25 * mm,
+    )
+    _initialize_variables_EN_1992_2004(beam)
+    A_s = 5.1522 * cm**2
+    d = 561.44 * mm
+    d_prime = 38.56 * mm
+
+    capacities = [
+        _simple_determine_nominal_moment_EN_1992_2004(beam, A_s, d, ratio * A_s, d_prime).to("kN*m").magnitude
+        for ratio in (0.0, 0.2, 0.5, 0.8, 0.95, 1.0, 1.2)
+    ]
+    assert capacities == sorted(capacities)
+    # Section is singly reinforced (x_eff << x_eff_lim), so A_s' is irrelevant.
+    assert capacities[-1] == pytest.approx(capacities[0], rel=1e-9)
 
 
 def test_en1992_high_strength_concrete_compression_reinforcement() -> None:
@@ -2093,6 +2271,37 @@ def test_design_flexure_rebar_infeasible_does_not_crash() -> None:
     )
     Node(section=section, forces=Forces(M_y=14 * kNm)).design_flexure()
     # If we got here without raising, the contract holds.
+
+
+def test_design_flexure_ACI_318_19_zero_moment_adopts_geometric_minimum() -> None:
+    """
+    Regression test: a shear-only load combination (M_y = 0) must still get the
+    geometric minimum longitudinal reinforcement (1.8‰ of b·h), not A_s = 0.
+
+    With M_u = 0 the ACI flexural minimum ratio is zero, so the design used to
+    leave the section completely unreinforced. That is not a buildable layout,
+    and it also breaks the shear check downstream: rho_w = 0 collapses V_c to
+    zero and raises "Longitudinal rebar As cannot be zero if A_v is less than
+    A_v_min." when V_u is small enough that A_v_min = 0.
+    """
+    beam = RectangularBeam(
+        label="shear-only",
+        concrete=Concrete_ACI_318_19(name="C25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=20 * cm,
+        height=50 * cm,
+        c_c=25 * mm,
+    )
+    node = Node(section=beam, forces=Forces(label="solo corte", V_z=20 * kN))
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        node.design()
+
+    A_s_geo_min = 1.8 / 1000 * beam.width * beam.height
+    assert beam._A_s_bot >= A_s_geo_min
+    assert beam._n1_b > 0
+    assert beam.V_c > 0 * kN
 
 
 def test_check_flexure_ACI_318_19_over_reinforced_with_default_top(
