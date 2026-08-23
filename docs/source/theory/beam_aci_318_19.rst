@@ -388,7 +388,7 @@ both faces carry steel.
 Validation
 ----------
 
-Every row is pinned by a test in ``tests/test_beam.py`` and was verified against the
+Every row is pinned by a test in ``tests/test_beam.py`` and is verified against the
 external source named.
 
 .. list-table::
@@ -400,13 +400,13 @@ external source named.
      - Verified against
    * - :math:`M_n`, singly reinforced
      - ``test_determine_nominal_moment_simple_reinf_ACI_318_19_Test_Etabs_03``
-     - ETABS + Excel *BEAM-01-Flexure-Rectangle ACI 318-19-v6*
+     - Calcpad *BEAM-01-Flexure-Rectangle ACI 318-19-v6*
    * - :math:`M_n`, doubly reinforced (steel not yielding)
      - ``test_determine_nominal_moment_double_reinf_ACI_318_19_Test_Etabs_01``
-     - ETABS + Excel, same workbook
+     - Calcpad, same sheet
    * - :math:`M_n`, doubly reinforced (steel yielding)
      - ``test_determine_nominal_moment_double_reinf_ACI_318_19_Test_Etabs_23_yielding``
-     - ETABS + Excel, same workbook
+     - Calcpad, same sheet
    * - :math:`A_{s,req}`, :math:`A_{s,min}` governing
      - ``test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_05``
      - ETABS, :math:`A_{s,req} = 1.7041\ \text{in}^2`
@@ -421,7 +421,7 @@ external source named.
      - §9.6.1.2
    * - Flexure check, full section
      - ``test_check_flexure_ACI_318_19_1`` … ``_3``
-     - Excel workbook
+     - Calcpad, same sheet
    * - Flexure design, doubly reinforced
      - ``test_design_flexure_ACI_318_19_Test_Etabs_01``
      - ETABS, verified through :math:`\phi M_n \ge M_u`

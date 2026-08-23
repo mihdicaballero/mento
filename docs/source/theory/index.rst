@@ -12,7 +12,7 @@ The intent is auditability. A structural engineer signing off on a design needs 
 verify that the tool agrees with the code, and to know exactly where it does not
 follow the most common interpretation. Every page therefore ends with a
 **Validation** table mapping each check to the test that pins it and to the external
-source that test was verified against.
+source that test is verified against.
 
 .. toctree::
    :hidden:

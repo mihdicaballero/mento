@@ -2,7 +2,7 @@ One-Way Slab
 ============
 
 ``OneWaySlab`` subclasses ``RectangularBeam``. **The code provisions are identical** —
-a one-way slab strip is analysed as a wide, shallow beam, and every equation on the
+a one-way slab is analysed as a wide, shallow beam, and every equation on the
 :doc:`ACI <beam_aci_318_19>` and :doc:`EN <beam_en_1992_2004>` pages applies
 unchanged.
 
@@ -11,18 +11,27 @@ This page covers only what differs.
 Model
 -----
 
-The slab is a strip of unit width — typically 1 m or 12 in — spanning one way. The
-strip width becomes :math:`b` (or :math:`b_w`) in every formula, and the slab
-thickness becomes :math:`h`. Results are therefore *per strip*, so a 1 m strip gives
-areas in cm²/m directly.
+A one-way slab spans in one direction and is designed over a chosen width. That
+``width`` becomes :math:`b` (or :math:`b_w`) in every formula, and the slab thickness
+becomes :math:`h`.
 
 .. math::
 
-   b = \text{strip width}
+   b = \text{design width}
    \qquad
    h = \text{slab thickness}
    \qquad
    d = h - c_c - \frac{d_b}{2}
+
+The width is a free parameter, not fixed at unity. A 1 m or 12 in width is the usual
+choice for a floor or roof slab, and it is convenient because the reported areas then
+read directly as cm²/m. Any other width is equally valid — a 150 cm width is a
+reasonable model for a strip footing, for example — and the section is solved at that
+width rather than scaled up from a unit strip.
+
+Results are therefore absolute for the width given: :math:`A_s` is the total steel
+across :math:`b`, not a per-metre intensity. Divide by the width to convert to cm²/m
+when that is the more useful form.
 
 Note the absence of a stirrup diameter in :math:`d`: slabs carry no transverse
 reinforcement by default, so ``_stirrup_d_b`` starts at zero and the mechanical cover
@@ -36,7 +45,7 @@ Reinforcement is specified by spacing, not count
 
 ``set_slab_longitudinal_rebar_bot(d_b1, s_b1, d_b3, s_b3)`` takes a **bar diameter
 and a spacing** per layer, matching slab detailing practice, instead of the beam's
-bar count. Internally the bar count over the strip is derived from the spacing, and
+bar count. Internally the bar count across the width is derived from the spacing, and
 from there the section behaves exactly as a beam:
 
 .. math::
@@ -61,8 +70,9 @@ Two ``BeamSettings`` values are overridden on construction:
      - Why
    * - ``max_bars_per_layer``
      - ≥ 200
-     - A 1 m strip at 10 cm spacing already needs 10 bars, and narrow spacings can
-       need far more. The beam default would reject valid slab layouts.
+     - A 1 m width at 10 cm spacing already needs 10 bars, and wider slabs or
+       narrower spacings need far more. The beam default would reject valid slab
+       layouts.
    * - ``max_diameter_diff``
      - 0
      - All bars within a layer must share a diameter — mixing diameters in a slab
@@ -100,12 +110,12 @@ Consequences for flexure
 
 Nothing changes mechanically. The geometric minimum of :math:`1.8\text{‰}\,b\,h` that
 mento applies under ACI (see :ref:`aci-decisions`) is expressed on the gross section,
-so for a slab strip it scales with the strip width as expected.
+so it scales with the design width as expected.
 
 .. note::
 
    Shrinkage and temperature reinforcement in the transverse direction (ACI §24.4,
-   EN §9.3.1.1) is **not** computed. mento designs the one-way strip only; the
+   EN §9.3.1.1) is **not** computed. mento designs the spanning direction only; the
    distribution steel perpendicular to the span is the engineer's responsibility.
 
 Validation
