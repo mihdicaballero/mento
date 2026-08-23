@@ -7,11 +7,9 @@ import warnings
 # from devtools import debug
 
 from mento.codes.flexure_design import (
-    MAX_FLEXURE_ITERATIONS as _MAX_FLEXURE_ITERATIONS,
-    FaceDemand,
-    rebar_design_fingerprint,
-    run_flexure_design,
-    select_safe_design,
+    _FaceDemand,
+    _run_flexure_design,
+    _select_safe_design as _select_safe_design_generic,
 )
 from mento.material import Concrete_ACI_318_19
 from mento.rebar import Rebar
@@ -929,11 +927,6 @@ def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.Data
 # verification -- lives in `mento.codes.flexure_design` and is shared with
 # EN 1992-2004. Only the two hooks below are ACI-specific.
 
-# Kept as module attributes because they are part of this module's historical
-# surface (tests and downstream code import them from here).
-MAX_FLEXURE_ITERATIONS = _MAX_FLEXURE_ITERATIONS
-_rebar_design_fingerprint = rebar_design_fingerprint
-
 
 def _flexure_capacity_ACI_318_19(self: "RectangularBeam", face: str, M_demand: Quantity) -> Quantity:
     """phi*Mn of the layout currently applied to the section, on `face`.
@@ -949,10 +942,10 @@ def _flexure_capacity_ACI_318_19(self: "RectangularBeam", face: str, M_demand: Q
 
 def _required_areas_ACI_318_19(
     self: "RectangularBeam", face: str, M: Quantity, d: Quantity, d_prime: Quantity
-) -> FaceDemand:
+) -> _FaceDemand:
     """Steel required by ACI 318-19 on `face` for the moment `M`.
 
-    The code-specific extras that do not belong in `FaceDemand` (the c/d ratio
+    The code-specific extras that do not belong in `_FaceDemand` (the c/d ratio
     and the 4/3-rule flag) are stored on the beam for the results tables.
     """
     (
@@ -969,7 +962,7 @@ def _required_areas_ACI_318_19(
     else:
         self._A_s_min_top, self._A_s_max_top = A_s_min, A_s_max
         self._c_d_top, self._A_s_bool_top = c_d, A_s_bool
-    return FaceDemand(A_s_min, A_s_max, A_s_tension, A_s_compression)
+    return _FaceDemand(A_s_min, A_s_max, A_s_tension, A_s_compression)
 
 
 def _select_safe_design(
@@ -978,29 +971,29 @@ def _select_safe_design(
     M_demand: Quantity,
     face: str,
 ) -> Dict[str, Any]:
-    """ACI-flavoured :func:`select_safe_design` — same selection rules, with
+    """ACI-flavoured safe-layout selection — same selection rules, with
     phi*Mn as the capacity measure."""
 
     def _capacity(f: str, M: Quantity) -> Quantity:
         return _flexure_capacity_ACI_318_19(self, f, M)
 
-    return select_safe_design(self, candidate_designs, M_demand, face, _capacity)
+    return _select_safe_design_generic(self, candidate_designs, M_demand, face, _capacity)
 
 
 def _design_flexure_ACI_318_19(self: "RectangularBeam", max_M_y_bot: Quantity, max_M_y_top: Quantity) -> None:
     """Design the longitudinal reinforcement of a beam per ACI 318-19.
 
     Thin wrapper: everything that is not an ACI equation lives in
-    :func:`mento.codes.flexure_design.run_flexure_design`.
+    ``mento.codes.flexure_design``.
     """
 
-    def _required(face: str, M: Quantity, d: Quantity, d_prime: Quantity) -> FaceDemand:
+    def _required(face: str, M: Quantity, d: Quantity, d_prime: Quantity) -> _FaceDemand:
         return _required_areas_ACI_318_19(self, face, M, d, d_prime)
 
     def _capacity(face: str, M: Quantity) -> Quantity:
         return _flexure_capacity_ACI_318_19(self, face, M)
 
-    run_flexure_design(self, max_M_y_bot, max_M_y_top, _required, _capacity)
+    _run_flexure_design(self, max_M_y_bot, max_M_y_top, _required, _capacity)
 
 
 def _compile_results_ACI_flexure_metric(self: "RectangularBeam", force: Forces) -> Dict[str, Any]:

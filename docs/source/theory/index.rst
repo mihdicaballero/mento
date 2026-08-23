@@ -22,7 +22,6 @@ source that test was verified against.
    beam_en_1992_2004
    one_way_slab
    shear_wall_aci_318_19
-   design_strategy
 
 What is implemented
 -------------------
@@ -89,8 +88,16 @@ Design vs. check
 
 A **check** takes a given reinforcement layout and reports capacity and a
 demand-to-capacity ratio. A **design** searches for a layout that satisfies the
-demand. They are different operations and mento keeps them mechanically consistent:
-the strategy the design search follows is described in :doc:`design_strategy`.
+demand.
+
+Design is iterative, because the problem is circular: the steel a section needs
+depends on its effective depth, the effective depth depends on where the bars end up,
+and the bars come from a discrete catalogue rather than a continuum. mento converges
+the mechanical covers, selects a buildable bar layout, and then **verifies that the
+layout it chose actually resists the demand** using the same capacity equations
+``check_flexure`` uses. A layout returned by a design therefore passes its own check,
+unless no layout in the catalogue can — in which case the section is reported with
+``DCR > 1`` rather than raising.
 
 Demand-to-capacity ratio
 ^^^^^^^^^^^^^^^^^^^^^^^^

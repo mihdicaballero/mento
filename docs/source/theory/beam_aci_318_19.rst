@@ -375,7 +375,7 @@ Effective depth from the real bar layout
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 :math:`d` is recomputed from the centroid of the bars actually placed, and the design
-iterates on it (see :doc:`design_strategy`). Software that assumes a fixed
+iterates on it. Software that assumes a fixed
 :math:`d` — ETABS, for instance — will report slightly different required areas for
 the same demand. The difference is geometric, not a disagreement about the code.
 

@@ -7,7 +7,7 @@ from pandas import DataFrame
 # from devtools import debug
 
 
-from mento.codes.flexure_design import FaceDemand, run_flexure_design
+from mento.codes.flexure_design import _FaceDemand, _run_flexure_design
 from mento.material import Concrete_EN_1992_2004
 from mento.rebar import Rebar
 from mento.units import MPa, mm, kNm, dimensionless, kN, inch, cm
@@ -509,31 +509,31 @@ def _flexure_capacity_EN_1992_2004(self: "RectangularBeam", face: str, M_demand:
 
 def _required_areas_EN_1992_2004(
     self: "RectangularBeam", face: str, M: Quantity, d: Quantity, d_prime: Quantity
-) -> FaceDemand:
+) -> _FaceDemand:
     """Steel required by EN 1992-2004 on `face` for the moment `M`."""
     A_s_min, A_s_max, A_s1, A_s2 = _calculate_flexural_reinforcement_EN_1992_2004(self, M, d, d_prime)
     if face == "bot":
         self._A_s_min_bot, self._A_s_max_bot = A_s_min, A_s_max
     else:
         self._A_s_min_top, self._A_s_max_top = A_s_min, A_s_max
-    return FaceDemand(A_s_min, A_s_max, A_s1, A_s2)
+    return _FaceDemand(A_s_min, A_s_max, A_s1, A_s2)
 
 
 def _design_flexure_EN_1992_2004(self: "RectangularBeam", max_M_y_bot: Quantity, max_M_y_top: Quantity) -> None:
     """Design the longitudinal reinforcement of a beam per EN 1992-2004.
 
     Thin wrapper: everything that is not an EN equation lives in
-    :func:`mento.codes.flexure_design.run_flexure_design`.
+    ``mento.codes.flexure_design``.
     """
     _initialize_variables_EN_1992_2004(self)
 
-    def _required(face: str, M: Quantity, d: Quantity, d_prime: Quantity) -> FaceDemand:
+    def _required(face: str, M: Quantity, d: Quantity, d_prime: Quantity) -> _FaceDemand:
         return _required_areas_EN_1992_2004(self, face, M, d, d_prime)
 
     def _capacity(face: str, M: Quantity) -> Quantity:
         return _flexure_capacity_EN_1992_2004(self, face, M)
 
-    run_flexure_design(self, max_M_y_bot, max_M_y_top, _required, _capacity)
+    _run_flexure_design(self, max_M_y_bot, max_M_y_top, _required, _capacity)
 
 
 def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> pd.DataFrame:

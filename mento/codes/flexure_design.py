@@ -1,27 +1,35 @@
-"""Code-agnostic driver for the flexural design of a rectangular section.
+"""Internal engine shared by the flexural design routines of each design code.
 
-ACI 318-19 and EN 1992-2004 disagree on the equations — the stress block, the
-safety format, the minimum reinforcement rules — but not on the *strategy* that
-surrounds them:
-
-1. Guess the mechanical covers, hence the effective depths.
-2. Ask the design code for the steel required on each face.
-3. Let the discrete rebar selector turn those areas into a buildable layout.
-4. Reconcile the faces: the layout on one face must also cover the compression
-   the opposite face's moment demands from it.
-5. Re-read the real centroids, which move the effective depths, and iterate
-   (Picard / fixed point) until the covers stop moving.
-6. Verify the layout actually resists the moment, and if it does not, fall back
-   to the best layout among those visited.
-
-Steps 1 and 3-6 live here. Steps 2 and the capacity evaluation of step 6 are
-supplied by the caller as two callbacks, which is the only place the design
-code enters.
-
-Only the discrete-selection strategy is shared: each code keeps its own
-equations in ``_calculate_flexural_reinforcement_*`` and
-``_determine_nominal_moment_*``.
+Private to ``mento.codes``: not part of the public API, and deliberately kept out
+of the published documentation.
 """
+
+# ---------------------------------------------------------------------------
+# Why this module exists
+#
+# ACI 318-19 and EN 1992-2004 disagree on the equations -- the stress block, the
+# safety format, the minimum reinforcement rules -- but not on the strategy that
+# surrounds them:
+#
+#   1. Guess the mechanical covers, hence the effective depths.
+#   2. Ask the design code for the steel required on each face.
+#   3. Let the discrete rebar selector turn those areas into a buildable layout.
+#   4. Reconcile the faces: the layout on one face must also cover the
+#      compression the opposite face's moment demands from it.
+#   5. Re-read the real centroids, which move the effective depths, and iterate
+#      (Picard / fixed point) until the covers stop moving.
+#   6. Verify the layout actually resists the moment, and if it does not, fall
+#      back to the best layout among those visited.
+#
+# Steps 1 and 3-6 live here. Step 2, and the capacity evaluation of step 6, are
+# supplied by the caller as two callbacks -- the only place the design code
+# enters. Each code keeps its own equations in
+# ``_calculate_flexural_reinforcement_*`` and ``_determine_nominal_moment_*``.
+#
+# Kept as comments rather than a module docstring on purpose: Sphinx autodoc
+# publishes docstrings, and this is implementation detail, not reference
+# material for users.
+# ---------------------------------------------------------------------------
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Dict
@@ -35,11 +43,11 @@ if TYPE_CHECKING:
     from ..beam import RectangularBeam
 
 
-MAX_FLEXURE_ITERATIONS = 30  # safety net for slow divergence without cycling
+_MAX_FLEXURE_ITERATIONS = 30  # safety net for slow divergence without cycling
 
 
 @dataclass
-class FaceDemand:
+class _FaceDemand:
     """Steel areas a design code requires for one tension face.
 
     Attributes
@@ -63,15 +71,15 @@ class FaceDemand:
 # Ask the design code for the areas required on ``face`` ("bot"/"top") by a
 # moment ``M`` (always a positive magnitude), given the tension-side effective
 # depth ``d`` and the compression-side mechanical cover ``d_prime``.
-RequiredAreas = Callable[..., FaceDemand]
+_RequiredAreas = Callable[..., _FaceDemand]
 
 # Resisting moment of the layout currently applied to the section, on ``face``,
 # under a demand of ``M_demand`` (positive magnitude). Includes the safety
 # format of the code (phi*Mn for ACI, M_Rd for EN).
-Capacity = Callable[..., Quantity]
+_Capacity = Callable[..., Quantity]
 
 
-def rebar_design_fingerprint(rebar_design: Any) -> tuple:
+def _rebar_design_fingerprint(rebar_design: Any) -> tuple:
     """Canonical, hashable identifier of a discrete rebar layout.
 
     Two iterations producing the same fingerprint mean the Picard (fixed-point
@@ -96,12 +104,12 @@ def rebar_design_fingerprint(rebar_design: Any) -> tuple:
     )
 
 
-def select_safe_design(
+def _select_safe_design(
     self: "RectangularBeam",
     candidate_designs: list,
     M_demand: Any,
     face: str,
-    capacity: Capacity,
+    capacity: _Capacity,
 ) -> Any:
     """Among a set of candidate rebar designs — those visited during the
     Picard (fixed-point iteration) loop — return the most appropriate one for
@@ -129,7 +137,7 @@ def select_safe_design(
         Required design moment on the face (positive magnitude).
     face : {"bot", "top"}
         Which face the layout governs.
-    capacity : Capacity
+    capacity : _Capacity
         Code-specific evaluation of the resisting moment.
     """
     M_demand_abs = abs(M_demand.to("kN*m"))
@@ -162,12 +170,12 @@ def select_safe_design(
     return evaluated[0][2]
 
 
-def run_flexure_design(
+def _run_flexure_design(
     self: "RectangularBeam",
     max_M_y_bot: Quantity,
     max_M_y_top: Quantity,
-    required_areas: RequiredAreas,
-    capacity: Capacity,
+    required_areas: _RequiredAreas,
+    capacity: _Capacity,
 ) -> None:
     """Design the longitudinal reinforcement of ``self`` for the two limiting
     moments, using ``required_areas`` and ``capacity`` as the design-code hooks.
@@ -177,10 +185,10 @@ def run_flexure_design(
     whichever is larger.
 
     The mechanical cover is solved by a Picard (fixed-point) iteration. The
-    loop is bounded by ``MAX_FLEXURE_ITERATIONS`` and includes per-face cycle
+    loop is bounded by ``_MAX_FLEXURE_ITERATIONS`` and includes per-face cycle
     detection: if the same layout fingerprint reappears, the loop exits and a
     safe layout is picked among the visited candidates by re-evaluating the
-    resisting moment (see :func:`select_safe_design`). This avoids infinite
+    resisting moment (see :func:`_select_safe_design`). This avoids infinite
     oscillation when two or more discrete layouts alternate without converging
     in the strict tolerance.
 
@@ -216,7 +224,7 @@ def run_flexure_design(
     top_visited: Dict[tuple, dict] = {}
     cycled = False
 
-    for _iteration_count in range(1, MAX_FLEXURE_ITERATIONS + 1):
+    for _iteration_count in range(1, _MAX_FLEXURE_ITERATIONS + 1):
         # Effective depths for this iteration
         d = self.height - rec_mec
 
@@ -317,15 +325,15 @@ def run_flexure_design(
         # forces the OTHER face into a limit cycle as well. Detecting recurrence
         # on either face is enough evidence that the whole system is in a limit
         # cycle; continuing would only waste iterations. We exit and let
-        # `select_safe_design` pick the best layout among those visited.
+        # `_select_safe_design` pick the best layout among those visited.
         if self.flexure_design_results_bot is not None:
-            fp_bot = rebar_design_fingerprint(self.flexure_design_results_bot)
+            fp_bot = _rebar_design_fingerprint(self.flexure_design_results_bot)
             if fp_bot in bot_visited:
                 cycled = True
             else:
                 bot_visited[fp_bot] = dict(self.flexure_design_results_bot)
         if self.flexure_design_results_top is not None:
-            fp_top = rebar_design_fingerprint(self.flexure_design_results_top)
+            fp_top = _rebar_design_fingerprint(self.flexure_design_results_top)
             if fp_top in top_visited:
                 cycled = True
             else:
@@ -346,7 +354,7 @@ def run_flexure_design(
     # is NOT guaranteed to resist the demand. The Picard (fixed-point
     # iteration) only ensures centroid consistency, not flexural capacity. So
     # we always run a final check; if the active layout fails, we pick the
-    # safest one among the visited layouts (see `select_safe_design`). If no
+    # safest one among the visited layouts (see `_select_safe_design`). If no
     # visited layout passes either, we pick the closest one — the downstream
     # `check_flexure` will surface DCR > 1 to signal that the section is
     # insufficient.
@@ -355,11 +363,11 @@ def run_flexure_design(
     # to and the active (unchanged) layout is left for check_flexure to report.
     if max_M_y_bot > 0 * kNm:
         if capacity("bot", max_M_y_bot) < max_M_y_bot and bot_visited:
-            chosen_bot = select_safe_design(self, list(bot_visited.values()), max_M_y_bot, "bot", capacity)
+            chosen_bot = _select_safe_design(self, list(bot_visited.values()), max_M_y_bot, "bot", capacity)
             self._apply_longitudinal_design_bot(chosen_bot)
 
     if max_M_y_top < 0 * kNm:
         M_demand_top = abs(max_M_y_top.to("kN*m"))
         if capacity("top", M_demand_top) < M_demand_top and top_visited:
-            chosen_top = select_safe_design(self, list(top_visited.values()), M_demand_top, "top", capacity)
+            chosen_top = _select_safe_design(self, list(top_visited.values()), M_demand_top, "top", capacity)
             self._apply_longitudinal_design_top(chosen_top)
