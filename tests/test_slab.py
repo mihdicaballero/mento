@@ -237,3 +237,58 @@ def test_lambda_s_is_capped_at_one_metric() -> None:
     assert d_mm < 250  # the regime where the cap bites
     assert math.sqrt(2 / (1 + 0.004 * d_mm)) > 1.0
     assert slab._lambda_s == pytest.approx(1.0, rel=1e-9)
+
+
+def test_shear_check_with_no_tension_reinforcement_warns_and_does_not_raise() -> None:
+    """
+    A slab with no longitudinal steel has no shear capacity under ACI, and the
+    check must say so instead of crashing.
+
+    Slabs start with zero reinforcement on both faces (unlike beams, which fall
+    back to starter bars). With no stirrups either, Table 22.5.5.1 gives
+    V_c proportional to rho_w**(1/3) = 0, so phi*Vn is exactly zero. Dividing
+    the demand by that used to raise ZeroDivisionError, breaking the contract
+    that a check reports an insufficient section rather than blowing up.
+
+    The UserWarning is the intended signal; the infinite DCR is the graceful
+    way to report zero capacity.
+    """
+    slab = OneWaySlab(
+        label="no-rebar",
+        concrete=Concrete_ACI_318_19(name="C25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=20 * cm,
+        c_c=25 * mm,
+    )
+    assert slab._A_s_bot.magnitude == 0
+
+    with pytest.warns(UserWarning, match="Longitudinal rebar As cannot be zero"):
+        Node(section=slab, forces=Forces(V_z=5 * kN)).check_shear()
+
+    assert slab.V_c.magnitude == 0
+    assert slab._DCRv == float("inf")
+
+
+def test_flexure_check_with_no_bottom_reinforcement_floors_phi_Mn() -> None:
+    """
+    Companion of the shear case on the flexure side.
+
+    With no bottom steel and a non-negative moment, phi*Mn on the bottom face is
+    zero. The check floors it at 0.01 kNm so the DCR stays a finite number
+    instead of raising, and reports As = 0 so the cause is visible.
+    """
+    slab = OneWaySlab(
+        label="no-rebar-flexure",
+        concrete=Concrete_ACI_318_19(name="C25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=20 * cm,
+        c_c=25 * mm,
+    )
+    results = Node(section=slab, forces=Forces(M_y=0 * kNm)).check_flexure()
+
+    assert slab._phi_M_n_bot.to("kN*m").magnitude == pytest.approx(0.01)
+    assert slab._DCRb_bot == 0
+    assert results.iloc[1]["Position"] == "Bottom"
+    assert results.iloc[1]["As"] == 0

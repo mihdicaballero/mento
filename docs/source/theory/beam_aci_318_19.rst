@@ -261,8 +261,11 @@ The result is bounded above (§22.5.5.1.1):
    :math:`\rho_w` uses the reinforcement on the **tension** face for the combination
    being checked — bottom steel for a positive moment, top steel for a negative one.
    A combination with no moment therefore uses the bottom steel. Because
-   :math:`V_c \propto \rho_w^{1/3}`, a section with no longitudinal steel would
-   compute :math:`V_c = 0`; see :ref:`aci-decisions`.
+   :math:`V_c \propto \rho_w^{1/3}`, a section with no longitudinal steel computes
+   :math:`V_c = 0`, and with no stirrups either its shear capacity is zero. mento
+   warns and reports an infinite DCR rather than raising. A *design* never produces
+   that situation — see :ref:`aci-decisions` — but a *check* on a user-supplied
+   layout can, and slabs start with no reinforcement on either face.
 
 Steel contribution and total strength
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -444,3 +447,8 @@ external source named.
      - ``test_lambda_s_is_capped_at_one_imperial`` / ``_metric``
        (in ``tests/test_slab.py``)
      - §22.5.5.1.3
+   * - Zero capacity reported, not raised
+     - ``test_shear_check_with_no_tension_reinforcement_warns_and_does_not_raise``,
+       ``test_flexure_check_with_no_bottom_reinforcement_floors_phi_Mn``
+       (in ``tests/test_slab.py``)
+     - Public contract: a check reports ``DCR``, it does not blow up

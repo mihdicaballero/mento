@@ -228,7 +228,17 @@ def _calculate_total_shear_strength_aci(self: "RectangularBeam") -> None:
     if isinstance(self.concrete, Concrete_ACI_318_19):
         self._phi_V_n = self.concrete.phi_v * (self.V_c + self._A_v * self.f_yt * self._d_shear)
         V_d_max = min(self._phi_V_n, self._phi_V_max)
-        self._DCRv = abs((self._V_u.to("kN").magnitude / V_d_max.to("kN").magnitude))
+        if V_d_max.to("kN").magnitude == 0:
+            # No stirrups AND no longitudinal steel on the tension face. V_c in
+            # Table 22.5.5.1 scales with rho_w**(1/3), so it collapses to zero
+            # and the section has no shear capacity at all -- which is what the
+            # warning in _calculate_concrete_shear_strength_aci flags. Report an
+            # infinite DCR rather than dividing by zero: check_shear must not
+            # raise because a section is insufficient. Mirrors the guard in the
+            # wall module and the phi*Mn floor in the flexure check.
+            self._DCRv = float("inf")
+        else:
+            self._DCRv = abs((self._V_u.to("kN").magnitude / V_d_max.to("kN").magnitude))
 
 
 def _calculate_rebar_spacing_aci(self: "RectangularBeam") -> None:
