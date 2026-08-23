@@ -367,8 +367,8 @@ Inverting :math:`K` yields the **block depth**, so the lever arm is
 C25 200×600 section at 150 kN·m that is 518.3 mm instead of 507.9 mm — a 2%
 overestimate of the lever arm, hence a 2% **under-estimate** of the required steel.
 
-mento previously carried this error, inherited from its reference spreadsheet. It is
-now pinned by a test that recomputes the Concise Eurocode 2 closed form from scratch.
+The single application is pinned by a test that recomputes the Concise Eurocode 2
+closed form from scratch.
 
 Ductility limits live on the neutral axis
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

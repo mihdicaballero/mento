@@ -1,14 +1,16 @@
 Slab
 ====
 
-The `OneWaySlab` class models a one-way slab strip for flexure and shear analysis and design.
+The `OneWaySlab` class models a one-way spanning slab for flexure and shear analysis and design.
 It inherits all check and design logic from `RectangularBeam`, but uses bar **diameter + spacing**
 instead of bar count for longitudinal reinforcement — consistent with standard slab detailing practice.
 
 Key Concepts
 ------------
 
-- **Geometry**: Defined by a strip `width` (typically 1 m or 100 cm) and slab `height` (thickness).
+- **Geometry**: Defined by a `width` and a slab `height` (thickness). The width is free:
+  1 m is the usual choice for a floor slab, but any width works — a footing might use 150 cm.
+  Results are the totals across that width, not per-metre values.
 - **Material Properties**: Requires a `Concrete` object and a `SteelBar` object.
 - **Reinforcement**: Specified by bar diameter and spacing, not bar count.
 - **Checks and design**: Performed through a `Node` object, exactly as for beams.
@@ -21,8 +23,8 @@ Below is a step-by-step guide on how to use the `OneWaySlab` class.
 1. Creating a Slab Object
 *************************
 
-To define a slab strip, specify its geometry, material properties, and clear cover.
-The `width` represents the analysis strip width; `height` is the slab thickness.
+To define a slab, specify its geometry, material properties, and clear cover.
+The `width` is the width being designed; `height` is the slab thickness.
 
 .. code-block:: python
 
@@ -33,7 +35,7 @@ The `width` represents the analysis strip width; `height` is the slab thickness.
     concrete = Concrete_ACI_318_19(name="C25", f_c=25 * MPa)
     steel = SteelBar(name="ADN 420", f_y=420 * MPa)
 
-    # Define slab strip geometry (1 m wide strip, 20 cm thick)
+    # Define slab geometry (1 m wide, 20 cm thick)
     slab = OneWaySlab(label="S101", concrete=concrete, steel_bar=steel,
                       width=100 * cm, height=20 * cm, c_c=25 * mm)
 
