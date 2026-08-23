@@ -7,6 +7,7 @@ from pandas import DataFrame
 # from devtools import debug
 
 
+from mento.codes.flexure_design import _FaceDemand, _run_flexure_design
 from mento.material import Concrete_EN_1992_2004
 from mento.rebar import Rebar
 from mento.units import MPa, mm, kNm, dimensionless, kN, inch, cm
@@ -277,6 +278,32 @@ def _min_max_flexural_reinforcement_ratio_EN_1992_2004(
     return rho_min, rho_max
 
 
+def _compression_zone_limits_EN_1992_2004(self: "RectangularBeam", d: Quantity) -> Tuple[Quantity, Quantity]:
+    """Compression zone at the ductility limit, as (neutral axis, block depth).
+
+    Both limits EN 1992-1-1 imposes are written on the NEUTRAL AXIS ratio
+    ``x_u/d``: the redistribution limit of 5.5(4), ``(delta - k_1)/k_2``
+    (``k_3``/``k_4`` above C50/60), and the 0.45 ductility cap. The equivalent
+    rectangular stress block of 3.1.7(3) is ``lambda`` times shallower than the
+    neutral axis, so the conversion happens once, here, and every caller gets
+    both depths already in the right units.
+
+    Returns
+    -------
+    (x_u_lim, x_eff_lim)
+        Neutral axis depth and equivalent rectangular block depth at the limit.
+    """
+    concrete_en = cast("Concrete_EN_1992_2004", self.concrete)
+    lambda_ = concrete_en._lambda_factor()
+    if concrete_en._f_ck <= 50 * MPa:
+        xi_lim_redistribution = (concrete_en._delta - concrete_en._k_1) / concrete_en._k_2
+    else:
+        xi_lim_redistribution = (concrete_en._delta - concrete_en._k_3) / concrete_en._k_4
+    xi_lim = min(xi_lim_redistribution, 0.45)  # both are x_u/d
+    x_u_lim = xi_lim * d
+    return x_u_lim, lambda_ * x_u_lim
+
+
 def _calculate_flexural_reinforcement_EN_1992_2004(
     self: "RectangularBeam", M_Ed: Quantity, d: Quantity, d_prima: float
 ) -> tuple[Quantity, Quantity, Quantity, Quantity]:
@@ -289,18 +316,13 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
 
     # Constants and material properties
     if isinstance(self.concrete, Concrete_EN_1992_2004):
-        lambda_ = self.concrete._lambda_factor()  # Factor for effective compression zone depth (EN 1992-1-1)
         eta = self.concrete._eta_factor()  # Factor for concrete strength (EN 1992-1-1)
         # Define f_yd
         f_yd = self.steel_bar.f_y / self.concrete._gamma_s
 
-        # Relative depth of compression zone at yielding of bottom reinforcement
+        # Compression zone at the ductility limit (EC2 5.5(4) and the 0.45 cap)
         concrete_en = cast("Concrete_EN_1992_2004", self.concrete)
-        xi_eff_lim_1 = (self.concrete._delta - self.concrete._k_1) / self.concrete._k_2
-        xi_eff_lim_2 = lambda_ * 0.45  # Ductility condition
-        xi_eff_lim = min(xi_eff_lim_1, xi_eff_lim_2)
-        # Compression zone depth limit
-        x_eff_lim = xi_eff_lim * d
+        x_u_lim, x_eff_lim = _compression_zone_limits_EN_1992_2004(self, d)
         # Limit moment for compressive reinforcement
 
         M_lim = eta * self._f_cd * self.width * x_eff_lim * (d - 0.5 * x_eff_lim)
@@ -311,11 +333,13 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
             # Relative design bending moment
             K_value = (M_Ed / (self.width * d**2 * eta * self._f_cd)).to("dimensionless").magnitude
 
-            # Compression zone depth
+            # Depth of the equivalent rectangular block. Inverting
+            # M = eta*f_cd*b*x_eff*(d - 0.5*x_eff) already yields lambda*x, so
+            # lambda must NOT be applied again to the lever arm below.
             x_eff = d * (1 - math.sqrt(1 - 2 * K_value))
 
             # Area of required tensile reinforcement
-            z = d - 0.5 * lambda_ * x_eff
+            z = d - 0.5 * x_eff
             A_s1 = M_Ed / (z * f_yd)
             # Ensure the area meets the minimum requirement
             A_s1 = max(A_s1, A_s_min)
@@ -326,14 +350,11 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
             # Compressive reinforcement is required
             self._doubly_reinforced = True
             # Limit tensile reinforcement area
-            z = d - 0.5 * lambda_ * x_eff_lim
+            z = d - 0.5 * x_eff_lim
             A_s1_lim = (M_lim / (z * f_yd)).to("cm^2")
 
-            # Compression zone depth with plastic limit (EC2 §5.5)
-            if self.concrete._f_ck <= 50 * MPa:
-                x_u = d * (self.concrete._delta - self.concrete._k_1) / self.concrete._k_2
-            else:
-                x_u = d * (self.concrete._delta - self.concrete._k_3) / self.concrete._k_4
+            # Neutral axis at the plastic limit (EC2 §5.5)
+            x_u = x_u_lim
 
             # Compressive reinforcement strain'
             epsilon_s2 = (x_u - d_prima) / x_u * concrete_en._epsilon_cu2
@@ -362,26 +383,55 @@ def _simple_determine_nominal_moment_EN_1992_2004(
     A_s_prime: Quantity,
     d_prime: Quantity,
 ) -> Quantity:
+    """
+    Design bending resistance M_Rd of a rectangular section.
+
+    The reinforcement on the compression face is only part of the resisting
+    couple when the section *needs* it to be in equilibrium, i.e. when the
+    compression block required to balance the tension steel exceeds the
+    ductility limit ``x_eff_lim``. Below that limit the concrete alone balances
+    the tension steel: any bar on the compression face is then an erection or
+    detailing bar, it is ignored (safe side), and the lever arm stays the singly
+    reinforced one. Only above the limit does the concrete saturate at
+    ``M_lim`` and the excess tension steel pair with the compression steel,
+    which is what changes the lever arm to ``d - d'``.
+
+    This mirrors :func:`_calculate_flexural_reinforcement_EN_1992_2004`, which
+    sizes the tension steel with exactly the same criterion, so that a layout
+    coming out of ``design_flexure`` is verified by ``check_flexure`` under the
+    same mechanical model.
+
+    For reference see Jimenez Montoya 16 Ed. P 213.
+    """
     # Constants and material properties
     if isinstance(self.concrete, Concrete_EN_1992_2004):
-        # For reference see Jimenez Montoya 16 Ed. P 213
         f_yd = self.steel_bar._f_y / self.concrete._gamma_s
         f_cd = self.concrete._alpha_cc * self.concrete.f_ck / self.concrete.gamma_c
+        eta = self.concrete._eta_factor()  # Factor for concrete strength
         b = self.width
-        omega_1 = A_s * f_yd / (b * d * f_cd)  # tension rebar ratio
-        omega_2 = A_s_prime / (b * d) * f_yd / f_cd  # Compression rebar ratio
-        if A_s_prime.to(cm**2).magnitude >= A_s.to(cm**2).magnitude:
-            z = d - d_prime  # Lever arm of internal forces
-            M_Rd = A_s * f_yd * z
 
-        elif omega_1 - omega_2 <= 0.36:
-            A_tensioned = A_s - A_s_prime
-            M_omega_1_omega_2 = (
-                A_tensioned * f_yd * (d - 0.5 * self.concrete._lambda_factor() * A_tensioned * f_yd / (f_cd * b))
-            )
-            M_Rd = M_omega_1_omega_2 + A_s_prime * f_yd * (d - d_prime)
+        # Depth of the equivalent rectangular block that balances the whole
+        # tension steel, assuming the section is singly reinforced.
+        x_eff = A_s * f_yd / (eta * f_cd * b)
+
+        # Ductility limit -- same criterion as the reinforcement sizing routine.
+        _, x_eff_lim = _compression_zone_limits_EN_1992_2004(self, d)
+
+        if x_eff <= x_eff_lim:
+            # Singly reinforced: A_s_prime is not required for equilibrium.
+            M_Rd = A_s * f_yd * (d - 0.5 * x_eff)
         else:
-            M_Rd = 0.295 * f_cd * b * d**2 + A_s_prime * f_yd * (d - d_prime)
+            # Doubly reinforced: the concrete contribution saturates at the
+            # ductility limit and the excess tension steel is balanced by the
+            # compression reinforcement, with lever arm (d - d'). At
+            # x_eff = x_eff_lim this returns exactly the M_lim used when sizing
+            # the reinforcement, so M_Rd is continuous across the branch.
+            A_s_lim = eta * f_cd * b * x_eff_lim / f_yd
+            M_lim = A_s_lim * f_yd * (d - 0.5 * x_eff_lim)
+            # The couple can only develop up to the steel actually available on
+            # the compression face.
+            A_s_couple = min(A_s - A_s_lim, A_s_prime)
+            M_Rd = M_lim + A_s_couple * f_yd * (d - d_prime)
     return M_Rd
 
 
@@ -436,119 +486,54 @@ def _split_top_bot_moment(self: "RectangularBeam", force: Forces) -> None:
         self._M_Ed_top = self._M_Ed
 
 
-def _design_flexure_EN_1992_2004(
-    self: "RectangularBeam", max_M_y_bot: Quantity, max_M_y_top: Quantity
-) -> Dict[str, Any]:
-    # Initialize the design variables requirements using the provided force.
+# ─────────────────────────────────────────────────────────────────────────────
+# Flexural design — EN 1992-2004 hooks for the shared driver
+# ─────────────────────────────────────────────────────────────────────────────
+# The design *strategy* -- Picard loop on the mechanical covers, discrete rebar
+# selection, face reconciliation, cycle detection and final capacity
+# verification -- lives in `mento.codes.flexure_design` and is shared with
+# ACI 318-19. Only the two hooks below are EN-specific.
+
+
+def _flexure_capacity_EN_1992_2004(self: "RectangularBeam", face: str, M_demand: Quantity) -> Quantity:
+    """M_Rd of the layout currently applied to the section, on `face`.
+
+    Recomputed rather than read from cached state so that the centroid of the
+    layout just applied is taken into account.
+    """
+    M_abs = abs(M_demand)
+    probe_force = Forces(M_y=(M_abs if face == "bot" else -M_abs))
+    _determine_nominal_moment_EN_1992_2004(self, probe_force)
+    return self._M_Rd_bot if face == "bot" else self._M_Rd_top
+
+
+def _required_areas_EN_1992_2004(
+    self: "RectangularBeam", face: str, M: Quantity, d: Quantity, d_prime: Quantity
+) -> _FaceDemand:
+    """Steel required by EN 1992-2004 on `face` for the moment `M`."""
+    A_s_min, A_s_max, A_s1, A_s2 = _calculate_flexural_reinforcement_EN_1992_2004(self, M, d, d_prime)
+    if face == "bot":
+        self._A_s_min_bot, self._A_s_max_bot = A_s_min, A_s_max
+    else:
+        self._A_s_min_top, self._A_s_max_top = A_s_min, A_s_max
+    return _FaceDemand(A_s_min, A_s_max, A_s1, A_s2)
+
+
+def _design_flexure_EN_1992_2004(self: "RectangularBeam", max_M_y_bot: Quantity, max_M_y_top: Quantity) -> None:
+    """Design the longitudinal reinforcement of a beam per EN 1992-2004.
+
+    Thin wrapper: everything that is not an EN equation lives in
+    ``mento.codes.flexure_design``.
+    """
     _initialize_variables_EN_1992_2004(self)
 
-    if isinstance(self.concrete, Concrete_EN_1992_2004):
-        # Initialize all the code related variables
-        # Initial assumptions for mechanical cover and compression depth
-        rec_mec = self.c_c + self._stirrup_d_b + 1 * cm  # type: ignore
-        d_prima = self.c_c + self._stirrup_d_b + 1 * cm  # type: ignore
-        # Start the iterative process
-        tol = 0.01 * cm  # Tolerance for convergence
-        Err = 2 * tol
-        iteration_count = 0
-        max_iterations = 50
+    def _required(face: str, M: Quantity, d: Quantity, d_prime: Quantity) -> _FaceDemand:
+        return _required_areas_EN_1992_2004(self, face, M, d, d_prime)
 
-        while Err >= tol and iteration_count < max_iterations:
-            iteration_count += 1
-            # Update the effective depth for bottom tension reinforcement
-            d = self.height - rec_mec
-            # Calculate reinforcement for the positive moment, even if it is 0
-            (
-                self._A_s_min_bot,
-                self._A_s_max_bot,
-                A_s_final_bot_Positive_M,
-                A_s_comp_top,
-            ) = _calculate_flexural_reinforcement_EN_1992_2004(
-                self,
-                max_M_y_bot,
-                d,
-                d_prima,  # type: ignore
-            )
-            # Initialize bottom and top reinforcement
-            self._A_s_bot = A_s_final_bot_Positive_M
-            self._A_s_top = A_s_comp_top
+    def _capacity(face: str, M: Quantity) -> Quantity:
+        return _flexure_capacity_EN_1992_2004(self, face, M)
 
-            # If there is a negative moment, calculate the top reinforcement
-            if max_M_y_top < 0:
-                (
-                    self._A_s_min_top,
-                    self._A_s_max_top,
-                    A_s_final_top_Negative_M,
-                    A_s_comp_bot,
-                ) = _calculate_flexural_reinforcement_EN_1992_2004(
-                    self,
-                    abs(max_M_y_top / kNm) * kNm,
-                    d,
-                    d_prima,  # type: ignore
-                )
-
-                # Adjust reinforcement areas based on positive and negative moments
-                self._A_s_bot = max(A_s_final_bot_Positive_M, A_s_comp_bot)
-                self._A_s_top = max(A_s_comp_top, A_s_final_top_Negative_M)
-
-            # Design bottom reinforcement
-            section_rebar_bot = Rebar(self)
-            section_rebar_bot.longitudinal_rebar(self._A_s_bot)
-            best_design_bot = section_rebar_bot.longitudinal_rebar_design
-
-            if self._A_s_top > 0:
-                section_rebar_top = Rebar(self)
-                section_rebar_top.longitudinal_rebar(self._A_s_top)
-                best_design_top = section_rebar_top.longitudinal_rebar_design
-            else:
-                best_design_top = None
-
-            # Set bottom rebar
-            self.set_longitudinal_rebar_bot(
-                best_design_bot["n_1"],
-                best_design_bot["d_b1"],
-                best_design_bot["n_2"],
-                best_design_bot["d_b2"],
-                best_design_bot["n_3"],
-                best_design_bot["d_b3"],
-                best_design_bot["n_4"],
-                best_design_bot["d_b4"],
-            )
-            if best_design_top is not None:
-                self.set_longitudinal_rebar_top(
-                    best_design_top["n_1"],
-                    best_design_top["d_b1"],
-                    best_design_top["n_2"],
-                    best_design_top["d_b2"],
-                    best_design_top["n_3"],
-                    best_design_top["d_b3"],
-                    best_design_top["n_4"],
-                    best_design_top["d_b4"],
-                )
-            else:
-                self.set_longitudinal_rebar_top(0, 0 * mm, 0, 0 * mm, 0, 0 * mm, 0, 0 * mm)
-
-            # Recalculate rebar centroid
-            c_mec_calc = self.c_c + self._stirrup_d_b + self._bot_rebar_centroid
-
-            if best_design_top is not None and self._A_s_top > 0:
-                d_prima_calc = self.c_c + self._stirrup_d_b + self._top_rebar_centroid
-            else:
-                d_prima_calc = d_prima
-
-            # Update error for iteration
-            Err = max(abs(c_mec_calc - rec_mec), abs(d_prima_calc - d_prima))
-            rec_mec = c_mec_calc
-            d_prima = d_prima_calc
-
-        # Return results as a DataFrame
-        results = {
-            "Bottom_As_adopted": self._A_s_bot.to("inch**2"),
-            "Bottom separation of bars": self._available_s_bot.to("inch"),
-            "As_compression_adopted": self._A_s_top.to("inch**2"),
-            "Top separation of bars": self._available_s_top.to("inch"),
-        }
-        return pd.DataFrame([results], index=[0])
+    _run_flexure_design(self, max_M_y_bot, max_M_y_top, _required, _capacity)
 
 
 def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> pd.DataFrame:

@@ -923,6 +923,34 @@ def test_check_with_en1992_concrete(
     assert len(result) > 0
 
 
+def test_design_with_en1992_concrete(
+    sample_steel: SteelBar,
+    sample_input_dataframe: pd.DataFrame,
+) -> None:
+    """design() must work for EN 1992 beams, not only ACI ones.
+
+    Regression test: the flexural design driver is shared between codes, so the
+    EN path now fills ``flexure_design_results_bot``/``_top``, which is what
+    ``BeamSummary.design`` reads to write the rebar columns back. Before the
+    two codes shared a driver, the EN branch never set them and design() failed.
+    """
+    concrete_en = Concrete_EN_1992_2004(name="C25/30", f_c=25 * MPa)
+
+    summary = BeamSummary(
+        concrete=concrete_en,
+        steel_bar=sample_steel,
+        beam_list=sample_input_dataframe,
+    )
+
+    result = summary.design()
+
+    assert isinstance(result, pd.DataFrame)
+    assert len(result) > 0
+    # Every designed beam ends up with at least one layer of longitudinal bars.
+    assert (result["n1"].astype(int) > 0).all()
+    assert (result["db1"].apply(lambda q: q.magnitude) > 0).all()
+
+
 def test_check_with_en1992_capacity_check(
     sample_steel: SteelBar,
     sample_input_dataframe: pd.DataFrame,

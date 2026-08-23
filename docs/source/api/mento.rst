@@ -126,8 +126,8 @@ mento.settings module
    :undoc-members:
    :show-inheritance:
 
-mento.shear_wall module
------------------------
+mento.shear\_wall module
+------------------------
 
 .. automodule:: mento.shear_wall
    :members:
@@ -150,10 +150,26 @@ mento.slab module
    :undoc-members:
    :show-inheritance:
 
+mento.summary module
+--------------------
+
+.. automodule:: mento.summary
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 mento.units module
 ------------------
 
 .. automodule:: mento.units
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module contents
+---------------
+
+.. automodule:: mento
    :members:
    :undoc-members:
    :show-inheritance:
