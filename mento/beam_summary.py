@@ -614,7 +614,10 @@ class BeamSummary:
         bot_result_data = beam._limiting_case_flexure_bot_details["flexure_capacity_bot"]
         forces_result = {
             "Design forces": ["Top max moment", "Bottom max moment"],
-            "Variable": ["Mu,top", "Mu,bot"],
+            "Variable": [
+                beam._flexure_symbols["demand_top"],
+                beam._flexure_symbols["demand_bot"],
+            ],
             "Value": [
                 round(beam._limiting_case_flexure_top_details["forces"]["Value"][0], 2),
                 round(beam._limiting_case_flexure_bot_details["forces"]["Value"][1], 2),

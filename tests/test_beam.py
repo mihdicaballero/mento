@@ -2710,6 +2710,104 @@ def test_flexure_results_detailed_after_check(capsys) -> None:
     assert "Materials" in captured.out
 
 
+def _designed_beam_for_code(concrete) -> RectangularBeam:
+    """A designed beam carrying a positive moment, for output-wording checks."""
+    steel = SteelBar(name="ADN420", f_y=420 * MPa)
+    beam = RectangularBeam(
+        label="SYM",
+        concrete=concrete,
+        steel_bar=steel,
+        width=20 * cm,
+        height=60 * cm,
+        c_c=25 * mm,
+    )
+    Node(beam, Forces(label="C1", M_y=100 * kNm, V_z=80 * kN)).design()
+    return beam
+
+
+@pytest.mark.parametrize(
+    "concrete_factory, demand, capacity, foreign_demand",
+    [
+        (
+            lambda: Concrete_EN_1992_2004(name="C25", f_c=25 * MPa),
+            "M_{Ed}",
+            "M_{Rd}",
+            "M_u",
+        ),
+        (
+            lambda: Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+            "M_u",
+            r"\phi M_n",
+            "M_{Ed}",
+        ),
+        (
+            lambda: Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa),
+            "M_u",
+            r"\phi M_n",
+            "M_{Ed}",
+        ),
+    ],
+    ids=["EN_1992_2004", "ACI_318_19", "CIRSOC_201_25"],
+)
+def test_flexure_markdown_uses_the_symbols_of_the_design_code(
+    concrete_factory, demand: str, capacity: str, foreign_demand: str
+) -> None:
+    """The Jupyter markdown line must not label a Eurocode result with ACI symbols.
+
+    EN 1992-2004 reports M_Ed against M_Rd; ACI 318-19 and CIRSOC 201-25 report
+    M_u against phi*M_n.
+    """
+    beam = _designed_beam_for_code(concrete_factory())
+    beam.flexure_results
+
+    markdown = beam._md_flexure_results
+    assert f"${demand}$" in markdown
+    assert f"${capacity}$" in markdown
+    assert f"${foreign_demand}$" not in markdown
+
+
+@pytest.mark.parametrize(
+    "concrete_factory, demand_top, demand_bot, foreign",
+    [
+        (
+            lambda: Concrete_EN_1992_2004(name="C25", f_c=25 * MPa),
+            "MEd,top",
+            "MEd,bot",
+            "Mu,",
+        ),
+        (
+            lambda: Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+            "Mu,top",
+            "Mu,bot",
+            "MEd,",
+        ),
+        (
+            lambda: Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa),
+            "Mu,top",
+            "Mu,bot",
+            "MEd,",
+        ),
+    ],
+    ids=["EN_1992_2004", "ACI_318_19", "CIRSOC_201_25"],
+)
+def test_flexure_detailed_forces_use_the_symbols_of_the_design_code(
+    capsys, concrete_factory, demand_top: str, demand_bot: str, foreign: str
+) -> None:
+    """The limiting-case design-forces table must follow the active code.
+
+    The per-code result dictionaries already carry the right wording; this pins
+    the summary that ``flexure_results_detailed`` assembles for the limiting case,
+    which used to be hard-coded to the ACI symbols whatever the code.
+    """
+    beam = _designed_beam_for_code(concrete_factory())
+    beam.flexure_results_detailed()
+
+    captured = capsys.readouterr()
+    assert demand_top in captured.out
+    assert demand_bot in captured.out
+    assert foreign not in captured.out
+
+
 def test_shear_results_detailed_not_checked(sample_beam) -> None:
     """Test shear_results_detailed when not checked."""
     with pytest.warns(UserWarning, match="Shear check has not been performed"):
