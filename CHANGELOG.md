@@ -11,6 +11,17 @@ from the release history and are summaries rather than complete lists.
 
 ## [Unreleased]
 
+### Removed
+
+- **Support for Python 3.10 and 3.11.** `requires-python` is now `>=3.12`, so pip refuses
+  to install mento on the older interpreters instead of installing it and failing later.
+  The classifiers and the conda recipe's `python_min` follow. Stay on 0.5.2 if you are
+  pinned to 3.10 or 3.11.
+- Ubuntu from the test matrix. Tests run on windows-latest against Python 3.12 and 3.13,
+  down from eight jobs to two. mento is pure Python and nothing in it is
+  platform-specific, but Linux is no longer verified on every pull request. The lint and
+  docs jobs still run on ubuntu-latest, and the PyPI distributions are still built there.
+
 ## [0.5.2] - 2026-08-25
 
 ### Added

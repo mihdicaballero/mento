@@ -6,7 +6,7 @@ keep in step with `pyproject.toml` so that submitting or updating the recipe is 
 rewrite.
 
 - `meta.yaml` — the recipe itself, pinned to a released version on PyPI and its sha256.
-- `conda_build_config.yaml` — raises `python_min` to 3.10, mento's minimum.
+- `conda_build_config.yaml` — raises `python_min` to 3.12, mento's minimum.
 
 The submission and update procedure is in
 [CONTRIBUTING.md](../CONTRIBUTING.md#publishing-on-conda-forge).
