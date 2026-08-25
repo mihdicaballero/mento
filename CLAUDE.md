@@ -259,11 +259,17 @@ Always set `$env:PYTHONIOENCODING="utf-8"` before running to avoid codec errors 
 
 Workflow: `.github/workflows/tests.yml`
 - Runs on push/PR to `main`
-- Matrix: Python 3.10, 3.11, 3.12 on ubuntu-latest and windows-latest
-- Steps: `pip install pytest pytest-cov`, `pip install -r requirements_dev.txt`
-- Lint: `ruff check .` (no auto-fix in CI)
-- Tests: `pytest --cov=mento --cov-config=.coveragerc --cov-report=xml`
-- Coverage uploaded to Codecov
+- `tests` job: Python 3.12 and 3.13 on windows-latest, installing `-e ".[test]"`.
+  Runs `pytest --cov=mento --cov-config=.coveragerc --cov-report=xml`; the 3.12 job
+  uploads coverage to Codecov.
+- `lint` job: ubuntu-latest, `ruff check .`, `ruff format --check .` and `mypy mento/`
+  (no auto-fix in CI).
+- `docs` job: ubuntu-latest, installs pandoc via apt, then
+  `sphinx-build -b html -W --keep-going` so warnings fail the build.
+
+The lint and docs jobs stay on ubuntu-latest because they are build infrastructure, not
+platform coverage — and the docs job installs pandoc with apt. Only the test matrix
+describes the platforms mento is verified on.
 
 ---
 

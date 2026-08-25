@@ -22,7 +22,7 @@ This repository provides a comprehensive package for the design and structural a
 pip install mento
 ```
 
-Requires Python 3.10 or newer.
+Requires Python 3.12 or newer.
 
 #### Features
 - Check and design for flexure and shear of:
