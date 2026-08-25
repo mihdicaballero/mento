@@ -512,6 +512,97 @@ def test_shear_design_CIRSOC_201_2025(
     assert beam_example_CIRSOC_201_2025._stirrup_s_l.to("cm").magnitude == 14
 
 
+def test_shear_design_spacing_along_width_wide_beam() -> None:
+    """A wide section needs more than one stirrup to keep its legs within s_max,w.
+
+    Regression test for issue #94. ``transverse_rebar`` sized the stirrups from the
+    required area alone, so a 50 cm beam came back with a single two-legged stirrup whose
+    legs sat 44 cm apart, against the 28 cm ACI 318-19 Table 9.7.6.2.2 allows once V_s
+    passes 0.33*sqrt(f_c)*b_w*d. The check reported the violation; the design did not
+    avoid it.
+    """
+    concrete = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
+    steel_bar = SteelBar(name="ADN 420", f_y=420 * MPa)
+    beam = RectangularBeam(
+        label="W1",
+        concrete=concrete,
+        steel_bar=steel_bar,
+        width=50 * cm,
+        height=60 * cm,
+        c_c=25 * mm,
+    )
+    node = Node(section=beam, forces=Forces(label="ELU_01", V_z=350 * kN, M_y=100 * kNm))
+    results = node.design_shear()
+
+    # Two stirrups, four legs: one stirrup cannot span 50 cm within the limit.
+    assert beam._stirrup_n == 2
+    # (50 - 2*2.5 - 1.0) / (4 - 1) = 14.67 cm between adjacent legs.
+    assert beam._stirrup_s_w.to("cm").magnitude == pytest.approx(14.67, rel=1e-2)
+    assert beam._stirrup_s_max_w.to("cm").magnitude == pytest.approx(28.05, rel=1e-2)
+    assert beam._stirrup_s_w <= beam._stirrup_s_max_w
+
+    # The layout still carries the demand it was sized for.
+    assert float(results.iloc[1]["DCR"]) <= 1.0
+
+
+@pytest.mark.parametrize("width_cm", [20, 30, 40, 50, 60, 80, 100, 120])
+@pytest.mark.parametrize("V_z_kN", [100, 250, 450])
+@pytest.mark.parametrize("code", ["ACI 318-19", "EN 1992-2004", "CIRSOC 201-25"])
+def test_shear_design_respects_spacing_along_width(code: str, V_z_kN: int, width_cm: int) -> None:
+    """No shear design may hand back stirrup legs spaced wider than s_max,w.
+
+    Issue #94 was not one bad case but a missing criterion, so this sweeps the widths and
+    demands where it bites. Before the fix 95 of these 168 combinations were in violation.
+    """
+    concretes = {
+        "ACI 318-19": Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        "EN 1992-2004": Concrete_EN_1992_2004(name="C25", f_c=25 * MPa),
+        "CIRSOC 201-25": Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa),
+    }
+    steel_bar = SteelBar(name="ADN 420", f_y=420 * MPa)
+    beam = RectangularBeam(
+        label="W1",
+        concrete=concretes[code],
+        steel_bar=steel_bar,
+        width=width_cm * cm,
+        height=60 * cm,
+        c_c=25 * mm,
+    )
+    node = Node(section=beam, forces=Forces(label="ELU_01", V_z=V_z_kN * kN, M_y=100 * kNm))
+    node.design_shear()
+
+    assert beam._stirrup_s_w <= beam._stirrup_s_max_w, (
+        f"{code}, width {width_cm} cm, V_z {V_z_kN} kN: legs {beam._stirrup_s_w.to('cm'):~.2f} apart, "
+        f"limit {beam._stirrup_s_max_w.to('cm'):~.2f}"
+    )
+
+
+def test_min_legs_along_width() -> None:
+    """The leg count follows the width, stays even, and never drops below one stirrup."""
+    concrete = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
+    steel_bar = SteelBar(name="ADN 420", f_y=420 * MPa)
+    beam = RectangularBeam(
+        label="W1",
+        concrete=concrete,
+        steel_bar=steel_bar,
+        width=50 * cm,
+        height=60 * cm,
+        c_c=25 * mm,
+    )
+    rebar = Rebar(beam)
+    # Legs sit (50 - 2*2.5 - 1.0) = 44 cm apart at two legs.
+    assert rebar.min_legs_along_width(10 * mm, 50 * cm) == 2  # 44 <= 50, one stirrup does
+    assert rebar.min_legs_along_width(10 * mm, 44 * cm) == 2  # exactly on the limit
+    # Two gaps would do (22 cm), but legs come in pairs, so it rounds up to four.
+    assert rebar.min_legs_along_width(10 * mm, 30 * cm) == 4
+    # Two gaps no longer fit, and the three that do already need an even four legs.
+    assert rebar.min_legs_along_width(10 * mm, 20 * cm) == 4  # 44/3 = 14.7 <= 20
+    assert rebar.min_legs_along_width(10 * mm, 10 * cm) == 6  # 44/5 = 8.8 <= 10
+
+    # A degenerate limit falls back to a single stirrup rather than looping forever.
+    assert rebar.min_legs_along_width(10 * mm, 0 * cm) == 2
+
+
 # # ------- FLEXURE TEST --------------
 
 

@@ -11,6 +11,22 @@ from the release history and are summaries rather than complete lists.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Shear design ignored the spacing limit across the width of the section.** The stirrups
+  were sized from the required area alone, so a wide beam came back with a single
+  two-legged stirrup whose legs sat far further apart than ACI 318-19 Table 9.7.6.2.2 or
+  EN 1992-1-1 9.2.2(8) allow — 44 cm against a 28 cm limit on a 50 cm section. The check
+  reported the violation, but the design would not avoid it, so `design_shear` handed back
+  a layout its own detailed report then marked as not compliant. The design now starts from
+  the fewest legs the width admits and adds stirrups rather than only tightening the
+  longitudinal spacing. Over a sweep of 168 width and demand combinations across the three
+  codes, 95 designs were in violation and none are now. Closes
+  [#94](https://github.com/mihdicaballero/mento/issues/94).
+- The spacing across the width was computed with whatever stirrup diameter the previous
+  pass had left on the beam instead of the one being tried, so the value stored for each
+  candidate was off by the difference between the two diameters.
+
 ## [0.5.2] - 2026-08-25
 
 ### Added
