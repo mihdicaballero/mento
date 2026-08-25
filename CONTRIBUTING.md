@@ -49,7 +49,7 @@ the tests and validation should cover.
 
 ## Setting up your environment
 
-mento requires Python 3.10 or newer.
+mento requires Python 3.12 or newer.
 
 ```bash
 git clone https://github.com/mihdicaballero/mento.git

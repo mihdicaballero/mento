@@ -44,7 +44,7 @@ approach before you write code.
 Setting up your environment
 ---------------------------
 
-Mento requires Python 3.10 or newer.
+Mento requires Python 3.12 or newer.
 
 .. code-block:: bash
 
