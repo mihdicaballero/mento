@@ -213,8 +213,13 @@ class RectangularBeam(RectangularSection):
         """Factory for the longitudinal reinforcement optimizer."""
         return Rebar(self)
 
-    def _apply_longitudinal_design_bot(self, design: dict) -> None:
-        """Apply a discrete design to the bottom reinforcement."""
+    def _apply_longitudinal_design_bot(self, design: Any) -> None:
+        """Apply a discrete design to the bottom reinforcement.
+
+        ``design`` is any mapping with the rebar-designer keys (n_1..n_4,
+        d_b1..d_b4); the designer hands back a pandas row, tests pass plain
+        dicts.
+        """
         self.set_longitudinal_rebar_bot(
             int(design.get("n_1", 0)),
             design.get("d_b1"),
@@ -226,8 +231,11 @@ class RectangularBeam(RectangularSection):
             design.get("d_b4"),
         )
 
-    def _apply_longitudinal_design_top(self, design: dict) -> None:
-        """Apply a discrete design to the top reinforcement."""
+    def _apply_longitudinal_design_top(self, design: Any) -> None:
+        """Apply a discrete design to the top reinforcement.
+
+        See :meth:`_apply_longitudinal_design_bot` for the accepted shape.
+        """
         self.set_longitudinal_rebar_top(
             int(design.get("n_1", 0)),
             design.get("d_b1"),
@@ -273,8 +281,8 @@ class RectangularBeam(RectangularSection):
             self._phi_M_n_top: Quantity = 0 * kNm
             self._d_b_max_bot: Quantity = 0 * mm
             self._d_b_max_top: Quantity = 0 * mm
-            self.flexure_design_results_bot: DataFrame = None
-            self.flexure_design_results_top: DataFrame = None
+            self.flexure_design_results_bot: Any = None
+            self.flexure_design_results_top: Any = None
             self._A_s_bool_bot: bool = False
             self._A_s_bool_top: bool = False
 
@@ -303,6 +311,14 @@ class RectangularBeam(RectangularSection):
             self._M_Rd_top: Quantity = 0 * kNm
             self._M_Ed_bot: Quantity = 0 * kNm
             self._M_Ed_top: Quantity = 0 * kNm
+            # Shared with the ACI branch: the flexural design driver and the
+            # results tables read these before any check has run.
+            self._A_s_min_bot: Quantity = 0 * cm**2
+            self._A_s_min_top: Quantity = 0 * cm**2
+            self._A_s_max_bot: Quantity = 0 * cm**2
+            self._A_s_max_top: Quantity = 0 * cm**2
+            self.flexure_design_results_bot: Any = None
+            self.flexure_design_results_top: Any = None
 
     ##########################################################
     # SET LONGITUDINAL AND TRANSVERSE REBAR AND UPDATE ATTRIBUTES
@@ -977,6 +993,9 @@ class RectangularBeam(RectangularSection):
         # Formatter instance for DCR formatting
         markdown_content = ""
         formatter = Formatter()
+        symbols = self._flexure_symbols
+        md_demand = symbols["md_demand"]
+        md_capacity = symbols["md_capacity"]
 
         # Handle top result data
         if top_result_data:
@@ -991,8 +1010,9 @@ class RectangularBeam(RectangularSection):
             formatted_DCR_top = formatter.DCR(DCR_top)
 
             markdown_content += (
-                f"Top longitudinal rebar: {rebar_top}, $A_{{s,top}}$ = {area_top} cm², $M_u$ = {Mu_top} kNm, "
-                f"$\\phi M_n$ = {Mn_top} kNm → {formatted_DCR_top} {warning_top}\n\n"
+                f"Top longitudinal rebar: {rebar_top}, $A_{{s,top}}$ = {area_top} cm², "
+                f"${md_demand}$ = {Mu_top} kNm, "
+                f"${md_capacity}$ = {Mn_top} kNm → {formatted_DCR_top} {warning_top}\n\n"
             )
         else:
             markdown_content += "No top moment to check.\n\n"
@@ -1010,8 +1030,9 @@ class RectangularBeam(RectangularSection):
             formatted_DCR_bot = formatter.DCR(DCR_bot)
 
             markdown_content += (
-                f"Bottom longitudinal rebar: {rebar_bot}, $A_{{s,bot}}$ = {area_bot} cm², $M_u$ = {Mu_bot} kNm, "
-                f"$\\phi M_n$ = {Mn_bot} kNm → {formatted_DCR_bot} {warning_bot}"
+                f"Bottom longitudinal rebar: {rebar_bot}, $A_{{s,bot}}$ = {area_bot} cm², "
+                f"${md_demand}$ = {Mu_bot} kNm, "
+                f"${md_capacity}$ = {Mn_bot} kNm → {formatted_DCR_bot} {warning_bot}"
             )
         else:
             markdown_content += "No bottom moment to check."
@@ -1083,6 +1104,34 @@ class RectangularBeam(RectangularSection):
         if self._shear_checked:
             self.shear_results  # This will generate _md_shear_results
         return None
+
+    @property
+    def _flexure_symbols(self) -> Dict[str, str]:
+        """Flexural symbols of the active design code.
+
+        ACI 318-19 and CIRSOC 201-25 work with a factored demand :math:`M_u` and a
+        reduced capacity :math:`\\phi M_n`; EN 1992-2004 works with :math:`M_{Ed}`
+        and :math:`M_{Rd}`. The per-code result dictionaries already carry the right
+        wording, but the limiting-case summaries assembled here have to pick it.
+
+        ``md_*`` entries are LaTeX for the Jupyter markdown line; the others are the
+        plain variable names used in the detailed tables and Word reports.
+        """
+        if self.concrete.design_code == "EN 1992-2004":
+            return {
+                "demand": "MEd",
+                "demand_top": "MEd,top",
+                "demand_bot": "MEd,bot",
+                "md_demand": "M_{Ed}",
+                "md_capacity": "M_{Rd}",
+            }
+        return {
+            "demand": "Mu",
+            "demand_top": "Mu,top",
+            "demand_bot": "Mu,bot",
+            "md_demand": "M_u",
+            "md_capacity": "\\phi M_n",
+        }
 
     @property
     def _report_text(self) -> Dict[str, str]:
@@ -1161,7 +1210,10 @@ class RectangularBeam(RectangularSection):
                     "Top max moment",
                     "Bottom max moment",
                 ],
-                "Variable": ["Mu,top", "Mu,bot"],
+                "Variable": [
+                    self._flexure_symbols["demand_top"],
+                    self._flexure_symbols["demand_bot"],
+                ],
                 "Value": [
                     round(self._limiting_case_flexure_top_details["forces"]["Value"][0], 2),
                     round(self._limiting_case_flexure_bot_details["forces"]["Value"][1], 2),
@@ -1277,7 +1329,10 @@ class RectangularBeam(RectangularSection):
                     "Top max moment",
                     "Bottom max moment",
                 ],
-                "Variable": ["Mu,top", "Mu,bot"],
+                "Variable": [
+                    self._flexure_symbols["demand_top"],
+                    self._flexure_symbols["demand_bot"],
+                ],
                 "Value": [
                     round(self._limiting_case_flexure_top_details["forces"]["Value"][0], 2),
                     round(self._limiting_case_flexure_bot_details["forces"]["Value"][1], 2),

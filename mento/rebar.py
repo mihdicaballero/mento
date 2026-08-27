@@ -173,6 +173,37 @@ class Rebar:
 
         return valid_diameters, s_max_l, s_max_w
 
+    def min_legs_along_width(self, d_b: Quantity, s_max_w: Quantity) -> int:
+        """
+        Smallest even number of stirrup legs whose transverse spacing fits within ``s_max_w``.
+
+        The legs are spread evenly across the section, so the ``n_legs - 1`` gaps between
+        them have to cover the distance separating the centres of the outermost pair,
+        ``width - 2 * c_c - d_b``. Both ACI 318-19 Table 9.7.6.2.2 and EN 1992-1-1 9.2.2(8)
+        cap that gap, which is what forces a wide section to carry more than the two legs of
+        a single stirrup regardless of how much area the shear demand asks for.
+
+        Parameters
+        ----------
+        d_b : Quantity
+            Diameter of the stirrup bar being tried.
+        s_max_w : Quantity
+            Maximum spacing allowed across the width of the beam.
+
+        Returns
+        -------
+        int
+            Number of legs, always even and never below 2.
+        """
+        outer_span = self.beam.width - 2 * self.beam.c_c - d_b
+        if outer_span <= 0 * cm or s_max_w <= 0 * cm:
+            return 2
+        # The tolerance keeps a span that divides exactly from rounding up a whole gap.
+        n_gaps = math.ceil((outer_span / s_max_w).to("dimensionless").magnitude - 1e-9)
+        n_legs = max(2, n_gaps + 1)
+        # Legs come in pairs, one closed stirrup each.
+        return n_legs + (n_legs % 2)
+
     def transverse_rebar(self, A_v_req: Quantity, V_s_req: Quantity, alpha: float) -> DataFrame:
         """
         Computes the required transverse reinforcement based on ACI 318-19.
@@ -197,8 +228,9 @@ class Rebar:
 
         # Iterate through available diameters
         for d_b in valid_diameters:
-            # Start with 2 legs = 1 stirrup
-            n_legs = 2
+            # Start from the fewest legs that keep the transverse spacing within s_max_w,
+            # rather than from a single stirrup: on a wide section two legs never comply.
+            n_legs = self.min_legs_along_width(d_b, s_max_w)
 
             # Start with maximum allowed spacing s_max_l
             if self.beam.concrete.unit_system == "metric":
@@ -210,8 +242,10 @@ class Rebar:
                 # Calculate spacing based on current legs
                 n_stirrups = math.ceil(n_legs / 2)  # Number of stirrups based on number of legs
                 n_legs_actual = n_stirrups * 2  # Ensure legs are even
-                # Consider 1 leg less for spacing laong width
-                s_w = (self.beam.width - 2 * self.beam.c_c - self.beam._stirrup_d_b) / (n_legs_actual - 1)  # noqa: F841
+                # n_legs - 1 gaps span the distance between the outermost leg centres.
+                # This uses the candidate diameter: self.beam._stirrup_d_b still holds
+                # whatever the previous pass left behind, which is not what is being tried.
+                s_w = (self.beam.width - 2 * self.beam.c_c - d_b) / (n_legs_actual - 1)
 
                 A_db = self.rebar_areas[d_b]  # Area of a stirrup bar
                 A_vs = n_legs_actual * A_db  # Area of vertical stirrups
@@ -219,8 +253,9 @@ class Rebar:
 
                 # Store the valid combination if spacing is also valid
                 if self.beam.concrete.unit_system == "metric":
-                    # Check if the calculated A_v meets or exceeds the required A_v
-                    if A_v >= A_v_req:
+                    # Check if the calculated A_v meets or exceeds the required A_v, and
+                    # that the legs are close enough together across the width.
+                    if A_v >= A_v_req and s_w <= s_max_w:
                         valid_combinations.append(
                             {
                                 "n_stir": int(n_stirrups),
@@ -242,8 +277,9 @@ class Rebar:
                         n_legs += 2
                         s_l = math.floor(s_max_l.to("cm").magnitude) * cm  # Reset s_l to the max allowed spacing
                 else:
-                    # Check if the calculated A_v meets or exceeds the required A_v
-                    if A_v >= A_v_req:
+                    # Check if the calculated A_v meets or exceeds the required A_v, and
+                    # that the legs are close enough together across the width.
+                    if A_v >= A_v_req and s_w <= s_max_w:
                         valid_combinations.append(
                             {
                                 "n_stir": int(n_stirrups),
@@ -575,8 +611,17 @@ class Rebar:
             self._long_combos_df = df
             return df
 
-    def longitudinal_rebar_EN_1992_2004(self, A_s_req: Quantity) -> None:
-        self.longitudinal_rebar_ACI_318_19(A_s_req)  # TODO WE HAVE TO CHANGE THIS
+    def longitudinal_rebar_EN_1992_2004(
+        self,
+        A_s_req: Quantity,
+        A_s_max: Quantity | None = None,
+        mech_cover: Quantity | None = None,
+    ) -> None:
+        # The bar-selection strategy (fit the area with the fewest, most uniform
+        # bars that still respect spacing and layer limits) is geometry, not code
+        # provisions, so EN reuses the ACI selector. Only the areas fed into it
+        # come from EN 1992-2004.
+        self.longitudinal_rebar_ACI_318_19(A_s_req, A_s_max, mech_cover)
 
     def _check_spacing(
         self,
@@ -764,7 +809,12 @@ class Rebar:
 
         return df
 
-    def longitudinal_rebar(self, A_s_req: Quantity, A_s_max: Quantity | None = None) -> Dict[str, Any]:
+    def longitudinal_rebar(
+        self,
+        A_s_req: Quantity,
+        A_s_max: Quantity | None = None,
+        mech_cover: Quantity | None = None,
+    ) -> Dict[str, Any]:
         """
         Selects the appropriate longitudinal rebar method based on the design
         code.
@@ -772,8 +822,10 @@ class Rebar:
         Args:
             A_s_req: Required longitudinal rebar area.
             A_s_max: Optional maximum allowable longitudinal rebar area.
+            mech_cover: Optional mechanical cover to the bar centroid, used as
+                the starting geometry for the layer layout.
         """
         if self.beam.concrete.design_code == "ACI 318-19" or self.beam.concrete.design_code == "CIRSOC 201-25":
-            return self.longitudinal_rebar_ACI_318_19(A_s_req, A_s_max)
+            return self.longitudinal_rebar_ACI_318_19(A_s_req, A_s_max, mech_cover)
         elif self.beam.concrete.design_code == "EN 1992-2004":
-            return self.longitudinal_rebar_EN_1992_2004(A_s_req)
+            return self.longitudinal_rebar_EN_1992_2004(A_s_req, A_s_max, mech_cover)

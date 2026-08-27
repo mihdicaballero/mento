@@ -1,0 +1,450 @@
+Beam — EN 1992-1-1:2004
+=======================
+
+Provisions implemented for ``RectangularBeam`` when the section is built with
+``Concrete_EN_1992_2004``.
+
+Scope
+-----
+
+**Implemented**
+
+- Flexure: design bending resistance of singly and doubly reinforced rectangular
+  sections, required steel area, minimum reinforcement, ductility limit on the
+  neutral axis.
+- Shear: members without shear reinforcement (§6.2.2) and with shear reinforcement
+  via the variable-strut-inclination method (§6.2.3), strut crushing limit, minimum
+  stirrups and spacing limits.
+
+**Not implemented**: torsion (§6.3), punching in the beam module (see
+``PunchingSlab``), serviceability limit states — crack width (§7.3) and deflection
+(§7.4) — anchorage and lap lengths (§8), fatigue (§6.8), and prestressing. The
+:math:`A_p` term appears in the shear reinforcement ratio but is fixed at zero.
+
+Nationally Determined Parameters
+--------------------------------
+
+EN 1992-1-1 leaves several values to the National Annex. mento uses the **recommended
+values from the Eurocode text**, not those of any particular national annex:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 16 16 68
+
+   * - Parameter
+     - Value
+     - Note
+   * - :math:`\alpha_{cc}`
+     - 0.85
+     - The Eurocode recommends 1.0; mento follows the UK NA and CEB Model Code
+       value of 0.85, which the *Designers' Guide to EN 1992-1-1* (p. 62) argues
+       for on the grounds that 1.0 is unconservative for compression zones at
+       failure. For shear, :math:`\alpha_{cc} = 1.0` is used instead.
+   * - :math:`\gamma_c,\ \gamma_s`
+     - 1.50, 1.15
+     - Persistent and transient design situations
+   * - :math:`\delta`
+     - 0.85
+     - Redistribution ratio, i.e. 15% moment redistribution assumed
+   * - :math:`k_1,\ k_3`
+     - 0.44, 0.54
+     - Eq. (5.10a)/(5.10b) recommended values
+   * - :math:`k_2,\ k_4`
+     - :math:`1.25\,(0.6 + 0.0014/\varepsilon_{cu2})`
+     - Recommended expression
+   * - :math:`C_{Rd,c}`
+     - :math:`0.18/\gamma_c`
+     - §6.2.2(1) recommended value
+
+.. warning::
+
+   With :math:`\delta = 0.85` and the recommended :math:`k_1/k_2`, the neutral axis
+   limit is :math:`x_u/d \le 0.328`. A UK National Annex user (:math:`k_1 = 0.4`,
+   :math:`k_2 = 1.0`) would get 0.45 and a correspondingly higher :math:`M_{lim}`.
+   This is a legitimate national choice, not an error — but it does mean mento is
+   more conservative than a UK-NA calculation about when compression reinforcement
+   becomes necessary.
+
+Symbols
+-------
+
+.. list-table::
+   :header-rows: 1
+   :widths: 16 44 40
+
+   * - Symbol
+     - Meaning
+     - Source
+   * - :math:`f_{ck},\ f_{cd}`
+     - Characteristic and design concrete strength, :math:`f_{cd} = \alpha_{cc} f_{ck}/\gamma_c`
+     - ``concrete.f_ck``, ``_f_cd``
+   * - :math:`f_{yd}`
+     - Design steel strength, :math:`f_{yk}/\gamma_s`
+     - —
+   * - :math:`\lambda,\ \eta`
+     - Stress block depth and strength factors (§3.1.7(3))
+     - ``_lambda_factor``, ``_eta_factor``
+   * - :math:`x,\ x_{eff}`
+     - Neutral axis depth and block depth, :math:`x_{eff} = \lambda x`
+     - —
+   * - :math:`x_{u,lim},\ x_{eff,lim}`
+     - The same two depths at the ductility limit
+     - ``_compression_zone_limits_EN_1992_2004``
+   * - :math:`z`
+     - Lever arm of internal forces
+     - —
+   * - :math:`\theta`
+     - Strut inclination, :math:`21.8° \le \theta \le 45°`
+     - ``_theta``
+   * - :math:`\varepsilon_{cu2}`
+     - Ultimate concrete strain (Table 3.1)
+     - ``_epsilon_cu2``
+
+Flexure
+-------
+
+Stress block
+^^^^^^^^^^^^
+
+§3.1.7(3) rectangular stress distribution: a uniform stress :math:`\eta f_{cd}` over
+a depth :math:`\lambda x` measured from the extreme compression fibre.
+
+.. math::
+
+   \lambda = \begin{cases}
+   0.8 & f_{ck} \le 50\ \text{MPa} \\[2pt]
+   0.8 - \dfrac{f_{ck} - 50}{400} & f_{ck} > 50\ \text{MPa}
+   \end{cases}
+   \qquad
+   \eta = \begin{cases}
+   1.0 & f_{ck} \le 50\ \text{MPa} \\[2pt]
+   1.0 - \dfrac{f_{ck} - 50}{200} & f_{ck} > 50\ \text{MPa}
+   \end{cases}
+
+.. important::
+
+   Throughout mento, :math:`x_{eff}` denotes the **block depth** :math:`\lambda x`,
+   never the neutral axis. The lever arm is therefore
+   :math:`z = d - x_{eff}/2 = d - \lambda x/2`. Applying :math:`\lambda` a second
+   time to :math:`x_{eff}` is the single easiest mistake to make here — it
+   under-sizes the tension steel by about 2%. See :ref:`en-decisions`.
+
+Ductility limit
+^^^^^^^^^^^^^^^
+
+Both limits EN 1992-1-1 imposes are written on the **neutral axis ratio**
+:math:`x_u/d`: the redistribution limit of §5.5(4) and the 0.45 cap.
+
+.. math::
+
+   \xi_{u,lim} = \min\left(\frac{\delta - k_1}{k_2},\ 0.45\right)
+   \qquad
+   x_{u,lim} = \xi_{u,lim}\, d
+   \qquad
+   x_{eff,lim} = \lambda\, x_{u,lim}
+
+(:math:`k_3/k_4` replace :math:`k_1/k_2` above C50/60.) The conversion to a block
+depth happens once, in ``_compression_zone_limits_EN_1992_2004``, and every caller
+receives both depths already in the right units.
+
+The limiting moment that separates singly from doubly reinforced is then
+
+.. math::
+
+   M_{lim} = \eta\, f_{cd}\, b\, x_{eff,lim}\left(d - \frac{x_{eff,lim}}{2}\right)
+
+Required reinforcement — :math:`M_{Ed} \le M_{lim}`
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+No compression reinforcement is needed. Inverting
+:math:`M = \eta f_{cd} b\, x_{eff}(d - x_{eff}/2)`:
+
+.. math::
+
+   K = \frac{M_{Ed}}{b\,d^2\,\eta\,f_{cd}}
+   \qquad
+   x_{eff} = d\left(1 - \sqrt{1 - 2K}\right)
+   \qquad
+   z = d - \frac{x_{eff}}{2}
+
+.. math::
+
+   A_{s1} = \max\left(\frac{M_{Ed}}{z\,f_{yd}},\ A_{s,min}\right)
+   \qquad
+   A_{s2} = 0
+
+This is algebraically identical to the closed form published in *Concise Eurocode 2*
+(The Concrete Centre), :math:`z/d = \left[1 + \sqrt{1 - 3.529K'}\right]/2` with
+:math:`K' = M/(f_{ck} b d^2)` — a test pins the agreement.
+
+Required reinforcement — :math:`M_{Ed} > M_{lim}`
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The concrete saturates at the ductility limit and the excess is carried by a couple
+between tension and compression steel:
+
+.. math::
+
+   z = d - \frac{x_{eff,lim}}{2}
+   \qquad
+   A_{s1,lim} = \frac{M_{lim}}{z\,f_{yd}}
+   \qquad
+   \Delta M = M_{Ed} - M_{lim}
+
+The compression steel stress follows from strain compatibility at :math:`x_{u,lim}`:
+
+.. math::
+
+   \varepsilon_{s2} = \frac{x_{u,lim} - d'}{x_{u,lim}}\,\varepsilon_{cu2}
+   \qquad
+   f_{sd} = \min\left(\varepsilon_{s2} E_s,\ f_{yd}\right)
+
+.. math::
+
+   A_{s2} = \frac{\Delta M}{(d - d')\, f_{sd}}
+   \qquad
+   A_{s1} = \max\left(A_{s1,lim} + A_{s2},\ A_{s,min}\right)
+
+Minimum and maximum reinforcement
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+§9.2.1.1:
+
+.. math::
+
+   \rho_{min} = \max\left(0.26\,\frac{f_{ctm}}{f_{yk}},\ 0.0013\right)
+   \qquad
+   \rho_{max} = 0.04
+
+with :math:`f_{ctm} = 0.30\, f_{ck}^{2/3}` (Table 3.1). Unlike ACI, :math:`\rho_{min}`
+is not conditioned on the moment being non-zero, so a shear-only combination already
+receives minimum flexural steel.
+
+Design bending resistance
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For a given layout, the block depth that balances the whole tension steel is
+
+.. math::
+
+   x_{eff} = \frac{A_s f_{yd}}{\eta\, f_{cd}\, b}
+
+If :math:`x_{eff} \le x_{eff,lim}` the section does not need compression steel for
+equilibrium, and any bar on the compression face is a detailing or erection bar:
+
+.. math::
+
+   M_{Rd} = A_s f_{yd}\left(d - \frac{x_{eff}}{2}\right)
+
+Otherwise the concrete saturates and the excess tension steel pairs with the
+compression steel actually available:
+
+.. math::
+
+   A_{s,lim} = \frac{\eta f_{cd}\, b\, x_{eff,lim}}{f_{yd}}
+   \qquad
+   M_{Rd} = M_{lim} + \min\left(A_s - A_{s,lim},\ A'_s\right) f_{yd}\,(d - d')
+
+At :math:`x_{eff} = x_{eff,lim}` the two branches coincide, so :math:`M_{Rd}` is
+continuous, and it is monotonic in :math:`A'_s`. See :ref:`en-decisions` for why
+that matters.
+
+Shear
+-----
+
+Members without shear reinforcement
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+§6.2.2(1), with :math:`C_{Rd,c} = 0.18/\gamma_c` and :math:`k_1 = 0.15`:
+
+.. math::
+
+   V_{Rd,c} = \left[C_{Rd,c}\,k\,(100\,\rho_l\,f_{ck})^{1/3}
+                    + k_1 \sigma_{cp}\right] b_w d
+
+bounded below by the minimum of §6.2.2(2):
+
+.. math::
+
+   V_{Rd,c,min} = \left(v_{min} + k_1 \sigma_{cp}\right) b_w d
+   \qquad
+   v_{min} = 0.035\,k^{3/2}\sqrt{f_{ck}}
+
+with
+
+.. math::
+
+   k = \min\left(1 + \sqrt{\frac{200}{d}},\ 2.0\right)
+   \qquad
+   \rho_l = \min\left(\frac{A_{sl} + A_p}{b_w d},\ 0.02\right)
+   \qquad
+   \sigma_{cp} = \min\left(\frac{N_{Ed}}{A_c},\ 0.2 f_{cd}\right)
+
+(:math:`d` in mm, :math:`f_{ck}` in MPa.) The governing value is
+:math:`\max(V_{Rd,c},\ V_{Rd,c,min})`. Note that every :math:`f_{cd}` in the shear
+provisions uses :math:`\alpha_{cc} = 1.0`, not the 0.85 adopted for flexure.
+
+Members with shear reinforcement
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+§6.2.3, variable strut inclination, with :math:`z = 0.9d`,
+:math:`\nu_1 = 0.6\,(1 - f_{ck}/250)` and :math:`\alpha_{cw} = 1` for
+non-prestressed members. The strut crushing limit is
+
+.. math::
+
+   V_{Rd,max} = \frac{\alpha_{cw}\, b_w\, z\, \nu_1\, f_{cd}}
+                     {\cot\theta + \tan\theta}
+
+mento selects :math:`\theta` within the code range :math:`21.8° \le \theta \le 45°`
+(:math:`1 \le \cot\theta \le 2.5`), taking the flattest strut that works — which
+minimises the required stirrups:
+
+1. Evaluate :math:`V_{Rd,max}` at :math:`\theta = 21.8°`. If
+   :math:`V_{Ed} \le` that value, use it.
+2. Otherwise evaluate at :math:`\theta = 45°`. If :math:`V_{Ed}` exceeds even that,
+   the section fails the crushing check; :math:`\theta = 45°` is kept and
+   ``max_shear_ok`` is false.
+3. In between, solve for the exact angle from
+   :math:`\theta = \tfrac{1}{2}\arcsin\!\left(V_{Ed}/V_{Rd,max,45°}\right)`.
+
+The stirrup contribution and the required area are then
+
+.. math::
+
+   V_{Rd,s} = \frac{A_{sw}}{s}\, z\, f_{ywd} \cot\theta
+   \qquad
+   \left(\frac{A_{sw}}{s}\right)_{req} =
+       \max\left(\frac{V_{Ed}}{z\, f_{ywd} \cot\theta},\ \rho_{w,min} b_w \sin\alpha\right)
+
+.. note::
+
+   For a section **with** stirrups, mento reports :math:`V_{Rd} = V_{Rd,s}` — the
+   concrete term is not added, per §6.2.3(2), where the truss model replaces
+   :math:`V_{Rd,c}` rather than supplementing it. This differs from ACI, where
+   :math:`V_c` and :math:`V_s` are summed.
+
+Minimum reinforcement and spacing
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+§9.2.2(5):
+
+.. math::
+
+   \rho_{w,min} = \frac{0.08\sqrt{f_{ck}}}{f_{ywk}}
+   \qquad
+   \left(\frac{A_{sw}}{s}\right)_{min} = \rho_{w,min}\, b_w \sin\alpha
+
+with :math:`\alpha` the stirrup inclination, fixed at 90° (vertical stirrups).
+
+Spacing limits, §9.2.2(6) and (8):
+
+.. math::
+
+   s_{max,l} = \min\left(0.75\,d\,(1 + \cot\alpha),\ 400\ \text{mm}\right)
+   \qquad
+   s_{max,w} = \min\left(0.75\,d,\ 600\ \text{mm}\right)
+
+.. note::
+
+   §6.2.1(4) requires minimum shear reinforcement even where
+   :math:`V_{Ed} \le V_{Rd,c}`, but allows it to be omitted in members where
+   transverse load redistribution is possible — slabs, and members of minor
+   importance. mento reports :math:`A_{sw,req} = A_{sw,min}` in that situation and
+   leaves the omission to the engineer.
+
+.. _en-decisions:
+
+Implementation decisions
+------------------------
+
+Lever arm: :math:`\lambda` applied exactly once
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Inverting :math:`K` yields the **block depth**, so the lever arm is
+:math:`z = d - 0.5\,x_{eff}`. Writing :math:`z = d - 0.5\,\lambda\,x_{eff}` applies
+:math:`\lambda` twice and gives :math:`d - 0.32x` instead of :math:`d - 0.4x`. For a
+C25 200×600 section at 150 kN·m that is 518.3 mm instead of 507.9 mm — a 2%
+overestimate of the lever arm, hence a 2% **under-estimate** of the required steel.
+
+The single application is pinned by a test that recomputes the Concise Eurocode 2
+closed form from scratch.
+
+Ductility limits live on the neutral axis
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+:math:`(\delta - k_1)/k_2` and the 0.45 cap are both limits on :math:`x_u/d`. Feeding
+either one straight into :math:`M_{lim}` as though it were a block depth inflates the
+threshold at which compression steel becomes necessary — by about 20% for C25. The
+single conversion point avoids the mix-up.
+
+Compression steel enters only when the section needs it
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The classic decomposition
+:math:`M = (A_s - A'_s) f_{yd} z_1 + A'_s f_{yd}(d - d')` is valid only when the
+compression steel is genuinely required for equilibrium. Applied to an
+under-reinforced section it moves the whole internal couple onto the shorter lever
+arm :math:`(d - d')` and **loses** capacity as :math:`A'_s` grows — adding steel
+would reduce the computed :math:`M_{Rd}`, which is physically impossible.
+
+mento therefore keys the branch on :math:`x_{eff}` versus :math:`x_{eff,lim}`, not on
+how much steel happens to sit on the compression face. Below the limit the
+compression bars are ignored, which is the safe side and is also what the mechanics
+say: the concrete alone balances the tension steel.
+
+Effective depth per face
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Each face is solved with its own effective depth: the top face uses
+:math:`d = h - d'_{top}` with the bottom cover as the compression side, and vice
+versa. For shear, :math:`d_{shear} = \min(d_{bot},\ d_{top})`.
+
+Validation
+----------
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 40 30
+
+   * - Check
+     - Test
+     - Verified against
+   * - :math:`A_{s,req}`, singly reinforced
+     - ``test_flexure_check_EN_1992_2004_01``
+     - Calcpad *EN 1992-1-1_2004 Beam Flexure 01 — Metric v2*
+   * - Closed-form agreement
+     - ``test_flexure_EN_1992_2004_matches_concise_eurocode_closed_form``
+     - *Concise Eurocode 2*, The Concrete Centre —
+       :math:`z/d = [1 + \sqrt{1 - 3.529K}]/2`, recomputed inside the test
+   * - :math:`A_{s,req}`, doubly reinforced
+     - ``test_flexure_check_EN_1992_2004_02``
+     - Calcpad, same sheet
+   * - :math:`A_{s,req}`, C35 section
+     - ``test_flexure_check_EN_1992_2004_03``
+     - Calcpad
+   * - :math:`A_{s,req}`, C60 (:math:`\lambda,\eta \ne 1`)
+     - ``test_flexure_check_EN_1992_2004_04``
+     - Calcpad
+   * - Ductility limits on :math:`x_u/d`
+     - ``test_compression_zone_limits_EN_1992_2004_are_expressed_on_the_neutral_axis``
+     - :math:`K' = 0.453\,\xi\,(1 - 0.4\xi)`, which reproduces the published
+       :math:`K' = 0.207` and :math:`0.168`
+   * - :math:`M_{Rd}` monotonic in :math:`A'_s`
+     - ``test_nominal_moment_EN_1992_2004_is_monotonic_in_compression_steel``
+     - Physical requirement
+   * - Design layout passes its own check
+     - ``test_design_flexure_EN_1992_2004_layout_passes_its_own_check``
+     - Internal consistency, design ↔ check
+   * - Shear check, with stirrups
+     - ``test_shear_check_EN_1992_2004_rebar_1`` … ``_3``
+     - Calcpad
+   * - Shear check, no stirrups
+     - ``test_shear_check_EN_1992_2004_no_rebar_1`` … ``_3``
+     - Calcpad
+   * - Shear design
+     - ``test_shear_design_EN_1992_2004_1``
+     - Calcpad
+   * - Never raises on an unfittable section
+     - ``test_design_flexure_EN_1992_2004_infeasible_does_not_crash``
+     - Public contract

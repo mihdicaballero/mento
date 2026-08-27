@@ -1,5 +1,5 @@
-# mento requires Python 3.10 or newer (requires-python in pyproject.toml), which is
+# mento requires Python 3.12 or newer (requires-python in pyproject.toml), which is
 # higher than the python_min conda-forge pins globally. Overriding it here keeps the
 # noarch package from advertising support for versions the project does not test.
 python_min:
-  - "3.10"
+  - "3.12"

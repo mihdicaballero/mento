@@ -9,6 +9,7 @@ An intuitive tool for structural engineers to design concrete elements efficient
 
    getting_started/index
    user_guide/index
+   theory/index
    examples/index
    api/mento
 
@@ -44,6 +45,14 @@ If you are new to Mento, check out our :ref:`Getting Started <getting_started/in
       :margin: 2 2 auto auto
 
       A comprehensive guide for using Mento.
+
+   .. grid-item-card:: Theory
+      :link: theory/index
+      :link-type: ref
+      :class-title: sd-fs-5
+      :margin: 2 2 auto auto
+
+      The code provisions behind every check, clause by clause.
 
    .. grid-item-card:: Examples
       :link: examples/index

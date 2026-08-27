@@ -28,6 +28,14 @@ mento.codes.EN\_1992\_2004\_beam module
    :undoc-members:
    :show-inheritance:
 
+mento.codes.flexure\_design module
+----------------------------------
+
+.. automodule:: mento.codes.flexure_design
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Module contents
 ---------------
 

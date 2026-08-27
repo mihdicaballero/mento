@@ -11,6 +11,35 @@ from the release history and are summaries rather than complete lists.
 
 ## [Unreleased]
 
+### Removed
+
+- **Support for Python 3.10 and 3.11.** `requires-python` is now `>=3.12`, so pip refuses
+  to install mento on the older interpreters instead of installing it and failing later.
+  The classifiers and the conda recipe's `python_min` follow. Stay on 0.5.2 if you are
+  pinned to 3.10 or 3.11.
+- Ubuntu from the test matrix. Tests run on windows-latest against Python 3.12 and 3.13,
+  down from eight jobs to two. mento is pure Python and nothing in it is
+  platform-specific, but Linux is no longer verified on every pull request. The lint and
+  docs jobs still run on ubuntu-latest, and the PyPI distributions are still built there.
+
+### Fixed
+
+- **Shear design ignored the spacing limit across the width of the section.** The stirrups
+  were sized from the required area alone, so a wide beam came back with a single
+  two-legged stirrup whose legs sat far further apart than ACI 318-19 Table 9.7.6.2.2 or
+  EN 1992-1-1 9.2.2(8) allow — 44 cm against a 28 cm limit on a 50 cm section. The check
+  reported the violation, but the design would not avoid it, so `design_shear` handed back
+  a layout its own detailed report then marked as not compliant. The design now starts from
+  the fewest legs the width admits and adds stirrups rather than only tightening the
+  longitudinal spacing. Over a sweep of 168 width and demand combinations across the three
+  codes, 95 designs were in violation and none are now. Closes
+  [#94](https://github.com/mihdicaballero/mento/issues/94).
+- The spacing across the width was computed with whatever stirrup diameter the previous
+  pass had left on the beam instead of the one being tried, so the value stored for each
+  candidate was off by the difference between the two diameters.
+
+## [0.5.2] - 2026-08-25
+
 ### Added
 
 - Spanish detailed reports. `mento.set_language("es")` switches
@@ -26,13 +55,42 @@ from the release history and are summaries rather than complete lists.
 - A DOI. Releases are archived on Zenodo, and
   [10.5281/zenodo.21956634](https://doi.org/10.5281/zenodo.21956634) always resolves to the
   latest one. It is in `CITATION.cff`, in the README badge and in the citing guide.
+- A [Theory section](https://mento-docs.readthedocs.io/en/latest/theory/index.html) in the
+  documentation, with one page per element and design code, so the tool can be audited
+  against the codes it implements. Each page names what is out of scope, the places where
+  mento takes a position the code leaves open, and a table mapping every check to the test
+  that pins it and the external source it was verified against.
 
 ### Changed
 
+- Flexure output is labelled with the symbols of the active design code. An EN 1992-2004
+  result was reported with ACI symbols — `M_u` and `\phi M_n` in the markdown line, and
+  `Mu,top` / `Mu,bot` heading the design forces of the detailed table — where the Eurocode
+  writes `M_Ed` and `M_Rd`. Only the limiting-case branch was affected, which is the one
+  taken when no explicit force is passed. ACI 318-19 and CIRSOC 201-25 are unchanged.
 - The conda recipe is pinned to 0.5.1 and its checksum.
 
 ### Fixed
 
+- **EN 1992-2004 flexural design produced layouts that its own check then rejected.** Over
+  a sweep of 288 combinations, 29 designs came back with DCR > 1. Several independent
+  defects: the lever arm applied `lambda` twice, under-sizing the tension steel by about
+  2%; the ductility limits mixed the neutral-axis and block-depth conventions, leaving
+  `M_lim` about 20% too high; the redistribution limit ignored `k_3`/`k_4` above C50/60;
+  `M_Rd` counted compression steel the section did not need, which made capacity
+  non-monotonic; and the top face was sized with the bottom face's effective depth.
+  Cross-checked against the Concise Eurocode 2 closed form and plain equilibrium. Flexural
+  design is now driven by one shared strategy for both codes.
+- **The ACI size effect factor was not capped at 1.0.** ACI 318-19 Eq. 22.5.5.1.3 writes
+  `lambda_s = sqrt(2/(1 + d/10in)) <= 1.0`. Without the cap, sections with `d` below about
+  250 mm got a factor above 1, inflating `V_c` instead of reducing it — the opposite of
+  what the provision is for, and on the unsafe side. It only applies in the
+  `A_v < A_v_min` branch, so in practice this moves slabs; beams under test are unaffected.
+- Checking a section with no reinforcement for ACI shear raised `ZeroDivisionError`
+  instead of reporting an insufficient section. With `rho_w` at zero, Table 22.5.5.1 puts
+  `phi*V_n` at exactly zero and the DCR division blew up. It now reports `DCR = inf`,
+  matching the guard already in the wall module. EN is unaffected, since `V_Rd,c` carries
+  the `v_min` floor of 6.2.2(2).
 - A one-way slab is no longer reported as a beam. `OneWaySlab` inherited the titles of
   `RectangularBeam`, so its detailed reports were headed `BEAM FLEXURE DETAILED RESULTS`
   and its Word file named `Beam S1 flexure check ACI 318-19.docx`. Slabs now use their own
@@ -164,7 +222,8 @@ First public release on PyPI: rectangular concrete beam check and design for fle
 shear under ACI 318-19 and CIRSOC 201-25, unit aware calculations, results as pandas
 DataFrames, and Word calculation reports.
 
-[Unreleased]: https://github.com/mihdicaballero/mento/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/mihdicaballero/mento/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/mihdicaballero/mento/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/mihdicaballero/mento/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/mihdicaballero/mento/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/mihdicaballero/mento/compare/v0.4.0...v0.4.1

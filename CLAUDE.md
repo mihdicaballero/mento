@@ -10,10 +10,10 @@ Reinforced concrete design Python package. Covers beams, slabs, sections, materi
 
 ## Python environment
 
-**Always use the `py312` or `rame-env` conda environment.** The base `anaconda3` env should never be used for mento.
+**Always use the `rame-env` conda environment.** The base `anaconda3` env should never be used for mento. (The old `py312` env no longer exists.)
 
 ```
-C:\Users\mihdi\anaconda3\envs\py312\python.exe
+C:\Users\mihdi\anaconda3\envs\rame-env\python.exe
 ```
 
 This is also set in `.vscode/settings.json` as `python.defaultInterpreterPath` so the VS Code test runner and IntelliSense use it automatically.
@@ -24,16 +24,16 @@ This is also set in `.vscode/settings.json` as `python.defaultInterpreterPath` s
 
 ```powershell
 # Full suite (uses pyproject.toml addopts: --cov, --cov-report=html, --cov-report=term-missing)
-& "C:\Users\mihdi\anaconda3\envs\py312\python.exe" -m pytest tests/
+& "C:\Users\mihdi\anaconda3\envs\rame-env\python.exe" -m pytest tests/
 
 # Single file, fast iteration (strip addopts to avoid --cov conflicts)
-& "C:\Users\mihdi\anaconda3\envs\py312\python.exe" -m pytest tests/test_beam.py --override-ini="addopts=" -v
+& "C:\Users\mihdi\anaconda3\envs\rame-env\python.exe" -m pytest tests/test_beam.py --override-ini="addopts=" -v
 
 # Single file with coverage
-& "C:\Users\mihdi\anaconda3\envs\py312\python.exe" -m pytest tests/test_beam.py --override-ini="addopts=" --cov=mento --cov-report=term-missing -q
+& "C:\Users\mihdi\anaconda3\envs\rame-env\python.exe" -m pytest tests/test_beam.py --override-ini="addopts=" --cov=mento --cov-report=term-missing -q
 
 # Check coverage for a specific module only
-& "C:\Users\mihdi\anaconda3\envs\py312\python.exe" -m pytest tests/ --override-ini="addopts=" --cov=mento --cov-report=term-missing -q 2>&1 | Select-String "beam|slab|rebar"
+& "C:\Users\mihdi\anaconda3\envs\rame-env\python.exe" -m pytest tests/ --override-ini="addopts=" --cov=mento --cov-report=term-missing -q 2>&1 | Select-String "beam|slab|rebar"
 ```
 
 > `--override-ini="addopts="` strips the default `--cov` flags from pyproject.toml. Required when running single files or adding custom `--cov` arguments to avoid argument conflicts.
@@ -44,13 +44,13 @@ This is also set in `.vscode/settings.json` as `python.defaultInterpreterPath` s
 
 ```powershell
 # Ruff lint (auto-fix)
-& "C:\Users\mihdi\anaconda3\envs\py312\python.exe" -m ruff check . --fix
+& "C:\Users\mihdi\anaconda3\envs\rame-env\python.exe" -m ruff check . --fix
 
 # Ruff format
-& "C:\Users\mihdi\anaconda3\envs\py312\python.exe" -m ruff format .
+& "C:\Users\mihdi\anaconda3\envs\rame-env\python.exe" -m ruff format .
 
 # MyPy (strict)
-& "C:\Users\mihdi\anaconda3\envs\py312\python.exe" -m mypy mento/
+& "C:\Users\mihdi\anaconda3\envs\rame-env\python.exe" -m mypy mento/
 ```
 
 Ruff config: 120-char line limit. MyPy config: `strict = true`, `allow_any_generics = true`. Package checked: `mento/`.
@@ -176,7 +176,7 @@ When asked to design or check a beam with mento, run a script via PowerShell wit
 
 ```powershell
 $env:PYTHONIOENCODING="utf-8"
-C:\Users\mihdi\anaconda3\envs\py312\python.exe -c "..."
+C:\Users\mihdi\anaconda3\envs\rame-env\python.exe -c "..."
 ```
 
 ### Correct API pattern — RectangularBeam design
@@ -222,7 +222,7 @@ beam._A_s_req_bot           # required As bottom
 beam._A_s_req_top           # required As top
 
 # Transverse (shear)
-beam._stirrup_n             # number of stirrup legs
+beam._stirrup_n             # number of closed stirrups (legs = _stirrup_n * 2)
 beam._stirrup_d_b           # stirrup diameter (mm)
 beam._stirrup_s_l           # longitudinal spacing (Quantity, cm)
 beam._A_v                   # Av provided (cm²/m)
@@ -259,11 +259,17 @@ Always set `$env:PYTHONIOENCODING="utf-8"` before running to avoid codec errors 
 
 Workflow: `.github/workflows/tests.yml`
 - Runs on push/PR to `main`
-- Matrix: Python 3.10, 3.11, 3.12 on ubuntu-latest and windows-latest
-- Steps: `pip install pytest pytest-cov`, `pip install -r requirements_dev.txt`
-- Lint: `ruff check .` (no auto-fix in CI)
-- Tests: `pytest --cov=mento --cov-config=.coveragerc --cov-report=xml`
-- Coverage uploaded to Codecov
+- `tests` job: Python 3.12 and 3.13 on windows-latest, installing `-e ".[test]"`.
+  Runs `pytest --cov=mento --cov-config=.coveragerc --cov-report=xml`; the 3.12 job
+  uploads coverage to Codecov.
+- `lint` job: ubuntu-latest, `ruff check .`, `ruff format --check .` and `mypy mento/`
+  (no auto-fix in CI).
+- `docs` job: ubuntu-latest, installs pandoc via apt, then
+  `sphinx-build -b html -W --keep-going` so warnings fail the build.
+
+The lint and docs jobs stay on ubuntu-latest because they are build infrastructure, not
+platform coverage — and the docs job installs pandoc with apt. Only the test matrix
+describes the platforms mento is verified on.
 
 ---
 
@@ -278,10 +284,10 @@ obj.some_method()
 
 **Checking coverage for one file:**
 ```powershell
-& "C:\Users\mihdi\anaconda3\envs\py312\python.exe" -m pytest tests/ --override-ini="addopts=" --cov=mento --cov-report=term-missing -q 2>&1 | Select-String "filename_or_module"
+& "C:\Users\mihdi\anaconda3\envs\rame-env\python.exe" -m pytest tests/ --override-ini="addopts=" --cov=mento --cov-report=term-missing -q 2>&1 | Select-String "filename_or_module"
 ```
 
 **Running a single test by name:**
 ```powershell
-& "C:\Users\mihdi\anaconda3\envs\py312\python.exe" -m pytest tests/test_beam.py::test_my_function --override-ini="addopts=" -v
+& "C:\Users\mihdi\anaconda3\envs\rame-env\python.exe" -m pytest tests/test_beam.py::test_my_function --override-ini="addopts=" -v
 ```

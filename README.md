@@ -8,7 +8,7 @@
 [![PyPI](https://img.shields.io/pypi/v/mento.svg)](https://pypi.org/project/mento/)
 [![Python versions](https://img.shields.io/pypi/pyversions/mento.svg)](https://pypi.org/project/mento/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21956634.svg)](https://doi.org/10.5281/zenodo.21956634)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21956635.svg)](https://doi.org/10.5281/zenodo.21956635)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/charliermarsh/ruff/main/assets/badge/v2.json)][ruff]
 
 [tests]: https://github.com/mihdicaballero/mento/actions/workflows/tests.yml
@@ -22,7 +22,7 @@ This repository provides a comprehensive package for the design and structural a
 pip install mento
 ```
 
-Requires Python 3.10 or newer.
+Requires Python 3.12 or newer.
 
 #### Features
 - Check and design for flexure and shear of:
