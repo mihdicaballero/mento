@@ -58,9 +58,7 @@ class RectangularSection(Section):
         max_cover_mm = min(width_mm, height_mm) / 2
 
         if cover_mm >= max_cover_mm:
-            raise ValueError(
-                "c_c must be less than half of the smallest section dimension."
-            )
+            raise ValueError("c_c must be less than half of the smallest section dimension.")
 
         # Calculate the rectangular section properties.
         self._A_x = self.width * self.height
