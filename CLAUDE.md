@@ -222,7 +222,7 @@ beam._A_s_req_bot           # required As bottom
 beam._A_s_req_top           # required As top
 
 # Transverse (shear)
-beam._stirrup_n             # number of stirrup legs
+beam._stirrup_n             # number of closed stirrups (legs = _stirrup_n * 2)
 beam._stirrup_d_b           # stirrup diameter (mm)
 beam._stirrup_s_l           # longitudinal spacing (Quantity, cm)
 beam._A_v                   # Av provided (cm²/m)
