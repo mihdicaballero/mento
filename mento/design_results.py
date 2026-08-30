@@ -48,6 +48,63 @@ class RebarLayer:
 
 
 @dataclass(frozen=True)
+class FaceReinforcement:
+    """The longitudinal bars a section carries on one face.
+
+    This is *configuration*, not a result: it says what is detailed on the
+    section right now, whether that came from a design, from
+    ``set_longitudinal_rebar_bot``, or from the constructor defaults. It is
+    therefore readable at any time, unlike :class:`FlexureFaceDesign`, which
+    also carries what a check demanded and so needs a check to have run.
+    """
+
+    layers: Tuple[RebarLayer, ...]
+    A_s: Quantity
+
+    @property
+    def n_bars(self) -> int:
+        """Total number of bars across every layer of this face."""
+        return sum(layer.n for layer in self.layers)
+
+    def __str__(self) -> str:
+        if not self.layers:
+            return "no reinforcement"
+        return " + ".join(str(layer) for layer in self.layers)
+
+
+@dataclass(frozen=True)
+class TransverseReinforcement:
+    """The stirrups a section carries, as configured."""
+
+    n_stirrups: int
+    d_b: Quantity
+    s_l: Quantity
+    A_v: Quantity
+
+    @property
+    def n_legs(self) -> int:
+        """Number of stirrup legs crossing the shear plane."""
+        return self.n_stirrups * 2
+
+    def __str__(self) -> str:
+        if self.n_stirrups == 0:
+            return "no stirrups"
+        return f"{self.n_stirrups}eØ{self.d_b:.4g~P}/{self.s_l:.4g~P}"
+
+
+@dataclass(frozen=True)
+class SectionReinforcement:
+    """Every bar a section carries: both faces plus the stirrups."""
+
+    bottom: FaceReinforcement
+    top: FaceReinforcement
+    transverse: TransverseReinforcement
+
+    def __str__(self) -> str:
+        return f"bottom: {self.bottom} / top: {self.top} / stirrups: {self.transverse}"
+
+
+@dataclass(frozen=True)
 class FlexureFaceDesign:
     """Longitudinal reinforcement on one face of the section.
 
@@ -159,6 +216,26 @@ def _face(beam: RectangularBeam, face: str) -> FlexureFaceDesign:
         A_s_min=area("A_s_min"),
         A_s_max=area("A_s_max"),
         DCR=float(envelope.get("DCR", getattr(beam, f"_DCRb_{suffix}", 0.0))),
+    )
+
+
+def build_reinforcement(beam: RectangularBeam) -> SectionReinforcement:
+    """Build the public view of the reinforcement ``beam`` currently carries.
+
+    Never raises: a section always has *some* reinforcement state, even if that
+    state is "none". This is what separates it from the design results, which
+    only exist once a check has run.
+    """
+    # These are set when the section is built, so they always exist.
+    return SectionReinforcement(
+        bottom=FaceReinforcement(layers=_layers(beam, "b"), A_s=beam._A_s_bot),
+        top=FaceReinforcement(layers=_layers(beam, "t"), A_s=beam._A_s_top),
+        transverse=TransverseReinforcement(
+            n_stirrups=int(beam._stirrup_n),
+            d_b=beam._stirrup_d_b,
+            s_l=beam._stirrup_s_l,
+            A_v=beam._A_v,
+        ),
     )
 
 

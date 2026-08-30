@@ -249,7 +249,7 @@ def test_convert_to_nodes_with_stirrups(beam_summary: BeamSummary) -> None:
     # Check that stirrups were set
     for node in nodes_with_stirrups:
         beam = node.section
-        assert beam._stirrup_n != 0
+        assert beam.reinforcement.transverse.n_stirrups != 0
 
 
 def test_convert_to_nodes_without_stirrups(beam_summary: BeamSummary) -> None:
@@ -257,7 +257,7 @@ def test_convert_to_nodes_without_stirrups(beam_summary: BeamSummary) -> None:
     # V101 has no stirrups
     node_without_stirrups = beam_summary.nodes[0]
     beam = node_without_stirrups.section
-    assert beam._stirrup_n == 0
+    assert beam.reinforcement.transverse.n_stirrups == 0
 
 
 def test_convert_to_nodes_positive_moment(beam_summary: BeamSummary) -> None:
@@ -266,8 +266,8 @@ def test_convert_to_nodes_positive_moment(beam_summary: BeamSummary) -> None:
     for i in [2, 3]:
         node = beam_summary.nodes[i]
         beam = node.section
-        # Should have bottom rebar set (n1_b != 0)
-        assert beam._n1_b != 0
+        # Should have bottom rebar set on the first layer
+        assert beam.reinforcement.bottom.layers[0].n != 0
 
 
 def test_convert_to_nodes_negative_moment(beam_summary: BeamSummary) -> None:
@@ -275,8 +275,8 @@ def test_convert_to_nodes_negative_moment(beam_summary: BeamSummary) -> None:
     # V102 has negative moment
     node = beam_summary.nodes[1]
     beam = node.section
-    # Should have top rebar set (n1_t != 0)
-    assert beam._n1_t != 0
+    # Should have top rebar set on the first layer
+    assert beam.reinforcement.top.layers[0].n != 0
 
 
 def test_convert_to_nodes_zero_moment(beam_summary: BeamSummary) -> None:
@@ -285,7 +285,7 @@ def test_convert_to_nodes_zero_moment(beam_summary: BeamSummary) -> None:
     node = beam_summary.nodes[0]
     beam = node.section
     # Should have bottom rebar set
-    assert beam._n1_b != 0
+    assert beam.reinforcement.bottom.layers[0].n != 0
 
 
 # ============================================================================
@@ -677,13 +677,10 @@ def test_beam_summary_all_rebar_layers(
     )
 
     beam = summary.nodes[0].section
-    # BeamSummary only configures the nodes here; no check or design has run, so the
-    # public flexure result is not available and the layers are read off the section.
     # Should have 4 layers of bottom rebar (positive moment)
-    assert beam._n1_b == 2
-    assert beam._n2_b == 2
-    assert beam._n3_b == 2
-    assert beam._n4_b == 2
+    bottom = beam.reinforcement.bottom
+    assert len(bottom.layers) == 4
+    assert [layer.n for layer in bottom.layers] == [2, 2, 2, 2]
 
 
 def test_beam_summary_with_different_units(

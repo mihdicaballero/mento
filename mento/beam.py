@@ -25,8 +25,10 @@ from mento.forces import Forces
 from mento.settings import BeamSettings
 from mento.design_results import (
     FlexureDesign,
+    SectionReinforcement,
     ShearDesign,
     build_flexure_design,
+    build_reinforcement,
     build_shear_design,
 )
 from mento._version import __version__ as MENTO_VERSION
@@ -918,6 +920,22 @@ class RectangularBeam(RectangularSection):
     ##########################################################
     # RESULTS
     ##########################################################
+
+    @property
+    def reinforcement(self) -> SectionReinforcement:
+        """The reinforcement this beam currently carries, as plain data.
+
+        Readable at any time — it describes the section, not a result, so it
+        does not need a check to have run::
+
+            beam.set_longitudinal_rebar_bot(n1=4, d_b1=16 * mm)
+            beam.reinforcement.bottom.A_s
+            beam.reinforcement.transverse.n_legs
+
+        For what a check *demanded* of that reinforcement (``A_s_req``,
+        ``DCR``), use :attr:`flexure_design` and :attr:`shear_design`.
+        """
+        return build_reinforcement(self)
 
     @property
     def flexure_design(self) -> FlexureDesign:

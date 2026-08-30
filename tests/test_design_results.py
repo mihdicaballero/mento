@@ -11,6 +11,7 @@ from mento.design_results import (
     DesignNotRunError,
     FlexureDesign,
     RebarLayer,
+    SectionReinforcement,
     ShearDesign,
 )
 
@@ -46,6 +47,91 @@ def designed_beam(beam: RectangularBeam) -> RectangularBeam:
 def test_rebar_layer_area_matches_the_circle_formula() -> None:
     layer = RebarLayer(n=3, d_b=16 * mm)
     assert layer.A_s.to("cm**2").magnitude == pytest.approx(3 * math.pi * (1.6**2) / 4)
+
+
+# ============================================================================
+# SectionReinforcement — what the section carries, readable without a check
+# ============================================================================
+
+
+def test_reinforcement_is_readable_before_any_check(beam: RectangularBeam) -> None:
+    """The whole point of the view: no check has run, and it still answers.
+
+    flexure_design and shear_design raise here; reinforcement must not, because
+    it describes the section rather than a result.
+    """
+    with pytest.raises(DesignNotRunError):
+        _ = beam.flexure_design
+    with pytest.raises(DesignNotRunError):
+        _ = beam.shear_design
+
+    assert isinstance(beam.reinforcement, SectionReinforcement)
+
+
+def test_reinforcement_reflects_the_longitudinal_setter(beam: RectangularBeam) -> None:
+    beam.set_longitudinal_rebar_bot(n1=4, d_b1=16 * mm)
+
+    bottom = beam.reinforcement.bottom
+    assert bottom.layers[0].n == 4
+    assert bottom.layers[0].d_b.to("mm").magnitude == pytest.approx(16)
+    assert bottom.n_bars == 4
+    # 4 bars of 16 mm: 4*pi*1.6^2/4 = 8.04 cm²
+    assert bottom.A_s.to("cm**2").magnitude == pytest.approx(4 * math.pi * (1.6**2) / 4)
+
+
+def test_reinforcement_reflects_the_transverse_setter(beam: RectangularBeam) -> None:
+    beam.set_transverse_rebar(n_stirrups=2, d_b=10 * mm, s_l=15 * cm)
+
+    stirrups = beam.reinforcement.transverse
+    assert stirrups.n_stirrups == 2
+    assert stirrups.n_legs == 4
+    assert stirrups.d_b.to("mm").magnitude == pytest.approx(10)
+    assert stirrups.s_l.to("cm").magnitude == pytest.approx(15)
+    assert stirrups.A_v.to("cm**2/m").magnitude > 0
+
+
+def test_reinforcement_lists_no_layers_for_a_bare_face(beam: RectangularBeam) -> None:
+    beam.set_longitudinal_rebar_top(n1=0, d_b1=0 * mm)
+    assert beam.reinforcement.top.layers == ()
+    assert beam.reinforcement.top.n_bars == 0
+    assert str(beam.reinforcement.top) == "no reinforcement"
+
+
+def test_reinforcement_is_a_value_not_a_live_view(beam: RectangularBeam) -> None:
+    """It is a snapshot: changing the section afterwards must not change it."""
+    before = beam.reinforcement.transverse
+    beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=20 * cm)
+    assert beam.reinforcement.transverse != before
+
+
+def test_reinforcement_matches_the_design_after_a_design_runs(
+    designed_beam: RectangularBeam,
+) -> None:
+    """The two views agree on what the section carries; they differ only in that
+    the design also reports what the check demanded."""
+    rebar = designed_beam.reinforcement
+    flexure = designed_beam.flexure_design
+    shear = designed_beam.shear_design
+
+    assert rebar.bottom.layers == flexure.bottom.layers
+    assert rebar.bottom.A_s == flexure.bottom.A_s
+    assert rebar.top.layers == flexure.top.layers
+    assert rebar.transverse.n_stirrups == shear.n_stirrups
+    assert rebar.transverse.s_l == shear.s_l
+    assert rebar.transverse.A_v == shear.A_v
+
+
+def test_reinforcement_str_describes_both_faces_and_stirrups(beam: RectangularBeam) -> None:
+    beam.set_longitudinal_rebar_bot(n1=3, d_b1=20 * mm)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=20 * cm)
+    text = str(beam.reinforcement)
+    assert "bottom: 3Ø20" in text
+    assert "stirrups: 1eØ8" in text
+
+
+def test_reinforcement_str_says_so_when_there_are_no_stirrups(beam: RectangularBeam) -> None:
+    beam.set_transverse_rebar(n_stirrups=0, d_b=0 * mm, s_l=0 * cm)
+    assert str(beam.reinforcement.transverse) == "no stirrups"
 
 
 def test_rebar_layer_str_is_the_engineering_shorthand() -> None:

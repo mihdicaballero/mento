@@ -440,11 +440,36 @@ as designed: an `_A_s_bot` read in `test_flexure_check_EN_1992_2004_01` sits
 that was just set, not a result. A whole-function regex says the test checks
 flexure; only the ordering says otherwise.
 
-**Exit, restated:** no test reads a private beam attribute *that the public API
-exposes and that is reachable after a check*. Groups 1-3 reopen once Phase 2b
-lands the reinforcement view and extends the result objects.
+**Exit met, once Phase 2b landed the reinforcement view** (see below). Final
+count: **116 candidate reads at the start, 14 left**, of which 12 are
+`test_design_results.py` and the other 2 are deliberate *writes*
+(`beam._d_b2_b = None`, injecting a state no public API can produce, to prove
+the area calculation survives it). No test reads a private beam attribute that
+the public API exposes. Group 2 — `_stirrup_s_w`, `_d_shear`, `_lambda_s`,
+`_phi_M_n_bot`, `_s_b1_t` and the `ShearWall` surface — is genuinely missing
+public API, not a test problem, and is tracked with issue #125.
 
-### Phase 2b — Checks return result dataclasses
+### Phase 2b — Checks return result dataclasses *(in progress)*
+
+**Done (2026-08-30): the reinforcement view.** Phase 2a found that
+`flexure_design` and `shear_design` conflate two different things —
+`layers`/`A_s`/`n_stirrups`/`d_b`/`s_l`/`A_v` are *what the section carries*,
+while `A_s_req`/`A_s_min`/`A_s_max`/`DCR` are *what a check demanded* — and gate
+both behind `DesignNotRunError`. So there was no way to read back a layout that
+had just been set.
+
+`section.reinforcement` now answers that, and never raises:
+
+```python
+beam.set_longitudinal_rebar_bot(n1=4, d_b1=16 * mm)
+beam.reinforcement.bottom.A_s          # 8.04 cm², no check needed
+beam.reinforcement.transverse.n_legs
+```
+
+It returns a frozen `SectionReinforcement(bottom, top, transverse)` — a
+snapshot, not a live view. The result objects are unchanged, so nothing breaks;
+they simply stop being the only way to ask what a section carries. This is the
+first piece of the ADR-0001 split that the rest of the phase completes.
 
 Only now does production code change. Extend `design_results.py` with
 check-result types; make check/design functions build and return them. Because

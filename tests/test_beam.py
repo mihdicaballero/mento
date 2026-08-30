@@ -186,9 +186,10 @@ def test_set_transverse_rebar_accepts_numpy_integer() -> None:
         s_l=20 * cm,
     )
 
-    assert beam._stirrup_n == 1
-    assert type(beam._stirrup_n) is int
-    assert beam._A_v.to("cm**2/m").magnitude == pytest.approx(5.0265, rel=1e-4)
+    stirrups = beam.reinforcement.transverse
+    assert stirrups.n_stirrups == 1
+    assert type(stirrups.n_stirrups) is int
+    assert stirrups.A_v.to("cm**2/m").magnitude == pytest.approx(5.0265, rel=1e-4)
 
 
 def test_set_transverse_rebar_invalid_input_preserves_previous_rebar() -> None:
@@ -199,12 +200,7 @@ def test_set_transverse_rebar_invalid_input_preserves_previous_rebar() -> None:
         s_l=20 * cm,
     )
 
-    previous_rebar = (
-        beam._stirrup_n,
-        beam._stirrup_d_b,
-        beam._stirrup_s_l,
-        beam._A_v,
-    )
+    previous_rebar = beam.reinforcement.transverse
 
     with pytest.raises(ValueError, match="s_l"):
         beam.set_transverse_rebar(
@@ -213,12 +209,7 @@ def test_set_transverse_rebar_invalid_input_preserves_previous_rebar() -> None:
             s_l=0 * cm,
         )
 
-    assert (
-        beam._stirrup_n,
-        beam._stirrup_d_b,
-        beam._stirrup_s_l,
-        beam._A_v,
-    ) == previous_rebar
+    assert beam.reinforcement.transverse == previous_rebar
 
 
 def test_beam_respects_provided_settings_unit_system() -> None:
@@ -239,37 +230,40 @@ def test_rebar_designer_factory_returns_rebar() -> None:
 def test_initialize_longitudinal_rebar_attributes_metric_defaults() -> None:
     beam = build_metric_beam()
 
-    assert beam._n1_b == 2
-    assert beam._n1_t == 2
-    assert beam._d_b1_b.magnitude == pytest.approx(8)
-    assert beam._d_b1_t.magnitude == pytest.approx(8)
+    rebar = beam.reinforcement
+    assert rebar.bottom.layers[0].n == 2
+    assert rebar.top.layers[0].n == 2
+    assert rebar.bottom.layers[0].d_b.magnitude == pytest.approx(8)
+    assert rebar.top.layers[0].d_b.magnitude == pytest.approx(8)
 
 
 def test_set_transverse_rebar_zero_spacing_clears_stirrups() -> None:
     beam = build_metric_beam()
     beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=20 * cm)
-    assert beam._A_v.to("cm**2/m").magnitude > 0
+    assert beam.reinforcement.transverse.A_v.to("cm**2/m").magnitude > 0
 
     # Clearing the stirrups must not divide by the zero spacing
     beam.set_transverse_rebar(n_stirrups=0, d_b=0 * mm, s_l=0 * cm)
 
-    assert beam._stirrup_n == 0
-    assert beam._stirrup_d_b.to("mm").magnitude == 0
-    assert beam._stirrup_s_l.to("cm").magnitude == 0
-    assert beam._A_v.to("cm**2/m").magnitude == 0
+    stirrups = beam.reinforcement.transverse
+    assert stirrups.n_stirrups == 0
+    assert stirrups.d_b.to("mm").magnitude == 0
+    assert stirrups.s_l.to("cm").magnitude == 0
+    assert stirrups.A_v.to("cm**2/m").magnitude == 0
 
 
 def test_set_transverse_rebar_defaults_clear_stirrups_imperial(
     beam_example_imperial: RectangularBeam,
 ) -> None:
     beam_example_imperial.set_transverse_rebar(n_stirrups=1, d_b=0.5 * inch, s_l=6 * inch)
-    assert beam_example_imperial._A_v.to("inch**2/ft").magnitude > 0
+    assert beam_example_imperial.reinforcement.transverse.A_v.to("inch**2/ft").magnitude > 0
 
     beam_example_imperial.set_transverse_rebar()
 
-    assert beam_example_imperial._stirrup_n == 0
-    assert beam_example_imperial._stirrup_s_l.to("inch").magnitude == 0
-    assert beam_example_imperial._A_v.to("inch**2/ft").magnitude == 0
+    stirrups = beam_example_imperial.reinforcement.transverse
+    assert stirrups.n_stirrups == 0
+    assert stirrups.s_l.to("inch").magnitude == 0
+    assert stirrups.A_v.to("inch**2/ft").magnitude == 0
 
 
 def test_shear_check_EN_1992_2004_rebar_1(
@@ -710,11 +704,12 @@ def test_flexure_check_EN_1992_2004_01(
     beam_example_EN_1992_2004_01.set_longitudinal_rebar_bot(n1=4, d_b1=16 * mm)
     beam_example_EN_1992_2004_01.set_longitudinal_rebar_top(n1=0, d_b1=0 * mm)
     # Read back before any check has run: this asserts the layout that was just
-    # set, not a result, so the public flexure_design is not available yet.
-    assert beam_example_EN_1992_2004_01._A_s_bot.to(cm**2).magnitude == pytest.approx(8.042, rel=1e-2)
+    # set, not a result, which is what `reinforcement` is for.
+    rebar = beam_example_EN_1992_2004_01.reinforcement
+    assert rebar.bottom.A_s.to(cm**2).magnitude == pytest.approx(8.042, rel=1e-2)
     assert beam_example_EN_1992_2004_01._d_bot.to(cm).magnitude == pytest.approx(56.0, rel=1e-2)
     assert beam_example_EN_1992_2004_01.width.to(cm).magnitude == pytest.approx(20.0, rel=1e-2)
-    assert beam_example_EN_1992_2004_01._stirrup_d_b.to(mm).magnitude == pytest.approx(6.0, rel=1e-2)
+    assert rebar.transverse.d_b.to(mm).magnitude == pytest.approx(6.0, rel=1e-2)
     node = Node(section=beam_example_EN_1992_2004_01, forces=f)
     results = node.check_flexure()
     assert results.iloc[1]["Label"] == "B_Example_EN_01"
@@ -3296,7 +3291,7 @@ def test_plot_single_bar_layer_is_centered() -> None:
 
     bottom_bar = next(c for c in circles if np.isclose(c.get_radius(), 0.8))
     # centered on the section, plus the inward corner offset applied to the outermost bar
-    corner_offset = 0.43 * beam._stirrup_d_b.to("cm").magnitude
+    corner_offset = 0.43 * beam.reinforcement.transverse.d_b.to("cm").magnitude
     assert np.isclose(bottom_bar.get_center()[0], beam.width.to("cm").magnitude / 2 + corner_offset)
 
     plt.close()
@@ -3475,21 +3470,25 @@ def test_plot_annotates_second_rebar_layer() -> None:
 def test_clear_top_longitudinal_imperial(beam_example_imperial: RectangularBeam) -> None:
     beam_example_imperial._clear_top_longitudinal()
 
-    assert beam_example_imperial._n1_t == 0
-    assert beam_example_imperial._d_b1_t.to("inch").magnitude == 0
+    # No bars left on the top face, so it lists no layers at all.
+    assert beam_example_imperial.reinforcement.top.layers == ()
+    assert beam_example_imperial.reinforcement.top.n_bars == 0
 
 
 def test_longitudinal_rebar_area_ignores_none_diameters() -> None:
     """Diameters forced to None (not through the setters) count as zero area."""
     beam = build_metric_beam()
     beam.set_longitudinal_rebar_bot(n1=2, d_b1=16 * mm)
-    A_s_bot = beam._A_s_bot
+    A_s_bot = beam.reinforcement.bottom.A_s
 
+    # Reaching into the private layer attributes on purpose: the point of the
+    # test is that a None diameter left behind by an earlier layout does not
+    # break the area calculation, and no public API can put one there.
     beam._d_b2_b = None
     beam._d_b3_b = None
     beam._calculate_longitudinal_rebar_area()
 
-    assert beam._A_s_bot.magnitude == pytest.approx(A_s_bot.magnitude)
+    assert beam.reinforcement.bottom.A_s.magnitude == pytest.approx(A_s_bot.magnitude)
 
 
 # This is where pytest will collect the tests and run them
