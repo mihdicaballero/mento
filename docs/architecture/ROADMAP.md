@@ -471,6 +471,38 @@ snapshot, not a live view. The result objects are unchanged, so nothing breaks;
 they simply stop being the only way to ask what a section carries. This is the
 first piece of the ADR-0001 split that the rest of the phase completes.
 
+**Done (2026-08-30): the envelope accumulators are gone.**
+`_update_flexure_envelope` and `_update_shear_envelope`, and the
+`_flexure_envelope` / `_shear_envelope` dicts they folded into, no longer exist.
+Each check now appends one frozen `FlexureCheck` / `ShearCheck` to a list, and
+enveloping is a pure function over it — `envelope_flexure_face(checks, "bottom")`
+— evaluated when a result is read rather than accumulated as the loop runs. Each
+quantity is enveloped independently, because the combination that governs
+`A_s_req` need not be the one that governs `DCR`. The per-combination results are
+public as `beam.flexure_checks` / `beam.shear_checks`, so a caller that wants to
+envelope them itself — mako does — no longer has to reach into the beam.
+
+**Measured, and it changes which phase unblocks mako.** With the accumulators
+gone and Phase 1's equations in place, a shear check costs **5.31 ms**, so
+20,000 checks take **106 s** against the 5 s target of §3.3. The profile says
+the remaining cost is not calculation at all:
+
+| per check | what |
+| --- | --- |
+| ~1.7 ms | `_initialize_dicts_ACI_318_19_shear` — building report tables |
+| ~1.1 ms | constructing a fresh `Rebar` designer, only to read a spacing limit |
+| ~0.8 ms | assembling the result DataFrame row |
+
+The equations are now noise. **This roadmap said Phase 2b "is the phase that
+unblocks mako"; the measurement says Phase 3 is.** Building UI tables and a
+DataFrame on a path that no one is going to display is what costs, and Phase 3
+is what takes them off it. The `Rebar` construction is a separate cheap win that
+belongs to the performance track, not to any phase.
+
+**Still to do in this phase:** the checks themselves still mutate the beam and
+return a DataFrame. Making them *return* results — and taking the mutation out —
+is the remainder, and it is what the §3.3 exit criterion asks for.
+
 Only now does production code change. Extend `design_results.py` with
 check-result types; make check/design functions build and return them. Because
 the tests already assert through the public API (Phase 2a), this phase does not

@@ -9,10 +9,15 @@ from mento import Concrete_ACI_318_19, Forces, Node, RectangularBeam, SteelBar
 from mento import MPa, cm, kN, kNm, m, mm
 from mento.design_results import (
     DesignNotRunError,
+    FlexureCheck,
     FlexureDesign,
+    FlexureFaceCheck,
     RebarLayer,
     SectionReinforcement,
+    ShearCheck,
     ShearDesign,
+    envelope_flexure_face,
+    envelope_shear,
 )
 
 pytestmark = pytest.mark.filterwarnings("ignore::UserWarning")
@@ -310,22 +315,76 @@ def test_shear_reports_the_combination_that_governs(
 def test_envelope_skips_quantities_the_design_code_does_not_set() -> None:
     """A design code that leaves a quantity unset must not break the envelope.
 
-    Both codes shipped today set all of them, so this is built directly rather than
-    through a check.
+    Both codes shipped today set all of them, so the results are built directly
+    rather than through a check. An absent quantity stays absent — enveloping
+    must not turn it into a zero that then competes in the max.
     """
-    beam = object.__new__(RectangularBeam)
-    beam._flexure_envelope = {}
-    beam._shear_envelope = {}
-    beam._A_s_req_bot = 4 * cm**2  # _A_s_min_bot and _A_s_max_bot deliberately absent
-    beam._DCRb_bot = 0.5
-    beam._A_v_req = 3 * cm**2 / m
-    beam._DCRv = 0.4
+    checks = [
+        FlexureCheck(
+            label="C1",
+            bottom=FlexureFaceCheck(A_s_req=4 * cm**2, A_s_min=None, A_s_max=None, DCR=0.5),
+            top=FlexureFaceCheck(A_s_req=None, A_s_min=None, A_s_max=None, DCR=0.0),
+        )
+    ]
 
-    beam._update_flexure_envelope("bot")
-    beam._update_shear_envelope()
+    bottom = envelope_flexure_face(checks, "bottom")
+    assert bottom.A_s_req == 4 * cm**2
+    assert bottom.A_s_min is None
+    assert bottom.A_s_max is None
+    assert bottom.DCR == 0.5
 
-    assert beam._flexure_envelope["bot"] == {"A_s_req": 4 * cm**2, "DCR": 0.5}
-    assert beam._shear_envelope == {"A_v_req": 3 * cm**2 / m, "DCR": 0.4}
+    shear = envelope_shear([ShearCheck(label="C1", A_v_req=3 * cm**2 / m, A_v_min=None, DCR=0.4)])
+    assert shear.A_v_req == 3 * cm**2 / m
+    assert shear.A_v_min is None
+    assert shear.DCR == 0.4
+
+
+def test_envelope_takes_the_worst_of_each_quantity_independently() -> None:
+    """The combination that governs A_s_req need not be the one that governs DCR,
+    so each quantity is enveloped on its own."""
+    checks = [
+        FlexureCheck(
+            label="C1",
+            bottom=FlexureFaceCheck(A_s_req=9 * cm**2, A_s_min=2 * cm**2, A_s_max=30 * cm**2, DCR=0.4),
+            top=FlexureFaceCheck(A_s_req=0 * cm**2, A_s_min=0 * cm**2, A_s_max=0 * cm**2, DCR=0.0),
+        ),
+        FlexureCheck(
+            label="C2",
+            bottom=FlexureFaceCheck(A_s_req=3 * cm**2, A_s_min=5 * cm**2, A_s_max=20 * cm**2, DCR=0.9),
+            top=FlexureFaceCheck(A_s_req=0 * cm**2, A_s_min=0 * cm**2, A_s_max=0 * cm**2, DCR=0.0),
+        ),
+    ]
+
+    bottom = envelope_flexure_face(checks, "bottom")
+    assert bottom.A_s_req == 9 * cm**2  # from C1
+    assert bottom.A_s_min == 5 * cm**2  # from C2
+    assert bottom.DCR == 0.9  # from C2
+
+
+def test_envelope_of_nothing_is_empty() -> None:
+    """No combinations checked: no demand, and nothing to divide by."""
+    empty = envelope_flexure_face([], "bottom")
+    assert empty.A_s_req is None
+    assert empty.DCR == 0.0
+    assert envelope_shear([]).DCR == 0.0
+
+
+def test_checks_expose_one_result_per_combination(
+    beam_two_combinations: RectangularBeam,
+) -> None:
+    """The per-combination results are public: a caller enveloping them itself
+    (mako does) does not have to reach into the beam."""
+    beam = beam_two_combinations
+    forces = _two_combinations()
+
+    beam.check_flexure(forces)
+    beam.check_shear(forces)
+
+    assert [c.label for c in beam.flexure_checks] == [f.label for f in forces]
+    assert [c.label for c in beam.shear_checks] == [f.label for f in forces]
+    # And the design results agree with enveloping them by hand.
+    assert beam.shear_design.DCR == pytest.approx(max(c.DCR for c in beam.shear_checks))
+    assert beam.flexure_design.bottom.DCR == pytest.approx(max(c.bottom.DCR for c in beam.flexure_checks))
 
 
 def test_envelope_resets_between_checks(beam_two_combinations: RectangularBeam) -> None:

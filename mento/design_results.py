@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Optional, Sequence, Tuple
 
 from pint import Quantity
 
@@ -45,6 +45,95 @@ class RebarLayer:
 
     def __str__(self) -> str:
         return f"{self.n}Ø{self.d_b:.4g~P}"
+
+
+@dataclass(frozen=True)
+class FlexureFaceCheck:
+    """What a single load combination demanded of one face.
+
+    A field is ``None`` when the design code did not set it for this
+    combination; enveloping skips those rather than treating them as zero.
+    """
+
+    A_s_req: Optional[Quantity]
+    A_s_min: Optional[Quantity]
+    A_s_max: Optional[Quantity]
+    DCR: float
+
+
+@dataclass(frozen=True)
+class FlexureCheck:
+    """The flexure result of one load combination, on both faces."""
+
+    label: str
+    bottom: FlexureFaceCheck
+    top: FlexureFaceCheck
+
+
+@dataclass(frozen=True)
+class ShearCheck:
+    """The shear result of one load combination."""
+
+    label: str
+    A_v_req: Optional[Quantity]
+    A_v_min: Optional[Quantity]
+    DCR: float
+
+
+def _worst(values: Sequence[Optional[Quantity]]) -> Optional[Quantity]:
+    """Largest of the values that are present, or None if none of them are."""
+    present = [value for value in values if value is not None]
+    return max(present) if present else None
+
+
+def envelope_flexure_face(checks: Sequence[FlexureCheck], face: str) -> FlexureFaceCheck:
+    """Worst demand on one face across every combination checked.
+
+    A pure function of the results: the governing combination differs per
+    quantity and per face, so each one is enveloped independently. ``face`` is
+    ``"bottom"`` or ``"top"``.
+    """
+    faces = [getattr(check, face) for check in checks]
+    return FlexureFaceCheck(
+        A_s_req=_worst([f.A_s_req for f in faces]),
+        A_s_min=_worst([f.A_s_min for f in faces]),
+        A_s_max=_worst([f.A_s_max for f in faces]),
+        DCR=max([f.DCR for f in faces], default=0.0),
+    )
+
+
+def envelope_shear(checks: Sequence[ShearCheck]) -> ShearCheck:
+    """Worst shear demand across every combination checked."""
+    return ShearCheck(
+        label="envelope",
+        A_v_req=_worst([c.A_v_req for c in checks]),
+        A_v_min=_worst([c.A_v_min for c in checks]),
+        DCR=max([c.DCR for c in checks], default=0.0),
+    )
+
+
+def capture_flexure_check(beam: RectangularBeam, label: str) -> FlexureCheck:
+    """Snapshot the flexure result the beam holds for the combination just run."""
+
+    def face(suffix: str) -> FlexureFaceCheck:
+        return FlexureFaceCheck(
+            A_s_req=getattr(beam, f"_A_s_req_{suffix}", None),
+            A_s_min=getattr(beam, f"_A_s_min_{suffix}", None),
+            A_s_max=getattr(beam, f"_A_s_max_{suffix}", None),
+            DCR=float(getattr(beam, f"_DCRb_{suffix}", 0.0)),
+        )
+
+    return FlexureCheck(label=label, bottom=face("bot"), top=face("top"))
+
+
+def capture_shear_check(beam: RectangularBeam, label: str) -> ShearCheck:
+    """Snapshot the shear result the beam holds for the combination just run."""
+    return ShearCheck(
+        label=label,
+        A_v_req=getattr(beam, "_A_v_req", None),
+        A_v_min=getattr(beam, "_A_v_min", None),
+        DCR=float(getattr(beam, "_DCRv", 0.0)),
+    )
 
 
 @dataclass(frozen=True)
@@ -196,15 +285,10 @@ def _face(beam: RectangularBeam, face: str) -> FlexureFaceDesign:
     # _A_s_bot is set when the section is built, so it always carries the area
     # unit of this beam and can seed the values a check may not have produced.
     zero: Quantity = 0 * beam._A_s_bot.units
-    # The envelope over every combination that was checked. The private attributes
-    # only describe the combination that ran last, which is not necessarily the one
-    # that governs this face.
-    envelope: Dict[str, Any] = getattr(beam, "_flexure_envelope", {}).get(suffix, {})
-
-    def area(name: str) -> Quantity:
-        """Envelope value of a per-combination area, or the last one if there is none."""
-        value: Optional[Quantity] = envelope.get(name, getattr(beam, f"_{name}_{suffix}", None))
-        return zero if value is None else value
+    # Envelope over every combination that was checked, computed here rather than
+    # accumulated during the loop: the beam's private attributes only describe the
+    # combination that ran last, which is not necessarily the one that governs.
+    worst = envelope_flexure_face(getattr(beam, "_flexure_checks", ()), "bottom" if face == "b" else "top")
 
     # A_s is the reinforcement the section carries, not a per-combination result.
     A_s: Optional[Quantity] = getattr(beam, f"_A_s_{suffix}", None)
@@ -212,10 +296,10 @@ def _face(beam: RectangularBeam, face: str) -> FlexureFaceDesign:
     return FlexureFaceDesign(
         layers=_layers(beam, face),
         A_s=zero if A_s is None else A_s,
-        A_s_req=area("A_s_req"),
-        A_s_min=area("A_s_min"),
-        A_s_max=area("A_s_max"),
-        DCR=float(envelope.get("DCR", getattr(beam, f"_DCRb_{suffix}", 0.0))),
+        A_s_req=zero if worst.A_s_req is None else worst.A_s_req,
+        A_s_min=zero if worst.A_s_min is None else worst.A_s_min,
+        A_s_max=zero if worst.A_s_max is None else worst.A_s_max,
+        DCR=worst.DCR,
     )
 
 
@@ -264,21 +348,16 @@ def build_shear_design(beam: RectangularBeam) -> ShearDesign:
         )
     A_v: Quantity = beam._A_v
     zero: Quantity = 0 * A_v.units
-    # As in _face: the private attributes describe the combination that ran last, the
-    # envelope describes every combination that was checked.
-    envelope: Dict[str, Any] = getattr(beam, "_shear_envelope", {})
-
-    def area(name: str) -> Quantity:
-        """Envelope value of a per-combination area, or the last one if there is none."""
-        value: Optional[Quantity] = envelope.get(name, getattr(beam, f"_{name}", None))
-        return zero if value is None else value
+    # As in _face: the private attributes describe the combination that ran last,
+    # so the envelope is taken over the results of every combination checked.
+    worst = envelope_shear(getattr(beam, "_shear_checks", ()))
 
     return ShearDesign(
         n_stirrups=int(beam._stirrup_n),
         d_b=beam._stirrup_d_b,
         s_l=beam._stirrup_s_l,
         A_v=A_v,
-        A_v_req=area("A_v_req"),
-        A_v_min=area("A_v_min"),
-        DCR=float(envelope.get("DCR", getattr(beam, "_DCRv", 0.0))),
+        A_v_req=zero if worst.A_v_req is None else worst.A_v_req,
+        A_v_min=zero if worst.A_v_min is None else worst.A_v_min,
+        DCR=worst.DCR,
     )
