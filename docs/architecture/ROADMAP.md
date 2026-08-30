@@ -329,21 +329,33 @@ remains is not a hot spot but ~7,600 Quantity constructions spread thin across
 itself. Closing the last 22 ms is Phase 1's float equations (ADR-0005), not more
 micro-optimization here.
 
-### Phase 1 — Extract pure equations
+### Phase 1 — Extract pure equations *(in progress)*
 
 Inside `codes/`, split code formulas out of the mutating orchestrators into
-`equations/` modules — **plain floats in the N/mm/MPa system, per ADR-0005**,
-clause in docstring. The existing orchestrators keep mutating the beam **but now
-call the pure functions**, converting at the call site with prebuilt unit
-objects. Add parametrized tests against code tables for each extracted equation.
-No public behavior changes; this phase only *creates the layer that does not
-exist yet*. The boundary gets teeth from day one: the AST test of §3.1 (no
-algebra in checkers, no pint in `equations/`) lands with the first extracted
-module.
+`equations/` modules — **plain floats per ADR-0005**, clause in docstring. The
+existing orchestrators keep mutating the beam **but now call the pure
+functions**, converting at the call site with prebuilt unit objects. Add
+parametrized tests against code tables for each extracted equation. No public
+behavior changes; this phase only *creates the layer that does not exist yet*.
+The boundary gets teeth from day one: the AST test of §3.1 (no algebra in
+checkers, no pint in `equations/`) lands with the first extracted module.
+
+**Done (2026-08-29): ACI 318-19 one-way shear.**
+`codes/aci_318_19/equations/shear.py` holds nine clause-cited functions
+(Eq. 22.5.5.1.3, Table 22.5.5.1, §22.5.5.1.1, §22.5.1.2, §9.6.3.1, §20.2.2.4,
+Table 9.6.3.4, §22.5.8.5.3). The shear orchestrator now calls them and
+`ACI_318_19_beam.py` no longer imports `math` at all — every inline formula in
+the module is gone. `tests/test_architecture_boundaries.py` enforces the
+boundary by AST and was verified to fail on a deliberate violation, not just to
+pass. Packaging moved to automatic discovery so a new code subpackage cannot be
+left out of the wheel; verified by building one and listing its contents.
+
+**Remaining:** ACI flexure, EN 1992-2004 (shear and flexure), the wall module.
 
 **Exit:** zero `self.` and zero pint imports inside `equations/`; every function
 cites its clause and has a parametrized test against the code's table; the
-boundary test is in CI.
+boundary test is in CI. *(Met for the shear module; the exit applies per code
+module as each is extracted.)*
 
 ### Phase 2a — Migrate tests to the public API
 

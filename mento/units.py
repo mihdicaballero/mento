@@ -10,6 +10,7 @@ ureg.formatter.default_format = ".2f~P"  # Standardize output formatting
 m = ureg.meter
 cm = ureg.centimeter
 mm = ureg.millimeter
+N = ureg.newton
 kN = ureg.kilonewton
 kgf = ureg.kilogram_force
 kNm = kN * m

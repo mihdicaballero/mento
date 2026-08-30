@@ -85,8 +85,11 @@ Repository = "https://github.com/mihdicaballero/mento"
 Issues = "https://github.com/mihdicaballero/mento/issues"
 Changelog = "https://github.com/mihdicaballero/mento/blob/main/CHANGELOG.md"
 
-[tool.setuptools]
-packages = ["mento", "mento.codes"]
+[tool.setuptools.packages.find]
+# Discovered rather than listed: the roadmap adds one subpackage per design code
+# (equations/, later checker.py), and an explicit list that silently ships a
+# wheel missing one of them is a failure mode worth designing out.
+include = ["mento*"]
 
 [tool.ruff]
 # Markdown is excluded because ruff 0.16 started formatting the python code

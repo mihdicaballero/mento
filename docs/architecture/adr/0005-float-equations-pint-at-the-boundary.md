@@ -30,9 +30,20 @@ that costs the most.
 
 ## Decision
 
-**`codes/<code>/equations/` functions take and return plain floats in a fixed,
+**`codes/<code>/equations/` functions take and return plain floats in a
 consistent unit system: N, mm, MPa (= N/mm²), N·mm.** Each docstring states the
 expected unit per argument alongside the clause citation.
+
+*Amended 2026-08-29, on extracting the first module.* The system cannot be a
+single fixed one. ACI 318-19 publishes separately rounded coefficients for SI
+and US customary — `0.17*sqrt(f_c[MPa])` against `2*sqrt(f_c[psi])`, which
+differ by 2.3 % rather than being conversions of each other — and mento
+reproduces both because its validation suite checks against worked examples in
+both. So an equation whose coefficients differ takes an `imperial: bool`
+keyword and works in either (N, mm, MPa) or (lb, in, psi); the *unit system* is
+a parameter, the *units within it* are fixed and documented per argument. This
+is a property of the design codes, not of mento: an engineer comparing the two
+forms against the printed code should find both, unconverted.
 
 **pint stays everywhere users touch mento.** Materials, forces, sections,
 settings, and the result dataclasses of ADR-0001 keep Quantities. The checker
