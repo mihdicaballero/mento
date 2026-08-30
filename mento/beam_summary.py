@@ -11,6 +11,7 @@ from mento.material import (
 from mento.forces import Forces
 from mento.beam import RectangularBeam
 from mento.codes.registry import design_code
+from mento.results import FAIL_MARK, PASS_MARK
 from mento import mm, cm, kN, MPa, m, inch, ft, kNm
 from mento.node import Node
 from mento.reports.summaries import beam_summary_doc
@@ -320,7 +321,7 @@ class BeamSummary:
                 # Determine status
                 dcr_values = [results_dict["DCRb,top"], results_dict["DCRb,bot"], results_dict["DCRv"]]
                 all_dcrs_ok = all(v < 1 for v in dcr_values)
-                results_dict["Status"] = "✅" if all_dcrs_ok else "❌"
+                results_dict["Status"] = PASS_MARK if all_dcrs_ok else FAIL_MARK
 
             # Add the results to the list
             results_list.append(results_dict)

@@ -9,13 +9,16 @@ import pytest
 import pandas as pd
 import copy
 import warnings
+from typing import Any, Optional
+
+from docx.oxml.ns import qn
 from pathlib import Path
 
 from mento import MPa, mm, cm, kN, kNm, m
 from mento.beam_summary import BeamSummary
 from mento.material import Concrete_ACI_318_19, SteelBar, Concrete_EN_1992_2004
 from mento.node import Node
-from mento.results import DocumentBuilder
+from mento.results import DocumentBuilder, FAIL_MARK, PASS_MARK
 
 # Suppress the specific ACI warning for all tests
 pytestmark = pytest.mark.filterwarnings("ignore::UserWarning")
@@ -1069,3 +1072,156 @@ def test_deprecated_summary_module_still_exports_beam_summary():
     assert legacy.BeamSummary is BeamSummary
     assert any(issubclass(w.category, DeprecationWarning) for w in caught)
     assert any("beam_summary" in str(w.message) for w in caught)
+
+
+# ---------------------------------------------------------------------------
+# The Word "Design Check Summary" table
+# ---------------------------------------------------------------------------
+
+
+def _built_document(summary: BeamSummary, monkeypatch: pytest.MonkeyPatch) -> Any:
+    """Build the Word summary and hand back the document instead of saving it."""
+    captured: list = []
+    monkeypatch.setattr(DocumentBuilder, "save", lambda self, *_: captured.append(self.doc))
+    summary.results_detailed_doc(index=1)
+    return captured[0]
+
+
+def _rows(table: Any) -> list:
+    return [[cell.text for cell in row.cells] for row in table.rows]
+
+
+def _cell_fill(cell: Any) -> Optional[str]:
+    """The shading colour of a table cell, or None if it has none."""
+    tc_pr = cell._element.find(qn("w:tcPr"))
+    if tc_pr is None:
+        return None
+    shd = tc_pr.find(qn("w:shd"))
+    return None if shd is None else shd.get(qn("w:fill"))
+
+
+def test_check_summary_table_carries_only_the_reporting_columns(
+    beam_summary: BeamSummary, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The closing table answers "did every beam pass, and on what".
+
+    The required-area and capacity columns are left out on purpose: the flexure
+    and shear tables above already report them in full, and repeating them here
+    pushed the table off the page.
+    """
+    table = _built_document(beam_summary, monkeypatch).tables[-1]
+
+    assert _rows(table)[0] == [
+        "Beam",
+        "b",
+        "h",
+        "As,top",
+        "As,bot",
+        "Av",
+        "Mu",
+        "Vu",
+        "Nu",
+        "DCRb,top",
+        "DCRb,bot",
+        "DCRv",
+        "Status",
+    ]
+    # The units row survives the column selection.
+    assert _rows(table)[1][:3] == ["", "cm", "cm"]
+    assert _rows(table)[1][6:9] == ["kNm", "kN", "kN"]
+
+
+def test_check_summary_table_uses_the_design_code_names_for_the_demands(
+    sample_steel: SteelBar, sample_input_dataframe: pd.DataFrame, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """EN reports M_Ed / V_Ed / N_Ed where ACI reports Mu / Vu / Nu."""
+    summary = BeamSummary(
+        concrete=Concrete_EN_1992_2004(name="C25/30", f_c=25 * MPa),
+        steel_bar=sample_steel,
+        beam_list=sample_input_dataframe,
+    )
+    header = _rows(_built_document(summary, monkeypatch).tables[-1])[0]
+
+    assert header[6:9] == ["MEd", "VEd", "NEd"]
+
+
+def test_the_status_column_is_shaded_green_when_it_passes(
+    beam_summary: BeamSummary, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A reader scans the summary for red rather than reading every tick."""
+    table = _built_document(beam_summary, monkeypatch).tables[-1]
+    status_idx = len(table.columns) - 1
+
+    verdicts = [(row.cells[0].text, row.cells[status_idx]) for row in table.rows]
+    header_label, header_cell = verdicts[0]
+    units_label, units_cell = verdicts[1]
+
+    # Neither the header nor the units row carries a verdict, so neither is shaded.
+    assert header_cell.text == "Status"
+    assert _cell_fill(header_cell) is None
+    assert units_cell.text == ""
+    assert _cell_fill(units_cell) is None
+
+    beams = verdicts[2:]
+    assert beams, "the fixture produced no beam rows"
+    for label, cell in beams:
+        expected = "C6EFCE" if cell.text == PASS_MARK else "FFC7CE"
+        assert _cell_fill(cell) == expected, f"{label} verdict {cell.text!r} was not shaded"
+
+
+def test_a_beam_that_fails_is_shaded_red(
+    sample_concrete: Concrete_ACI_318_19, sample_steel: SteelBar, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The colouring has to distinguish, not just decorate."""
+    # The second beam is deliberately far too small for its demand.
+    beam_list = pd.DataFrame(
+        {
+            "Label": ["", "passes", "fails"],
+            "Comb.": ["", "ELU 1", "ELU 2"],
+            "b": ["cm", 25, 20],
+            "h": ["cm", 50, 30],
+            "cc": ["mm", 25, 25],
+            "Nx": ["kN", 0, 0],
+            "Vz": ["kN", 40, 250],
+            "My": ["kNm", 40, 200],
+            "ns": ["", 1, 1],
+            "dbs": ["mm", 8, 6],
+            "sl": ["cm", 20, 25],
+            "n1": ["", 3, 2],
+            "db1": ["mm", 16, 8],
+            "n2": ["", 0, 0],
+            "db2": ["mm", 0, 0],
+            "n3": ["", 0, 0],
+            "db3": ["mm", 0, 0],
+            "n4": ["", 0, 0],
+            "db4": ["mm", 0, 0],
+        }
+    )
+    summary = BeamSummary(concrete=sample_concrete, steel_bar=sample_steel, beam_list=beam_list)
+    summary.check()
+    table = _built_document(summary, monkeypatch).tables[-1]
+    status_idx = len(table.columns) - 1
+
+    by_label = {row.cells[0].text: row.cells[status_idx] for row in table.rows}
+    assert by_label["passes"].text == PASS_MARK
+    assert _cell_fill(by_label["passes"]) == "C6EFCE"
+    assert by_label["fails"].text == FAIL_MARK
+    assert _cell_fill(by_label["fails"]) == "FFC7CE"
+
+
+def test_the_all_beam_tables_are_set_a_point_smaller(
+    beam_summary: BeamSummary, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Flexure, shear and the closing check table are much wider than the text."""
+    doc = _built_document(beam_summary, monkeypatch)
+
+    for table in doc.tables[-3:]:
+        sizes = {
+            run.font.size.pt
+            for row in table.rows
+            for cell in row.cells
+            for paragraph in cell.paragraphs
+            for run in paragraph.runs
+            if run.font.size is not None
+        }
+        assert sizes == {8.0}, f"expected 8 pt throughout, found {sizes}"

@@ -27,6 +27,11 @@ if TYPE_CHECKING:
     from mento.shear_wall_summary import ShearWallSummary
 
 
+#: The all-beams tables are much wider than the running text, so they are set
+#: a point smaller to keep every column on the page.
+SUMMARY_FONT_SIZE = 8
+
+
 def _details(value: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     """The detail tables a check leaves on the element.
 
@@ -188,6 +193,7 @@ def beam_summary_doc(self: "BeamSummary", index: int = 1) -> None:
     doc_builder.add_table_data(
         df_flex_all,
         column_widths=[Cm(2), Cm(2), Cm(2), Cm(2), Cm(2), Cm(1.5), Cm(1.5), Cm(1.5), Cm(1.5), Cm(1.5), Cm(1.5)],
+        font_size=SUMMARY_FONT_SIZE,
     )
 
     doc_builder.add_heading("Shear Results", level=3)
@@ -202,12 +208,50 @@ def beam_summary_doc(self: "BeamSummary", index: int = 1) -> None:
     # two lists only ever differed by the columns a code drops above.
     n = len(df_shear_all.columns)
     widths = [Cm(2)] * min(5, n) + [Cm(1.5)] * max(0, min(6, n - 5)) + [Cm(2)] * max(0, n - 11)
-    doc_builder.add_table_data(df_shear_all, column_widths=widths)
+    doc_builder.add_table_data(df_shear_all, column_widths=widths, font_size=SUMMARY_FONT_SIZE)
 
     doc_builder.add_heading("Design Check Summary", level=3)
-    df_check = self.check()
-    doc_builder.add_table_data(
-        df_check, column_widths=[Cm(1.7), Cm(1), Cm(1), Cm(3), Cm(3), Cm(2), Cm(1.5), Cm(1.5), Cm(1.2), Cm(1.2)]
+    # The closing table answers one question -- did every beam pass, and on
+    # what. It carries the geometry, the reinforcement actually detailed, the
+    # governing demands and the three DCRs, and leaves out the required-area
+    # and capacity columns that the flexure and shear tables above already
+    # report in full. The demand columns are the active code's own names.
+    cols = design_code(self.concrete).summary_columns
+    df_check = self.check()[
+        [
+            "Beam",
+            "b",
+            "h",
+            "As,top",
+            "As,bot",
+            "Av",
+            cols["moment_demand"],
+            cols["shear_demand"],
+            cols["axial_demand"],
+            "DCRb,top",
+            "DCRb,bot",
+            "DCRv",
+            "Status",
+        ]
+    ]
+    doc_builder.add_table_status(
+        df_check,
+        column_widths=[
+            Cm(1.4),
+            Cm(0.8),
+            Cm(0.8),
+            Cm(1.9),
+            Cm(1.9),
+            Cm(1.9),
+            Cm(1.2),
+            Cm(1.1),
+            Cm(1.1),
+            Cm(1.3),
+            Cm(1.3),
+            Cm(1.1),
+            Cm(1.0),
+        ],
+        font_size=SUMMARY_FONT_SIZE,
     )
 
     # Save

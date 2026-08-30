@@ -12,6 +12,12 @@ from pandas.io.formats.style import Styler
 
 from mento.i18n import DEFAULT_LANGUAGE, translate, translate_dataframe, translate_table
 
+#: The verdict marks a summary's Status column carries. Named because the Word
+#: builder shades that column by matching them: a literal on one side and a
+#: different literal on the other would simply stop colouring, silently.
+PASS_MARK = "✅"
+FAIL_MARK = "❌"
+
 CUSTOM_COLORS = {
     "blue": "#1f77b4",  # Default Matplotlib blue
     "red": "#d62728",  # Default Matplotlib red
@@ -475,8 +481,51 @@ class DocumentBuilder:
 
         return table
 
-    def add_table_data(self, df: pd.DataFrame, column_widths=[Cm(12), Cm(2), Cm(2), Cm(2)]) -> None:
-        self.add_table(df, column_widths, font_size=self.font_size)
+    def add_table_data(
+        self,
+        df: pd.DataFrame,
+        column_widths=[Cm(12), Cm(2), Cm(2), Cm(2)],
+        font_size: Optional[float] = None,
+    ) -> None:
+        """Add a data table. ``font_size`` overrides the document default.
+
+        Wide summary tables need a smaller face than the running text to fit
+        the page, so the caller can ask for one.
+        """
+        self.add_table(df, column_widths, font_size=font_size or self.font_size)
+
+    def add_table_status(
+        self,
+        df: pd.DataFrame,
+        column_widths: List[Cm],
+        status_column: str = "Status",
+        font_size: Optional[float] = None,
+    ) -> None:
+        """Add a table whose pass/fail column is shaded green or red.
+
+        The same colours :meth:`add_table_dcr` gives the governing row of a
+        detailed result, applied per row to one column instead: a reader scans
+        the summary for red rather than reading every tick.
+
+        Only cells actually holding a verdict are shaded, so the units row --
+        which carries an empty string there -- is left alone.
+        """
+        self.add_table(df, column_widths, font_size=font_size or self.font_size)
+        table = self.doc.tables[-1]
+        status_idx = df.columns.get_loc(status_column)
+
+        for row_offset in range(df.shape[0]):
+            verdict = str(df.iat[row_offset, status_idx])
+            if verdict not in (PASS_MARK, FAIL_MARK):
+                continue
+            passed = verdict == PASS_MARK
+            shading_color = "C6EFCE" if passed else "FFC7CE"
+            font_color = "006100" if passed else "9C0006"
+            cell = table.rows[row_offset + 1].cells[status_idx]
+            cell._element.get_or_add_tcPr().append(parse_xml(f'<w:shd {nsdecls("w")} w:fill="{shading_color}"/>'))
+            for paragraph in cell.paragraphs:
+                for run in paragraph.runs:
+                    run.font.color.rgb = RGBColor.from_string(font_color)
 
     def add_table_dcr(self, df: pd.DataFrame) -> None:
         """
