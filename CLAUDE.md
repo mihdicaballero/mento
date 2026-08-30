@@ -213,9 +213,13 @@ node.results           # combined Markdown summary (IPython)
 
 ```python
 # Longitudinal (flexure)
-beam._n1_b, beam._d_b1_b   # bottom layer 1: count, diameter (mm)
-beam._n2_b, beam._d_b2_b   # bottom layer 2
-beam._n1_t, beam._d_b1_t   # top layer 1
+# Layer 1 = (_n1, _d_b1) + (_n2, _d_b2);  Layer 2 = (_n3, _d_b3) + (_n4, _d_b4).
+# The pairs within a layer allow mixed diameters side by side in that same layer.
+beam._n1_b, beam._d_b1_b   # bottom layer 1, group A: count, diameter (mm)
+beam._n2_b, beam._d_b2_b   # bottom layer 1, group B (same layer as _n1_b)
+beam._n3_b, beam._d_b3_b   # bottom layer 2, group A
+beam._n4_b, beam._d_b4_b   # bottom layer 2, group B
+beam._n1_t, beam._d_b1_t   # top layer 1, group A (same _n1.._n4 scheme)
 beam._A_s_bot               # total As bottom (Quantity, cm²)
 beam._A_s_top               # total As top   (Quantity, cm²)
 beam._A_s_req_bot           # required As bottom
