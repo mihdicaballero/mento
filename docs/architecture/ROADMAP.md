@@ -323,6 +323,14 @@ worth doing opportunistically when touching a file, but it is not a milestone.
 The general lesson for the remaining phases: measure the cheap fix *after* the
 structural one, not before — removing work beats speeding it up.
 
+*Amended 2026-08-30, from the check paths (Phase 2b):* "the fix is worth ~54 µs
+per call" holds only for conversions that **do not change units**. Those cost
+50 µs as a string against 4 µs as a unit object. A conversion that really
+converts costs ~58 µs either way, and the fix buys nothing. So the 111
+string-based calls left here are worth roughly that much only to the extent
+they are no-ops — which is exactly the case that turned out to dominate EN
+flexure. Worth re-counting on this path with that split in mind.
+
 **Exit:** partially met. `design_flexure` is 72 ms against a 50 ms target. What
 remains is not a hot spot but ~7,600 Quantity constructions spread thin across
 `flexure_design.py` and the ACI module — no profile peak is left in mento
@@ -646,9 +654,61 @@ counterproposal flagged (371 of them across `mento/`), worth ~24 % of profiled
 time. There is no calculation left to optimize; ADR-0005's boundary is the only
 thing between here and the target.
 
-**That is the performance track's job, not this phase's.** Phase 2b was about
-immutability and it achieved it. The 5 s target moves to the precompute work,
-which now has an unambiguous target to aim at and a clean path to measure on.
+**Done (2026-08-30): the precompute, and the target is met.** The float view
+of §5 landed, and with it the 5 s target:
+
+| values path | before | after | factor | 20,000 checks |
+| --- | --- | --- | --- | --- |
+| ACI shear | 1.432 ms | **0.090 ms** | 16.0× | 1.8 s |
+| ACI flexure | 1.114 ms | **0.184 ms** | 6.1× | 3.7 s |
+| EN shear | 1.044 ms | **0.113 ms** | 9.2× | 2.3 s |
+| EN flexure | 1.105 ms | **0.077 ms** | 14.3× | 1.5 s |
+
+Shear *and* flexure on one section: 2.35 ms → **0.23 ms**, so the §3.3 loop of
+20,000 sections runs in **4.6 s** against the 5 s target. **Phase 2b's exit
+criteria are both met.**
+
+What it took was not a new layer. ADR-0005 already said floats in the
+equations and pint at the boundary; what was missing is that the *state* was
+still pint, so each helper unwrapped its inputs and re-wrapped its output and
+the boundary was re-crossed at every step. All five check states hold floats
+now, `mento/precompute.py` publishes the section's geometry and materials the
+same way — converted once, rebuilt only when the section changes — and pint
+reappears only in `apply_*_state` and the frozen public results.
+
+**Two measurements worth keeping, because they point opposite ways.**
+
+*A conversion is expensive only when it converts.* 58 µs when the units
+actually change, 4 µs when they do not. The 19 unit-changing conversions in an
+ACI shear check were 1.17 ms of its 1.43 ms; nothing else was.
+
+*But a unit spelled as a string is parsed every time.* This is where the
+counterproposal's `.to("cm")` → `.to(cm)` point is right, and where this
+roadmap first got it wrong:
+
+| | string | unit object |
+| --- | --- | --- |
+| no-op (`f_c.to("MPa")` on MPa) | 50.34 µs | **3.97 µs** |
+| real (`d.to("mm")` from cm) | 59.09 µs | 60.34 µs |
+
+Parsing costs ~46 µs. Beside a real conversion's work it is invisible — which
+is why the first measurement, taken only on real conversions, concluded the
+spelling did not matter. On a *no-op* it is the whole cost. EN flexure stalled
+at 0.392 ms with a single conversion left, and the culprit was
+`Concrete_EN_1992_2004._lambda_factor` / `._eta_factor` calling
+`self._f_ck.to("MPa")` six times per check on a value fixed at construction.
+Converting it once took EN flexure to 0.077 ms. Neither check path parses a
+unit string any more.
+
+**The eager refresh is what keeps the guards strict.** The float view is
+rebuilt from `_update_effective_heights` — the one place every geometry and
+reinforcement change funnels through — rather than filled lazily on first use.
+A lazily-filled memo would appear in the section's `__dict__` after a check and
+be indistinguishable, to the untouched-section guards, from a check writing
+its results back. Seven refreshes per design against thousands of conversions
+saved per check, so there is nothing to trade off. Two tests pin it, both
+confirmed by sabotaging the refresh: a stale view would be a silently wrong
+answer, not a crash.
 
 ### Phase 3 — Extract presentation — **done 2026-08-30**
 
