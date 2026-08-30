@@ -1,3 +1,4 @@
+import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, List, Optional
 
@@ -44,6 +45,15 @@ class Section:
     label: Optional[str] = field(default=None, kw_only=True)
 
     def __post_init__(self) -> None:
+        # Concrete cover must be a physical length.
+        if not isinstance(self.c_c, Quantity) or not self.c_c.check("[length]"):
+            raise TypeError("c_c must be a length Quantity.")
+
+        cover_mm = self.c_c.to("mm").magnitude
+        if not math.isfinite(cover_mm) or cover_mm < 0:
+            raise ValueError("c_c must be greater than or equal to zero.")
+
+        # Assign the section ID only after validating the cover.
         Section._last_id += 1
         self._id = Section._last_id
 

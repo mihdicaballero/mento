@@ -127,6 +127,100 @@ def build_metric_beam(settings: BeamSettings | None = None) -> RectangularBeam:
     )
 
 
+@pytest.mark.parametrize(
+    ("n_stirrups", "d_b", "s_l", "expected_exception", "message"),
+    [
+        pytest.param(0, 8 * mm, 20 * cm, ValueError, "n_stirrups", id="zero-stirrups"),
+        pytest.param(-1, 8 * mm, 20 * cm, ValueError, "n_stirrups", id="negative-stirrups"),
+        pytest.param(1.5, 8 * mm, 20 * cm, TypeError, "n_stirrups", id="float-stirrups"),
+        pytest.param(True, 8 * mm, 20 * cm, TypeError, "n_stirrups", id="boolean-stirrups"),
+        pytest.param(1, 0 * mm, 20 * cm, ValueError, "d_b", id="zero-diameter"),
+        pytest.param(1, -8 * mm, 20 * cm, ValueError, "d_b", id="negative-diameter"),
+        pytest.param(1, 8 * mm, 0 * cm, ValueError, "s_l", id="zero-spacing"),
+        pytest.param(1, 8 * mm, -20 * cm, ValueError, "s_l", id="negative-spacing"),
+        pytest.param(1, 8 * MPa, 20 * cm, TypeError, "d_b", id="diameter-wrong-units"),
+        pytest.param(1, 8 * mm, 20 * MPa, TypeError, "s_l", id="spacing-wrong-units"),
+        pytest.param(1, 8, 20 * cm, TypeError, "d_b", id="diameter-not-quantity"),
+        pytest.param(1, 8 * mm, 20, TypeError, "s_l", id="spacing-not-quantity"),
+        pytest.param(
+            1,
+            float("nan") * mm,
+            20 * cm,
+            ValueError,
+            "d_b",
+            id="nan-diameter",
+        ),
+        pytest.param(
+            1,
+            8 * mm,
+            float("inf") * cm,
+            ValueError,
+            "s_l",
+            id="infinite-spacing",
+        ),
+    ],
+)
+def test_set_transverse_rebar_rejects_invalid_inputs(
+    n_stirrups,
+    d_b,
+    s_l,
+    expected_exception,
+    message,
+) -> None:
+    beam = build_metric_beam()
+
+    with pytest.raises(expected_exception, match=message):
+        beam.set_transverse_rebar(
+            n_stirrups=n_stirrups,
+            d_b=d_b,
+            s_l=s_l,
+        )
+
+
+def test_set_transverse_rebar_accepts_numpy_integer() -> None:
+    beam = build_metric_beam()
+
+    beam.set_transverse_rebar(
+        n_stirrups=np.int64(1),
+        d_b=8 * mm,
+        s_l=20 * cm,
+    )
+
+    assert beam._stirrup_n == 1
+    assert type(beam._stirrup_n) is int
+    assert beam._A_v.to("cm**2/m").magnitude == pytest.approx(5.0265, rel=1e-4)
+
+
+def test_set_transverse_rebar_invalid_input_preserves_previous_rebar() -> None:
+    beam = build_metric_beam()
+    beam.set_transverse_rebar(
+        n_stirrups=1,
+        d_b=8 * mm,
+        s_l=20 * cm,
+    )
+
+    previous_rebar = (
+        beam._stirrup_n,
+        beam._stirrup_d_b,
+        beam._stirrup_s_l,
+        beam._A_v,
+    )
+
+    with pytest.raises(ValueError, match="s_l"):
+        beam.set_transverse_rebar(
+            n_stirrups=2,
+            d_b=10 * mm,
+            s_l=0 * cm,
+        )
+
+    assert (
+        beam._stirrup_n,
+        beam._stirrup_d_b,
+        beam._stirrup_s_l,
+        beam._A_v,
+    ) == previous_rebar
+
+
 def test_beam_respects_provided_settings_unit_system() -> None:
     settings = BeamSettings(unit_system="imperial", max_bars_per_layer=3)
     beam = build_metric_beam(settings=settings)

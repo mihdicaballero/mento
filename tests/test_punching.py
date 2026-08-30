@@ -176,6 +176,26 @@ class TestPunchingSlab:
         # d_avg = 10 - 1 - 0.625 = 8.375 inch
         assert slab.d_avg.to("inch").magnitude == pytest.approx(8.375)
 
+    def test_rejects_non_positive_thickness(self, conc_aci, steel):
+        with pytest.raises(ValueError, match="h must be greater than zero"):
+            PunchingSlab(concrete=conc_aci, steel_bar=steel, h=0 * cm, c_c=25 * mm)
+
+    def test_rejects_negative_cover(self, conc_aci, steel):
+        with pytest.raises(ValueError, match="c_c must be greater than or equal to zero"):
+            PunchingSlab(concrete=conc_aci, steel_bar=steel, h=25 * cm, c_c=-10 * mm)
+
+    def test_rejects_cover_that_consumes_the_depth(self, conc_aci, steel):
+        with pytest.raises(ValueError, match="d_avg must be greater than zero"):
+            PunchingSlab(concrete=conc_aci, steel_bar=steel, h=10 * cm, c_c=9 * cm)
+
+    def test_rejects_non_length_thickness(self, conc_aci, steel):
+        with pytest.raises(TypeError, match="h must be a length Quantity"):
+            PunchingSlab(concrete=conc_aci, steel_bar=steel, h=25, c_c=25 * mm)
+
+    def test_rejects_non_length_cover(self, conc_aci, steel):
+        with pytest.raises(TypeError, match="c_c must be a length Quantity"):
+            PunchingSlab(concrete=conc_aci, steel_bar=steel, h=25 * cm, c_c=25)
+
 
 # ---------------------------------------------------------------------------
 # Opening

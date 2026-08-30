@@ -45,6 +45,43 @@ def test_section_initialization(basic_section: Section, concrete_c25: Concrete, 
     assert isinstance(basic_section.c_c, Quantity)
 
 
+@pytest.mark.parametrize(
+    ("c_c", "expected_exception"),
+    [
+        pytest.param(-1 * mm, ValueError, id="negative-cover"),
+        pytest.param(float("nan") * mm, ValueError, id="nan-cover"),
+        pytest.param(float("inf") * mm, ValueError, id="infinite-cover"),
+        pytest.param(25 * MPa, TypeError, id="cover-wrong-units"),
+        pytest.param(25, TypeError, id="cover-not-quantity"),
+    ],
+)
+def test_section_rejects_invalid_cover(
+    concrete_c25: Concrete,
+    steel_b500s: SteelBar,
+    c_c,
+    expected_exception,
+) -> None:
+    with pytest.raises(expected_exception, match="c_c"):
+        Section(
+            concrete=concrete_c25,
+            steel_bar=steel_b500s,
+            c_c=c_c,
+        )
+
+
+def test_section_accepts_zero_cover(
+    concrete_c25: Concrete,
+    steel_b500s: SteelBar,
+) -> None:
+    section = Section(
+        concrete=concrete_c25,
+        steel_bar=steel_b500s,
+        c_c=0 * mm,
+    )
+
+    assert section.c_c == 0 * mm
+
+
 def test_section_default_node_and_label() -> None:
     """Test that optional attributes have correct default values."""
     concrete = Concrete("C30")
