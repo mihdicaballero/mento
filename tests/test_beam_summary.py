@@ -19,7 +19,7 @@ from mento import MPa, mm, cm, kN, kNm, m
 from mento.beam_summary import BeamSummary
 from mento.material import Concrete_ACI_318_19, SteelBar, Concrete_EN_1992_2004
 from mento.node import Node
-from mento.results import DocumentBuilder, FAIL_MARK, PASS_MARK
+from mento.results import DocumentBuilder, FAIL_MARK, PASS_MARK, VERDICT_COLUMN
 
 # Suppress the specific ACI warning for all tests
 pytestmark = pytest.mark.filterwarnings("ignore::UserWarning")
@@ -1125,7 +1125,7 @@ def test_check_summary_table_carries_only_the_reporting_columns(
         "DCRb,top",
         "DCRb,bot",
         "DCRv",
-        "Status",
+        VERDICT_COLUMN,
     ]
     # The units row survives the column selection.
     assert _rows(table)[1][:3] == ["", "cm", "cm"]
@@ -1146,7 +1146,7 @@ def test_check_summary_table_uses_the_design_code_names_for_the_demands(
     assert header[6:9] == ["MEd", "VEd", "NEd"]
 
 
-def test_the_status_column_is_shaded_green_when_it_passes(
+def test_the_verdict_column_is_shaded_green_when_it_passes(
     beam_summary: BeamSummary, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A reader scans the summary for red rather than reading every tick."""
@@ -1158,7 +1158,7 @@ def test_the_status_column_is_shaded_green_when_it_passes(
     units_label, units_cell = verdicts[1]
 
     # Neither the header nor the units row carries a verdict, so neither is shaded.
-    assert header_cell.text == "Status"
+    assert header_cell.text == VERDICT_COLUMN
     assert _cell_fill(header_cell) is None
     assert units_cell.text == ""
     assert _cell_fill(units_cell) is None
@@ -1283,7 +1283,7 @@ def test_limit_check_verdicts_are_shaded_like_the_summary(
     """A limit check is a pass/fail statement too, so it gets the same colours."""
     doc = _built_document(beam_summary, monkeypatch)
 
-    limit_tables = [t for t in doc.tables if t.rows[0].cells[-1].text == "Ok?"]
+    limit_tables = [t for t in doc.tables if t.rows[0].cells[0].text == "Check"]
     assert limit_tables, "the report produced no limit-check tables"
 
     verdicts = []
@@ -1334,7 +1334,7 @@ def test_a_failed_limit_check_is_shaded_red(
     summary.check()
     doc = _built_document(summary, monkeypatch)
 
-    limit_tables = [t for t in doc.tables if t.rows[0].cells[-1].text == "Ok?"]
+    limit_tables = [t for t in doc.tables if t.rows[0].cells[0].text == "Check"]
     by_check = {
         row.cells[0].text: row.cells[len(table.columns) - 1] for table in limit_tables for row in table.rows[1:]
     }
@@ -1360,3 +1360,105 @@ def test_the_shear_summary_drops_the_redundant_capacity_tick(
     assert "Vu≤ØVn" not in header
     assert "Vu≤ØVmax" in header, "the maximum-capacity check is still worth reporting"
     assert "DCR" in header
+
+
+def test_beam_data_columns_are_sized_to_what_they_hold(
+    beam_summary: BeamSummary, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One column per input field, so the widths are measured, not listed.
+
+    A hand-written list that fell short of the column count left the last
+    columns at a fallback width -- making the narrowest data in the table the
+    widest column -- and squeezed everything else to fit.
+    """
+    doc = _built_document(beam_summary, monkeypatch)
+    # Beam Data is the first of the four all-beams tables.
+    table = doc.tables[-4]
+    header = [cell.text for cell in table.rows[0].cells]
+    assert header[0] == "Label" and header[-1] == "db4", f"expected Beam Data, got {header}"
+
+    widths = [Emu(cell.width).cm for cell in table.rows[0].cells]
+    assert len(widths) == len(header)
+    # The rebar-count columns hold one or two characters; none of them may be
+    # wider than the label column, which holds the beam name.
+    assert max(widths[-4:]) <= widths[0]
+    assert _table_width_cm(table) <= _usable_width_cm(doc) + 0.05
+
+
+def test_forces_are_reported_to_one_decimal_and_dcrs_to_two(
+    beam_summary: BeamSummary, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Display precision, chosen for the column width a report has to fit."""
+    doc = _built_document(beam_summary, monkeypatch)
+    table = doc.tables[-1]
+    header = [cell.text for cell in table.rows[0].cells]
+    units = [cell.text for cell in table.rows[1].cells]
+
+    for row in table.rows[2:]:
+        for name, unit, cell in zip(header, units, row.cells):
+            text = cell.text
+            if "." not in text:
+                continue
+            decimals = len(text.split(".")[1])
+            if name.startswith("DCR"):
+                assert decimals <= 2, f"{name}={text} carries more than two decimals"
+            elif unit in ("kN", "kNm"):
+                assert decimals <= 1, f"{name}={text} carries more than one decimal"
+
+
+def test_the_frames_themselves_keep_their_precision(beam_summary: BeamSummary) -> None:
+    """Rounding is for the page, not for the numbers.
+
+    The result frames are also the programmatic API, and the validation suite
+    compares them against Calcpad and ETABS references at more decimals than a
+    report shows -- so the rounding has to stay in the document builder.
+    """
+    shown = beam_summary.check()
+    dcr_values = [value for value in shown["DCRb,bot"][1:] if isinstance(value, float)]
+
+    assert dcr_values, "the summary reported no bottom DCR"
+    # Three decimals is what check() has always produced; the report shows two.
+    assert any(round(value, 2) != value for value in dcr_values), (
+        "check() lost precision -- the rounding leaked out of the report layer"
+    )
+
+
+def test_a_section_that_only_just_passes_is_not_reported_as_failing(
+    sample_concrete: Concrete_ACI_318_19, sample_steel: SteelBar
+) -> None:
+    """The verdict reads the DCR, not the rounded DCR the table prints.
+
+    This beam's shear DCR is 0.997 -- it passes, and it shows as 1.00 at the
+    two decimals the report has room for. Comparing the printed value against
+    1 would call it a failure.
+    """
+    beam_list = pd.DataFrame(
+        {
+            "Label": ["", "just-passes"],
+            "Comb.": ["", "ELU 1"],
+            "b": ["cm", 25],
+            "h": ["cm", 50],
+            "cc": ["mm", 25],
+            "Nx": ["kN", 0],
+            "Vz": ["kN", 145.392],
+            "My": ["kNm", 10],
+            "ns": ["", 1],
+            "dbs": ["mm", 8],
+            "sl": ["cm", 20],
+            "n1": ["", 3],
+            "db1": ["mm", 16],
+            "n2": ["", 0],
+            "db2": ["mm", 0],
+            "n3": ["", 0],
+            "db3": ["mm", 0],
+            "n4": ["", 0],
+            "db4": ["mm", 0],
+        }
+    )
+    summary = BeamSummary(concrete=sample_concrete, steel_bar=sample_steel, beam_list=beam_list)
+    results = summary.check()
+
+    beam = summary.nodes[0].section
+    assert 0.995 <= beam._DCRv < 1.0, f"the fixture stopped being a knife-edge case: {beam._DCRv}"
+    assert round(beam._DCRv, 2) == 1.0, "rounding no longer hides the margin, so this proves nothing"
+    assert results[VERDICT_COLUMN][1] == PASS_MARK

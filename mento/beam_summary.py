@@ -11,7 +11,7 @@ from mento.material import (
 from mento.forces import Forces
 from mento.beam import RectangularBeam
 from mento.codes.registry import design_code
-from mento.results import FAIL_MARK, PASS_MARK
+from mento.results import FAIL_MARK, PASS_MARK, VERDICT_COLUMN
 from mento import mm, cm, kN, MPa, m, inch, ft, kNm
 from mento.node import Node
 from mento.reports.summaries import beam_summary_doc
@@ -316,12 +316,15 @@ class BeamSummary:
 
                 # Assemble results_dict and units_row from the split dicts
                 results_dict = OrderedDict({**common_data, **code_specific_data})
-                units_row = pd.DataFrame([OrderedDict({**common_units, **code_specific_units, "Status": ""})])
+                units_row = pd.DataFrame([OrderedDict({**common_units, **code_specific_units, VERDICT_COLUMN: ""})])
 
-                # Determine status
-                dcr_values = [results_dict["DCRb,top"], results_dict["DCRb,bot"], results_dict["DCRv"]]
+                # Determine status from the values themselves, not from the
+                # rounded ones the table shows: a DCR of 0.997 reads as 1.00 at
+                # two decimals, and comparing that against 1 would report a
+                # section that passes as one that fails.
+                dcr_values = [beam._DCRb_top, beam._DCRb_bot, beam._DCRv]
                 all_dcrs_ok = all(v < 1 for v in dcr_values)
-                results_dict["Status"] = PASS_MARK if all_dcrs_ok else FAIL_MARK
+                results_dict[VERDICT_COLUMN] = PASS_MARK if all_dcrs_ok else FAIL_MARK
 
             # Add the results to the list
             results_list.append(results_dict)

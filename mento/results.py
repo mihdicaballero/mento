@@ -18,6 +18,71 @@ from mento.i18n import DEFAULT_LANGUAGE, translate, translate_dataframe, transla
 PASS_MARK = "✅"
 FAIL_MARK = "❌"
 
+#: What the pass/fail column is called. The limit-check tables already asked
+#: "Ok?", and the summaries agreeing with them keeps the column narrow.
+VERDICT_COLUMN = "Ok?"
+
+#: Decimals for the reported numbers. Forces and moments are quoted in kN and
+#: kN*m, where a second decimal is below what any of these calculations can
+#: claim and only widens the column; a DCR is a ratio around 1, where two
+#: decimals is the resolution a reader acts on.
+FORCE_DECIMALS = 1
+DCR_DECIMALS = 2
+
+#: The units a force or a moment is quoted in. A value in one of these is
+#: rounded to `FORCE_DECIMALS` for display.
+FORCE_DISPLAY_UNITS = {"kN", "kNm", "kN*m", "kN·m", "kip", "kip*ft", "kip·ft"}
+
+
+def _rounded(value: Any, decimals: int) -> Any:
+    """Round a float, and leave anything else -- a label, a tick -- alone."""
+    return round(value, decimals) if isinstance(value, float) else value
+
+
+def round_for_display(df: pd.DataFrame) -> pd.DataFrame:
+    """A copy of ``df`` with forces at one decimal and DCRs at two.
+
+    Display only, and deliberately so. The frames themselves keep the
+    precision they were built with, because they are also the programmatic
+    result and the validation suite compares them against Calcpad and ETABS
+    references at more decimals than a report has room to show.
+
+    Two shapes reach a Word table: a detail table, which carries the unit
+    beside each value, and an all-rows summary, which carries the units on its
+    first row. The unit is what decides, so a column of areas keeps its second
+    decimal either way.
+    """
+    out = df.copy()
+
+    if "Unit" in out.columns and "Value" in out.columns:
+        variables = out["Variable"].astype(str) if "Variable" in out.columns else pd.Series([""] * len(out))
+        for column in ("Value", "Min.", "Max."):
+            if column not in out.columns:
+                continue
+            out[column] = [
+                _rounded(value, DCR_DECIMALS)
+                if variable == "DCR"
+                else _rounded(value, FORCE_DECIMALS)
+                if str(unit) in FORCE_DISPLAY_UNITS
+                else value
+                for value, unit, variable in zip(out[column], out["Unit"], variables)
+            ]
+        return out
+
+    # A summary always carries its units on the first row; a frame without one
+    # is a bug in whoever built it, and should say so rather than be skipped.
+    units = out.iloc[0]
+    for column in out.columns:
+        if str(column).startswith("DCR"):
+            decimals = DCR_DECIMALS
+        elif str(units[column]) in FORCE_DISPLAY_UNITS:
+            decimals = FORCE_DECIMALS
+        else:
+            continue
+        out[column] = [_rounded(value, decimals) for value in out[column]]
+    return out
+
+
 #: Column widths for a per-element detail table: a description, then a symbol,
 #: a value and a unit. Sized to the longest description these tables carry
 #: ("Depth of equivalent strength block ratio", 40 characters) rather than to
@@ -429,10 +494,12 @@ class DocumentBuilder:
         """
         n_columns = len(table.columns)
         widths = list(column_widths[:n_columns])
-        # A caller that gave fewer widths than there are columns used to leave
+        # A caller that gives fewer widths than there are columns used to leave
         # the rest at Word's default, which is what made the flexure limit
-        # checks wider than the page.
-        widths += [Cm(2)] * (n_columns - len(widths))
+        # checks wider than the page. Missing ones repeat the last width given:
+        # a trailing run of similar columns is the usual shape, and a fixed
+        # fallback made the narrowest columns of a wide table the widest.
+        widths += [widths[-1]] * (n_columns - len(widths))
 
         # Scale down to the text width when the total overruns it, keeping the
         # proportions the caller asked for. A table narrower than the page is
@@ -482,7 +549,7 @@ class DocumentBuilder:
         """
         from docx.shared import Pt
 
-        df = translate_dataframe(df, self.language)
+        df = translate_dataframe(round_for_display(df), self.language)
 
         # --- Create and style table ---
         table = self.doc.add_table(rows=df.shape[0] + 1, cols=df.shape[1])
@@ -518,6 +585,27 @@ class DocumentBuilder:
         spacer.paragraph_format.space_after = Pt(0)
 
         return table
+
+    def content_widths(self, df: pd.DataFrame, min_cm: float = 0.75) -> List[Cm]:
+        """Widths proportional to the longest text in each column.
+
+        The wide all-rows tables -- one line per beam or wall -- have too many
+        columns to size by hand, and a hand-written list that falls short of
+        the column count is not visibly wrong until it is rendered. Measuring
+        the frame cannot fall short.
+
+        The result fills the text column exactly, so these tables still span
+        the line, which is what distinguishes them from the per-element ones.
+        """
+        section = self.doc.sections[0]
+        usable_cm = Emu(section.page_width - section.left_margin - section.right_margin).cm
+
+        lengths = [max([len(str(column))] + [len(str(value)) for value in df[column]]) for column in df.columns]
+        # A floor so a one-character column is still readable, then the rest of
+        # the width shared out in proportion to what each column has to show.
+        spare = usable_cm - min_cm * len(lengths)
+        total = sum(lengths)
+        return [Cm(min_cm + spare * length / total) for length in lengths]
 
     def add_table_data(
         self,
@@ -556,7 +644,7 @@ class DocumentBuilder:
         self,
         df: pd.DataFrame,
         column_widths: List[Cm],
-        status_column: str = "Status",
+        status_column: str = VERDICT_COLUMN,
         font_size: Optional[float] = None,
     ) -> None:
         """Add a table whose pass/fail column is shaded green or red.
@@ -594,7 +682,7 @@ class DocumentBuilder:
                 for run in paragraph.runs:
                     run.font.color.rgb = RGBColor.from_string(font_color)
 
-    def add_table_min_max(self, df: pd.DataFrame, verdict_column: str = "Ok?") -> None:
+    def add_table_min_max(self, df: pd.DataFrame, verdict_column: str = VERDICT_COLUMN) -> None:
         """Add a limit-check table, with its verdict column shaded.
 
         Same colouring as the summary's Status column: a limit check is a

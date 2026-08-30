@@ -18,7 +18,7 @@ from docx.shared import Cm
 
 from mento._version import __version__ as MENTO_VERSION
 from mento.codes.registry import design_code
-from mento.results import DocumentBuilder
+from mento.results import DocumentBuilder, VERDICT_COLUMN
 
 if TYPE_CHECKING:
     from mento.beam import RectangularBeam
@@ -167,25 +167,13 @@ def beam_summary_doc(self: "BeamSummary", index: int = 1) -> None:
     doc_builder.add_heading("Summary - All Beams", level=2)
     doc_builder.add_heading("Beam Data", level=3)
     beam_data_out = self.beam_list.fillna("")
+    # Measured rather than listed: this table has one column per input field,
+    # and the list it used to carry was four short of that, so the last four
+    # columns fell back to a default width and the rest were squeezed.
     doc_builder.add_table_data(
         beam_data_out,
-        column_widths=[
-            Cm(1),
-            Cm(1),
-            Cm(1),
-            Cm(1),
-            Cm(1),
-            Cm(1.5),
-            Cm(1.5),
-            Cm(1),
-            Cm(1),
-            Cm(1),
-            Cm(1),
-            Cm(1),
-            Cm(1),
-            Cm(1),
-            Cm(1),
-        ],
+        column_widths=doc_builder.content_widths(beam_data_out),
+        font_size=SUMMARY_FONT_SIZE,
     )
 
     doc_builder.add_heading("Flexure Results", level=3)
@@ -231,7 +219,7 @@ def beam_summary_doc(self: "BeamSummary", index: int = 1) -> None:
             "DCRb,top",
             "DCRb,bot",
             "DCRv",
-            "Status",
+            VERDICT_COLUMN,
         ]
     ]
     doc_builder.add_table_status(
@@ -296,17 +284,23 @@ def wall_summary_doc(self: "ShearWallSummary", index: int = 1) -> None:
 
     doc_builder.add_heading("Wall Data", level=3)
     wall_data_out = self.wall_list.fillna("")
-    doc_builder.add_table_data(wall_data_out)
+    doc_builder.add_table_data(
+        wall_data_out, column_widths=doc_builder.content_widths(wall_data_out), font_size=SUMMARY_FONT_SIZE
+    )
 
     doc_builder.add_heading("Shear Results", level=3)
     df_shear_all = self.shear_results()
     cols_to_drop = [c for c in ["Vu≤ØVn,max", "Vu≤ØVn"] if c in df_shear_all.columns]
     df_shear_all = df_shear_all.drop(columns=cols_to_drop)
-    doc_builder.add_table_data(df_shear_all)
+    doc_builder.add_table_data(
+        df_shear_all, column_widths=doc_builder.content_widths(df_shear_all), font_size=SUMMARY_FONT_SIZE
+    )
 
     doc_builder.add_heading("Design Check Summary", level=3)
     df_check = self.check()
-    doc_builder.add_table_data(df_check)
+    doc_builder.add_table_data(
+        df_check, column_widths=doc_builder.content_widths(df_check), font_size=SUMMARY_FONT_SIZE
+    )
 
     doc_builder.save(f"Shear_Wall_Summary_{self.concrete.design_code}.docx")
     print(f"✅ Results exported to Shear_Wall_Summary_{self.concrete.design_code}.docx")
