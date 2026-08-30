@@ -7,15 +7,24 @@ from pandas import DataFrame
 # from devtools import debug
 
 
+from mento.codes.en_1992_2004.equations import flexure as flexure_eq
+from mento.codes.en_1992_2004.equations import shear as shear_eq
 from mento.codes.flexure_design import _FaceDemand, _run_flexure_design
 from mento.material import Concrete_EN_1992_2004
 from mento.rebar import Rebar
-from mento.units import MPa, mm, kNm, dimensionless, kN, inch, cm
+from mento.units import MPa, mm, kNm, dimensionless, kN, N, inch
 from mento.forces import Forces
 
 
 if TYPE_CHECKING:
     from ..beam import RectangularBeam  # Import Beam for type checking only
+
+# Prebuilt unit objects for the boundary conversions of ADR-0005. The equation
+# layer works in N, mm, mm², MPa and N·mm; these are the only units crossing
+# into and out of it, and building them once keeps the conversion off the hot
+# path (`.to(_mm2)`, never `.to("mm**2")`).
+_mm2 = mm**2
+_Nmm = N * mm
 
 
 def _initialize_variables_EN_1992_2004(self: "RectangularBeam") -> None:
@@ -45,8 +54,12 @@ def _initialize_shear_variables_EN_1992_2004(self: "RectangularBeam", force: For
         self._V_Ed_1 = force.V_z  # Consider the same shear at the edge of support and in d
         self._V_Ed_2 = force.V_z  # Consider the same shear at the edge of support and in d
 
-        # Minimum shear reinforcement calculation
-        rho_min = 0.08 * math.sqrt(self.concrete.f_ck.to("MPa").magnitude) / (self._f_ywk) * MPa
+        # Minimum shear reinforcement calculation. Eq. (9.5N) gives the ratio;
+        # §9.2.2(5) defines it as A_sw/(s*b_w*sin(alpha)), hence the geometry here.
+        rho_min = shear_eq.min_shear_reinforcement_ratio(
+            self.concrete.f_ck.to(MPa).magnitude,
+            self._f_ywk.to(MPa).magnitude,
+        )
         self._A_v_min = rho_min * self.width * math.sin(self._alpha)
 
         # Consider bottom or top tension reinforcement
@@ -65,30 +78,44 @@ def _initialize_shear_variables_EN_1992_2004(self: "RectangularBeam", force: For
             )
 
         # Shear calculation for sections without rebar
-        self._k_value = min(1 + math.sqrt(200 / self._d_shear.to("mm").magnitude), 2)
+        self._k_value = shear_eq.size_effect_factor(self._d_shear.to(mm).magnitude)
 
         # Positive of compression
-        self._sigma_cp = min(self._N_Ed / self.A_x, 0.2 * self._f_cd_shear)
+        self._sigma_cp = (
+            shear_eq.axial_stress(
+                self._N_Ed.to(N).magnitude,
+                self.A_x.to(_mm2).magnitude,
+                self._f_cd_shear.to(MPa).magnitude,
+            )
+            * MPa
+        )
 
 
 def _shear_without_rebar_EN_1992_2004(self: "RectangularBeam") -> Quantity:
     self._stirrup_d_b = 0 * mm
     self._theta = 0
     if isinstance(self.concrete, Concrete_EN_1992_2004):
-        # Total shear capacity without rebar
-        C_rdc = 0.18 / self.concrete.gamma_c
-        v_min = 0.035 * self._k_value ** (3 / 2) * math.sqrt(self.concrete.f_ck.to("MPa").magnitude)
-        k_1 = 0.15
-        V_Rd_c_min = ((v_min + k_1 * self._sigma_cp.to("MPa").magnitude) * self.width * self._d_shear * MPa).to("kN")
+        # Total shear capacity without rebar: Eq. (6.2.a), floored by Eq. (6.2.b).
+        f_ck = self.concrete.f_ck.to(MPa).magnitude
+        b_w = self.width.to(mm).magnitude
+        d = self._d_shear.to(mm).magnitude
+        sigma_cp = self._sigma_cp.to(MPa).magnitude
         rho_l = self._rho_l_bot if self._M_Ed >= 0 * kNm else self._rho_l_top
+        V_Rd_c_min = (
+            shear_eq.min_shear_resistance_without_reinforcement(f_ck, self._k_value, sigma_cp, b_w, d) * N
+        ).to(kN)
         V_Rd_c = (
-            (
-                C_rdc * self._k_value * (100 * rho_l * self.concrete.f_ck.to("MPa").magnitude) ** (1 / 3) * MPa
-                + k_1 * self._sigma_cp.to("MPa")
+            shear_eq.shear_resistance_without_reinforcement(
+                f_ck,
+                self.concrete.gamma_c,
+                self._k_value,
+                rho_l.to(dimensionless).magnitude,
+                sigma_cp,
+                b_w,
+                d,
             )
-            * self.width
-            * self._d_shear
-        ).to("kN")
+            * N
+        ).to(kN)
     return max(V_Rd_c_min, V_Rd_c)
 
 
@@ -97,17 +124,18 @@ def _calculate_max_shear_strength_EN_1992_2004(self: "RectangularBeam") -> None:
     Calculate the maximum shear strength (V_Rd_max) and the corresponding strut angle (θ).
     """
     if isinstance(self.concrete, Concrete_EN_1992_2004):
-        alpha_cw = 1  # Non-prestressed members or members subject to tensile stress due to axial force
-        v_1 = 0.6 * (1 - self.concrete.f_ck.to("MPa").magnitude / 250)  # Strength reduction factor for concrete struts
-        self._z = 0.9 * self._d_shear  # Lever arm
+        alpha_cw = 1.0  # Non-prestressed members or members subject to tensile stress due to axial force
+        nu_1 = shear_eq.strut_strength_reduction_factor(self.concrete.f_ck.to(MPa).magnitude)
+        b_w = self.width.to(mm).magnitude
+        f_cd = self._f_cd_shear.to(MPa).magnitude
+        z = shear_eq.lever_arm(self._d_shear.to(mm).magnitude)
+        self._z = z * mm  # Lever arm
 
         # The θ angle is limited between 21.8° ≤ θ ≤ 45° (1 ≤ cot(θ) ≤ 2.5)
         # Check the minimum strut angle θ = 21.8° (cot(θ) = 2.5)
         theta_min: float = math.radians(21.8)
         cot_theta_min: float = 1 / math.tan(theta_min)
-        V_Rd_max_min_angle = (
-            alpha_cw * self.width * self._z * v_1 * self._f_cd_shear / (cot_theta_min + math.tan(theta_min))
-        ).to("kN")
+        V_Rd_max_min_angle = (shear_eq.max_shear_resistance(alpha_cw, b_w, z, nu_1, f_cd, theta_min) * N).to(kN)
 
         if self._V_Ed_1 <= V_Rd_max_min_angle:
             # If within the minimum angle
@@ -118,10 +146,9 @@ def _calculate_max_shear_strength_EN_1992_2004(self: "RectangularBeam") -> None:
         else:
             # Check the maximum strut angle θ = 45° (cot(θ) = 1.0)
             theta_max: float = math.radians(45)
-            cot_theta_max = 1 / math.tan(theta_max)
             V_Rd_max_max_angle: Quantity = (
-                alpha_cw * self.width * self._z * v_1 * self._f_cd_shear / (cot_theta_max + math.tan(theta_max))
-            ).to("kN")
+                shear_eq.max_shear_resistance(alpha_cw, b_w, z, nu_1, f_cd, theta_max) * N
+            ).to(kN)
 
             if self._V_Ed_1 > V_Rd_max_max_angle:
                 self._theta = theta_max
@@ -131,11 +158,9 @@ def _calculate_max_shear_strength_EN_1992_2004(self: "RectangularBeam") -> None:
             else:
                 self._max_shear_ok = True
                 # Determine the angle θ of the strut based on the shear force
-                self._theta = 0.5 * math.asin((self._V_Ed_1 / V_Rd_max_max_angle))
+                self._theta = shear_eq.strut_angle(self._V_Ed_1.to(kN).magnitude, V_Rd_max_max_angle.to(kN).magnitude)
                 self._cot_theta = 1 / math.tan(self._theta)
-                self._V_Rd_max = (
-                    alpha_cw * self.width * self._z * v_1 * self._f_cd_shear / (self._cot_theta + math.tan(self._theta))
-                ).to("kN")
+                self._V_Rd_max = (shear_eq.max_shear_resistance(alpha_cw, b_w, z, nu_1, f_cd, self._theta) * N).to(kN)
 
 
 def _calculate_required_shear_reinforcement_EN_1992_2004(
@@ -144,12 +169,17 @@ def _calculate_required_shear_reinforcement_EN_1992_2004(
     """
     Calculate the required shear reinforcement area (A_v_req).
     """
+    z = self._z.to(mm).magnitude
+    f_ywd = self._f_ywd.to(MPa).magnitude
     # Calculate the required shear reinforcement area
     self._A_v_req = max(
-        (self._V_Ed_2 / (self._z * self._f_ywd * self._cot_theta)),  # Required area based on shear force
+        shear_eq.required_shear_reinforcement(self._V_Ed_2.to(N).magnitude, z, f_ywd, self._cot_theta)
+        * mm,  # Required area based on shear force, as an area per unit length
         self._A_v_min,  # Minimum required area
     )
-    self._V_Rd_s = self._A_v * self._z * self._f_ywd * self._cot_theta
+    self._V_Rd_s = (
+        shear_eq.shear_reinforcement_resistance(self._A_v.to(mm).magnitude, z, f_ywd, self._cot_theta) * N
+    ).to(kN)
     self._V_s_req = self._V_Rd_s
     # Maximum shear capacity is the same as the steel capacity
     self._V_Rd = self._V_Rd_s
@@ -256,12 +286,12 @@ def _min_max_flexural_reinforcement_ratio_EN_1992_2004(
     """
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         # Calculate the minimum tensile reinforcement ratio
-        rho_min = max(
-            0.26 * self.concrete.f_ctm.to("MPa").magnitude / self.steel_bar.f_y.to("MPa").magnitude,
-            0.0013,
+        rho_min = flexure_eq.min_reinforcement_ratio(
+            self.concrete.f_ctm.to(MPa).magnitude,
+            self.steel_bar.f_y.to(MPa).magnitude,
         )
         # Set the maximum tensile reinforcement ratio
-        rho_max = 0.04
+        rho_max = flexure_eq.max_reinforcement_ratio()
 
         # # For positive moments (tension in the bottom), set minimum reinforcement accordingly.
         # if force._M_y > 0 * kNm:
@@ -295,85 +325,87 @@ def _compression_zone_limits_EN_1992_2004(self: "RectangularBeam", d: Quantity) 
     """
     concrete_en = cast("Concrete_EN_1992_2004", self.concrete)
     lambda_ = concrete_en._lambda_factor()
-    if concrete_en._f_ck <= 50 * MPa:
-        xi_lim_redistribution = (concrete_en._delta - concrete_en._k_1) / concrete_en._k_2
-    else:
-        xi_lim_redistribution = (concrete_en._delta - concrete_en._k_3) / concrete_en._k_4
-    xi_lim = min(xi_lim_redistribution, 0.45)  # both are x_u/d
+    xi_lim = flexure_eq.neutral_axis_depth_limit_ratio(  # x_u/d
+        concrete_en._f_ck.to(MPa).magnitude,
+        concrete_en._delta,
+        concrete_en._k_1,
+        concrete_en._k_2,
+        concrete_en._k_3,
+        concrete_en._k_4,
+    )
     x_u_lim = xi_lim * d
     return x_u_lim, lambda_ * x_u_lim
 
 
 def _calculate_flexural_reinforcement_EN_1992_2004(
-    self: "RectangularBeam", M_Ed: Quantity, d: Quantity, d_prima: float
+    self: "RectangularBeam", M_Ed: Quantity, d: Quantity, d_prima: Quantity
 ) -> tuple[Quantity, Quantity, Quantity, Quantity]:
     """
     Calculate the required top and bottom reinforcement areas for bending.
     """
     rho_min, rho_max = _min_max_flexural_reinforcement_ratio_EN_1992_2004(self)
-    A_s_min = rho_min * d * self.width
-    A_s_max = rho_max * d * self.width  # noqa: F841
+    # ADR-0005 boundary: convert once, compute in floats (N, mm, MPa, N·mm),
+    # re-apply units on the way out.
+    b = self.width.to(mm).magnitude
+    d_mm = d.to(mm).magnitude
+    A_s_min = rho_min * d_mm * b
+    A_s_max = rho_max * d_mm * b
 
     # Constants and material properties
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         eta = self.concrete._eta_factor()  # Factor for concrete strength (EN 1992-1-1)
+        f_cd = self._f_cd.to(MPa).magnitude
         # Define f_yd
-        f_yd = self.steel_bar.f_y / self.concrete._gamma_s
+        f_yd = (self.steel_bar.f_y / self.concrete._gamma_s).to(MPa).magnitude
 
         # Compression zone at the ductility limit (EC2 5.5(4) and the 0.45 cap)
-        concrete_en = cast("Concrete_EN_1992_2004", self.concrete)
-        x_u_lim, x_eff_lim = _compression_zone_limits_EN_1992_2004(self, d)
+        x_u_lim_q, x_eff_lim_q = _compression_zone_limits_EN_1992_2004(self, d)
+        x_u_lim = x_u_lim_q.to(mm).magnitude
+        x_eff_lim = x_eff_lim_q.to(mm).magnitude
         # Limit moment for compressive reinforcement
-
-        M_lim = eta * self._f_cd * self.width * x_eff_lim * (d - 0.5 * x_eff_lim)
+        M = M_Ed.to(_Nmm).magnitude
+        M_lim = flexure_eq.limit_moment(eta, f_cd, b, x_eff_lim, d_mm)
 
         # Check if compressive reinforcement is required
-        if M_Ed <= M_lim:
-            # No compressive reinforcement required
-            # Relative design bending moment
-            K_value = (M_Ed / (self.width * d**2 * eta * self._f_cd)).to("dimensionless").magnitude
-
-            # Depth of the equivalent rectangular block. Inverting
+        if M <= M_lim:
+            # No compressive reinforcement required. Inverting
             # M = eta*f_cd*b*x_eff*(d - 0.5*x_eff) already yields lambda*x, so
             # lambda must NOT be applied again to the lever arm below.
-            x_eff = d * (1 - math.sqrt(1 - 2 * K_value))
+            x_eff = flexure_eq.compression_block_depth_for_moment(M, b, d_mm, eta, f_cd)
 
-            # Area of required tensile reinforcement
-            z = d - 0.5 * x_eff
-            A_s1 = M_Ed / (z * f_yd)
-            # Ensure the area meets the minimum requirement
-            A_s1 = max(A_s1, A_s_min)
+            # Area of required tensile reinforcement, at least the minimum
+            A_s1 = max(
+                flexure_eq.reinforcement_for_moment(M, flexure_eq.lever_arm(d_mm, x_eff), f_yd),
+                A_s_min,
+            )
             # No compressive reinforcement required
-            A_s2 = 0 * cm**2
+            A_s2 = 0.0
 
         else:
             # Compressive reinforcement is required
             self._doubly_reinforced = True
+            d_prime = d_prima.to(mm).magnitude
             # Limit tensile reinforcement area
-            z = d - 0.5 * x_eff_lim
-            A_s1_lim = (M_lim / (z * f_yd)).to("cm^2")
+            A_s1_lim = flexure_eq.reinforcement_for_moment(M_lim, flexure_eq.lever_arm(d_mm, x_eff_lim), f_yd)
 
-            # Neutral axis at the plastic limit (EC2 §5.5)
-            x_u = x_u_lim
+            # Compressive reinforcement stress, from the strain at the neutral
+            # axis at the plastic limit (EC2 §5.5)
+            f_sd = flexure_eq.compression_steel_stress(
+                x_u_lim,
+                d_prime,
+                self.concrete._epsilon_cu2,
+                self.steel_bar._E_s.to(MPa).magnitude,
+                f_yd,
+            )
 
-            # Compressive reinforcement strain'
-            epsilon_s2 = (x_u - d_prima) / x_u * concrete_en._epsilon_cu2
-
-            # Compressive reinforcement stress'
-            f_sd = min(epsilon_s2 * self.steel_bar._E_s, f_yd)
-
-            # Extra moment to take with top reinforcement
-            delta_M = M_Ed - M_lim
-
-            # Lever arm of internal forces for compressive reinforcement
-            z_2 = d - d_prima
-            # Required compressive reinforcement area
-            A_s2 = (delta_M / ((z_2) * f_sd)).to("cm^2")
+            # Extra moment to take with top reinforcement, on the lever arm
+            # (d - d') of the compression steel couple
+            A_s2 = flexure_eq.reinforcement_for_moment(M - M_lim, d_mm - d_prime, f_sd)
 
             # Required tensile reinforcement area
             A_s1 = max(A_s1_lim + A_s2, A_s_min)
 
-    return A_s_min, A_s_max, A_s1, A_s2
+    return A_s_min * _mm2, A_s_max * _mm2, A_s1 * _mm2, A_s2 * _mm2
 
 
 def _simple_determine_nominal_moment_EN_1992_2004(
@@ -405,33 +437,42 @@ def _simple_determine_nominal_moment_EN_1992_2004(
     """
     # Constants and material properties
     if isinstance(self.concrete, Concrete_EN_1992_2004):
-        f_yd = self.steel_bar._f_y / self.concrete._gamma_s
-        f_cd = self.concrete._alpha_cc * self.concrete.f_ck / self.concrete.gamma_c
+        f_yd = (self.steel_bar._f_y / self.concrete._gamma_s).to(MPa).magnitude
+        f_cd = (self.concrete._alpha_cc * self.concrete.f_ck / self.concrete.gamma_c).to(MPa).magnitude
         eta = self.concrete._eta_factor()  # Factor for concrete strength
-        b = self.width
+        b = self.width.to(mm).magnitude
+        d_mm = d.to(mm).magnitude
+        A_s_mm2 = A_s.to(_mm2).magnitude
 
         # Depth of the equivalent rectangular block that balances the whole
         # tension steel, assuming the section is singly reinforced.
-        x_eff = A_s * f_yd / (eta * f_cd * b)
+        x_eff = flexure_eq.compression_block_depth_for_steel(A_s_mm2, f_yd, eta, f_cd, b)
 
         # Ductility limit -- same criterion as the reinforcement sizing routine.
-        _, x_eff_lim = _compression_zone_limits_EN_1992_2004(self, d)
+        _, x_eff_lim_q = _compression_zone_limits_EN_1992_2004(self, d)
+        x_eff_lim = x_eff_lim_q.to(mm).magnitude
 
         if x_eff <= x_eff_lim:
             # Singly reinforced: A_s_prime is not required for equilibrium.
-            M_Rd = A_s * f_yd * (d - 0.5 * x_eff)
+            M_Rd = flexure_eq.moment_resistance_singly_reinforced(A_s_mm2, f_yd, d_mm, x_eff) * _Nmm
         else:
             # Doubly reinforced: the concrete contribution saturates at the
             # ductility limit and the excess tension steel is balanced by the
-            # compression reinforcement, with lever arm (d - d'). At
-            # x_eff = x_eff_lim this returns exactly the M_lim used when sizing
-            # the reinforcement, so M_Rd is continuous across the branch.
-            A_s_lim = eta * f_cd * b * x_eff_lim / f_yd
-            M_lim = A_s_lim * f_yd * (d - 0.5 * x_eff_lim)
-            # The couple can only develop up to the steel actually available on
-            # the compression face.
-            A_s_couple = min(A_s - A_s_lim, A_s_prime)
-            M_Rd = M_lim + A_s_couple * f_yd * (d - d_prime)
+            # compression reinforcement, with lever arm (d - d').
+            M_Rd = (
+                flexure_eq.moment_resistance_doubly_reinforced(
+                    A_s_mm2,
+                    A_s_prime.to(_mm2).magnitude,
+                    f_yd,
+                    eta,
+                    f_cd,
+                    b,
+                    d_mm,
+                    d_prime.to(mm).magnitude,
+                    x_eff_lim,
+                )
+                * _Nmm
+            )
     return M_Rd
 
 

@@ -329,7 +329,7 @@ remains is not a hot spot but ~7,600 Quantity constructions spread thin across
 itself. Closing the last 22 ms is Phase 1's float equations (ADR-0005), not more
 micro-optimization here.
 
-### Phase 1 — Extract pure equations *(in progress)*
+### Phase 1 — Extract pure equations — **done 2026-08-29**
 
 Inside `codes/`, split code formulas out of the mutating orchestrators into
 `equations/` modules — **plain floats per ADR-0005**, clause in docstring. The
@@ -340,22 +340,64 @@ behavior changes; this phase only *creates the layer that does not exist yet*.
 The boundary gets teeth from day one: the AST test of §3.1 (no algebra in
 checkers, no pint in `equations/`) lands with the first extracted module.
 
-**Done (2026-08-29): ACI 318-19 one-way shear.**
-`codes/aci_318_19/equations/shear.py` holds nine clause-cited functions
-(Eq. 22.5.5.1.3, Table 22.5.5.1, §22.5.5.1.1, §22.5.1.2, §9.6.3.1, §20.2.2.4,
-Table 9.6.3.4, §22.5.8.5.3). The shear orchestrator now calls them and
-`ACI_318_19_beam.py` no longer imports `math` at all — every inline formula in
-the module is gone. `tests/test_architecture_boundaries.py` enforces the
-boundary by AST and was verified to fail on a deliberate violation, not just to
-pass. Packaging moved to automatic discovery so a new code subpackage cannot be
-left out of the wheel; verified by building one and listing its contents.
+**Done (2026-08-29): ACI 318-19 — shear, flexure and walls.**
 
-**Remaining:** ACI flexure, EN 1992-2004 (shear and flexure), the wall module.
+| module | clauses covered |
+| --- | --- |
+| `aci_318_19/equations/shear.py` | Eq. 22.5.5.1.3, Table 22.5.5.1, §22.5.5.1.1, §22.5.1.2, §9.6.3.1, §20.2.2.4, Table 9.6.3.4, §22.5.8.5.3 |
+| `aci_318_19/equations/flexure.py` | §21.2.2, §9.6.1.2, §22.2, §22.2.2.4.1, §22.3 |
+| `aci_318_19/equations/wall.py` | §11.5.4.3, §11.5.4.6, §11.6.1, Eq. 11.6.2, §11.7.3 |
 
-**Exit:** zero `self.` and zero pint imports inside `equations/`; every function
-cites its clause and has a parametrized test against the code's table; the
-boundary test is in CI. *(Met for the shear module; the exit applies per code
-module as each is extracted.)*
+`ACI_318_19_beam.py` no longer imports `math` **or** `numpy`: every inline
+formula in the module is gone. `tests/test_architecture_boundaries.py` enforces
+the boundary by AST and was verified to fail on a deliberate violation, not just
+to pass. Packaging moved to automatic discovery so a new code subpackage cannot
+be left out of the wheel; verified by building one and listing its contents.
+
+Two duplications collapsed on the way: the doubly-reinforced design branch was
+re-deriving rho_max with `0.003/(eps_y+0.006)` spelled out, which is exactly
+`eps_c/(eps_y+2*eps_c)` for ACI's fixed eps_c, and the wall module had its own
+copy of the §20.2.2.4 f_yt cap — it now calls the beam one, since the clause is
+the same.
+
+**CIRSOC 201-25 needs no equations module.** It subclasses
+`Concrete_ACI_318_19` and reuses the ACI provisions verbatim; what differs is
+the bar diameter catalogue, which is data, not formulas. Recorded here so nobody
+goes looking for `codes/cirsoc_201_25/equations/`.
+
+**Done (2026-08-29): EN 1992-1-1:2004 — shear and flexure.**
+
+| module | clauses covered |
+| --- | --- |
+| `en_1992_2004/equations/shear.py` | §6.2.2(1) Eqs. (6.2.a)/(6.2.b)/(6.3N), §6.2.3 Eqs. (6.8)/(6.9)/(6.6N), §9.2.2(5) Eq. (9.5N) |
+| `en_1992_2004/equations/flexure.py` | §3.1.7(3), §3.2.7(2), §5.5(4) Eqs. (5.10a)/(5.10b), §6.1, §9.2.1.1 Eq. (9.1N) |
+
+EN is metric-only, so these take no `is_imperial` keyword — the unit system is a
+parameter only where a code publishes two coefficient sets, which EN does not.
+The recommended values a National Annex may override (`C_Rd,c = 0.18/gamma_c`,
+`k_1 = 0.15`, `v_min`, `rho_w,min`) are named and marked as recommended rather
+than buried as literals, which is what will make a National Annex layer
+possible later without another archaeology pass.
+
+The flexure module keeps the neutral axis `x_u` and the stress block depth
+`x_eff = lambda*x_u` explicitly apart, stating in every signature which one it
+takes. Conflating them is the standard EN implementation bug and the old inline
+code gave the reader nothing to check it against.
+
+Only trigonometry (cot from tan) stayed inline in the EN orchestrator, which is
+right: it is arithmetic, not a clause.
+
+**Nothing to extract from `punching.py`** — the check still raises
+`NotImplementedError`, so its formulas do not exist yet. When they land they
+should be written into `equations/` directly rather than extracted later.
+`flexure_design.py` and `slab.py` hold orchestration and bar geometry, no code
+clauses.
+
+**Exit met.** Zero `self.` and zero pint imports inside `equations/`; every
+public function cites its clause and has tests derived from the printed code;
+the boundary test runs in CI and is parametrized over every equations module, so
+a new code subpackage is covered the moment it exists. Suite 773 → 930 passing,
+coverage still 100 %.
 
 ### Phase 2a — Migrate tests to the public API
 
