@@ -68,6 +68,32 @@ def test_importing_the_code_layer_does_not_drag_in_presentation() -> None:
     assert result.stdout.strip() == "False False", f"mento.codes pulled in presentation: {result.stdout!r}"
 
 
+BEAM_CODE_MODULES = [
+    EQUATIONS_ROOT / "ACI_318_19_beam.py",
+    EQUATIONS_ROOT / "EN_1992_2004_beam.py",
+]
+
+
+@pytest.mark.parametrize("path", BEAM_CODE_MODULES, ids=lambda p: p.name)
+def test_code_modules_do_not_build_report_tables(path: Path) -> None:
+    """Phase 3: labelled, rounded, unit-annotated tables are presentation.
+
+    They used to make up roughly a third of each code module. They live in
+    ``mento/report_tables.py`` now, and the beam decides when to build them —
+    the design code does not, which is what lets a check skip them entirely.
+
+    ``ACI_318_19_wall.py`` is deliberately not in this list: the wall report
+    has not been moved yet.
+    """
+    offenders = [
+        node.name
+        for node in ast.walk(_parse(path))
+        if isinstance(node, ast.FunctionDef)
+        and (node.name.startswith("_initialize_dicts") or node.name.startswith("_compile_results"))
+    ]
+    assert not offenders, f"{path.name} still builds report tables: {offenders}"
+
+
 @pytest.mark.parametrize("path", EQUATION_MODULES, ids=lambda p: p.name)
 def test_equations_do_not_import_units(path: Path) -> None:
     """ADR-0005: equations take and return floats, so they never see a Quantity."""

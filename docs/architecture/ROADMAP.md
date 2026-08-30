@@ -557,14 +557,45 @@ equations for speed.
 **Exit:** the §3.3 mako loop runs without mutating any element; the §1.5
 benchmark is rerun and meets the < 5 s / 20,000-checks target.
 
-### Phase 3 — Extract presentation
+### Phase 3 — Extract presentation *(in progress)*
 
 Move `_initialize_dicts_*` out of the code modules into the report layer; move
 matplotlib and docx code out of `beam.py`. After this phase, `codes/` contains only
 equations + checkers, and elements contain only geometry + thin orchestration.
 
-**Exit:** `import mento.codes` imports neither matplotlib nor docx — verified by
-a test.
+**Done (2026-08-30): the report tables are out of `codes/`.** 889 lines — the
+four `_initialize_dicts_*` builders and the `_compile_results_*` row builders —
+moved to `mento/report_tables.py`. They were about a third of each code module.
+
+| module | before | after |
+| --- | --- | --- |
+| `codes/ACI_318_19_beam.py` | 1445 | **938** |
+| `codes/EN_1992_2004_beam.py` | 1073 | **612** |
+
+The move was done by a script that cuts the exact source text rather than by
+hand: 889 lines of labels, rounding and unit strings is precisely where a
+transcription error hides, and a numeric regression suite would not necessarily
+catch a wrong column header.
+
+More than relocation, the *call* moved too. `_check_shear_*` and
+`_check_flexure_*` are calculation only now — they return `None` and no longer
+know that reports exist. `RectangularBeam._run_shear_check(force, report=...)`
+decides whether to build one, which is what lets `shear_check_results` skip the
+whole thing. The `report: bool` flag that Phase 2b threaded through the code
+modules is gone with it.
+
+`mento/report_tables.py` is also **not** in mypy's `ignore_errors` list, so 889
+lines that were previously unchecked are now type-checked; the six `Optional`
+errors that surfaced were fixed rather than silenced.
+
+`tests/test_architecture_boundaries.py` asserts by AST that no beam code module
+defines a `_initialize_dicts_*` or `_compile_results_*` function.
+
+**Remaining:** matplotlib and docx are still inside `beam.py` (2219 lines), and
+the wall report tables (`ACI_318_19_wall.py`) have not moved.
+
+**Exit:** `import mento.codes` imports neither matplotlib nor docx — met, and
+guarded by a test since the `codes/__init__` cleanup in Phase 2b.
 
 ### Phase 4 — Code registry
 

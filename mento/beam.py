@@ -23,6 +23,7 @@ from mento.results import Formatter, TablePrinter, DocumentBuilder, CUSTOM_COLOR
 from mento.i18n import get_language, translate
 from mento.forces import Forces
 from mento.settings import BeamSettings
+from mento.report_tables import build_flexure_report, build_shear_report
 from mento.design_results import (
     FlexureCheck,
     FlexureDesign,
@@ -667,16 +668,24 @@ class RectangularBeam(RectangularSection):
         return tuple(self._shear_checks)
 
     def _run_flexure_check(self, force: Forces, *, report: bool) -> Optional[DataFrame]:
-        """Dispatch one flexure check to the design code in force."""
+        """Compute one flexure combination, and build its report only if asked.
+
+        The design code does the calculation; assembling the row and the detail
+        tables is presentation and lives in :mod:`mento.report_tables`.
+        """
         if self.concrete.design_code in ("ACI 318-19", "CIRSOC 201-25"):
-            return _check_flexure_ACI_318_19(self, force, report=report)
-        return _check_flexure_EN_1992_2004(self, force, report=report)
+            _check_flexure_ACI_318_19(self, force)
+        else:
+            _check_flexure_EN_1992_2004(self, force)
+        return build_flexure_report(self, force) if report else None
 
     def _run_shear_check(self, force: Forces, *, report: bool) -> Optional[DataFrame]:
-        """Dispatch one shear check to the design code in force."""
+        """Compute one shear combination, and build its report only if asked."""
         if self.concrete.design_code in ("ACI 318-19", "CIRSOC 201-25"):
-            return _check_shear_ACI_318_19(self, force, report=report)
-        return _check_shear_EN_1992_2004(self, force, report=report)
+            _check_shear_ACI_318_19(self, force)
+        else:
+            _check_shear_EN_1992_2004(self, force)
+        return build_shear_report(self, force) if report else None
 
     def check_flexure(self, forces: list[Forces]) -> DataFrame:
         # Initialize variables to track limiting cases

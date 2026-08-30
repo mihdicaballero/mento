@@ -1,5 +1,4 @@
 from pint import Quantity
-import pandas as pd
 from typing import TYPE_CHECKING, Dict, Any, cast
 import warnings
 # from devtools import debug
@@ -243,12 +242,12 @@ def _calculate_rebar_spacing_aci(self: "RectangularBeam") -> None:
     self._stirrup_s_w = max(self._stirrup_s_w, 0 * inch)
 
 
-def _check_shear_ACI_318_19(self: "RectangularBeam", force: Forces, *, report: bool = True) -> pd.DataFrame | None:
+def _check_shear_ACI_318_19(self: "RectangularBeam", force: Forces) -> None:
     """Run the ACI shear check for one combination.
 
-    With ``report=False`` the numbers are computed and left on the beam, but the
-    report tables and the result DataFrame are not built — most of what a check
-    costs. Callers that only want values read them off the beam or through
+    Calculation only: the numbers are left on the beam, and whether to turn them
+    into a report table is the caller's decision (see
+    :mod:`mento.report_tables`). Callers that only want values read them through
     :func:`~mento.design_results.capture_shear_check`.
     """
     if isinstance(self.concrete, Concrete_ACI_318_19):
@@ -288,14 +287,6 @@ def _check_shear_ACI_318_19(self: "RectangularBeam", force: Forces, *, report: b
         # Rebar spacing checks
         _calculate_rebar_spacing_aci(self)
 
-        if not report:
-            return None
-
-        # Check results and return DataFrame
-        results = _compile_results_ACI_shear(self, force)
-        _initialize_dicts_ACI_318_19_shear(self)
-        return results
-
 
 def _design_shear_ACI_318_19(self: "RectangularBeam", force: Forces) -> None:
     # Set the initial variables
@@ -320,26 +311,6 @@ def _design_shear_ACI_318_19(self: "RectangularBeam", force: Forces) -> None:
     self._update_longitudinal_rebar_attributes()
 
     return None
-
-
-def _compile_results_ACI_shear(self: "RectangularBeam", force: Forces) -> pd.DataFrame:
-    results = {
-        "Label": self.label,
-        "Comb.": force.label,
-        "Av,min": round(self._A_v_min.to("cm²/m").magnitude, 2),
-        "Av,req": round(self._A_v_req.to("cm²/m").magnitude, 2),
-        "Av": round(self._A_v.to("cm²/m").magnitude, 2),
-        "Vu": self._V_u.to("kN").magnitude,
-        "Nu": self._N_u.to("kN").magnitude,
-        "ØVc": round(self._phi_V_c.to("kN").magnitude, 2),
-        "ØVs": round(self._phi_V_s.to("kN").magnitude, 2),
-        "ØVn": round(self._phi_V_n.to("kN").magnitude, 2),
-        "ØVmax": round(self._phi_V_max.to("kN").magnitude, 2),
-        "Vu≤ØVmax": self._max_shear_ok,
-        "Vu≤ØVn": self._V_u <= self._phi_V_n,
-        "DCR": round(self._DCRv, 3),
-    }
-    return pd.DataFrame([results], index=[0])
 
 
 # TODO: Delete this method since is not used
@@ -810,21 +781,20 @@ def _determine_nominal_moment_ACI_318_19(self: "RectangularBeam", force: Forces)
     return None
 
 
-def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces, *, report: bool = True) -> pd.DataFrame | None:
+def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> None:
     """
     Checks the flexural capacity of the section according to ACI 318-19 guidelines.
 
     This function accepts a single force and performs the flexural check of the section
     following the ACI 318-19 requirements. It initializes the design variables, computes the
     nominal moments for both top and bottom reinforcement, determines the required reinforcement
-    areas, and calculates the design capacity ratios. Finally, the results are compiled into a
-    Pandas DataFrame.
+    areas, and calculates the design capacity ratios.
+
+    Calculation only — the results are left on the beam, and turning them into a
+    report table is the caller's decision (see :mod:`mento.report_tables`).
 
     Parameters:
         force (Forces): The force acting on the section, which must include a single moment value.
-
-    Returns:
-        pd.DataFrame: A DataFrame containing the flexural design metrics and results.
     """
 
     # Initialize the design variables according to ACI 318-19 requirements using the provided force.
@@ -883,18 +853,6 @@ def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces, *, report:
     # Calculate the longitudinal reinforcement ratios for both sides.
     self._rho_l_bot = self._A_s_bot / (self._d_bot * self.width)
     self._rho_l_top = self._A_s_bot / (self._d_top * self.width)
-
-    if not report:
-        return None
-
-    # Compile the design results into a dictionary.
-    results = _compile_results_ACI_flexure_metric(self, force)
-
-    # Initialize any additional dictionaries required for ACI 318-19 flexural checks.
-    _initialize_dicts_ACI_318_19_flexure(self)
-
-    # Return the results as a Pandas DataFrame.
-    return pd.DataFrame([results], index=[0])
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -974,472 +932,6 @@ def _design_flexure_ACI_318_19(self: "RectangularBeam", max_M_y_bot: Quantity, m
     _run_flexure_design(self, max_M_y_bot, max_M_y_top, _required, _capacity)
 
 
-def _compile_results_ACI_flexure_metric(self: "RectangularBeam", force: Forces) -> Dict[str, Any]:
-    # Create dictionaries for bottom and top rows
-    if self._M_u >= 0:
-        result = {
-            "Label": self.label,
-            "Comb.": force.label,
-            "Position": "Bottom",
-            "As,min": round(self._A_s_min_bot.to("cm ** 2").magnitude, 2),
-            "As,req top": round(self._A_s_req_top.to("cm ** 2").magnitude, 2),
-            "As,req bot": round(self._A_s_req_bot.to("cm ** 2").magnitude, 2),
-            "As": round(self._A_s_bot.to("cm ** 2").magnitude, 2),
-            # 'c/d': self._c_d_bot,
-            "Mu": round(self._M_u_bot.to("kN*m").magnitude, 2),
-            "ØMn": round(self._phi_M_n_bot.to("kN*m").magnitude, 2),
-            "Mu≤ØMn": self._M_u_bot <= self._phi_M_n_bot,
-            "DCR": round(self._DCRb_bot, 3),
-        }
-    else:
-        result = {
-            "Label": self.label,
-            "Comb.": force.label,
-            "Position": "Top",
-            "As,min": round(self._A_s_min_top.to("cm ** 2").magnitude, 2),
-            "As,req top": round(self._A_s_req_top.to("cm ** 2").magnitude, 2),
-            "As,req bot": round(self._A_s_req_bot.to("cm ** 2").magnitude, 2),
-            "As": round(self._A_s_top.to("cm ** 2").magnitude, 2),
-            # 'c/d': self._c_d_top,
-            "Mu": round(self._M_u_top.to("kN*m").magnitude, 2),
-            "ØMn": round(self._phi_M_n_top.to("kN*m").magnitude, 2),
-            "Mu≤ØMn": -self._M_u_top <= self._phi_M_n_top,
-            "DCR": round(self._DCRb_top, 3),
-        }
-    return result
-
-
 ##########################################################
 # RESULTS
 ##########################################################
-
-
-def _initialize_dicts_ACI_318_19_shear(self: "RectangularBeam") -> None:
-    if isinstance(self.concrete, Concrete_ACI_318_19):
-        """Initialize the dictionaries used in check and design methods."""
-        self._materials_shear = {
-            "Materials": [
-                "Section Label",
-                "Concrete strength",
-                "Steel reinforcement yield strength",
-                "Concrete density",
-                "Normalweight concrete",
-                "Safety factor for shear",
-            ],
-            "Variable": ["", "fc", "fy", "wc", "λ", "Øv"],
-            "Value": [
-                self.label,
-                round(self.concrete.f_c.to("MPa").magnitude, 2),
-                round(self.steel_bar.f_y.to("MPa").magnitude, 2),
-                round(self.concrete.density.to("kg/m**3").magnitude, 1),
-                self.concrete.lambda_factor,
-                self.concrete.phi_v,
-            ],
-            "Unit": ["", "MPa", "MPa", "kg/m³", "", ""],
-        }
-        self._geometry_shear = {
-            "Geometry": [
-                "Section height",
-                "Section width",
-                "Clear cover",
-                "Longitudinal tension rebar",
-            ],
-            "Variable": ["h", "b", "cc", "As"],
-            "Value": [
-                self.height.to("cm").magnitude,
-                self.width.to("cm").magnitude,
-                self.c_c.to("cm").magnitude,
-                round(self._A_s_tension.to("cm**2").magnitude, 2),
-            ],
-            "Unit": ["cm", "cm", "cm", "cm²"],
-        }
-        self._forces_shear = {
-            "Design forces": [
-                "Axial, positive for compression",
-                "Shear",
-            ],
-            "Variable": ["Nu", "Vu"],
-            "Value": [
-                round(self._N_u.to("kN").magnitude, 2),
-                round(self._V_u.to("kN").magnitude, 2),
-            ],
-            "Unit": ["kN", "kN"],
-        }
-        # Min max lists
-        if self._phi_V_s == 0 * kN:
-            db_min = 0 * mm if self.concrete.unit_system == "metric" else 0 * inch
-            self._stirrup_d_b = 0 * mm if self.concrete.unit_system == "metric" else 0 * inch
-        else:
-            if self.concrete.design_code == "ACI 318-19":
-                db_min = 10 * mm if self.concrete.unit_system == "metric" else 3 / 8 * inch
-            else:
-                db_min = 6 * mm
-        min_values = [
-            None,
-            None,
-            self._A_v_min,
-            db_min,
-        ]  # Use None for items without a minimum constraint
-        max_values = [
-            self._stirrup_s_max_l,
-            self._stirrup_s_max_w,
-            None,
-            None,
-        ]  # Use None for items without a maximum constraint
-        current_values = [
-            self._stirrup_s_l,
-            self._stirrup_s_w,
-            self._A_v,
-            self._stirrup_d_b,
-        ]  # Current values to check
-        # Generate check marks based on the range conditions
-        checks = [
-            "✅" if (min_val is None or curr >= min_val) and (max_val is None or curr <= max_val) else "❌"
-            for curr, min_val, max_val in zip(current_values, min_values, max_values)
-        ]
-        self._all_shear_checks_passed = all(check == "✅" for check in checks)
-        self._data_min_max_shear = {
-            "Check": [
-                "Stirrup spacing along length",
-                "Stirrup spacing along width",
-                "Minimum shear reinforcement",
-                "Minimum rebar diameter",
-            ],
-            "Unit": ["cm", "cm", "cm²/m", "mm"],
-            "Value": [
-                round(self._stirrup_s_l.to("cm").magnitude, 2),
-                round(self._stirrup_s_w.to("cm").magnitude, 2),
-                round(self._A_v.to("cm**2/m").magnitude, 2),
-                round(self._stirrup_d_b.to("mm").magnitude, 0),
-            ],
-            "Min.": [
-                "",
-                "",
-                round(self._A_v_min.to("cm**2/m").magnitude, 2),
-                round(db_min.to("mm").magnitude, 0),
-            ],
-            "Max.": [
-                round(self._stirrup_s_max_l.to("cm").magnitude, 2),
-                round(self._stirrup_s_max_w.to("cm").magnitude, 2),
-                "",
-                "",
-            ],
-            "Ok?": checks,
-        }
-        self._shear_reinforcement = {
-            "Shear reinforcement strength": [
-                "Number of stirrups",
-                "Stirrup diameter",
-                "Stirrup spacing",
-                "Effective height",
-                "Minimum shear reinforcing",
-                "Required shear reinforcing",
-                "Defined shear reinforcing",
-                "Shear rebar strength",
-            ],
-            "Variable": ["ns", "db", "s", "d", "Av,min", "Av,req", "Av", "ØVs"],
-            "Value": [
-                self._stirrup_n,
-                round(self._stirrup_d_b.to("mm").magnitude, 3),
-                round(self._stirrup_s_l.to("cm").magnitude, 3),
-                round(self._d_shear.to("cm").magnitude, 2),
-                round(self._A_v_min.to("cm**2/m").magnitude, 2),
-                round(self._A_v_req.to("cm**2/m").magnitude, 2),
-                round(self._A_v.to("cm**2/m").magnitude, 2),
-                round(self._phi_V_s.to("kN").magnitude, 2),
-            ],
-            "Unit": ["", "mm", "cm", "cm", "cm²/m", "cm²/m", "cm²/m", "kN"],
-        }
-        check_max = "✅" if self._max_shear_ok else "❌"
-        check_FU = "✅" if self._DCRv < 1 else "❌"
-        self._shear_concrete = {
-            "Shear strength": [
-                "Effective shear area",
-                "Longitudinal reinforcement ratio",
-                "Size modification factor",
-                "Axial stress",
-                "Concrete effective shear stress",
-                "Concrete strength",
-                "Maximum shear strength",
-                "Total shear strength",
-                "Max shear check",
-                "Demand Capacity Ratio",
-            ],
-            "Variable": [
-                "Acv",
-                "ρw",
-                "λs",
-                "σNu",
-                "kc",
-                "ØVc",
-                "ØVmax",
-                "ØVn",
-                "",
-                "DCR",
-            ],
-            "Value": [
-                round(self._A_cv.to("cm**2").magnitude, 2),
-                round(self._rho_w.magnitude, 5),
-                round(self._lambda_s, 3),
-                round(self._sigma_Nu.to("MPa").magnitude, 2),
-                round(self._k_c_min.to("MPa").magnitude, 2),
-                round(self._phi_V_c.to("kN").magnitude, 2),
-                round(self._phi_V_max.to("kN").magnitude, 2),
-                round(self._phi_V_n.to("kN").magnitude, 2),
-                check_max,
-                round(self._DCRv, 2),
-            ],
-            "Unit": ["cm²", "", "", "MPa", "MPa", "kN", "kN", "kN", "", check_FU],
-        }
-        self._shear_all_checks = self._all_shear_checks_passed and (check_max == "✅") and (check_FU == "✅")
-
-
-def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
-    if isinstance(self.concrete, Concrete_ACI_318_19):
-        # Update longitudinal rebar attributes
-        self._update_longitudinal_rebar_attributes()
-        """Initialize the dictionaries used in check and design methods."""
-        self._materials_flexure = {
-            "Materials": [
-                "Section Label",
-                "Concrete strength",
-                "Steel reinforcement yield strength",
-            ],
-            "Variable": ["", "fc", "fy"],
-            "Value": [
-                self.label,
-                round(self.concrete.f_c.to("MPa").magnitude, 2),
-                round(self.steel_bar.f_y.to("MPa").magnitude, 2),
-            ],
-            "Unit": ["", "MPa", "MPa"],
-        }
-        self._geometry_flexure = {
-            "Geometry": [
-                "Section height",
-                "Section width",
-                "Clear cover",
-                "Mechanical top cover",
-                "Mechanical bottom cover",
-            ],
-            "Variable": ["h", "b", "cc", "cm,top", "cm,bot"],
-            "Value": [
-                self.height.to("cm").magnitude,
-                self.width.to("cm").magnitude,
-                self.c_c.to("cm").magnitude,
-                round(self._c_mec_top.to("cm").magnitude, 2),
-                round(self._c_mec_bot.to("cm").magnitude, 2),
-            ],
-            "Unit": ["cm", "cm", "cm", "cm", "cm"],
-        }
-        self._forces_flexure = {
-            "Design forces": [
-                "Top max moment",
-                "Bottom max moment",
-            ],
-            "Variable": ["Mu,top", "Mu,bot"],
-            "Value": [
-                round(self._M_u_top.to("kN*m").magnitude, 2),
-                round(self._M_u_bot.to("kN*m").magnitude, 2),
-            ],
-            "Unit": ["kNm", "kNm"],
-        }
-        # Min max lists
-        min_spacing_top: Quantity = max(
-            self.settings.clear_spacing,
-            self.settings.vibrator_size,
-            self._d_b_max_top,
-        )
-        min_spacing_bot: Quantity = max(self.settings.clear_spacing, self._d_b_max_bot)
-        min_values = [
-            self._A_s_min_top,
-            min_spacing_top,
-            self._A_s_min_bot,
-            min_spacing_bot,
-        ]  # Use None for items without a minimum constraint
-        max_values = [
-            self._A_s_max_top,
-            None,
-            self._A_s_max_bot,
-            None,
-        ]  # Use None for items without a maximum constraint
-        current_values = [
-            self._A_s_top,
-            self._available_s_top,
-            self._A_s_bot,
-            self._available_s_bot,
-        ]  # Current values to check
-
-        ARTICLE_STR = "9.6.1.3"
-
-        checks = []
-        for i, (curr, min_val, max_val) in enumerate(zip(current_values, min_values, max_values)):
-            # --- EXCEPTION FOR DOUBLY REINFORCED SECTIONS ---
-            # If doubly reinforced, ignore maximum limits for top (i=0) and bottom (i=2)
-            if self._doubly_reinforced and i in (0, 2):
-                # If it passes min, we give the special tag
-                if min_val is None or curr >= min_val:
-                    checks.append("✅ D.R.")
-                    continue
-                # If it fails min, let the normal logic handle it (fall through)
-            # -------------------------------------------------
-
-            passed = (min_val is None or curr >= min_val) and (max_val is None or curr <= max_val)
-            if passed:
-                checks.append("✅")
-                continue
-
-            # Detect if fails by min or max
-            failed_min = (min_val is not None) and (curr < min_val)
-
-            if i == 0 and failed_min and getattr(self, "_A_s_bool_top", True):
-                # Position 0 -> _A_s_top vs _A_s_min_top
-                checks.append(ARTICLE_STR)
-            elif i == 2 and failed_min and getattr(self, "_A_s_bool_bot", True):
-                # Position 2 -> _A_s_bot vs _A_s_min_bot
-                checks.append(ARTICLE_STR)
-            else:
-                # Any other failure (includes max or no flags)
-                checks.append("❌")
-
-        self._all_flexure_checks_passed = not any(check in ("❌") for check in checks)
-        self._data_min_max_flexure = {
-            "Check": [
-                "Min/Max As rebar top",
-                "Minimum spacing top",
-                "Min/Max As rebar bottom",
-                "Minimum spacing bottom",
-            ],
-            "Unit": ["cm²", "mm", "cm²", "mm"],
-            "Value": [
-                round(self._A_s_top.to("cm**2").magnitude, 2),
-                round(self._available_s_top.to("mm").magnitude, 2),
-                round(self._A_s_bot.to("cm**2").magnitude, 2),
-                round(self._available_s_bot.to("mm").magnitude, 2),
-            ],
-            "Min.": [
-                round(self._A_s_min_top.to("cm**2").magnitude, 2),
-                round(min_spacing_top.to("mm").magnitude, 2),
-                round(self._A_s_min_bot.to("cm**2").magnitude, 2),
-                round(min_spacing_bot.to("mm").magnitude, 2),
-            ],
-            "Max.": [
-                round(self._A_s_max_top.to("cm**2").magnitude, 2),
-                "",
-                round(self._A_s_max_bot.to("cm**2").magnitude, 2),
-                "",
-            ],
-            "Ok?": checks,
-        }
-        check_DCR_top = "✅" if self._DCRb_top < 1 else "❌"
-        check_DCR_bot = "✅" if self._DCRb_bot < 1 else "❌"
-        self._flexure_capacity_top = {
-            "Top reinforcement check": [
-                "First layer bars",
-                "Second layer bars",
-                "Effective height",
-                "Depth of equivalent strength block ratio",
-                "Minimum rebar reinforcing",
-                "Required rebar reinforcing top",
-                "Required rebar reinforcing bottom",
-                "Defined rebar reinforcing top",
-                "Longitudinal reinforcement ratio",
-                "Total flexural strength",
-                "Demand Capacity Ratio",
-            ],
-            "Variable": [
-                "n1+n2",
-                "n3+n4",
-                "d",
-                "c/d",
-                "As,min",
-                "As,req top",
-                "As,req bot",
-                "As",
-                "ρl",
-                "ØMn",
-                "DCR",
-            ],
-            "Value": [
-                self._format_longitudinal_rebar_string(self._n1_t, self._d_b1_t, self._n2_t, self._d_b2_t),
-                self._format_longitudinal_rebar_string(self._n3_t, self._d_b3_t, self._n4_t, self._d_b4_t),
-                round(self._d_top.to("cm").magnitude, 2),
-                self._c_d_top,
-                round(self._A_s_min_top.to("cm**2").magnitude, 2),
-                round(self._A_s_req_top.to("cm**2").magnitude, 2),
-                round(self._A_s_req_bot.to("cm**2").magnitude, 2),
-                round(self._A_s_top.to("cm**2").magnitude, 2),
-                round(self._rho_l_top.magnitude, 5),
-                round(self._phi_M_n_top.to("kN*m").magnitude, 2),
-                round(self._DCRb_top, 2),
-            ],
-            "Unit": [
-                "",
-                "",
-                "cm",
-                "",
-                "cm²",
-                "cm²",
-                "cm²",
-                "cm²",
-                "",
-                "kNm",
-                check_DCR_top,
-            ],
-        }
-        self._flexure_capacity_bot = {
-            "Bottom reinforcement check": [
-                "First layer bars",
-                "Second layer bars",
-                "Effective height",
-                "Depth of equivalent strength block ratio",
-                "Minimum rebar reinforcing",
-                "Required rebar reinforcing top",
-                "Required rebar reinforcing bottom",
-                "Defined rebar reinforcing bottom",
-                "Longitudinal reinforcement ratio",
-                "Total flexural strength",
-                "Demand Capacity Ratio",
-            ],
-            "Variable": [
-                "n1+n2",
-                "n3+n4",
-                "d",
-                "c/d",
-                "As,min",
-                "As,req top",
-                "As,req bot",
-                "As",
-                "ρl",
-                "ØMn",
-                "DCR",
-            ],
-            "Value": [
-                self._format_longitudinal_rebar_string(self._n1_b, self._d_b1_b, self._n2_b, self._d_b2_b),
-                self._format_longitudinal_rebar_string(self._n3_b, self._d_b3_b, self._n4_b, self._d_b4_b),
-                round(self._d_bot.to("cm").magnitude, 2),
-                self._c_d_bot,
-                round(self._A_s_min_bot.to("cm**2").magnitude, 2),
-                round(self._A_s_req_top.to("cm**2").magnitude, 2),
-                round(self._A_s_req_bot.to("cm**2").magnitude, 2),
-                round(self._A_s_bot.to("cm**2").magnitude, 2),
-                round(self._rho_l_bot.magnitude, 5),
-                round(self._phi_M_n_bot.to("kN*m").magnitude, 2),
-                round(self._DCRb_bot, 2),
-            ],
-            "Unit": [
-                "",
-                "",
-                "cm",
-                "",
-                "cm²",
-                "cm²",
-                "cm²",
-                "cm²",
-                "",
-                "kNm",
-                check_DCR_bot,
-            ],
-        }
-        self._flexure_all_checks = (
-            self._all_flexure_checks_passed and (check_DCR_bot == "✅") and (check_DCR_top == "✅")
-        )
