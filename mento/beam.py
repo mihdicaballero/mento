@@ -9,6 +9,7 @@ import pandas as pd
 from pandas import DataFrame
 import math
 import warnings
+from numbers import Integral
 # from devtools import debug
 
 from mento.rectangular import RectangularSection
@@ -329,23 +330,57 @@ class RectangularBeam(RectangularSection):
         d_b: Quantity = 0 * mm,
         s_l: Quantity = 0 * cm,
     ) -> None:
-        """Sets the transverse rebar in the beam section.
+        """Set transverse reinforcement or clear it with an all-zero input."""
 
-        A zero spacing means no stirrups, which clears the transverse reinforcement.
-        """
+        # Reject booleans and non-integer stirrup counts.
+        if isinstance(n_stirrups, bool) or not isinstance(n_stirrups, Integral):
+            raise TypeError("n_stirrups must be an integer.")
+        n_stirrups = int(n_stirrups)
+
+        # Diameter and spacing must be physical lengths.
+        if not isinstance(d_b, Quantity) or not d_b.check("[length]"):
+            raise TypeError("d_b must be a length Quantity.")
+        if not isinstance(s_l, Quantity) or not s_l.check("[length]"):
+            raise TypeError("s_l must be a length Quantity.")
+
+        diameter_mm = d_b.to("mm").magnitude
+        spacing_mm = s_l.to("mm").magnitude
+        if not math.isfinite(diameter_mm):
+            raise ValueError("d_b must be finite.")
+        if not math.isfinite(spacing_mm):
+            raise ValueError("s_l must be finite.")
+
+        # An all-zero input explicitly removes the transverse reinforcement.
+        if n_stirrups == 0 and diameter_mm == 0 and spacing_mm == 0:
+            self._stirrup_n = 0
+            self._stirrup_d_b = d_b
+            self._stirrup_s_l = s_l
+            self._A_v = 0 * cm**2 / m
+            self._update_effective_heights()
+            return
+
+        # Every non-empty reinforcement configuration must be strictly positive.
+        if n_stirrups <= 0:
+            raise ValueError("n_stirrups must be greater than zero.")
+        if diameter_mm <= 0:
+            raise ValueError("d_b must be greater than zero.")
+        if spacing_mm <= 0:
+            raise ValueError("s_l must be greater than zero.")
+
+        # Store the inputs only after all validations pass.
         self._stirrup_n = n_stirrups
         self._stirrup_d_b = d_b
         self._stirrup_s_l = s_l
-        if s_l == 0 * cm:
-            # No stirrups: same state as a section without transverse rebar
-            self._A_v = 0 * cm**2 / m
-        else:
-            n_legs = n_stirrups * 2
-            A_db = (d_b**2) * math.pi / 4  # Area of one stirrup leg
-            A_vs = n_legs * A_db  # Total area of stirrups
-            self._A_v = A_vs / s_l  # Stirrup area per unit length
 
-        # Update effective heights
+        # A closed stirrup contributes two vertical legs.
+        n_legs = n_stirrups * 2
+        A_db = d_b**2 * math.pi / 4
+        A_vs = n_legs * A_db
+
+        # Calculate the transverse reinforcement area per unit length.
+        self._A_v = A_vs / s_l
+
+        # Recalculate effective depths using the new stirrup diameter.
         self._update_effective_heights()
 
     def _len_unit(self) -> Quantity:

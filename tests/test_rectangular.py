@@ -62,6 +62,88 @@ def test_rectangular_section_initialization(
     assert basic_rectangular_section.c_c == 25 * mm
 
 
+@pytest.mark.parametrize(
+    ("width", "height", "expected_exception", "message"),
+    [
+        pytest.param(0 * cm, 50 * cm, ValueError, "width", id="zero-width"),
+        pytest.param(-30 * cm, 50 * cm, ValueError, "width", id="negative-width"),
+        pytest.param(30 * MPa, 50 * cm, TypeError, "width", id="width-wrong-units"),
+        pytest.param(30, 50 * cm, TypeError, "width", id="width-not-quantity"),
+        pytest.param(
+            float("nan") * cm,
+            50 * cm,
+            ValueError,
+            "width",
+            id="nan-width",
+        ),
+        pytest.param(30 * cm, 0 * cm, ValueError, "height", id="zero-height"),
+        pytest.param(30 * cm, -50 * cm, ValueError, "height", id="negative-height"),
+        pytest.param(30 * cm, 50 * MPa, TypeError, "height", id="height-wrong-units"),
+        pytest.param(30 * cm, 50, TypeError, "height", id="height-not-quantity"),
+        pytest.param(
+            30 * cm,
+            float("inf") * cm,
+            ValueError,
+            "height",
+            id="infinite-height",
+        ),
+    ],
+)
+def test_rectangular_section_rejects_invalid_dimensions(
+    concrete_c25: Concrete,
+    steel_b500s: SteelBar,
+    width,
+    height,
+    expected_exception,
+    message,
+) -> None:
+    with pytest.raises(expected_exception, match=message):
+        RectangularSection(
+            concrete=concrete_c25,
+            steel_bar=steel_b500s,
+            c_c=25 * mm,
+            width=width,
+            height=height,
+        )
+
+
+@pytest.mark.parametrize(
+    "c_c",
+    [
+        pytest.param(15 * cm, id="half-width"),
+        pytest.param(16 * cm, id="greater-than-half-width"),
+    ],
+)
+def test_rectangular_section_rejects_excessive_cover(
+    concrete_c25: Concrete,
+    steel_b500s: SteelBar,
+    c_c,
+) -> None:
+    with pytest.raises(ValueError, match="c_c"):
+        RectangularSection(
+            concrete=concrete_c25,
+            steel_bar=steel_b500s,
+            c_c=c_c,
+            width=30 * cm,
+            height=50 * cm,
+        )
+
+
+def test_rectangular_section_accepts_cover_below_limit(
+    concrete_c25: Concrete,
+    steel_b500s: SteelBar,
+) -> None:
+    section = RectangularSection(
+        concrete=concrete_c25,
+        steel_bar=steel_b500s,
+        c_c=14.9 * cm,
+        width=30 * cm,
+        height=50 * cm,
+    )
+
+    assert section.c_c == 14.9 * cm
+
+
 def test_rectangular_section_geometric_properties(
     basic_rectangular_section: RectangularSection,
 ) -> None:

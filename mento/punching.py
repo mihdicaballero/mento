@@ -1,18 +1,19 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal, Optional
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from pandas import DataFrame
+from pint import Quantity
 
 from mento.column import Column
 from mento.material import Concrete, SteelBar
 from mento.units import mm, cm, inch
 
 if TYPE_CHECKING:
-    from pint import Quantity
     from mento.forces import Forces
 
 
@@ -42,11 +43,31 @@ class PunchingSlab:
     d_avg: Quantity = field(init=False)
 
     def __post_init__(self) -> None:
+        # Slab thickness must be a physical length.
+        if not isinstance(self.h, Quantity) or not self.h.check("[length]"):
+            raise TypeError("h must be a length Quantity.")
+
+        h_mm = self.h.to("mm").magnitude
+        if not math.isfinite(h_mm) or h_mm <= 0:
+            raise ValueError("h must be greater than zero.")
+
+        # Cover must be a physical length.
+        if not isinstance(self.c_c, Quantity) or not self.c_c.check("[length]"):
+            raise TypeError("c_c must be a length Quantity.")
+
+        cover_mm = self.c_c.to("mm").magnitude
+        if not math.isfinite(cover_mm) or cover_mm < 0:
+            raise ValueError("c_c must be greater than or equal to zero.")
+
         if self.concrete.unit_system == "metric":
             bar_estimate = 16 * mm
         else:
             bar_estimate = 0.625 * inch  # ~#5 bar
         self.d_avg = self.h - self.c_c - bar_estimate
+
+        # The cover and bar allowance must leave a usable effective depth.
+        if self.d_avg.to("mm").magnitude <= 0:
+            raise ValueError("d_avg must be greater than zero: h is too small for the given c_c.")
 
     @property
     def unit_system(self) -> str:

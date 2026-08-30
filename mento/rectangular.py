@@ -1,3 +1,4 @@
+import math
 from typing import Optional
 from dataclasses import dataclass, field
 from pint import Quantity
@@ -33,7 +34,33 @@ class RectangularSection(Section):
     _ax: Optional[Axes] = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
+        # Width must be a physical length.
+        if not isinstance(self.width, Quantity) or not self.width.check("[length]"):
+            raise TypeError("width must be a length Quantity.")
+
+        width_mm = self.width.to("mm").magnitude
+        if not math.isfinite(width_mm) or width_mm <= 0:
+            raise ValueError("width must be greater than zero.")
+
+        # Height must be a physical length.
+        if not isinstance(self.height, Quantity) or not self.height.check("[length]"):
+            raise TypeError("height must be a length Quantity.")
+
+        height_mm = self.height.to("mm").magnitude
+        if not math.isfinite(height_mm) or height_mm <= 0:
+            raise ValueError("height must be greater than zero.")
+
+        # Validate the general section properties.
         super().__post_init__()
+
+        # Cover must fit inside the smallest section dimension.
+        cover_mm = self.c_c.to("mm").magnitude
+        max_cover_mm = min(width_mm, height_mm) / 2
+
+        if cover_mm >= max_cover_mm:
+            raise ValueError("c_c must be less than half of the smallest section dimension.")
+
+        # Calculate the rectangular section properties.
         self._A_x = self.width * self.height
         self._I_y = self.width * self.height**3 / 12
         self._I_z = self.height * self.width**3 / 12
