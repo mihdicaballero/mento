@@ -365,7 +365,7 @@ def test_shear_check_EN_1992_2004_no_rebar_1(
     assert results.iloc[1]["Av"] == pytest.approx(0, rel=1e-3)
     assert results.iloc[1]["VEd,1"] == pytest.approx(30, rel=1e-3)
     assert results.iloc[1]["VEd,2"] == pytest.approx(30, rel=1e-3)
-    assert beam_example_EN_1992_2004_01._stirrup_d_b.to("mm").magnitude == 0
+    assert beam_example_EN_1992_2004_01.shear_design.d_b.to("mm").magnitude == 0
     assert beam_example_EN_1992_2004_01._d_shear.to("cm").magnitude == pytest.approx(56.6, rel=1e-3)
     assert results.iloc[1]["VRd,c"] == pytest.approx(56.51, rel=1e-3)
     assert results.iloc[1]["VRd,s"] == pytest.approx(0, rel=1e-3)
@@ -391,7 +391,7 @@ def test_shear_check_EN_1992_2004_no_rebar_2(
     assert results.iloc[1]["Av"] == pytest.approx(0, rel=1e-3)
     assert results.iloc[1]["VEd,1"] == pytest.approx(30, rel=1e-3)
     assert results.iloc[1]["VEd,2"] == pytest.approx(30, rel=1e-3)
-    assert beam_example_EN_1992_2004_01._stirrup_d_b.to("mm").magnitude == 0
+    assert beam_example_EN_1992_2004_01.shear_design.d_b.to("mm").magnitude == 0
     assert beam_example_EN_1992_2004_01._d_shear.to("cm").magnitude == pytest.approx(57, rel=1e-3)
     assert results.iloc[1]["VRd,c"] == pytest.approx(40.09, rel=1e-3)
     assert results.iloc[1]["VRd,s"] == pytest.approx(0, rel=1e-3)
@@ -418,7 +418,7 @@ def test_shear_check_EN_1992_2004_no_rebar_3(
     assert results.iloc[1]["Av"] == pytest.approx(0, rel=1e-3)
     assert results.iloc[1]["VEd,1"] == pytest.approx(30, rel=1e-3)
     assert results.iloc[1]["VEd,2"] == pytest.approx(30, rel=1e-3)
-    assert beam_example_EN_1992_2004_01._stirrup_d_b.to("mm").magnitude == 0
+    assert beam_example_EN_1992_2004_01.shear_design.d_b.to("mm").magnitude == 0
     assert beam_example_EN_1992_2004_01._d_shear.to("cm").magnitude == pytest.approx(56.6, rel=1e-3)
     assert results.iloc[1]["VRd,c"] == pytest.approx(63.59, rel=1e-3)
     assert results.iloc[1]["VRd,s"] == pytest.approx(0, rel=1e-3)
@@ -511,7 +511,7 @@ def test_shear_check_ACI_318_19_no_rebar_1(
     assert results.iloc[1]["Av,min"] == pytest.approx(2.12, rel=1e-3)
     assert results.iloc[1]["Av,req"] == pytest.approx(2.12, rel=1e-3)
     assert results.iloc[1]["Av"] == pytest.approx(0, rel=1e-3)
-    assert beam_example_imperial._stirrup_d_b.to("mm").magnitude == 0
+    assert beam_example_imperial.shear_design.d_b.to("mm").magnitude == 0
     assert beam_example_imperial._d_shear.to("cm").magnitude == pytest.approx(36.04, rel=1e-3)
     assert results.iloc[1]["ØVc"] == pytest.approx(35.48, rel=1e-3)
     assert results.iloc[1]["ØVs"] == pytest.approx(0, rel=1e-3)
@@ -574,9 +574,10 @@ def test_shear_design_ACI_318_19(beam_example_imperial: RectangularBeam) -> None
     assert results.iloc[1]["Vu≤ØVn"] is True
 
     # Design result
-    assert beam_example_imperial._stirrup_n == 1
-    assert beam_example_imperial._stirrup_d_b.to("mm").magnitude == pytest.approx(9.525, rel=1e-3)
-    assert beam_example_imperial._stirrup_s_l.to("cm").magnitude == pytest.approx(12.7, rel=1e-3)
+    shear = beam_example_imperial.shear_design
+    assert shear.n_stirrups == 1
+    assert shear.d_b.to("mm").magnitude == pytest.approx(9.525, rel=1e-3)
+    assert shear.s_l.to("cm").magnitude == pytest.approx(12.7, rel=1e-3)
 
 
 def test_shear_design_CIRSOC_201_2025(
@@ -599,9 +600,10 @@ def test_shear_design_CIRSOC_201_2025(
     assert results.iloc[1]["Vu≤ØVn"] is True
 
     # Design result
-    assert beam_example_CIRSOC_201_2025._stirrup_n == 1
-    assert beam_example_CIRSOC_201_2025._stirrup_d_b.to("mm").magnitude == 6
-    assert beam_example_CIRSOC_201_2025._stirrup_s_l.to("cm").magnitude == 14
+    shear = beam_example_CIRSOC_201_2025.shear_design
+    assert shear.n_stirrups == 1
+    assert shear.d_b.to("mm").magnitude == 6
+    assert shear.s_l.to("cm").magnitude == 14
 
 
 def test_shear_design_spacing_along_width_wide_beam() -> None:
@@ -627,7 +629,8 @@ def test_shear_design_spacing_along_width_wide_beam() -> None:
     results = node.design_shear()
 
     # Two stirrups, four legs: one stirrup cannot span 50 cm within the limit.
-    assert beam._stirrup_n == 2
+    assert beam.shear_design.n_stirrups == 2
+    assert beam.shear_design.n_legs == 4
     # (50 - 2*2.5 - 1.0) / (4 - 1) = 14.67 cm between adjacent legs.
     assert beam._stirrup_s_w.to("cm").magnitude == pytest.approx(14.67, rel=1e-2)
     assert beam._stirrup_s_max_w.to("cm").magnitude == pytest.approx(28.05, rel=1e-2)
@@ -706,6 +709,8 @@ def test_flexure_check_EN_1992_2004_01(
     beam_example_EN_1992_2004_01.set_transverse_rebar(n_stirrups=1, d_b=6 * mm, s_l=15 * cm)
     beam_example_EN_1992_2004_01.set_longitudinal_rebar_bot(n1=4, d_b1=16 * mm)
     beam_example_EN_1992_2004_01.set_longitudinal_rebar_top(n1=0, d_b1=0 * mm)
+    # Read back before any check has run: this asserts the layout that was just
+    # set, not a result, so the public flexure_design is not available yet.
     assert beam_example_EN_1992_2004_01._A_s_bot.to(cm**2).magnitude == pytest.approx(8.042, rel=1e-2)
     assert beam_example_EN_1992_2004_01._d_bot.to(cm).magnitude == pytest.approx(56.0, rel=1e-2)
     assert beam_example_EN_1992_2004_01.width.to(cm).magnitude == pytest.approx(20.0, rel=1e-2)
@@ -972,7 +977,7 @@ def test_en1992_high_strength_concrete_compression_reinforcement() -> None:
     assert isinstance(result, pd.DataFrame)
 
     # Beam should have compression reinforcement (top rebar)
-    assert beam._A_s_top > 0 * cm**2
+    assert beam.flexure_design.top.A_s > 0 * cm**2
 
     # Beam should be marked as doubly reinforced
     assert beam._doubly_reinforced is True
@@ -1011,7 +1016,7 @@ def test_en1992_normal_strength_concrete_compression_reinforcement() -> None:
 
     # If doubly reinforced, should have top rebar
     if beam._doubly_reinforced:
-        assert beam._A_s_top > 0 * cm**2
+        assert beam.flexure_design.top.A_s > 0 * cm**2
 
     # Check that x_u calculation used k_1 and k_2 (normal-strength path)
     check_result = node.check_flexure()
@@ -2033,7 +2038,7 @@ def test_design_flexure_ACI_318_19_Test_Etabs_01() -> None:
 
     assert isinstance(results, pd.DataFrame)
     assert beam._doubly_reinforced is True
-    assert beam._A_s_bot.to("cm**2").magnitude >= 19.0
+    assert beam.flexure_design.bottom.A_s.to("cm**2").magnitude >= 19.0
 
     # Verificar que φMn con las barras diseñadas supera Mu = 200 kip·ft = 271.2 kNm
     check_results = node.check_flexure()
@@ -2070,7 +2075,7 @@ def test_design_flexure_ACI_318_19_negative_moment_doubly_reinforced() -> None:
     assert isinstance(results, pd.DataFrame)
     assert beam._doubly_reinforced is True
     # Tension governs on top for negative moment.
-    assert beam._A_s_top.to("cm**2").magnitude >= 19.0
+    assert beam.flexure_design.top.A_s.to("cm**2").magnitude >= 19.0
 
 
 def test_design_flexure_ACI_318_19_large_negative_moment_doubly_reinforced() -> None:
@@ -2097,8 +2102,9 @@ def test_design_flexure_ACI_318_19_large_negative_moment_doubly_reinforced() -> 
     assert isinstance(results, pd.DataFrame)
     assert beam._doubly_reinforced is True
     # Tension on top governs; compression steel present on the bottom face.
-    assert beam._A_s_top.to("cm**2").magnitude > beam._A_s_bot.to("cm**2").magnitude
-    assert beam._A_s_bot.to("cm**2").magnitude > 0
+    flexure = beam.flexure_design
+    assert flexure.top.A_s.to("cm**2").magnitude > flexure.bottom.A_s.to("cm**2").magnitude
+    assert flexure.bottom.A_s.to("cm**2").magnitude > 0
 
 
 def test_design_flexure_ACI_318_19_negative_moment_insufficient_section() -> None:
@@ -2250,9 +2256,11 @@ def test_design_flexure_ACI_318_19_cycle_adopts_passing_visited_layout() -> None
     assert isinstance(results, pd.DataFrame)
     # Se adopta el candidato visitado que cumple (2Ø20), no el activo al salir
     # del lazo (4Ø12 = 4.52 cm², ØMn = 34.0 kN·m).
-    assert (beam._n1_b, beam._d_b1_b.to("mm").magnitude) == (2, 20)
-    assert beam._n3_b == 0
-    assert beam._A_s_bot.to("cm**2").magnitude == pytest.approx(6.28, rel=1e-3)
+    bottom = beam.flexure_design.bottom
+    assert (bottom.layers[0].n, bottom.layers[0].d_b.to("mm").magnitude) == (2, 20)
+    # A single layer: the public API only lists layers that carry bars.
+    assert len(bottom.layers) == 1
+    assert bottom.A_s.to("cm**2").magnitude == pytest.approx(6.28, rel=1e-3)
 
     check_results = node.check_flexure()
     assert check_results.iloc[1]["Position"] == "Bottom"
@@ -2309,9 +2317,10 @@ def test_design_flexure_ACI_318_19_compression_bottom_exceeds_provided_bottom() 
     assert beam._doubly_reinforced is True
     # Traccion arriba en dos capas; la cara inferior queda armada por la
     # compresion que impone el momento negativo.
-    assert beam._A_s_top.to("cm**2").magnitude == pytest.approx(12.57, rel=1e-3)
-    assert (beam._n1_b, beam._d_b1_b.to("mm").magnitude) == (2, 25)
-    assert beam._A_s_bot.to("cm**2").magnitude == pytest.approx(9.82, rel=1e-3)
+    flexure = beam.flexure_design
+    assert flexure.top.A_s.to("cm**2").magnitude == pytest.approx(12.57, rel=1e-3)
+    assert (flexure.bottom.layers[0].n, flexure.bottom.layers[0].d_b.to("mm").magnitude) == (2, 25)
+    assert flexure.bottom.A_s.to("cm**2").magnitude == pytest.approx(9.82, rel=1e-3)
 
     check_results = node.check_flexure()
     assert check_results.iloc[1]["Position"] == "Top"
@@ -2482,8 +2491,9 @@ def test_design_flexure_ACI_318_19_zero_moment_adopts_geometric_minimum() -> Non
         node.design()
 
     A_s_geo_min = 1.8 / 1000 * beam.width * beam.height
-    assert beam._A_s_bot >= A_s_geo_min
-    assert beam._n1_b > 0
+    bottom = beam.flexure_design.bottom
+    assert bottom.A_s >= A_s_geo_min
+    assert bottom.layers[0].n > 0
     assert beam.V_c > 0 * kN
 
 
@@ -2684,7 +2694,8 @@ def test_low_concrete_strength_negative_sqrt() -> None:
 
     # The designed reinforcement should equal A_s_max due to negative sqrt_value
     # Check that beam has bottom rebar set
-    assert beam._A_s_req_bot == beam._A_s_max_bot
+    bottom = beam.flexure_design.bottom
+    assert bottom.A_s_req == bottom.A_s_max
 
 
 def test_doubly_reinforced_ignores_max_limits() -> None:

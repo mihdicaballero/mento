@@ -247,10 +247,11 @@ def test_beam_transverse_rebar_ACI_318_19_imperial(
     N1 = Node(beam_example_imperial, forces=f)
     results = N1.design_shear()
     assert results is not None
-    assert beam_example_imperial._stirrup_n == 1
-    assert beam_example_imperial._stirrup_d_b == 3 / 8 * inch
-    assert beam_example_imperial._stirrup_s_l == 5 * inch
-    assert beam_example_imperial._A_v.to("cm**2/m").magnitude == pytest.approx(11.2214, rel=1e-3)
+    shear = beam_example_imperial.shear_design
+    assert shear.n_stirrups == 1
+    assert shear.d_b == 3 / 8 * inch
+    assert shear.s_l == 5 * inch
+    assert shear.A_v.to("cm**2/m").magnitude == pytest.approx(11.2214, rel=1e-3)
 
 
 def test_beam_transverse_rebar_ACI_318_19_metric(
@@ -263,10 +264,11 @@ def test_beam_transverse_rebar_ACI_318_19_metric(
     results = N1.design_shear()
 
     assert results is not None
-    assert beam_example_metric._stirrup_n == 1
-    assert beam_example_metric._stirrup_d_b == 10 * mm
-    assert beam_example_metric._stirrup_s_l == 22 * cm
-    assert beam_example_metric._A_v.to("cm**2/m").magnitude == pytest.approx(7.14, rel=1e-3)
+    shear = beam_example_metric.shear_design
+    assert shear.n_stirrups == 1
+    assert shear.d_b == 10 * mm
+    assert shear.s_l == 22 * cm
+    assert shear.A_v.to("cm**2/m").magnitude == pytest.approx(7.14, rel=1e-3)
 
 
 def test_beam_transverse_rebar_max_spacing_imperial(
@@ -279,7 +281,8 @@ def test_beam_transverse_rebar_max_spacing_imperial(
     results = N1.design_shear()
 
     assert results is not None
-    assert beam_example_imperial._stirrup_s_l <= 24 * inch
+    assert beam_example_imperial.shear_design.s_l <= 24 * inch
+    # The spacing across the width has no equivalent on the public shear result yet.
     assert beam_example_imperial._stirrup_s_w <= 24 * inch
 
 
@@ -293,7 +296,7 @@ def test_beam_transverse_rebar_min_diameter(
     results = N1.design_shear()
 
     assert results is not None
-    assert beam_example_metric._stirrup_d_b >= 8 * mm
+    assert beam_example_metric.shear_design.d_b >= 8 * mm
 
 
 def test_beam_transverse_rebar_CIRSOC_201_25(
@@ -307,10 +310,11 @@ def test_beam_transverse_rebar_CIRSOC_201_25(
     results = N1.design_shear()
 
     assert results is not None
-    assert beam_example_metric._stirrup_n == 1
-    assert beam_example_metric._stirrup_d_b == 6 * mm
-    assert beam_example_metric._stirrup_s_l == 22 * cm
-    assert beam_example_metric._A_v.to("cm**2/m").magnitude == pytest.approx(2.57, rel=1e-3)
+    shear = beam_example_metric.shear_design
+    assert shear.n_stirrups == 1
+    assert shear.d_b == 6 * mm
+    assert shear.s_l == 22 * cm
+    assert shear.A_v.to("cm**2/m").magnitude == pytest.approx(2.57, rel=1e-3)
 
 
 # Test 1: Slab mode - spacing penalty
@@ -587,14 +591,15 @@ def test_transverse_rebar_small_spacing_metric() -> None:
     results = N1.design_shear()
 
     assert results is not None
+    shear = beam.shear_design
     # With very high shear, should either:
     # - Have very small spacing (< 5 cm would trigger leg increase)
     # - Or have multiple stirrups (n > 1)
-    assert beam._stirrup_n >= 1
+    assert shear.n_stirrups >= 1
 
     # If spacing is >= 5cm, n should be 1; if < 5cm tried, n should be > 1
-    if beam._stirrup_s_l.to("cm").magnitude >= 5:
-        assert beam._stirrup_n >= 1
+    if shear.s_l.to("cm").magnitude >= 5:
+        assert shear.n_stirrups >= 1
     # The test passes if the design completes without error
 
 
@@ -622,11 +627,12 @@ def test_transverse_rebar_small_spacing_imperial() -> None:
     results = N1.design_shear()
 
     assert results is not None
-    assert beam._stirrup_n >= 1
+    shear = beam.shear_design
+    assert shear.n_stirrups >= 1
 
     # If spacing is >= 2 inch, n should be 1; if < 2 inch tried, n should be > 1
-    if beam._stirrup_s_l.to("inch").magnitude >= 2:
-        assert beam._stirrup_n >= 1
+    if shear.s_l.to("inch").magnitude >= 2:
+        assert shear.n_stirrups >= 1
 
 
 # Test 14: Stirrups with n_legs > 6 (breaking condition)
@@ -655,7 +661,7 @@ def test_transverse_rebar_max_legs_exceeded() -> None:
     # Should complete (either with solution or moving to larger diameter)
     assert results is not None
     # Should not exceed 3 stirrups (6 legs max)
-    assert beam._stirrup_n <= 3
+    assert beam.shear_design.n_stirrups <= 3
 
 
 # Test 15: Zero steel requirement (A_s_req = 0)

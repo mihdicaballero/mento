@@ -677,6 +677,8 @@ def test_beam_summary_all_rebar_layers(
     )
 
     beam = summary.nodes[0].section
+    # BeamSummary only configures the nodes here; no check or design has run, so the
+    # public flexure result is not available and the layers are read off the section.
     # Should have 4 layers of bottom rebar (positive moment)
     assert beam._n1_b == 2
     assert beam._n2_b == 2

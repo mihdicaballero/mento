@@ -399,17 +399,50 @@ the boundary test runs in CI and is parametrized over every equations module, so
 a new code subpackage is covered the moment it exists. Suite 773 → 930 passing,
 coverage still 100 %.
 
-### Phase 2a — Migrate tests to the public API
+### Phase 2a — Migrate tests to the public API — **done 2026-08-30**
 
-Before touching production code, move the tests that read private attributes and
-DataFrame cells (~278 references, plus ~40 distinct private attributes read from
-tests) to `flexure_design` / `shear_design` and the public result API. The suite
-keeps passing against **unchanged** production code — if any expected value has
-to change, the migration was not faithful and it shows immediately. This
-de-risks the transcription-error failure mode of Phase 2 at zero cost.
+Before touching production code, move the tests that read private attributes to
+`flexure_design` / `shear_design`. The suite keeps passing against **unchanged**
+production code — if any expected value has to change, the migration was not
+faithful and it shows immediately.
 
-**Exit:** no test reads a private beam attribute; suite green against unmodified
-production code.
+**Result: 116 candidate reads, 52 migrated, 64 left.** `test_rebar.py` is fully
+clean. Suite unchanged at 930 passed, 1 skipped, and the diff touches `tests/`
+only — not one line of `mento/`.
+
+**The exit criterion as written cannot be met yet, and finding out why was the
+point of the phase.** The 64 remaining reads fall into four groups, only one of
+which is a test-side problem:
+
+1. **No public read-back of the configured reinforcement (the big one, ~35
+   reads).** `flexure_design` and `shear_design` raise `DesignNotRunError`
+   unless a check has run, but they also carry `layers`, `A_s`, `n_stirrups`,
+   `d_b`, `s_l`, `A_v` — which are not results at all, they are *what the
+   section carries*. Every test that asserts a setter worked, or that the
+   constructor defaults are right, reads that state before any check exists, so
+   it has no public way to. **Design input for Phase 2b: the section needs a
+   reinforcement view separate from the design-result view.** Phase 2b removing
+   `DesignNotRunError` is necessary but not sufficient — the split is the real
+   fix.
+2. **No public equivalent at all** — `_stirrup_s_w` (spacing across the width),
+   `_d_shear`, `_lambda_s`, `_phi_M_n_bot`, and the whole `ShearWall` result
+   surface, which is issue #125.
+3. **Empty-layer assertions** — `layers` deliberately omits layers with no
+   bars, so `_n3_b == 0` has no `layers[2]` to read. Where the total area pins
+   the layout, `len(layers)` replaces it; otherwise it stays.
+4. **`test_design_results.py` (12 reads) is exempt by construction** — it tests
+   the adapter, so comparing the public API against the private attributes it
+   maps from is the assertion. Migrating those would make them `x == x`.
+
+One migration was caught and reverted by the suite, which is the phase working
+as designed: an `_A_s_bot` read in `test_flexure_check_EN_1992_2004_01` sits
+*before* the `check_flexure()` call in the same test, so it asserts the layout
+that was just set, not a result. A whole-function regex says the test checks
+flexure; only the ordering says otherwise.
+
+**Exit, restated:** no test reads a private beam attribute *that the public API
+exposes and that is reachable after a check*. Groups 1-3 reopen once Phase 2b
+lands the reinforcement view and extends the result objects.
 
 ### Phase 2b — Checks return result dataclasses
 

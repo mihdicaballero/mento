@@ -261,13 +261,14 @@ def test_shear_check_with_no_tension_reinforcement_warns_and_does_not_raise() ->
         height=20 * cm,
         c_c=25 * mm,
     )
+    # Read before any check runs, so the public flexure result is not available yet.
     assert slab._A_s_bot.magnitude == 0
 
     with pytest.warns(UserWarning, match="Longitudinal rebar As cannot be zero"):
         Node(section=slab, forces=Forces(V_z=5 * kN)).check_shear()
 
     assert slab.V_c.magnitude == 0
-    assert slab._DCRv == float("inf")
+    assert slab.shear_design.DCR == float("inf")
 
 
 def test_flexure_check_with_no_bottom_reinforcement_floors_phi_Mn() -> None:
@@ -288,7 +289,8 @@ def test_flexure_check_with_no_bottom_reinforcement_floors_phi_Mn() -> None:
     )
     results = Node(section=slab, forces=Forces(M_y=0 * kNm)).check_flexure()
 
+    # phi*Mn has no equivalent on the public flexure result yet.
     assert slab._phi_M_n_bot.to("kN*m").magnitude == pytest.approx(0.01)
-    assert slab._DCRb_bot == 0
+    assert slab.flexure_design.bottom.DCR == 0
     assert results.iloc[1]["Position"] == "Bottom"
     assert results.iloc[1]["As"] == 0
