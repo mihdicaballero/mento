@@ -535,14 +535,43 @@ first. `tests/test_architecture_boundaries.py` now imports each entry point in a
 Emptying it also means `import mento.codes` no longer drags in matplotlib or
 docx — the Phase 3 exit criterion, met early and now guarded by a test.
 
-**Not done, and honestly not close: the checks still mutate the beam.** The
-§3.3 criterion asks for a loop that mutates no element, and `report=False` only
-removes the presentation, not the writes to `self`. Taking those out means the
-check functions stop being the thing that stores results, which in turn means
-the report layer stops reading them off the beam — **that is Phase 3, and it has
-to come first.** At 1.56 ms a shear check, 20,000 of them still take 31 s
-against the 5 s target, and what is left is the orchestrators' own pint
-arithmetic rather than anything a phase boundary hides.
+**Investigated after Phase 3 (2026-08-30), and the answer is not a refactor.**
+With the report layer no longer reading results off the element, what a check
+still writes was measured directly. It splits in two, and only one half is a
+defect:
+
+*Results on the element* (20 attributes: `V_c`, `_DCRv`, `_phi_V_n`, ...) are
+the deprecated compatibility layer this phase explicitly sanctions. They are
+captured into a frozen `ShearCheck` immediately, so a caller never reads them.
+
+*Section state* is the real finding. When a section has **no stirrups
+configured**, `check_shear` drops the assumed stirrup layer and recomputes the
+effective depths on the section itself:
+
+| | flexure first | shear first |
+| --- | --- | --- |
+| bottom DCR | 0.59309 | **0.58215** (−1.84 %) |
+| `d_bot` | 45.7 cm | 46.5 cm |
+
+**Running the shear check changes what a later flexure check reports.** A
+section that has stirrups is unaffected, which localises the cause: flexure
+assumes `settings.stirrup_diameter_ini`, shear assumes none, and nothing
+reconciles them. Exposure is the check-only path — which is exactly what mako
+does per station before it decides reinforcement. `design()` hides it, because
+designing assigns stirrups.
+
+**This is an engineering decision, not a cleanup.** Making flexure drop the
+layer, or shear keep it, or the section decide once — every option moves
+numbers the validation suite pins. It is recorded as a `strict` xfail in
+`test_check_order_does_not_change_the_flexure_result`, paired with a passing
+test proving the coupling vanishes once stirrups exist; fixing it turns the
+xfail into a failure, which is the prompt to drop the marker.
+
+**What full statelessness would still buy** is that `shear_check_results`
+touches no attribute at all. That needs a state object threaded through ~11
+helpers per code per check type. It is worth doing, but it is not what is
+holding mako back: at 1.56 ms a shear check, 20,000 take 31 s against the 5 s
+target, and the remaining cost is the orchestrators' own pint arithmetic.
 
 Only now does production code change. Extend `design_results.py` with
 check-result types; make check/design functions build and return them. Because

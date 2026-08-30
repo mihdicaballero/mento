@@ -3495,3 +3495,72 @@ def test_longitudinal_rebar_area_ignores_none_diameters() -> None:
 # This is where pytest will collect the tests and run them
 if __name__ == "__main__":
     pytest.main()
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "Known issue: on a section with no stirrups configured, check_shear drops the "
+        "assumed stirrup layer and recomputes the effective depths, so a flexure check "
+        "run afterwards uses a different d than one run before. Needs an engineering "
+        "decision -- flexure assumes settings.stirrup_diameter_ini, shear assumes none -- "
+        "and every way of reconciling them moves validated numbers. Remove this marker "
+        "when the two agree."
+    ),
+)
+def test_check_order_does_not_change_the_flexure_result() -> None:
+    """Checking shear must not change what a flexure check then reports.
+
+    Measured today: the bottom DCR moves 1.84 % (0.59309 -> 0.58215) because
+    ``_d_bot`` goes 45.7 -> 46.5 cm. A beam that HAS stirrups is unaffected,
+    which is what localises the cause.
+    """
+
+    def build() -> RectangularBeam:
+        beam = RectangularBeam(
+            label="order",
+            concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+            steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+            width=30 * cm,
+            height=50 * cm,
+            c_c=25 * mm,
+        )
+        beam.set_longitudinal_rebar_bot(n1=3, d_b1=20 * mm)
+        return beam
+
+    combo = [Forces(label="C1", V_z=80 * kN, M_y=90 * kNm)]
+
+    flexure_first = build().flexure_check_results(combo)[0]
+
+    beam = build()
+    beam.shear_check_results(combo)
+    shear_first = beam.flexure_check_results(combo)[0]
+
+    assert flexure_first.bottom.DCR == pytest.approx(shear_first.bottom.DCR)
+
+
+def test_check_order_is_harmless_once_stirrups_are_configured() -> None:
+    """The counterpart of the xfail above: with stirrups there is no assumption
+    for the shear check to drop, so the order stops mattering."""
+
+    def build() -> RectangularBeam:
+        beam = RectangularBeam(
+            label="order-ok",
+            concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+            steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+            width=30 * cm,
+            height=50 * cm,
+            c_c=25 * mm,
+        )
+        beam.set_longitudinal_rebar_bot(n1=3, d_b1=20 * mm)
+        beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=20 * cm)
+        return beam
+
+    combo = [Forces(label="C1", V_z=80 * kN, M_y=90 * kNm)]
+
+    flexure_first = build().flexure_check_results(combo)[0]
+    beam = build()
+    beam.shear_check_results(combo)
+    shear_first = beam.flexure_check_results(combo)[0]
+
+    assert flexure_first.bottom.DCR == pytest.approx(shear_first.bottom.DCR)
