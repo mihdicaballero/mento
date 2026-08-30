@@ -17,7 +17,12 @@ from pathlib import Path
 
 from mento import MPa, mm, cm, kN, kNm, m
 from mento.beam_summary import BeamSummary
-from mento.reports.summaries import BEAM_DATA_COLUMNS, SUMMARY_FONT_SIZE
+from mento.reports.summaries import (
+    BEAM_DATA_COLUMNS,
+    FLEXURE_SUMMARY_WIDTHS,
+    SHEAR_SUMMARY_WIDTHS,
+    SUMMARY_FONT_SIZE,
+)
 from mento.material import Concrete_ACI_318_19, SteelBar, Concrete_EN_1992_2004
 from mento.node import Node
 from mento.results import DocumentBuilder, FAIL_MARK, PASS_MARK, VERDICT_COLUMN
@@ -1486,8 +1491,22 @@ def test_a_section_that_only_just_passes_is_not_reported_as_failing(
     assert results[VERDICT_COLUMN][1] == PASS_MARK
 
 
+@pytest.mark.parametrize(
+    "concrete, tick, demand, capacity",
+    [
+        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), "Mu≤ØMn", "Mu", "ØMn"),
+        (Concrete_EN_1992_2004(name="C25/30", f_c=25 * MPa), "MEd≤MRd", "MEd", "MRd"),
+    ],
+    ids=["ACI", "EN"],
+)
 def test_the_flexure_summary_drops_the_codes_own_capacity_tick(
-    sample_steel: SteelBar, sample_input_dataframe: pd.DataFrame, monkeypatch: pytest.MonkeyPatch
+    concrete: Concrete_ACI_318_19,
+    tick: str,
+    demand: str,
+    capacity: str,
+    sample_steel: SteelBar,
+    sample_input_dataframe: pd.DataFrame,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Same reasoning as the shear ticks, and the same declaration.
 
@@ -1495,17 +1514,39 @@ def test_the_flexure_summary_drops_the_codes_own_capacity_tick(
     tables both read that list, so dropping a column does not mean finding
     every table that carries it.
     """
-    summary = BeamSummary(
-        concrete=Concrete_EN_1992_2004(name="C25/30", f_c=25 * MPa),
-        steel_bar=sample_steel,
-        beam_list=sample_input_dataframe,
-    )
+    summary = BeamSummary(concrete=concrete, steel_bar=sample_steel, beam_list=sample_input_dataframe)
     header = [cell.text for cell in _built_document(summary, monkeypatch).tables[-3].rows[0].cells]
 
-    assert "MRd" in header, f"expected the flexure summary, got {header}"
-    assert "MEd≤MRd" not in header
-    # The demand and the resistance stay, so the margin is still readable.
-    assert {"MEd", "MRd", "DCR"} <= set(header)
+    assert capacity in header, f"expected the flexure summary, got {header}"
+    assert tick not in header
+    # The demand and the capacity stay, so the margin is still readable.
+    assert {demand, capacity, "DCR"} <= set(header)
 
     shown = summary.flexure_results(capacity_check=False)
-    assert "MEd≤MRd" in shown.columns
+    assert tick in shown.columns
+
+
+def test_both_codes_report_summaries_of_the_same_shape(
+    sample_steel: SteelBar, sample_input_dataframe: pd.DataFrame, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """What lets one hand-set width list serve both codes.
+
+    The widths are typed against the rendered document, not computed, so they
+    only hold while the two codes drop the same number of columns. If one ever
+    stops doing that, this says so here rather than in the next report someone
+    opens.
+    """
+    shapes = {}
+    for concrete in (
+        Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        Concrete_EN_1992_2004(name="C25/30", f_c=25 * MPa),
+    ):
+        summary = BeamSummary(concrete=concrete, steel_bar=sample_steel, beam_list=sample_input_dataframe)
+        doc = _built_document(summary, monkeypatch)
+        shapes[concrete.design_code] = (
+            len(doc.tables[-3].columns),
+            len(doc.tables[-2].columns),
+        )
+
+    assert len(set(shapes.values())) == 1, shapes
+    assert shapes["ACI 318-19"] == (len(FLEXURE_SUMMARY_WIDTHS), len(SHEAR_SUMMARY_WIDTHS))

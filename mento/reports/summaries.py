@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Dict, Optional, cast
 
 import pandas as pd
-from docx.shared import Cm, Emu
+from docx.shared import Cm
 
 from mento._version import __version__ as MENTO_VERSION
 from mento.codes.registry import design_code
@@ -56,18 +56,45 @@ BEAM_DATA_COLUMNS = (
 #: eleven rebar columns hold a count or a diameter and no more.
 BEAM_DATA_WIDTHS = [Cm(2), Cm(1), Cm(1), Cm(1)] + [Cm(0.9)] * 11
 
+#: Widths for the two per-combination summaries, one entry per column, set
+#: against the rendered document rather than computed. Both design codes leave
+#: the same three capacity ticks out of these tables, so both end up the same
+#: shape -- ten columns and twelve -- and one list each serves them. If a code
+#: ever drops a different set, `add_table` warns that its list fell short
+#: rather than quietly repeating the last width.
+FLEXURE_SUMMARY_WIDTHS = [
+    Cm(2),
+    Cm(4),
+    Cm(1.3),
+    Cm(1.2),
+    Cm(1.6),
+    Cm(1.6),
+    Cm(1.2),
+    Cm(1.2),
+    Cm(1.2),
+    Cm(1),
+]
+
+SHEAR_SUMMARY_WIDTHS = [
+    Cm(2),
+    Cm(4),
+    Cm(1.2),
+    Cm(1.2),
+    Cm(1.1),
+    Cm(1.2),
+    Cm(1.2),
+    Cm(1.2),
+    Cm(1.2),
+    Cm(1.3),
+    Cm(1),
+    Cm(1),
+]
+
 
 def _without_dropped_columns(self: "BeamSummary", df: pd.DataFrame) -> pd.DataFrame:
     """Drop the columns the active design code keeps out of its Word summary."""
     dropped = design_code(self.concrete).summary_drop_columns
     return df.drop(columns=[column for column in dropped if column in df.columns])
-
-
-def _label_then_even_widths(doc_builder: DocumentBuilder, df: pd.DataFrame, *leading: Cm) -> list:
-    """The leading columns as given, and the rest sharing the remaining width."""
-    rest = len(df.columns) - len(leading)
-    spare = doc_builder.usable_width.emu - sum(width.emu for width in leading)
-    return list(leading) + [Emu(spare // rest)] * rest
 
 
 def _details(value: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -223,7 +250,7 @@ def beam_summary_doc(self: "BeamSummary", index: int = 1) -> None:
     df_flex_all = _without_dropped_columns(self, self.flexure_results(capacity_check=False))
     doc_builder.add_table_data(
         df_flex_all,
-        column_widths=_label_then_even_widths(doc_builder, df_flex_all, Cm(2), Cm(4)),
+        column_widths=FLEXURE_SUMMARY_WIDTHS,
         font_size=SUMMARY_FONT_SIZE,
     )
 
@@ -231,7 +258,7 @@ def beam_summary_doc(self: "BeamSummary", index: int = 1) -> None:
     df_shear_all = _without_dropped_columns(self, self.shear_results(capacity_check=False))
     doc_builder.add_table_data(
         df_shear_all,
-        column_widths=_label_then_even_widths(doc_builder, df_shear_all, Cm(2), Cm(4)),
+        column_widths=SHEAR_SUMMARY_WIDTHS,
         font_size=SUMMARY_FONT_SIZE,
     )
 
