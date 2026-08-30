@@ -1,6 +1,9 @@
 # mento architecture roadmap
 
-Status: accepted (2026-08-26). Companion decision records live in [`adr/`](adr/).
+Status: accepted (2026-08-26); amended 2026-08-29 with the measured performance
+baseline (§1.5), the equation-signature decision (ADR-0005), the Phase 2 split,
+per-phase exit criteria, and the performance track. Companion decision records
+live in [`adr/`](adr/).
 
 This document describes where mento's internal architecture is today, what the two
 closest open-source reference projects do, the target architecture we are converging
@@ -66,15 +69,56 @@ Both are patches on top of the cause rather than its removal.
 - The one clean boundary today is `results.py` (`Formatter`, `TablePrinter`,
   `DocumentBuilder`), which does not know about beam.
 
-### 1.4 Hygiene findings (cheap to fix, tracked in Phase 0)
+### 1.4 Hygiene findings (resolved — Phase 0, 2026-08-29)
 
-- `build/lib/mento/` (a stale copy of the package) and `docs/build/` are committed.
-- Two contradictory pytest configs: `pyproject.toml` (`testpaths = ["tests"]`) and
-  `tests/pytest.ini` (`testpaths = test`, a nonexistent directory).
-- No `conftest.py`; beam fixtures are re-declared per test file.
-- `tests/modules_testing.py` (829 lines) contains no tests — it is a manual
-  exploration script living inside `tests/`.
-- 17 generated `.docx`/`.xlsx` artifacts are versioned under `docs/source/examples/`.
+- ~~`build/lib/mento/` and `docs/build/` are committed.~~ Already untracked when
+  Phase 0 ran; `.gitignore`'s `build/` pattern matches at any depth. The stale
+  copies remain on disk as local build artifacts only.
+- Two contradictory pytest configs. **Worse than diagnosed:** `tests/pytest.ini`
+  won — running `pytest tests/` set rootdir to `tests/` and used it, so
+  `pyproject.toml`'s coverage `addopts` were silently ignored. Only CI, which
+  passes `--cov` explicitly, was measuring coverage. `pytest.ini` is deleted;
+  `pyproject.toml` is now the configfile.
+- No `conftest.py`; fixtures re-declared per test file. Three fixtures were
+  declared identically in two modules each (`concrete_c25`, `steel_b500s`,
+  `steel`) and now live in `tests/conftest.py`, which also sets the `Agg`
+  backend that four modules were each setting by hand.
+- `tests/modules_testing.py` (829 lines) contains no tests. Moved to
+  `scripts/modules_testing.py`.
+- ~~17 generated `.docx`/`.xlsx` artifacts are versioned.~~ Already untracked; the
+  `*.docx`/`*.xlsx`/`*.pdf` ignore rules cover them.
+
+One trap found and deliberately left alone: `beam_example_imperial` is defined in
+both `test_beam.py` and `test_rebar.py` with **different** geometry and settings.
+Same name, different fixture — hoisting either into `conftest.py` would silently
+change the other module's expected values.
+
+### 1.5 Performance baseline (measured 2026-08-29)
+
+Profiled on rame-env / Python 3.12, commit 6299b78 (ACI 318-19, 30×50 section,
+M = 120 kNm); consistent with an independent measurement of ~331 ms on another
+machine:
+
+| Call | Cost today |
+| --- | --- |
+| `design_flexure` | 375 ms |
+| `check_shear` | 8.3 ms |
+| `check_flexure` (designed beam) | 7.3 ms |
+
+Two facts anchor the plan:
+
+- **pint is the multiplier.** ~65 % of profiler self-time is pint-internal
+  (~967k pint calls vs ~2.8k mento calls per design). A representative flexure
+  chain runs 1071 µs/call with pint + string units, 313 µs with prebuilt unit
+  objects, **0.9 µs with plain floats** (~1200×). This is what decides the
+  equation signature — see ADR-0005.
+- **The design cost is rebar selection, not equations.** 97 % of
+  `design_flexure` is the combinatorial search in `rebar.py` (hundreds of
+  spacing/penalty evaluations, each doing pint arithmetic). The flexure
+  equations cost ~6 ms. So the mako loop — which *checks* per station and
+  designs rebar once — costs ~8 ms/station today, not 375: ~2.7 min serial for
+  1000 stations × 2 faces × 10 combos. Slow, but an optimization target, not a
+  blocker.
 
 ---
 
@@ -132,29 +176,42 @@ foundation        units.py, material.py, forces.py, — leaves; already clean to
 Per design code, a subpackage with two kinds of modules:
 
 ```python
-# codes/aci_318_19/equations/shear.py — ONLY formulas; cite the clause; tested
-# against the code's own tables.
-def V_c(f_c, lambda_, rho_w, b_w, d, sigma_Nu) -> Quantity:
-    """Concrete shear strength — ACI 318-19, Table 22.5.5.1(c)."""
+# codes/aci_318_19/equations/shear.py — ONLY formulas; cite the clause; floats in
+# N/mm/MPa per ADR-0005; tested against the code's own tables.
+def V_c(f_c: float, lambda_: float, rho_w: float, b_w: float, d: float, sigma_Nu: float) -> float:
+    """Concrete shear strength [N] — ACI 318-19, Table 22.5.5.1(c).
 
-def s_max(d: Quantity, V_s: Quantity, threshold: Quantity) -> Quantity:
-    """Maximum stirrup spacing — ACI 318-19 §9.7.6.2.2."""
+    f_c [MPa], b_w [mm], d [mm], sigma_Nu [MPa].
+    """
+
+def s_max(d: float, V_s: float, threshold: float) -> float:
+    """Maximum stirrup spacing [mm] — ACI 318-19 §9.7.6.2.2."""
 ```
 
 ```python
-# codes/aci_318_19/checker.py — ONLY factors + orchestration + result assembly.
+# codes/aci_318_19/checker.py — ONLY factors + unit boundary + orchestration +
+# result assembly. Converts pint → float once on entry (prebuilt unit objects,
+# never strings), wraps float → pint once in the result.
 class ACI318_19:
     phi_v = 0.75
 
     def check_shear(self, section, force, settings) -> ShearCheckResult:
-        Vc = eq.V_c(f_c=section.concrete.f_c, b_w=section.width, ...)
+        Vc = eq.V_c(f_c=section.concrete.f_c.to(MPa).magnitude, b_w=section.width.to(mm).magnitude, ...)
         Vs = eq.V_s(...)
-        return ShearCheckResult(V_c=Vc, phi_V_n=self.phi_v * (Vc + Vs), ...)
+        return ShearCheckResult(V_c=Vc * N, phi_V_n=self.phi_v * (Vc + Vs) * N, ...)
 ```
 
 The discipline that keeps this honest: **the checker does not compute — it calls
-equations and assembles the result.** If a checker method starts containing algebra,
-that algebra belongs in `equations/`.
+equations and assembles the result — and the equations do not convert.** If a
+checker method starts containing algebra, that algebra belongs in `equations/`.
+This boundary is enforced mechanically, not by review: a test walks the AST of
+every `checker.py` and fails on arithmetic between quantities, and another fails
+on any pint import inside `equations/`.
+
+Equation signatures are floats in a fixed N/mm/MPa/N·mm system (ADR-0005): the
+measured pint overhead (~1000× on the hot chain, see §1.5) rules out Quantities
+inside the equations layer, and pint stays in everything users touch — inputs,
+results, reports.
 
 Why hybrid and not pure-functions-only (structuralcodes) or class-only
 (concrete-properties): the equations get the testability and the low contribution
@@ -195,6 +252,13 @@ results = [
 If a change makes this loop need a mutable element, a display import, or per-call
 state cleanup, the change is wrong.
 
+**Performance target:** 20,000 checks (1000 stations × 2 faces × 10 combinations)
+in **under 5 seconds, serial**, measured at the close of Phase 2b against the
+§1.5 baseline. With float equations (ADR-0005) the per-check cost becomes boundary
+conversion plus dataclass assembly, so the target is comfortable — it exists so we
+know when to stop optimizing, and so a regression is a failed exit criterion
+rather than an opinion.
+
 ### 3.4 Presentation as its own layer (see ADR-0004)
 
 Word reports, plots, styled tables, and pint display formatting are kept as
@@ -203,45 +267,100 @@ first-class features — implemented in modules that consume result dataclasses:
 - `_initialize_dicts_*` table builders move out of `codes/` into the report layer.
 - Section/rebar plotting moves out of `beam.py` into a plotting module (adopting a
   `plotting_context`-style helper to centralize matplotlib boilerplate).
-- Display units follow concrete-properties: calculations run in pint quantities;
-  *rounding and unit choice for display* belong to the presentation layer.
+- Units follow concrete-properties more closely than first stated: the equations
+  layer is float-only in a consistent base system, and pint lives at the
+  boundaries — inputs, result dataclasses, and display (ADR-0005). *Rounding and
+  unit choice for display* belong to the presentation layer.
 
 ---
 
 ## 4. Migration phases
 
 Incremental; the package imports and the full test suite passes after every phase.
-Each phase is independently mergeable.
+Each phase is independently mergeable, and each has an **exit criterion** beyond
+green tests — green only says nothing broke, not that the phase achieved its goal.
 
-### Phase 0 — Hygiene (no risk, do first)
+### Phase 0 — Hygiene (no risk, do first) — **done 2026-08-29**
 
-- Remove `build/` and `docs/build/` from version control; extend `.gitignore`.
-- Delete `tests/pytest.ini`; `pyproject.toml` is the single pytest config.
-- Add `tests/conftest.py`; move the shared beam/material fixtures there.
-- Move `tests/modules_testing.py` out of `tests/` (e.g. `scripts/` or delete).
-- Stop versioning generated `.docx`/`.xlsx` under `docs/source/examples/`.
+- ~~Remove `build/` and `docs/build/` from version control; extend
+  `.gitignore`.~~ Already clean; no change needed (see §1.4).
+- Delete `tests/pytest.ini`; `pyproject.toml` is the single pytest config. ✔
+- Add `tests/conftest.py`; move the shared fixtures there. ✔
+- Move `tests/modules_testing.py` out of `tests/` → `scripts/`. ✔
+- ~~Stop versioning generated `.docx`/`.xlsx`.~~ Already clean.
+
+**Exit met:** one pytest config (`configfile: pyproject.toml`, rootdir at the
+repo root); shared fixtures and the `Agg` backend live in `conftest.py`; no
+generated artifacts tracked. Suite unchanged at **733 passed, 1 skipped**
+before and after; `ruff check`, `ruff format --check` and `mypy mento/` clean.
+
+### Performance track — cheap wins, parallel to any phase
+
+Independent of the architecture work, driven by the §1.5 measurements:
+
+- **Mechanical `.to()` fix**: replace the ~384 string conversions (`.to("cm")`)
+  with prebuilt unit objects (`.to(cm)`) in code that will *not* migrate into
+  `equations/` — rebar orchestration, presentation, elements. Measured 6.3× per
+  conversion, ~3.4× on pint-heavy paths. Zero design decisions involved.
+- **Rebar selection precompute**: `rebar.py` is 97 % of design cost. Build the
+  candidate table once per settings with float magnitudes (the zapatas-style
+  `_precompute_design_arrays` pattern) and evaluate spacing checks and penalties
+  vectorized in numpy. Expected to take `design_flexure` from ~375 ms to well
+  under 50 ms without touching any phase.
+
+**Exit:** benchmark rerun recorded next to §1.5; `design_flexure` under 50 ms.
 
 ### Phase 1 — Extract pure equations
 
 Inside `codes/`, split code formulas out of the mutating orchestrators into
-`equations/` modules (pure in / pure out, clause in docstring). The existing
-orchestrators keep mutating the beam **but now call the pure functions**. Add
-parametrized tests against code tables for each extracted equation. No public
-behavior changes; this phase only *creates the layer that does not exist yet*.
+`equations/` modules — **plain floats in the N/mm/MPa system, per ADR-0005**,
+clause in docstring. The existing orchestrators keep mutating the beam **but now
+call the pure functions**, converting at the call site with prebuilt unit
+objects. Add parametrized tests against code tables for each extracted equation.
+No public behavior changes; this phase only *creates the layer that does not
+exist yet*. The boundary gets teeth from day one: the AST test of §3.1 (no
+algebra in checkers, no pint in `equations/`) lands with the first extracted
+module.
 
-### Phase 2 — Checks return result dataclasses
+**Exit:** zero `self.` and zero pint imports inside `equations/`; every function
+cites its clause and has a parametrized test against the code's table; the
+boundary test is in CI.
 
-Extend `design_results.py` with check-result types; make check/design functions
-build and return them. Private beam attributes are kept synchronized as a
-deprecated compatibility layer (`DeprecationWarning` on documented ones). The
-envelope accumulators are deleted — enveloping becomes a pure operation over the
-returned list. This is the phase that unblocks mako.
+### Phase 2a — Migrate tests to the public API
+
+Before touching production code, move the tests that read private attributes and
+DataFrame cells (~278 references, plus ~40 distinct private attributes read from
+tests) to `flexure_design` / `shear_design` and the public result API. The suite
+keeps passing against **unchanged** production code — if any expected value has
+to change, the migration was not faithful and it shows immediately. This
+de-risks the transcription-error failure mode of Phase 2 at zero cost.
+
+**Exit:** no test reads a private beam attribute; suite green against unmodified
+production code.
+
+### Phase 2b — Checks return result dataclasses
+
+Only now does production code change. Extend `design_results.py` with
+check-result types; make check/design functions build and return them. Because
+the tests already assert through the public API (Phase 2a), this phase does not
+touch them: if they pass, behavior was preserved. Private beam attributes are
+kept synchronized as a deprecated compatibility layer (`DeprecationWarning` on
+documented ones). The envelope accumulators are deleted — enveloping becomes a
+pure operation over the returned list. Together with Phase 1's float equations,
+this is what unblocks mako: immutability for correctness and parallelism, float
+equations for speed.
+
+**Exit:** the §3.3 mako loop runs without mutating any element; the §1.5
+benchmark is rerun and meets the < 5 s / 20,000-checks target.
 
 ### Phase 3 — Extract presentation
 
 Move `_initialize_dicts_*` out of the code modules into the report layer; move
 matplotlib and docx code out of `beam.py`. After this phase, `codes/` contains only
 equations + checkers, and elements contain only geometry + thin orchestration.
+
+**Exit:** `import mento.codes` imports neither matplotlib nor docx — verified by
+a test.
 
 ### Phase 4 — Code registry
 
@@ -250,6 +369,16 @@ Formalize the per-code subpackage protocol (structuralcodes-style
 and future codes plug in as subpackages without touching elements. Only worth doing
 once phases 1–3 exist; a registry over today's structure would formalize the
 coupling instead of removing it.
+
+**Exit:** adding a code requires editing no file under `elements`.
+
+### Features in flight during the migration
+
+Open `help wanted` issues (#123, #124, #125, #127) are not frozen, but they
+follow the layer that exists when they land: once Phase 1 creates `equations/`
+for a code, new verifications for that code write their formulas there from the
+start; until then they follow the current style and are listed in the issue as
+migration debt. Nothing is written in the old style *silently*.
 
 ---
 
