@@ -16,15 +16,17 @@ from mento.material import Concrete, SteelBar
 from mento.settings import BeamSettings
 from mento.units import cm, dimensionless, kN, mm
 
-from mento.codes.ACI_318_19_wall import _check_shear_ACI_318_19_wall
-from mento.codes.check_state import apply_wall_shear_state
+from mento.codes.registry import design_code
 from mento.plots.walls import plot_wall_elevation
 from mento.reports import walls as wall_reports
 
 
 class ShearWall(RectangularBeam):
     """
-    Reinforced concrete structural wall — ACI 318-19 Section 11 shear check/design.
+    Reinforced concrete structural wall — shear check and design.
+
+    The design code is whatever the concrete declares; only codes whose
+    registry entry supplies the wall hooks can check one.
 
     Geometry:
         thickness — wall thickness  (t)         [maps to parent's ``width``]
@@ -126,7 +128,7 @@ class ShearWall(RectangularBeam):
         self._s_v: Quantity = 0 * mm
         self._rho_l: Quantity = 0 * dimensionless
 
-        # Wall shear result quantities (ACI 318-19)
+        # Wall shear result quantities
         self._Acv: Quantity = 0 * cm**2
         self._alpha_c: float = 0.0
         self._hw_lw: float = 0.0
@@ -202,16 +204,12 @@ class ShearWall(RectangularBeam):
         self._limiting_case_shear_details = None
 
         for force in forces:
-            if self.concrete.design_code == "ACI 318-19" or self.concrete.design_code == "CIRSOC 201-25":
-                state = _check_shear_ACI_318_19_wall(self, force)
-                # The report tables read the wall, so the state is applied here
-                # and not on a values-only path.
-                apply_wall_shear_state(self, state)
-                result = wall_reports.build_wall_shear_report(self, force)
-            else:
-                raise NotImplementedError(
-                    f"Shear wall check not implemented for design code: {self.concrete.design_code}"
-                )
+            code = design_code(self.concrete)
+            state = code.requires("check_shear_wall")(self, force)
+            # The report tables read the wall, so the state is applied here
+            # and not on a values-only path.
+            code.requires("apply_wall_shear_state")(self, state)
+            result = wall_reports.build_wall_shear_report(self, force)
 
             self._shear_results_list.append(result)
             self._shear_results_detailed_list[force.id] = {
@@ -246,15 +244,7 @@ class ShearWall(RectangularBeam):
         if not forces:
             raise ValueError("design_shear requires at least one Forces object.")
 
-        code = self.concrete.design_code
-        if code == "ACI 318-19" or code == "CIRSOC 201-25":
-            # CIRSOC 201-25 reuses the ACI wall design; the code-specific bar
-            # catalogue is selected inside _design_shear_ACI_318_19_wall.
-            from mento.codes.ACI_318_19_wall import _design_shear_ACI_318_19_wall
-
-            _design_shear_ACI_318_19_wall(self, forces)
-        else:
-            raise NotImplementedError(f"Shear wall design not implemented for design code: {code}")
+        design_code(self.concrete).requires("design_shear_wall")(self, forces)
 
         # Re-run the check so the returned DataFrame / detail dicts reflect the mesh.
         return self.check_shear(forces)

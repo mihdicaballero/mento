@@ -7,10 +7,10 @@ from collections import OrderedDict
 from mento.material import (
     Concrete,
     SteelBar,
-    Concrete_EN_1992_2004,
 )
 from mento.forces import Forces
 from mento.beam import RectangularBeam
+from mento.codes.registry import design_code
 from mento import mm, cm, kN, MPa, m, inch, ft, kNm
 from mento.node import Node
 from mento.reports.summaries import beam_summary_doc
@@ -233,29 +233,16 @@ class BeamSummary:
                     "Av,real": "cm²/m",
                 }
 
-                # Code-specific data #TODO
-                if isinstance(self.concrete, Concrete_EN_1992_2004):
-                    code_specific_data = {
-                        "MRd,top": round(beam._M_Rd_top.to("kN*m").magnitude, 1),
-                        "MRd,bot": round(beam._M_Rd_bot.to("kN*m").magnitude, 1),
-                        "VRd": shear_results["VRd"][1],
-                    }
-                    code_specific_units = {
-                        "MRd,top": "kNm",
-                        "MRd,bot": "kNm",
-                        "VRd": "kN",
-                    }
-                else:  # ACI 318-19 or CIRSOC 201-25 design code
-                    code_specific_data = {
-                        "ØMn,top": round(beam._phi_M_n_top.to("kN*m").magnitude, 1),
-                        "ØMn,bot": round(beam._phi_M_n_bot.to("kN*m").magnitude, 1),
-                        "ØVn": shear_results["ØVn"][1],
-                    }
-                    code_specific_units = {
-                        "ØMn,top": "kNm",
-                        "ØMn,bot": "kNm",
-                        "ØVn": "kN",
-                    }
+                # Code-specific data: the column names are the code's own.
+                code = design_code(self.concrete)
+                cols = code.summary_columns
+                capacities = code.requires("capacity_columns")(beam)
+                code_specific_data = {**capacities, cols["shear_capacity"]: shear_results[cols["shear_capacity"]][1]}
+                code_specific_units = {
+                    cols["moment_capacity_top"]: "kNm",
+                    cols["moment_capacity_bot"]: "kNm",
+                    cols["shear_capacity"]: "kN",
+                }
 
                 # Merge data dictionaries
                 merged_data = {**common_data, **code_specific_data}
@@ -307,41 +294,24 @@ class BeamSummary:
                     "DCRv": "",
                 }
 
-                # Code-specific data
-                if isinstance(self.concrete, Concrete_EN_1992_2004):  # TODO
-                    code_specific_data = {
-                        "MEd": round(flexure_results["MEd"][0], 1),
-                        "VEd": round(shear_results["VEd,2"][0], 1),
-                        "NEd": round(shear_results["NEd"][0], 1),
-                        "MRd,top": round(beam._M_Rd_top.to("kN*m").magnitude, 1),
-                        "MRd,bot": round(beam._M_Rd_bot.to("kN*m").magnitude, 1),
-                        "VRd": round(shear_results["VRd"][0], 1),
-                    }
-                    code_specific_units = {
-                        "MEd": "kNm",
-                        "VEd": "kN",
-                        "NEd": "kN",
-                        "MRd,top": "kNm",
-                        "MRd,bot": "kNm",
-                        "VRd": "kN",
-                    }
-                else:  # ACI 318-19 or CIRSOC 201-25 design code
-                    code_specific_data = {
-                        "Mu": round(flexure_results["Mu"][0], 1),
-                        "Vu": round(shear_results["Vu"][0], 1),
-                        "Nu": round(shear_results["Nu"][0], 1),
-                        "ØMn,top": round(beam._phi_M_n_top.to("kN*m").magnitude, 1),
-                        "ØMn,bot": round(beam._phi_M_n_bot.to("kN*m").magnitude, 1),
-                        "ØVn": round(shear_results["ØVn"][0], 1),
-                    }
-                    code_specific_units = {
-                        "Mu": "kNm",
-                        "Vu": "kN",
-                        "Nu": "kN",
-                        "ØMn,top": "kNm",
-                        "ØMn,bot": "kNm",
-                        "ØVn": "kN",
-                    }
+                # Code-specific data: the column names are the code's own.
+                code = design_code(self.concrete)
+                cols = code.summary_columns
+                code_specific_data = {
+                    cols["moment_demand"]: round(flexure_results[cols["moment_demand"]][0], 1),
+                    cols["shear_demand"]: round(shear_results[cols["shear_demand_source"]][0], 1),
+                    cols["axial_demand"]: round(shear_results[cols["axial_demand"]][0], 1),
+                    **code.requires("capacity_columns")(beam),
+                    cols["shear_capacity"]: round(shear_results[cols["shear_capacity"]][0], 1),
+                }
+                code_specific_units = {
+                    cols["moment_demand"]: "kNm",
+                    cols["shear_demand"]: "kN",
+                    cols["axial_demand"]: "kN",
+                    cols["moment_capacity_top"]: "kNm",
+                    cols["moment_capacity_bot"]: "kNm",
+                    cols["shear_capacity"]: "kN",
+                }
 
                 # Assemble results_dict and units_row from the split dicts
                 results_dict = OrderedDict({**common_data, **code_specific_data})
@@ -513,12 +483,10 @@ class BeamSummary:
         # Add code-specific capacity columns after a capacity flexure check
         if capacity_check and check_type == "flexure":
             beam: RectangularBeam = node.section  # type: ignore
-            if isinstance(self.concrete, Concrete_EN_1992_2004):
-                results["MRd,top"] = round(beam._M_Rd_top.to("kN*m").magnitude, 1)
-                results["MRd,bot"] = round(beam._M_Rd_bot.to("kN*m").magnitude, 1)
-            else:
-                results["ØMn,top"] = round(beam._phi_M_n_top.to("kN*m").magnitude, 1)
-                results["ØMn,bot"] = round(beam._phi_M_n_bot.to("kN*m").magnitude, 1)
+            # `results` is a DataFrame: each capacity becomes its own column,
+            # named the way the active code names it.
+            for column, value in design_code(self.concrete).requires("capacity_columns")(beam).items():
+                results[column] = value
 
         # Restore original forces if we did a capacity check
         if capacity_check:

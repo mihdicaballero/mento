@@ -12,13 +12,10 @@ from numbers import Integral
 # from devtools import debug
 
 from mento.rectangular import RectangularSection
-from mento.material import (
-    Concrete_ACI_318_19,
-    Concrete_EN_1992_2004,
-)
+from mento.codes.registry import design_code
 from mento.precompute import refresh_section_floats
 from mento.rebar import Rebar
-from mento.units import MPa, mm, inch, kN, m, cm, kNm, dimensionless
+from mento.units import mm, inch, kN, m, cm, dimensionless
 from mento.forces import Forces
 from mento.settings import BeamSettings
 from mento.reports import views
@@ -36,25 +33,6 @@ from mento.design_results import (
     build_shear_design,
     capture_flexure_check,
     capture_shear_check,
-)
-
-from mento.codes.EN_1992_2004_beam import (
-    _check_shear_EN_1992_2004,
-    _check_flexure_EN_1992_2004,
-    _design_shear_EN_1992_2004,
-    _design_flexure_EN_1992_2004,
-)
-from mento.codes.check_state import (
-    apply_en_flexure_state,
-    apply_en_shear_state,
-    apply_flexure_state,
-    apply_shear_state,
-)
-from mento.codes.ACI_318_19_beam import (
-    _check_shear_ACI_318_19,
-    _design_shear_ACI_318_19,
-    _check_flexure_ACI_318_19,
-    _design_flexure_ACI_318_19,
 )
 
 
@@ -200,11 +178,81 @@ class RectangularBeam(RectangularSection):
         self._flexure_capacity_top: Dict = {}
         self._flexure_all_checks: bool = False
 
+    # ------------------------------------------------------------------
+    # The ADR-0001 compatibility layer: declared, never assigned here.
+    #
+    # A check no longer writes its results to the section. These exist because
+    # the report tables still read them off the element, and each design code
+    # zeroes its own set through ``DesignCode.initialize_attributes``, so a
+    # table asked for before any check has run finds a number instead of an
+    # AttributeError.
+    #
+    # Declared under TYPE_CHECKING for two reasons: the type checker needs to
+    # know they exist and what they hold, and ``RectangularBeam`` is a
+    # dataclass, so a plain annotation here would become a constructor field.
+    #
+    # They leave with the compatibility layer. A new design code should not add
+    # to this list -- its report tables should read the check state instead.
+    # ------------------------------------------------------------------
+    if TYPE_CHECKING:
+        # ACI 318-19 and CIRSOC 201-25
+        _phi_V_n: Quantity
+        _phi_V_s: Quantity
+        _phi_V_c: Quantity
+        _phi_V_max: Quantity
+        _V_u: Quantity
+        _M_u: Quantity
+        _M_u_bot: Quantity
+        _M_u_top: Quantity
+        _N_u: Quantity
+        _A_cv: Quantity
+        _k_c_min: Quantity
+        _sigma_Nu: Quantity
+        V_c: Quantity
+        _rho_w: Quantity
+        f_yt: Quantity
+        _phi_M_n_bot: Quantity
+        _phi_M_n_top: Quantity
+        _d_b_max_bot: Quantity
+        _d_b_max_top: Quantity
+        _lambda_s: float
+        _max_shear_ok: bool
+        _A_s_bool_bot: bool
+        _A_s_bool_top: bool
+        # EN 1992-2004
+        _V_Ed_1: Quantity
+        _V_Ed_2: Quantity
+        _N_Ed: Quantity
+        _M_Ed: Quantity
+        _M_Ed_bot: Quantity
+        _M_Ed_top: Quantity
+        _M_Rd_bot: Quantity
+        _M_Rd_top: Quantity
+        _sigma_cd: Quantity
+        _sigma_cp: Quantity
+        _V_Rd_c: Quantity
+        _V_Rd_s: Quantity
+        _V_Rd_max: Quantity
+        _V_Rd: Quantity
+        _f_ywk: Quantity
+        _f_ywd: Quantity
+        _f_cd: Quantity
+        _f_cd_shear: Quantity
+        _A_p: Quantity
+        _z: Quantity
+        _k_value: float
+        _theta: float
+        _cot_theta: float
+        # Both
+        _A_s_min_bot: Quantity
+        _A_s_min_top: Quantity
+        _A_s_max_bot: Quantity
+        _A_s_max_top: Quantity
+        flexure_design_results_bot: Any
+        flexure_design_results_top: Any
+
     def _initialize_code_attributes(self) -> None:
-        if isinstance(self.concrete, Concrete_ACI_318_19):
-            self._initialize_ACI_318_attributes()
-        elif isinstance(self.concrete, Concrete_EN_1992_2004):
-            self._initialize_EN_1992_2004_attributes()
+        design_code(self.concrete).initialize_attributes(self)
 
     def _initialize_longitudinal_rebar_attributes(self) -> None:
         """Initialize all rebar-related attributes with default values."""
@@ -273,72 +321,6 @@ class RectangularBeam(RectangularSection):
             self.set_longitudinal_rebar_top(0, 0 * mm)
         else:
             self.set_longitudinal_rebar_top(0, 0 * inch)
-
-    def _initialize_ACI_318_attributes(self) -> None:
-        if isinstance(self.concrete, Concrete_ACI_318_19):
-            self._phi_V_n: Quantity = 0 * kN
-            self._phi_V_s: Quantity = 0 * kN
-            self._phi_V_c: Quantity = 0 * kN
-            self._phi_V_max: Quantity = 0 * kN
-            self._V_u: Quantity = 0 * kN
-            self._M_u: Quantity = 0 * kNm
-            self._M_u_bot: Quantity = 0 * kNm
-            self._M_u_top: Quantity = 0 * kNm
-            self._N_u: Quantity = 0 * kN
-            self._A_cv: Quantity = 0 * cm**2
-            self._k_c_min: Quantity = 0 * MPa
-            self._sigma_Nu: Quantity = 0 * MPa
-            self.V_c: Quantity = 0 * kN
-            self._rho_w: Quantity = 0 * dimensionless
-            self._lambda_s: float = 0
-            self.f_yt: Quantity = 0 * MPa
-            self._max_shear_ok: bool = False
-            self._A_s_min_bot: Quantity = 0 * cm**2
-            self._A_s_min_top: Quantity = 0 * cm**2
-            self._A_s_max_bot: Quantity = 0 * cm**2
-            self._A_s_max_top: Quantity = 0 * cm**2
-            self._phi_M_n_bot: Quantity = 0 * kNm
-            self._phi_M_n_top: Quantity = 0 * kNm
-            self._d_b_max_bot: Quantity = 0 * mm
-            self._d_b_max_top: Quantity = 0 * mm
-            self.flexure_design_results_bot: Any = None
-            self.flexure_design_results_top: Any = None
-            self._A_s_bool_bot: bool = False
-            self._A_s_bool_top: bool = False
-
-    def _initialize_EN_1992_2004_attributes(self) -> None:
-        if isinstance(self.concrete, Concrete_EN_1992_2004):
-            self._V_Ed_1: Quantity = 0 * kN
-            self._V_Ed_2: Quantity = 0 * kN
-            self._N_Ed: Quantity = 0 * kN
-            self._M_Ed: Quantity = 0 * kNm
-            self._sigma_cd: Quantity = 0 * MPa
-            self._V_Rd_c: Quantity = 0 * kN
-            self._V_Rd_s: Quantity = 0 * kN
-            self._V_Rd_max: Quantity = 0 * kN
-            self._V_Rd: Quantity = 0 * kN
-            self._k_value: float = 0
-            self._f_ywk = self.steel_bar.f_y
-            self._f_ywd: Quantity = 0 * MPa
-            self._f_cd: Quantity = 0 * MPa
-            self._f_cd_shear: Quantity = 0 * MPa
-            self._A_p = 0 * cm**2  # No prestressed for now
-            self._sigma_cp: Quantity = 0 * MPa
-            self._theta: float = 0
-            self._cot_theta: float = 0
-            self._z: Quantity = 0 * cm
-            self._M_Rd_bot: Quantity = 0 * kNm
-            self._M_Rd_top: Quantity = 0 * kNm
-            self._M_Ed_bot: Quantity = 0 * kNm
-            self._M_Ed_top: Quantity = 0 * kNm
-            # Shared with the ACI branch: the flexural design driver and the
-            # results tables read these before any check has run.
-            self._A_s_min_bot: Quantity = 0 * cm**2
-            self._A_s_min_top: Quantity = 0 * cm**2
-            self._A_s_max_bot: Quantity = 0 * cm**2
-            self._A_s_max_top: Quantity = 0 * cm**2
-            self.flexure_design_results_bot: Any = None
-            self.flexure_design_results_top: Any = None
 
     ##########################################################
     # SET LONGITUDINAL AND TRANSVERSE REBAR AND UPDATE ATTRIBUTES
@@ -627,10 +609,7 @@ class RectangularBeam(RectangularSection):
                 max_M_y_bot = force._M_y
                 self._limiting_case_top = force
         # Design flexural reinforcement for the limiting cases
-        if self.concrete.design_code == "ACI 318-19" or self.concrete.design_code == "CIRSOC 201-25":
-            _design_flexure_ACI_318_19(self, max_M_y_bot, max_M_y_top)
-        elif self.concrete.design_code == "EN 1992-2004":
-            _design_flexure_EN_1992_2004(self, max_M_y_bot, max_M_y_top)
+        design_code(self.concrete).design_flexure(self, max_M_y_bot, max_M_y_top)
 
         # Check flexural capacity for all forces with the assigned reinforcement
         all_results = self.check_flexure(forces)
@@ -693,15 +672,10 @@ class RectangularBeam(RectangularSection):
         :mod:`mento.reports.tables`, which still reads the element — so the
         state is copied back only when a report is wanted.
         """
-        state: Any = None
-        if self.concrete.design_code in ("ACI 318-19", "CIRSOC 201-25"):
-            state = _check_flexure_ACI_318_19(self, force)
-            if report:
-                apply_flexure_state(self, state)
-        else:
-            state = _check_flexure_EN_1992_2004(self, force)
-            if report:
-                apply_en_flexure_state(self, state)
+        code = design_code(self.concrete)
+        state: Any = code.check_flexure(self, force)
+        if report:
+            code.apply_flexure_state(self, state)
         if report:
             self._flexure_report_row = build_flexure_report(self, force)
         return state
@@ -713,15 +687,10 @@ class RectangularBeam(RectangularSection):
         have been written to. Building a report does need that, because the
         tables still read the element — the compatibility layer of ADR-0001.
         """
-        if self.concrete.design_code in ("ACI 318-19", "CIRSOC 201-25"):
-            state = _check_shear_ACI_318_19(self, force)
-            if report:
-                apply_shear_state(self, state)
-        else:
-            en_state = _check_shear_EN_1992_2004(self, force)
-            if report:
-                apply_en_shear_state(self, en_state)
-            state = en_state
+        code = design_code(self.concrete)
+        state = code.check_shear(self, force)
+        if report:
+            code.apply_shear_state(self, state)
         if report:
             self._shear_report_row = build_shear_report(self, force)
         return state
@@ -805,10 +774,7 @@ class RectangularBeam(RectangularSection):
 
         # Step 1: Identify the worst-case force
         for force in forces:
-            if self.concrete.design_code == "ACI 318-19" or self.concrete.design_code == "CIRSOC 201-25":
-                _design_shear_ACI_318_19(self, force)
-            elif self.concrete.design_code == "EN 1992-2004":
-                _design_shear_EN_1992_2004(self, force)
+            design_code(self.concrete).design_shear(self, force)
             # Check if this result is the limiting case
             current_A_v_req = self._A_v_req
             if current_A_v_req >= max_A_v_req:
@@ -880,95 +846,13 @@ class RectangularBeam(RectangularSection):
         return all_results
 
     def _get_units_row_shear(self) -> pd.DataFrame:
-        if isinstance(self.concrete, Concrete_EN_1992_2004):
-            # Orden exacto de columnas para EN 1992
-            return pd.DataFrame(
-                [
-                    {
-                        "Label": "",
-                        "Comb.": "",
-                        "Av,min": "cm²/m",
-                        "Av,req": "cm²/m",
-                        "Av": "cm²/m",
-                        "NEd": "kN",
-                        "VEd,1": "kN",
-                        "VEd,2": "kN",
-                        "VRd,c": "kN",
-                        "VRd,s": "kN",
-                        "VRd": "kN",
-                        "VRd,max": "kN",
-                        "VEd,1≤VRd,max": "",
-                        "VEd,2≤VRd": "",
-                        "DCR": "",
-                    }
-                ]
-            )
-        else:
-            return pd.DataFrame(
-                [
-                    {
-                        "Label": "",
-                        "Comb.": "",
-                        "Av,min": "cm²/m",
-                        "Av,req": "cm²/m",
-                        "Av": "cm²/m",
-                        "Vu": "kN",
-                        "Nu": "kN",
-                        "ØVc": "kN",
-                        "ØVs": "kN",
-                        "ØVn": "kN",
-                        "ØVmax": "kN",
-                        "Vu≤ØVmax": "",
-                        "Vu≤ØVn": "",
-                        "DCR": "",
-                    }
-                ]
-            )
+        """The unit row of the shear summary, in the active code's own names."""
+        return pd.DataFrame([design_code(self.concrete).units_row_shear])
 
     def _get_units_row_flexure(self) -> pd.DataFrame:
+        """The unit row of the flexure summary, in the active code's own names."""
         # TODO: Add imperial units row output
-        if self.concrete.design_code == "ACI 318-19" or self.concrete.design_code == "CIRSOC 201-25":
-            units_row = pd.DataFrame(
-                [
-                    {
-                        "Label": "",
-                        "Comb.": "",
-                        "Position": "",
-                        "As,min": "cm²",
-                        "As,req top": "cm²",
-                        "As,req bot": "cm²",
-                        "As": "cm²",
-                        # "c/d": "",  # Uncomment if you include this field later
-                        "Mu": "kNm",
-                        "ØMn": "kNm",
-                        "Mu≤ØMn": "",
-                        "DCR": "",
-                    }
-                ]
-            )
-        elif self.concrete.design_code == "EN 1992-2004":
-            units_row = pd.DataFrame(
-                [
-                    {
-                        "Label": "",
-                        "Comb.": "",
-                        "Position": "",
-                        "As,min": "cm²",
-                        "As,req top": "cm²",
-                        "As,req bot": "cm²",
-                        "As": "cm²",
-                        # "c/d": "",  # Uncomment if you include this field later
-                        "MEd": "kNm",
-                        "MRd": "kNm",
-                        "MEd≤MRd": "",
-                        "DCR": "",
-                    }
-                ]
-            )
-        else:
-            raise ValueError(f"Flexure design method not implemented for concrete type: {type(self.concrete).__name__}")  # noqa: E501
-
-        return units_row
+        return pd.DataFrame([design_code(self.concrete).units_row_flexure])
 
     ##########################################################
     # CHECK & DESIGN ALL
@@ -1086,31 +970,13 @@ class RectangularBeam(RectangularSection):
 
     @property
     def _flexure_symbols(self) -> Dict[str, str]:
-        """Flexural symbols of the active design code.
+        r"""Flexural symbols of the active design code.
 
         ACI 318-19 and CIRSOC 201-25 work with a factored demand :math:`M_u` and a
-        reduced capacity :math:`\\phi M_n`; EN 1992-2004 works with :math:`M_{Ed}`
-        and :math:`M_{Rd}`. The per-code result dictionaries already carry the right
-        wording, but the limiting-case summaries assembled here have to pick it.
-
-        ``md_*`` entries are LaTeX for the Jupyter markdown line; the others are the
-        plain variable names used in the detailed tables and Word reports.
+        reduced capacity :math:`\phi M_n`; EN 1992-2004 works with :math:`M_{Ed}`
+        and :math:`M_{Rd}`. Each code declares its own in its registry entry.
         """
-        if self.concrete.design_code == "EN 1992-2004":
-            return {
-                "demand": "MEd",
-                "demand_top": "MEd,top",
-                "demand_bot": "MEd,bot",
-                "md_demand": "M_{Ed}",
-                "md_capacity": "M_{Rd}",
-            }
-        return {
-            "demand": "Mu",
-            "demand_top": "Mu,top",
-            "demand_bot": "Mu,bot",
-            "md_demand": "M_u",
-            "md_capacity": "\\phi M_n",
-        }
+        return design_code(self.concrete).flexure_symbols
 
     def flexure_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
         """Write the detailed flexure results to a Word document.

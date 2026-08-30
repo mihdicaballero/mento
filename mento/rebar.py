@@ -6,6 +6,7 @@ import numpy as np
 
 from mento.codes.aci_318_19.equations import shear as aci_shear_eq
 from mento.codes.en_1992_2004.equations import shear as en_shear_eq
+from mento.codes.registry import design_code
 from mento.precompute import CANONICAL, DISPLAY, section_floats
 from mento.units import mm, cm, inch
 
@@ -245,12 +246,8 @@ class Rebar:
         valid_combinations = []
 
         # Get code specific limitations
-        if self.beam.concrete.design_code == "ACI 318-19":
-            valid_diameters, s_max_l, s_max_w = self.transverse_rebar_ACI_318_19(V_s_req)
-        elif self.beam.concrete.design_code == "CIRSOC 201-25":
-            valid_diameters, s_max_l, s_max_w = self.transverse_rebar_CIRSOC_201_25(V_s_req)
-        elif self.beam.concrete.design_code == "EN 1992-2004":
-            valid_diameters, s_max_l, s_max_w = self.transverse_rebar_EN_1992_2004(alpha)
+        code = design_code(self.beam.concrete)
+        valid_diameters, s_max_l, s_max_w = code.transverse_rebar(self, V_s_req, alpha)
 
         # Iterate through available diameters
         for d_b in valid_diameters:
@@ -787,7 +784,4 @@ class Rebar:
             mech_cover: Optional mechanical cover to the bar centroid, used as
                 the starting geometry for the layer layout.
         """
-        if self.beam.concrete.design_code == "ACI 318-19" or self.beam.concrete.design_code == "CIRSOC 201-25":
-            return self.longitudinal_rebar_ACI_318_19(A_s_req, A_s_max, mech_cover)
-        elif self.beam.concrete.design_code == "EN 1992-2004":
-            return self.longitudinal_rebar_EN_1992_2004(A_s_req, A_s_max, mech_cover)
+        return design_code(self.beam.concrete).longitudinal_rebar(self, A_s_req, A_s_max, mech_cover)

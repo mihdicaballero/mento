@@ -3506,12 +3506,21 @@ def test_shear_results_markdown_without_limiting_case() -> None:
     assert beam._md_shear_results == "No shear to check."
 
 
-def test_get_units_row_flexure_unknown_design_code() -> None:
+def test_an_unregistered_design_code_says_so_and_lists_what_is_registered() -> None:
+    """The registry is the single place that knows which codes exist."""
     beam = build_metric_beam()
     beam.concrete.design_code = "NBR 6118-2014"
 
-    with pytest.raises(ValueError, match="Flexure design method not implemented"):
+    with pytest.raises(NotImplementedError, match="unknown design code: NBR 6118-2014") as excinfo:
         beam._get_units_row_flexure()
+    # Naming the registered codes is the point: the old error named neither the
+    # code that was asked for nor the ones available.
+    assert "ACI 318-19" in str(excinfo.value)
+    assert "EN 1992-2004" in str(excinfo.value)
+
+    # Every element entry point goes through the same lookup, not just this one.
+    with pytest.raises(NotImplementedError, match="unknown design code"):
+        beam.shear_check_results([Forces(label="C1", V_z=80 * kN)])
 
 
 def test_plot_annotates_second_rebar_layer() -> None:

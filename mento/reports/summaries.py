@@ -17,7 +17,7 @@ import pandas as pd
 from docx.shared import Cm
 
 from mento._version import __version__ as MENTO_VERSION
-from mento.material import Concrete_EN_1992_2004
+from mento.codes.registry import design_code
 from mento.results import DocumentBuilder
 
 if TYPE_CHECKING:
@@ -193,48 +193,16 @@ def beam_summary_doc(self: "BeamSummary", index: int = 1) -> None:
     doc_builder.add_heading("Shear Results", level=3)
     df_shear_all = self.shear_results(capacity_check=False)
 
-    if isinstance(self.concrete, Concrete_EN_1992_2004):
-        # Remove Eurocode-specific columns
-        cols_to_remove = ["VEd,1≤VRd,max", "VEd,2≤VRd"]
-        df_shear_all = df_shear_all.drop(columns=[c for c in cols_to_remove if c in df_shear_all.columns])
+    # Columns the active code does not carry into the Word summary.
+    cols_to_remove = design_code(self.concrete).summary_drop_columns
+    df_shear_all = df_shear_all.drop(columns=[c for c in cols_to_remove if c in df_shear_all.columns])
 
-        doc_builder.add_table_data(
-            df_shear_all,
-            column_widths=[
-                Cm(2),
-                Cm(2),
-                Cm(2),
-                Cm(2),
-                Cm(2),
-                Cm(1.5),
-                Cm(1.5),
-                Cm(1.5),
-                Cm(1.5),
-                Cm(1.5),
-                Cm(1.5),
-                Cm(2),
-            ],
-        )
-    else:
-        doc_builder.add_table_data(
-            df_shear_all,
-            column_widths=[
-                Cm(2),
-                Cm(2),
-                Cm(2),
-                Cm(2),
-                Cm(2),
-                Cm(1.5),
-                Cm(1.5),
-                Cm(1.5),
-                Cm(1.5),
-                Cm(1.5),
-                Cm(1.5),
-                Cm(2),
-                Cm(2),
-                Cm(2),
-            ],
-        )
+    # Label and demand columns are wide, the check columns narrow, whatever is
+    # left wide again. Derived from the frame rather than listed per code: the
+    # two lists only ever differed by the columns a code drops above.
+    n = len(df_shear_all.columns)
+    widths = [Cm(2)] * min(5, n) + [Cm(1.5)] * max(0, min(6, n - 5)) + [Cm(2)] * max(0, n - 11)
+    doc_builder.add_table_data(df_shear_all, column_widths=widths)
 
     doc_builder.add_heading("Design Check Summary", level=3)
     df_check = self.check()

@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, cast
 
 from IPython.display import Markdown, display
 
+from mento.codes.registry import design_code
 from mento.i18n import get_language, translate
 from mento.results import Formatter, TablePrinter
 from mento.units import cm
@@ -165,16 +166,16 @@ def shear_results(self: "RectangularBeam") -> None:
             )
         # Limitng cases checks
         warning = "⚠️ Some checks failed, see detailed results." if not checks_pass else ""
-        if self.concrete.design_code == "ACI 318-19" or self.concrete.design_code == "CIRSOC 201-25":
-            markdown_content = (
-                f"Shear reinforcing {rebar_v}, $A_v$={_details(limiting_reinforcement)['Value'][6]} cm²/m"
-                f", $V_u$={_details(limiting_forces)['Value'][1]} kN, $\\phi V_n$={_details(limiting_shear_concrete)['Value'][7]} kN → {formatted_DCR} {warning}"
-            )  # noqa: E501
-        else:  # self.concrete.design_code == "EN 1992-2004"
-            markdown_content = (
-                f"Shear reinforcing {rebar_v}, $A_{{sw}}$={_details(limiting_reinforcement)['Value'][6]} cm²/m"
-                f", $V_{{Ed,2}}$={_details(limiting_forces)['Value'][1]} kN, $V_{{Rd}}$={_details(limiting_shear_concrete)['Value'][6]} kN → {formatted_DCR} {warning}"
-            )  # noqa: E501
+        # Each code names these quantities its own way, and puts its capacity
+        # on a different row of its own detail table.
+        symbols = design_code(self.concrete).shear_symbols
+        capacity = _details(limiting_shear_concrete)["Value"][symbols["capacity_row"]]
+        markdown_content = (
+            f"Shear reinforcing {rebar_v}, ${symbols['reinforcement']}$"
+            f"={_details(limiting_reinforcement)['Value'][6]} cm²/m"
+            f", ${symbols['demand']}$={_details(limiting_forces)['Value'][1]} kN"
+            f", ${symbols['capacity']}$={capacity} kN → {formatted_DCR} {warning}"
+        )
     else:
         markdown_content += "No shear to check."
     self._md_shear_results = markdown_content
