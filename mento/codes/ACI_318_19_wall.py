@@ -3,7 +3,6 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
-import pandas as pd
 from pint import Quantity
 
 from mento.codes.aci_318_19.equations import shear as shear_eq
@@ -148,181 +147,17 @@ def _calculate_spacing_limits_wall(self: "ShearWall") -> None:
     self._s_v_max = wall_eq.max_vertical_spacing(lw, t, is_imperial=is_imperial) * length_unit
 
 
-def _compile_wall_shear_dicts(self: "ShearWall", force: Forces) -> None:
-    """Populate result dicts used by detailed output methods."""
-    phi_v = self.concrete.phi_v
-    unit = "kN" if self.concrete.unit_system == "metric" else "kip"
-
-    # Materials
-    self._materials_shear_wall = {
-        "Materials": [
-            "Section Label",
-            "Concrete strength",
-            "Steel reinforcement yield strength",
-            "Normalweight concrete",
-            "Safety factor for shear",
-        ],
-        "Variable": ["", "fc", "fy", "λ", "Øv"],
-        "Value": [
-            self.label,
-            round(self.concrete.f_c.to("MPa").magnitude, 2)
-            if self.concrete.unit_system == "metric"
-            else round(self.concrete.f_c.to("psi").magnitude, 0),
-            round(self.steel_bar.f_y.to("MPa").magnitude, 2)
-            if self.concrete.unit_system == "metric"
-            else round(self.steel_bar.f_y.to("ksi").magnitude, 2),
-            self.concrete.lambda_factor,
-            phi_v,
-        ],
-        "Unit": [
-            "",
-            "MPa" if self.concrete.unit_system == "metric" else "psi",
-            "MPa" if self.concrete.unit_system == "metric" else "ksi",
-            "",
-            "",
-        ],
-    }
-    # Geometry
-    self._geometry_shear_wall = {
-        "Geometry": [
-            "Wall thickness",
-            "Wall length",
-            "Wall height",
-            "Aspect ratio",
-            "Gross shear area",
-        ],
-        "Variable": ["t", "lw", "hw", "hw/lw", "Acv"],
-        "Value": [
-            round(self.thickness.to("cm").magnitude, 1),
-            round(self.length.to("cm").magnitude, 1),
-            round(self.height.to("cm").magnitude, 1),
-            round(self._hw_lw, 3),
-            round(self._Acv.to("cm**2").magnitude, 1),
-        ],
-        "Unit": ["cm", "cm", "cm", "", "cm²"],
-    }
-
-    rho_t_ok = bool(self._rho_t >= self._rho_t_min)
-    rho_l_ok = bool(self._rho_l >= self._rho_l_min)
-    s_h_ok = bool(self._s_h <= self._s_h_max) if self._s_h > 0 * mm else True
-    s_v_ok = bool(self._s_v <= self._s_v_max) if self._s_v > 0 * mm else True
-    Vn_max_ok = bool(self._V_u <= self._phi_V_n_max_wall)
-    Vn_ok = bool(self._V_u <= self._phi_V_n_wall)
-
-    self._all_wall_shear_checks_passed = all([rho_t_ok, rho_l_ok, Vn_max_ok, Vn_ok])
-
-    def _v(q: Quantity) -> float:
-        return (
-            round(q.to("kN").magnitude, 2) if self.concrete.unit_system == "metric" else round(q.to("kip").magnitude, 2)
-        )
-
-    self._forces_shear_wall = {
-        "Design forces": ["Shear"],
-        "Variable": ["Vu"],
-        "Value": [_v(self._V_u)],
-        "Unit": [unit],
-    }
-    self._shear_capacity_wall = {
-        "Shear strength": [
-            "Concrete shear strength",
-            "Steel shear strength",
-            "Total shear strength",
-            "Maximum shear strength",
-            "Demand Capacity Ratio",
-        ],
-        "Variable": ["ØVc", "ØVs", "ØVn", "ØVn,max", "DCR"],
-        "Value": [
-            round((phi_v * self._V_c_wall).to("kN").magnitude, 2),
-            round((phi_v * self._V_s_wall).to("kN").magnitude, 2),
-            round(self._phi_V_n_wall.to("kN").magnitude, 2),
-            round(self._phi_V_n_max_wall.to("kN").magnitude, 2),
-            round(self._DCRv_wall, 3),
-        ],
-        "Unit": [unit, unit, unit, unit, ""],
-    }
-    self._data_min_max_wall = {
-        "Check": [
-            "Horizontal reinforcement ratio",
-            "Minimum vertical reinf. ratio",
-            "Horizontal bar spacing (E.F.)",
-            "Vertical bar spacing (E.F.)",
-            "Maximum shear capacity",
-            "Total shear capacity",
-        ],
-        "Unit": ["", "", "mm", "mm", unit, unit],
-        "Value": [
-            round(self._rho_t.to("").magnitude, 5),
-            round(self._rho_l.to("").magnitude, 5),
-            round(self._s_h.to("mm").magnitude, 1) if self._s_h > 0 * mm else 0.0,
-            round(self._s_v.to("mm").magnitude, 1) if self._s_v > 0 * mm else 0.0,
-            _v(self._V_u),
-            _v(self._V_u),
-        ],
-        "Min.": [
-            round(self._rho_t_min.to("").magnitude, 5),
-            round(self._rho_l_min.to("").magnitude, 5),
-            "",
-            "",
-            "",
-            "",
-        ],
-        "Max.": [
-            "",
-            "",
-            round(self._s_h_max.to("mm").magnitude, 1),
-            round(self._s_v_max.to("mm").magnitude, 1),
-            _v(self._phi_V_n_max_wall),
-            _v(self._phi_V_n_wall),
-        ],
-        "Ok?": [
-            "✅" if rho_t_ok else "❌",
-            "✅" if rho_l_ok else "❌",
-            "✅" if s_h_ok else "❌",
-            "✅" if s_v_ok else "❌",
-            "✅" if Vn_max_ok else "❌",
-            "✅" if Vn_ok else "❌",
-        ],
-    }
-
-
-def _compile_results_wall_shear(self: "ShearWall", force: Forces) -> pd.DataFrame:
-    """Build a one-row DataFrame for this force combination."""
-    phi_v = self.concrete.phi_v
-
-    def _v(q: Quantity) -> float:
-        return (
-            round(q.to("kN").magnitude, 2) if self.concrete.unit_system == "metric" else round(q.to("kip").magnitude, 2)
-        )
-
-    row = {
-        "Label": self.label,
-        "Comb.": force.label,
-        "ρt,min": round(self._rho_t_min.to("").magnitude, 5),
-        "ρt,req": round(self._rho_t_req.to("").magnitude, 5),
-        "ρt": round(self._rho_t.to("").magnitude, 5),
-        "ρl,min": round(self._rho_l_min.to("").magnitude, 5),
-        "ρl": round(self._rho_l.to("").magnitude, 5),
-        "Vu": _v(self._V_u),
-        "ØVc": _v(phi_v * self._V_c_wall),
-        "ØVs": _v(phi_v * self._V_s_wall),
-        "ØVn": _v(self._phi_V_n_wall),
-        "ØVn,max": _v(self._phi_V_n_max_wall),
-        "Vu≤ØVn,max": bool(self._V_u <= self._phi_V_n_max_wall),
-        "Vu≤ØVn": bool(self._V_u <= self._phi_V_n_wall),
-        "DCR": round(self._DCRv_wall, 3),
-    }
-    return pd.DataFrame([row])
-
-
 ##########################################################
 # MAIN CHECK FUNCTION
 ##########################################################
 
 
-def _check_shear_ACI_318_19_wall(self: "ShearWall", force: Forces) -> pd.DataFrame:
+def _check_shear_ACI_318_19_wall(self: "ShearWall", force: Forces) -> None:
     """
     ACI 318-19 Section 11 shear check for a structural wall.
-    Returns a one-row DataFrame with shear check results.
+
+    Calculation only: the results are left on the wall, and turning them into a
+    report table is the caller's decision (see :mod:`mento.reports.walls`).
     """
     if not isinstance(self.concrete, Concrete_ACI_318_19):
         raise TypeError("ACI 318-19 wall shear check requires Concrete_ACI_318_19.")
@@ -369,10 +204,6 @@ def _check_shear_ACI_318_19_wall(self: "ShearWall", force: Forces) -> pd.DataFra
         self._DCRv_wall = float("inf")
     else:
         self._DCRv_wall = float((self._V_u / phi_Vn_eff).to("").magnitude)
-
-    # 10. Compile detail dicts and result row
-    _compile_wall_shear_dicts(self, force)
-    return _compile_results_wall_shear(self, force)
 
 
 ##########################################################

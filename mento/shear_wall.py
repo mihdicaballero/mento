@@ -202,7 +202,8 @@ class ShearWall(RectangularBeam):
 
         for force in forces:
             if self.concrete.design_code == "ACI 318-19" or self.concrete.design_code == "CIRSOC 201-25":
-                result = _check_shear_ACI_318_19_wall(self, force)
+                _check_shear_ACI_318_19_wall(self, force)
+                result = wall_reports.build_wall_shear_report(self, force)
             else:
                 raise NotImplementedError(
                     f"Shear wall check not implemented for design code: {self.concrete.design_code}"

@@ -557,7 +557,7 @@ equations for speed.
 **Exit:** the §3.3 mako loop runs without mutating any element; the §1.5
 benchmark is rerun and meets the < 5 s / 20,000-checks target.
 
-### Phase 3 — Extract presentation *(in progress)*
+### Phase 3 — Extract presentation — **done 2026-08-30**
 
 Move `_initialize_dicts_*` out of the code modules into the report layer; move
 matplotlib and docx code out of `beam.py`. After this phase, `codes/` contains only
@@ -648,9 +648,27 @@ alongside lazy imports in the elements, and that combination buys a one-time
 nothing per check. mako's cost is per check. The criterion that does matter —
 `import mento.codes` free of both — holds and is guarded by a test.
 
-**Remaining:** the wall report tables in `codes/ACI_318_19_wall.py`
-(`_compile_wall_shear_dicts`, `_compile_results_wall_shear`) are the last
-presentation left inside `codes/`.
+**Done (2026-08-30): `codes/` holds calculation only.** The wall's report
+tables (`_compile_wall_shear_dicts`, `_compile_results_wall_shear`, 160 lines)
+moved to `reports/walls.py`, and `_check_shear_ACI_318_19_wall` returns `None`
+— the wall decides when to build a report, exactly as the beam does.
+`ACI_318_19_wall.py` is 512 → 343 lines.
+
+The boundary test now walks **every** module under `codes/` instead of the two
+beam ones, and fails on any `_initialize_dicts_*` or `_compile_*` function.
+Verified by adding one back to the wall module and watching it fail.
+
+**Phase 3 is complete.** `codes/` is equations and orchestration, the elements
+are geometry and thin delegation, and the presentation layer is one place:
+
+| layer | lines |
+| --- | --- |
+| `mento/reports/` | 1929 |
+| `mento/plots/` | 991 |
+| `mento/codes/` (calculation) | 2276 |
+
+**Exit met:** `import mento.codes` imports neither matplotlib nor docx, guarded
+by a test that runs in a fresh interpreter.
 
 **Exit:** `import mento.codes` imports neither matplotlib nor docx — met, and
 guarded by a test since the `codes/__init__` cleanup in Phase 2b.

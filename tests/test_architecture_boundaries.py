@@ -125,28 +125,29 @@ def test_elements_do_not_import_presentation_libraries(path: Path) -> None:
     )
 
 
-BEAM_CODE_MODULES = [
-    EQUATIONS_ROOT / "ACI_318_19_beam.py",
-    EQUATIONS_ROOT / "EN_1992_2004_beam.py",
-]
+# Every design-code module: no longer just the beam ones, since the wall's
+# report tables moved out too.
+CODE_MODULES = sorted(EQUATIONS_ROOT.glob("*.py"))
 
 
-@pytest.mark.parametrize("path", BEAM_CODE_MODULES, ids=lambda p: p.name)
+def test_code_modules_are_discovered() -> None:
+    """Guards the test below: an empty glob would make it vacuously pass."""
+    assert len(CODE_MODULES) >= 3, f"expected the code modules under {EQUATIONS_ROOT}"
+
+
+@pytest.mark.parametrize("path", CODE_MODULES, ids=lambda p: p.name)
 def test_code_modules_do_not_build_report_tables(path: Path) -> None:
     """Phase 3: labelled, rounded, unit-annotated tables are presentation.
 
-    They used to make up roughly a third of each code module. They live in
-    ``mento/report_tables.py`` now, and the beam decides when to build them —
-    the design code does not, which is what lets a check skip them entirely.
-
-    ``ACI_318_19_wall.py`` is deliberately not in this list: the wall report
-    has not been moved yet.
+    They used to be roughly a third of each code module. They live under
+    ``mento/reports/`` now, and the element decides when to build them — the
+    design code does not, which is what lets a check skip them entirely.
     """
     offenders = [
         node.name
         for node in ast.walk(_parse(path))
         if isinstance(node, ast.FunctionDef)
-        and (node.name.startswith("_initialize_dicts") or node.name.startswith("_compile_results"))
+        and (node.name.startswith("_initialize_dicts") or node.name.startswith("_compile_"))
     ]
     assert not offenders, f"{path.name} still builds report tables: {offenders}"
 
