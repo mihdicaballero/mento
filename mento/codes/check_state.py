@@ -18,7 +18,7 @@ from typing import Any, TYPE_CHECKING
 from pint import Quantity
 
 from mento.precompute import CANONICAL, DISPLAY
-from mento.units import cm, inch, kip, kN, kNm, mm, psi, MPa, dimensionless
+from mento.units import cm, inch, kip, kN, mm, psi, MPa, dimensionless
 
 if TYPE_CHECKING:
     from mento.beam import RectangularBeam
@@ -444,89 +444,92 @@ def apply_flexure_state(section: "RectangularBeam", state: FlexureCheckState) ->
 #: EN names its demand M_Ed and its capacity M_Rd, so flexure gets a second
 #: state rather than a union of both codes' vocabularies.
 EN_FLEXURE_BEAM_ATTRIBUTES = {
-    "M_Ed": "_M_Ed",
-    "M_Ed_bot": "_M_Ed_bot",
-    "M_Ed_top": "_M_Ed_top",
-    "M_Rd_bot": "_M_Rd_bot",
-    "M_Rd_top": "_M_Rd_top",
-    "f_cd": "_f_cd",
-    "f_cd_shear": "_f_cd_shear",
-    "f_ywd": "_f_ywd",
-    "A_s_min_bot": "_A_s_min_bot",
-    "A_s_min_top": "_A_s_min_top",
-    "A_s_max_bot": "_A_s_max_bot",
-    "A_s_max_top": "_A_s_max_top",
-    "A_s_req_bot": "_A_s_req_bot",
-    "A_s_req_top": "_A_s_req_top",
-    "c_d_bot": "_c_d_bot",
-    "c_d_top": "_c_d_top",
-    "d_b_max_bot": "_d_b_max_bot",
-    "d_b_max_top": "_d_b_max_top",
-    "rho_l_bot": "_rho_l_bot",
-    "rho_l_top": "_rho_l_top",
-    "DCR_bot": "_DCRb_bot",
-    "DCR_top": "_DCRb_top",
+    "M_Ed": ("_M_Ed", "moment"),
+    "M_Ed_bot": ("_M_Ed_bot", "moment"),
+    "M_Ed_top": ("_M_Ed_top", "moment"),
+    "M_Rd_bot": ("_M_Rd_bot", "moment"),
+    "M_Rd_top": ("_M_Rd_top", "moment"),
+    "f_cd": ("_f_cd", "stress"),
+    "f_cd_shear": ("_f_cd_shear", "stress"),
+    "f_ywd": ("_f_ywd", "stress"),
+    "A_s_min_bot": ("_A_s_min_bot", "area"),
+    "A_s_min_top": ("_A_s_min_top", "area"),
+    "A_s_max_bot": ("_A_s_max_bot", "area"),
+    "A_s_max_top": ("_A_s_max_top", "area"),
+    "A_s_req_bot": ("_A_s_req_bot", "area"),
+    "A_s_req_top": ("_A_s_req_top", "area"),
+    "c_d_bot": ("_c_d_bot", "raw"),
+    "c_d_top": ("_c_d_top", "raw"),
+    "d_b_max_bot": ("_d_b_max_bot", "length"),
+    "d_b_max_top": ("_d_b_max_top", "length"),
+    "rho_l_bot": ("_rho_l_bot", "dimensionless"),
+    "rho_l_top": ("_rho_l_top", "dimensionless"),
+    "DCR_bot": ("_DCRb_bot", "raw"),
+    "DCR_top": ("_DCRb_top", "raw"),
 }
 
 
 @dataclass
 class ENFlexureCheckState:
-    """One combination's EN 1992-1-1 flexure result, both faces."""
+    """One combination's EN flexure result, in N, mm, mm2, MPa and N*mm.
 
-    M_Ed: Quantity
-    M_Ed_bot: Quantity
-    M_Ed_top: Quantity
-    M_Rd_bot: Quantity
-    M_Rd_top: Quantity
-    f_cd: Quantity
-    f_cd_shear: Quantity
-    f_ywd: Quantity
-    A_s_min_bot: Quantity
-    A_s_min_top: Quantity
-    A_s_max_bot: Quantity
-    A_s_max_top: Quantity
-    A_s_req_bot: Quantity
-    A_s_req_top: Quantity
+    Floats, for the reason given on :class:`ShearCheckState`.
+    """
+
+    M_Ed: float
+    M_Ed_bot: float
+    M_Ed_top: float
+    M_Rd_bot: float
+    M_Rd_top: float
+    f_cd: float
+    f_cd_shear: float
+    f_ywd: float
+    A_s_min_bot: float
+    A_s_min_top: float
+    A_s_max_bot: float
+    A_s_max_top: float
+    A_s_req_bot: float
+    A_s_req_top: float
     c_d_bot: float
     c_d_top: float
-    d_b_max_bot: Quantity
-    d_b_max_top: Quantity
-    rho_l_bot: Quantity
-    rho_l_top: Quantity
+    d_b_max_bot: float
+    d_b_max_top: float
+    rho_l_bot: float
+    rho_l_top: float
     DCR_bot: float
     DCR_top: float
 
 
 def new_en_flexure_state(section: "RectangularBeam") -> ENFlexureCheckState:
-    """A zeroed EN flexure state. Eurocode sections are metric only."""
-    stress, length, area, moment = 0 * MPa, 0 * mm, 0 * cm**2, 0 * kNm
+    """A zeroed EN flexure state. Every field is a float, so nothing converts."""
     return ENFlexureCheckState(
-        M_Ed=moment,
-        M_Ed_bot=moment,
-        M_Ed_top=moment,
-        M_Rd_bot=moment,
-        M_Rd_top=moment,
-        f_cd=stress,
-        f_cd_shear=stress,
-        f_ywd=stress,
-        A_s_min_bot=area,
-        A_s_min_top=area,
-        A_s_max_bot=area,
-        A_s_max_top=area,
-        A_s_req_bot=area,
-        A_s_req_top=area,
+        M_Ed=0.0,
+        M_Ed_bot=0.0,
+        M_Ed_top=0.0,
+        M_Rd_bot=0.0,
+        M_Rd_top=0.0,
+        f_cd=0.0,
+        f_cd_shear=0.0,
+        f_ywd=0.0,
+        A_s_min_bot=0.0,
+        A_s_min_top=0.0,
+        A_s_max_bot=0.0,
+        A_s_max_top=0.0,
+        A_s_req_bot=0.0,
+        A_s_req_top=0.0,
         c_d_bot=0.0,
         c_d_top=0.0,
-        d_b_max_bot=length,
-        d_b_max_top=length,
-        rho_l_bot=0 * dimensionless,
-        rho_l_top=0 * dimensionless,
+        d_b_max_bot=0.0,
+        d_b_max_top=0.0,
+        rho_l_bot=0.0,
+        rho_l_top=0.0,
         DCR_bot=0.0,
         DCR_top=0.0,
     )
 
 
 def apply_en_flexure_state(section: "RectangularBeam", state: ENFlexureCheckState) -> None:
-    """Copy an EN flexure state onto the section — the same compatibility layer."""
-    for field_name, attribute in EN_FLEXURE_BEAM_ATTRIBUTES.items():
-        setattr(section, attribute, getattr(state, field_name))
+    """Copy an EN flexure state onto the section, back in pint."""
+    imperial = section.concrete.is_imperial
+    for field_name, (attribute, kind) in EN_FLEXURE_BEAM_ATTRIBUTES.items():
+        setattr(section, attribute, to_display(getattr(state, field_name), kind, imperial))

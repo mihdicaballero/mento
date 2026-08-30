@@ -930,18 +930,16 @@ def test_compression_zone_limits_EN_1992_2004_are_expressed_on_the_neutral_axis(
         height=60 * cm,
         c_c=2.6 * cm,
     )
-    d = 560 * mm
+    d = 560.0  # mm -- the EN equations layer works in floats
     x_u_lim, x_eff_lim = _compression_zone_limits_EN_1992_2004(beam, d)
 
     xi_expected = min((concrete._delta - concrete._k_1) / concrete._k_2, 0.45)
     assert xi_expected == pytest.approx(0.328, rel=1e-3)
-    assert (x_u_lim / d).to("dimensionless").magnitude == pytest.approx(xi_expected, rel=1e-9)
-    assert (x_eff_lim / x_u_lim).to("dimensionless").magnitude == pytest.approx(concrete._lambda_factor(), rel=1e-9)
+    assert x_u_lim / d == pytest.approx(xi_expected, rel=1e-9)
+    assert x_eff_lim / x_u_lim == pytest.approx(concrete._lambda_factor(), rel=1e-9)
     # M_lim built on the block depth, per The Concrete Centre's K' = 0.453*xi*(1-0.4*xi)
     f_cd = (concrete._alpha_cc * concrete.f_ck / concrete.gamma_c).to("MPa").magnitude
-    M_lim = (
-        concrete._eta_factor() * f_cd * 200 * x_eff_lim.to("mm").magnitude * (560 - 0.5 * x_eff_lim.to("mm").magnitude)
-    )
+    M_lim = concrete._eta_factor() * f_cd * 200 * x_eff_lim * (560 - 0.5 * x_eff_lim)
     assert M_lim / 1e6 == pytest.approx(202.55, rel=1e-3)
 
 
@@ -1015,12 +1013,13 @@ def test_nominal_moment_EN_1992_2004_is_monotonic_in_compression_steel() -> None
         c_c=25 * mm,
     )
     _initialize_variables_EN_1992_2004(beam)
-    A_s = 5.1522 * cm**2
-    d = 561.44 * mm
-    d_prime = 38.56 * mm
+    # The EN equations layer works in floats: mm2, mm and N*mm.
+    A_s = (5.1522 * cm**2).to("mm**2").magnitude
+    d = 561.44
+    d_prime = 38.56
 
     capacities = [
-        _simple_determine_nominal_moment_EN_1992_2004(beam, A_s, d, ratio * A_s, d_prime).to("kN*m").magnitude
+        _simple_determine_nominal_moment_EN_1992_2004(beam, A_s, d, ratio * A_s, d_prime) / 1e6
         for ratio in (0.0, 0.2, 0.5, 0.8, 0.95, 1.0, 1.2)
     ]
     assert capacities == sorted(capacities)

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Tuple, cast
 
 from mento.codes.en_1992_2004.equations import flexure as flexure_eq
 from mento.codes.check_state import (
+    to_display,
     ENFlexureCheckState,
     ENShearCheckState,
     apply_en_shear_state,
@@ -18,7 +19,7 @@ from mento.codes.flexure_design import _FaceDemand, _run_flexure_design
 from mento.material import Concrete_EN_1992_2004
 from mento.precompute import section_floats
 from mento.rebar import max_stirrup_spacing_EN_1992_2004
-from mento.units import MPa, mm, kNm, dimensionless, N
+from mento.units import MPa, mm, kNm, N
 from mento.forces import Forces
 
 
@@ -231,9 +232,9 @@ def _design_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> None:
         flexure_st = new_en_flexure_state(self)
         _split_top_bot_moment(self, flexure_st, force)
         self._M_Ed, self._M_Ed_bot, self._M_Ed_top = (
-            flexure_st.M_Ed,
-            flexure_st.M_Ed_bot,
-            flexure_st.M_Ed_top,
+            to_display(flexure_st.M_Ed, "moment", False),
+            to_display(flexure_st.M_Ed_bot, "moment", False),
+            to_display(flexure_st.M_Ed_top, "moment", False),
         )
         st = new_en_shear_state(self)
         st.f_ywd = self._f_ywd.to(MPa).magnitude
@@ -284,7 +285,7 @@ def _min_max_flexural_reinforcement_ratio_EN_1992_2004(
     return rho_min, rho_max
 
 
-def _compression_zone_limits_EN_1992_2004(self: "RectangularBeam", d: Quantity) -> Tuple[Quantity, Quantity]:
+def _compression_zone_limits_EN_1992_2004(self: "RectangularBeam", d: float) -> Tuple[float, float]:
     """Compression zone at the ductility limit, as (neutral axis, block depth).
 
     Both limits EN 1992-1-1 imposes are written on the NEUTRAL AXIS ratio
@@ -302,7 +303,7 @@ def _compression_zone_limits_EN_1992_2004(self: "RectangularBeam", d: Quantity) 
     concrete_en = cast("Concrete_EN_1992_2004", self.concrete)
     lambda_ = concrete_en._lambda_factor()
     xi_lim = flexure_eq.neutral_axis_depth_limit_ratio(  # x_u/d
-        concrete_en._f_ck.to(MPa).magnitude,
+        section_floats(self).f_c,
         concrete_en._delta,
         concrete_en._k_1,
         concrete_en._k_2,
@@ -314,16 +315,17 @@ def _compression_zone_limits_EN_1992_2004(self: "RectangularBeam", d: Quantity) 
 
 
 def _calculate_flexural_reinforcement_EN_1992_2004(
-    self: "RectangularBeam", M_Ed: Quantity, d: Quantity, d_prima: Quantity
-) -> tuple[Quantity, Quantity, Quantity, Quantity]:
+    self: "RectangularBeam", M_Ed: float, d: float, d_prima: float
+) -> tuple[float, float, float, float]:
     """
     Calculate the required top and bottom reinforcement areas for bending.
     """
     rho_min, rho_max = _min_max_flexural_reinforcement_ratio_EN_1992_2004(self)
     # ADR-0005 boundary: convert once, compute in floats (N, mm, MPa, N·mm),
     # re-apply units on the way out.
-    b = self.width.to(mm).magnitude
-    d_mm = d.to(mm).magnitude
+    sec = section_floats(self)
+    b = sec.width
+    d_mm = d
     A_s_min = rho_min * d_mm * b
     A_s_max = rho_max * d_mm * b
 
@@ -332,16 +334,14 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
         eta = self.concrete._eta_factor()  # Factor for concrete strength (EN 1992-1-1)
         # Derived from the concrete rather than read off the beam: it is a
         # material property, so a check has no reason to have stored it first.
-        f_cd = (self.concrete._alpha_cc * self.concrete.f_ck / self.concrete.gamma_c).to(MPa).magnitude
+        f_cd = self.concrete._alpha_cc * sec.f_c / self.concrete.gamma_c
         # Define f_yd
-        f_yd = (self.steel_bar.f_y / self.concrete._gamma_s).to(MPa).magnitude
+        f_yd = sec.f_y / self.concrete._gamma_s
 
         # Compression zone at the ductility limit (EC2 5.5(4) and the 0.45 cap)
-        x_u_lim_q, x_eff_lim_q = _compression_zone_limits_EN_1992_2004(self, d)
-        x_u_lim = x_u_lim_q.to(mm).magnitude
-        x_eff_lim = x_eff_lim_q.to(mm).magnitude
+        x_u_lim, x_eff_lim = _compression_zone_limits_EN_1992_2004(self, d)
         # Limit moment for compressive reinforcement
-        M = M_Ed.to(_Nmm).magnitude
+        M = M_Ed
         M_lim = flexure_eq.limit_moment(eta, f_cd, b, x_eff_lim, d_mm)
 
         # Check if compressive reinforcement is required
@@ -362,7 +362,7 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
         else:
             # Compressive reinforcement is required
             self._doubly_reinforced = True
-            d_prime = d_prima.to(mm).magnitude
+            d_prime = d_prima
             # Limit tensile reinforcement area
             A_s1_lim = flexure_eq.reinforcement_for_moment(M_lim, flexure_eq.lever_arm(d_mm, x_eff_lim), f_yd)
 
@@ -372,7 +372,7 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
                 x_u_lim,
                 d_prime,
                 self.concrete._epsilon_cu2,
-                self.steel_bar._E_s.to(MPa).magnitude,
+                sec.E_s,
                 f_yd,
             )
 
@@ -383,16 +383,16 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
             # Required tensile reinforcement area
             A_s1 = max(A_s1_lim + A_s2, A_s_min)
 
-    return A_s_min * _mm2, A_s_max * _mm2, A_s1 * _mm2, A_s2 * _mm2
+    return A_s_min, A_s_max, A_s1, A_s2
 
 
 def _simple_determine_nominal_moment_EN_1992_2004(
     self: "RectangularBeam",
-    A_s: Quantity,
-    d: Quantity,
-    A_s_prime: Quantity,
-    d_prime: Quantity,
-) -> Quantity:
+    A_s: float,
+    d: float,
+    A_s_prime: float,
+    d_prime: float,
+) -> float:
     """
     Design bending resistance M_Rd of a rectangular section.
 
@@ -415,41 +415,30 @@ def _simple_determine_nominal_moment_EN_1992_2004(
     """
     # Constants and material properties
     if isinstance(self.concrete, Concrete_EN_1992_2004):
-        f_yd = (self.steel_bar._f_y / self.concrete._gamma_s).to(MPa).magnitude
-        f_cd = (self.concrete._alpha_cc * self.concrete.f_ck / self.concrete.gamma_c).to(MPa).magnitude
+        sec = section_floats(self)
+        f_yd = sec.f_y / self.concrete._gamma_s
+        f_cd = self.concrete._alpha_cc * sec.f_c / self.concrete.gamma_c
         eta = self.concrete._eta_factor()  # Factor for concrete strength
-        b = self.width.to(mm).magnitude
-        d_mm = d.to(mm).magnitude
-        A_s_mm2 = A_s.to(_mm2).magnitude
+        b = sec.width
+        d_mm = d
+        A_s_mm2 = A_s
 
         # Depth of the equivalent rectangular block that balances the whole
         # tension steel, assuming the section is singly reinforced.
         x_eff = flexure_eq.compression_block_depth_for_steel(A_s_mm2, f_yd, eta, f_cd, b)
 
         # Ductility limit -- same criterion as the reinforcement sizing routine.
-        _, x_eff_lim_q = _compression_zone_limits_EN_1992_2004(self, d)
-        x_eff_lim = x_eff_lim_q.to(mm).magnitude
+        _, x_eff_lim = _compression_zone_limits_EN_1992_2004(self, d)
 
         if x_eff <= x_eff_lim:
             # Singly reinforced: A_s_prime is not required for equilibrium.
-            M_Rd = flexure_eq.moment_resistance_singly_reinforced(A_s_mm2, f_yd, d_mm, x_eff) * _Nmm
+            M_Rd = flexure_eq.moment_resistance_singly_reinforced(A_s_mm2, f_yd, d_mm, x_eff)
         else:
             # Doubly reinforced: the concrete contribution saturates at the
             # ductility limit and the excess tension steel is balanced by the
             # compression reinforcement, with lever arm (d - d').
-            M_Rd = (
-                flexure_eq.moment_resistance_doubly_reinforced(
-                    A_s_mm2,
-                    A_s_prime.to(_mm2).magnitude,
-                    f_yd,
-                    eta,
-                    f_cd,
-                    b,
-                    d_mm,
-                    d_prime.to(mm).magnitude,
-                    x_eff_lim,
-                )
-                * _Nmm
+            M_Rd = flexure_eq.moment_resistance_doubly_reinforced(
+                A_s_mm2, A_s_prime, f_yd, eta, f_cd, b, d_mm, d_prime, x_eff_lim
             )
     return M_Rd
 
@@ -472,36 +461,37 @@ def _determine_nominal_moment_EN_1992_2004(self: "RectangularBeam", st: ENFlexur
     [rho_min, rho_max] = _min_max_flexural_reinforcement_ratio_EN_1992_2004(self)
 
     # For positive moments (tension in the bottom), set minimum reinforcement accordingly.
+    sec = section_floats(self)
     if force._M_y > 0 * kNm:
-        rho_min_top = 0 * dimensionless
+        rho_min_top = 0.0
         rho_min_bot = rho_min
     else:
         rho_min_top = rho_min
-        rho_min_bot = 0 * dimensionless
+        rho_min_bot = 0.0
 
     # Calculate minimum and maximum bottom reinforcement areas
-    st.A_s_min_bot = rho_min_bot * self._d_bot * self.width
-    st.A_s_max_bot = rho_max * self._d_bot * self.width
+    st.A_s_min_bot = rho_min_bot * sec.d_bot * sec.width
+    st.A_s_max_bot = rho_max * sec.d_bot * sec.width
     # Determine the nominal moment for positive moments
     st.M_Rd_bot = _simple_determine_nominal_moment_EN_1992_2004(
-        self, self._A_s_bot, self._d_bot, self._A_s_top, self._c_mec_top
+        self, sec.A_s_bot, sec.d_bot, sec.A_s_top, sec.c_mec_top
     )
     # Determine capacity for negative moment (tension at the top)
-    st.A_s_min_top = rho_min_top * self._d_top * self.width
-    st.A_s_max_top = rho_max * self._d_top * self.width
+    st.A_s_min_top = rho_min_top * sec.d_top * sec.width
+    st.A_s_max_top = rho_max * sec.d_top * sec.width
     st.M_Rd_top = _simple_determine_nominal_moment_EN_1992_2004(
-        self, self._A_s_top, self._d_top, self._A_s_bot, self._c_mec_bot
+        self, sec.A_s_top, sec.d_top, sec.A_s_bot, sec.c_mec_bot
     )
     return None
 
 
 def _split_top_bot_moment(self: "RectangularBeam", st: ENFlexureCheckState, force: Forces) -> None:
-    st.M_Ed = force._M_y
-    if st.M_Ed > 0 * kNm:
+    st.M_Ed = force._M_y.to(_Nmm).magnitude
+    if st.M_Ed > 0:
         st.M_Ed_bot = st.M_Ed
-        st.M_Ed_top = 0 * kNm
+        st.M_Ed_top = 0.0
     else:
-        st.M_Ed_bot = 0 * kNm
+        st.M_Ed_bot = 0.0
         st.M_Ed_top = st.M_Ed
 
 
@@ -525,16 +515,27 @@ def _flexure_capacity_EN_1992_2004(self: "RectangularBeam", face: str, M_demand:
     st = new_en_flexure_state(self)
     _determine_nominal_moment_EN_1992_2004(self, st, probe_force)
     # The design wants the capacity on the beam too; a check never comes here.
-    self._M_Rd_bot, self._M_Rd_top = st.M_Rd_bot, st.M_Rd_top
-    self._A_s_min_bot, self._A_s_max_bot = st.A_s_min_bot, st.A_s_max_bot
-    return st.M_Rd_bot if face == "bot" else st.M_Rd_top
+    self._M_Rd_bot = to_display(st.M_Rd_bot, "moment", False)
+    self._M_Rd_top = to_display(st.M_Rd_top, "moment", False)
+    self._A_s_min_bot = to_display(st.A_s_min_bot, "area", False)
+    self._A_s_max_bot = to_display(st.A_s_max_bot, "area", False)
+    return self._M_Rd_bot if face == "bot" else self._M_Rd_top
 
 
 def _required_areas_EN_1992_2004(
     self: "RectangularBeam", face: str, M: Quantity, d: Quantity, d_prime: Quantity
 ) -> _FaceDemand:
     """Steel required by EN 1992-2004 on `face` for the moment `M`."""
-    A_s_min, A_s_max, A_s1, A_s2 = _calculate_flexural_reinforcement_EN_1992_2004(self, M, d, d_prime)
+    A_s_min, A_s_max, A_s1, A_s2 = _calculate_flexural_reinforcement_EN_1992_2004(
+        self, M.to(_Nmm).magnitude, d.to(mm).magnitude, d_prime.to(mm).magnitude
+    )
+    # The design path speaks pint on both sides; only the calculation is floats.
+    A_s_min, A_s_max, A_s1, A_s2 = (
+        to_display(A_s_min, "area", False),
+        to_display(A_s_max, "area", False),
+        to_display(A_s1, "area", False),
+        to_display(A_s2, "area", False),
+    )
     if face == "bot":
         self._A_s_min_bot, self._A_s_max_bot = A_s_min, A_s_max
     else:
@@ -569,9 +570,10 @@ def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> ENFle
     concrete = cast("Concrete_EN_1992_2004", self.concrete)
 
     # The material values this check needs, carried rather than written.
-    st.f_ywd = self._f_ywk / concrete._gamma_s
-    st.f_cd_shear = concrete.f_ck / concrete.gamma_c
-    st.f_cd = concrete._alpha_cc * concrete.f_ck / concrete.gamma_c
+    sec = section_floats(self)
+    st.f_ywd = self._f_ywk.to(MPa).magnitude / concrete._gamma_s
+    st.f_cd_shear = sec.f_c / concrete.gamma_c
+    st.f_cd = concrete._alpha_cc * sec.f_c / concrete.gamma_c
 
     # Split bottom and top moments
     _split_top_bot_moment(self, st, force)
@@ -585,13 +587,10 @@ def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> ENFle
             st.A_s_max_bot,
             st.A_s_req_bot,
             st.A_s_req_top,
-        ) = _calculate_flexural_reinforcement_EN_1992_2004(self, st.M_Ed_bot, self._d_bot, self._c_mec_top)
+        ) = _calculate_flexural_reinforcement_EN_1992_2004(self, st.M_Ed_bot, sec.d_bot, sec.c_mec_top)
         st.c_d_top = 0
         # Calculate the design capacity ratio for the bottom side.
-        st.DCR_bot = round(
-            st.M_Ed_bot.to("kN*m").magnitude / st.M_Rd_bot.to("kN*m").magnitude,
-            3,
-        )
+        st.DCR_bot = round(st.M_Ed_bot / st.M_Rd_bot, 3)
         st.DCR_top = 0
     else:
         # For negative moments, calculate the reinforcement requirements for the top tension side.
@@ -600,24 +599,19 @@ def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> ENFle
             st.A_s_max_top,
             st.A_s_req_top,
             st.A_s_req_bot,
-        ) = _calculate_flexural_reinforcement_EN_1992_2004(
-            self, abs(st.M_Ed_top / kNm) * kNm, self._d_top, self._c_mec_bot
-        )
+        ) = _calculate_flexural_reinforcement_EN_1992_2004(self, abs(st.M_Ed_top), sec.d_top, sec.c_mec_bot)
         st.c_d_bot = 0
         # Calculate the design capacity ratio for the top side.
-        st.DCR_top = round(
-            -st.M_Ed_top.to("kN*m").magnitude / st.M_Rd_top.to("kN*m").magnitude,
-            3,
-        )
+        st.DCR_top = round(-st.M_Ed_top / st.M_Rd_top, 3)
         st.DCR_bot = 0
 
     # Determine the maximum detailing cover dimensions for top and bottom.
-    st.d_b_max_top = max(self._d_b1_t, self._d_b2_t, self._d_b3_t, self._d_b4_t)
-    st.d_b_max_bot = max(self._d_b1_b, self._d_b2_b, self._d_b3_b, self._d_b4_b)
+    st.d_b_max_top = max(self._d_b1_t, self._d_b2_t, self._d_b3_t, self._d_b4_t).to(mm).magnitude
+    st.d_b_max_bot = max(self._d_b1_b, self._d_b2_b, self._d_b3_b, self._d_b4_b).to(mm).magnitude
 
     # Calculate the longitudinal reinforcement ratios for both sides.
-    st.rho_l_bot = self._A_s_bot / (self._d_bot * self.width)
-    st.rho_l_top = self._A_s_bot / (self._d_top * self.width)
+    st.rho_l_bot = sec.A_s_bot / (sec.d_bot * sec.width)
+    st.rho_l_top = sec.A_s_bot / (sec.d_top * sec.width)
 
     return st
 
