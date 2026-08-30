@@ -136,7 +136,7 @@ def beam_summary_doc(self: "BeamSummary", index: int = 1) -> None:
     doc_builder.add_table_data(df_flex_geometry)
     doc_builder.add_table_data(df_flex_forces)
     doc_builder.add_heading("Limit checks", level=3)
-    doc_builder.add_table_data(df_flex_min_max)
+    doc_builder.add_table_min_max(df_flex_min_max)
     doc_builder.add_heading("Flexural Capacity Top", level=3)
     doc_builder.add_table_dcr(df_flex_capacity_top)
     doc_builder.add_heading("Flexural Capacity Bottom", level=3)

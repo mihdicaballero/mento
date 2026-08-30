@@ -2,11 +2,11 @@ import pandas as pd
 from typing import Optional, List, Any
 from tabulate import tabulate
 from docx import Document
-from docx.shared import Pt, Cm, RGBColor
+from docx.shared import Pt, Cm, Emu, RGBColor
 import seaborn as sns
 import matplotlib.pyplot as plt
 from docx.oxml import parse_xml
-from docx.oxml.ns import nsdecls
+from docx.oxml.ns import nsdecls, qn
 from io import BytesIO
 from pandas.io.formats.style import Styler
 
@@ -17,6 +17,18 @@ from mento.i18n import DEFAULT_LANGUAGE, translate, translate_dataframe, transla
 #: different literal on the other would simply stop colouring, silently.
 PASS_MARK = "✅"
 FAIL_MARK = "❌"
+
+#: Column widths for a per-element detail table: a description, then a symbol,
+#: a value and a unit. Sized to the longest description these tables carry
+#: ("Depth of equivalent strength block ratio", 40 characters) rather than to
+#: the page, so a table that describes one beam does not span the line the way
+#: the all-beams summaries do. With the fixed layout `add_table` sets, anything
+#: longer wraps rather than being clipped.
+DETAIL_TABLE_WIDTHS = [Cm(7.2), Cm(2.2), Cm(3.0), Cm(1.4)]
+
+#: The same, for a limit check: description, unit, value, minimum, maximum and
+#: the verdict.
+LIMIT_TABLE_WIDTHS = [Cm(7.0), Cm(1.5), Cm(1.9), Cm(1.7), Cm(1.7), Cm(1.2)]
 
 CUSTOM_COLORS = {
     "blue": "#1f77b4",  # Default Matplotlib blue
@@ -415,8 +427,34 @@ class DocumentBuilder:
         -------
         None
         """
+        n_columns = len(table.columns)
+        widths = list(column_widths[:n_columns])
+        # A caller that gave fewer widths than there are columns used to leave
+        # the rest at Word's default, which is what made the flexure limit
+        # checks wider than the page.
+        widths += [Cm(2)] * (n_columns - len(widths))
+
+        # Scale down to the text width when the total overruns it, keeping the
+        # proportions the caller asked for. A table narrower than the page is
+        # left narrow -- only the all-beams summaries are meant to span it.
+        section = self.doc.sections[0]
+        usable = section.page_width - section.left_margin - section.right_margin
+        total = sum(w.emu for w in widths)
+        if total > usable:
+            widths = [Emu(int(w.emu * usable / total)) for w in widths]
+
+        # Word honours cell widths only with autofit off and a fixed layout;
+        # without both it stretches every table to the full text width and the
+        # widths set below are ignored.
+        table.autofit = False
+        table.allow_autofit = False
+        tbl_pr = table._tbl.tblPr
+        for existing in tbl_pr.findall(qn("w:tblLayout")):
+            tbl_pr.remove(existing)
+        tbl_pr.append(parse_xml(f'<w:tblLayout {nsdecls("w")} w:type="fixed"/>'))
+
         for row in table.rows:
-            for idx, width in enumerate(column_widths):
+            for idx, width in enumerate(widths):
                 row.cells[idx].width = width
 
     def add_table(
@@ -484,7 +522,7 @@ class DocumentBuilder:
     def add_table_data(
         self,
         df: pd.DataFrame,
-        column_widths=[Cm(12), Cm(2), Cm(2), Cm(2)],
+        column_widths=DETAIL_TABLE_WIDTHS,
         font_size: Optional[float] = None,
     ) -> None:
         """Add a data table. ``font_size`` overrides the document default.
@@ -493,6 +531,26 @@ class DocumentBuilder:
         the page, so the caller can ask for one.
         """
         self.add_table(df, column_widths, font_size=font_size or self.font_size)
+
+    def _shade_verdicts(self, table: Any, df: pd.DataFrame, column: str) -> None:
+        """Shade every cell of ``column`` that holds a verdict, green or red.
+
+        Cells that hold neither mark -- a units row, a blank -- are left alone,
+        so the colouring says something wherever it appears.
+        """
+        column_idx = df.columns.get_loc(column)
+        for row_offset in range(df.shape[0]):
+            verdict = str(df.iat[row_offset, column_idx])
+            if verdict not in (PASS_MARK, FAIL_MARK):
+                continue
+            passed = verdict == PASS_MARK
+            cell = table.rows[row_offset + 1].cells[column_idx]
+            fill = "C6EFCE" if passed else "FFC7CE"
+            font_color = "006100" if passed else "9C0006"
+            cell._element.get_or_add_tcPr().append(parse_xml(f'<w:shd {nsdecls("w")} w:fill="{fill}"/>'))
+            for paragraph in cell.paragraphs:
+                for run in paragraph.runs:
+                    run.font.color.rgb = RGBColor.from_string(font_color)
 
     def add_table_status(
         self,
@@ -506,63 +564,46 @@ class DocumentBuilder:
         The same colours :meth:`add_table_dcr` gives the governing row of a
         detailed result, applied per row to one column instead: a reader scans
         the summary for red rather than reading every tick.
-
-        Only cells actually holding a verdict are shaded, so the units row --
-        which carries an empty string there -- is left alone.
         """
         self.add_table(df, column_widths, font_size=font_size or self.font_size)
-        table = self.doc.tables[-1]
-        status_idx = df.columns.get_loc(status_column)
-
-        for row_offset in range(df.shape[0]):
-            verdict = str(df.iat[row_offset, status_idx])
-            if verdict not in (PASS_MARK, FAIL_MARK):
-                continue
-            passed = verdict == PASS_MARK
-            shading_color = "C6EFCE" if passed else "FFC7CE"
-            font_color = "006100" if passed else "9C0006"
-            cell = table.rows[row_offset + 1].cells[status_idx]
-            cell._element.get_or_add_tcPr().append(parse_xml(f'<w:shd {nsdecls("w")} w:fill="{shading_color}"/>'))
-            for paragraph in cell.paragraphs:
-                for run in paragraph.runs:
-                    run.font.color.rgb = RGBColor.from_string(font_color)
+        self._shade_verdicts(self.doc.tables[-1], df, status_column)
 
     def add_table_dcr(self, df: pd.DataFrame) -> None:
+        """Add a capacity table, with the governing row shaded green or red.
+
+        The whole row, not one cell: this table ends on the combination that
+        governs, and that row is the answer the reader came for.
         """
-        Adds a table using `add_table` and modifies the last row's DCR cell color.
+        self.add_table(df, DETAIL_TABLE_WIDTHS, font_size=self.font_size)
+        table = self.doc.tables[-1]
 
-        - Green if DCR < 1
-        - Red if DCR >= 1
-        """
-        column_widths = [Cm(12), Cm(2), Cm(2), Cm(2)]
-        self.add_table(df, column_widths, font_size=self.font_size)
-        # Get the last table added to the document
-        table = self.doc.tables[-1]  # Retrieve the most recent table
+        last_row_idx = df.shape[0]
+        dcr_column_idx = 2  # Third column holds the DCR
 
-        # Apply color to DCR cell (third column of the last row)
-        last_row_idx = df.shape[0]  # Last row index
-        dcr_column_idx = 2  # Third column index (zero-based)
-
-        dcr_value = float(df.iat[-1, dcr_column_idx])  # Extract DCR value
+        dcr_value = float(df.iat[-1, dcr_column_idx])
         if dcr_value < 1:
             shading_color = "C6EFCE"  # Green
-            font_color = "006100"  # Green font
+            font_color = "006100"
         else:
             shading_color = "FFC7CE"  # Red
-            font_color = "9C0006"  # Red font
+            font_color = "9C0006"
 
-        # Apply shading and font color to the entire last row
         for cell in table.rows[last_row_idx].cells:
-            # Apply background color
             cell._element.get_or_add_tcPr().append(parse_xml(f'<w:shd {nsdecls("w")} w:fill="{shading_color}"/>'))
-            # Apply font color
             for paragraph in cell.paragraphs:
                 for run in paragraph.runs:
                     run.font.color.rgb = RGBColor.from_string(font_color)
 
-    def add_table_min_max(self, df: pd.DataFrame) -> None:
-        column_widths = [Cm(9), Cm(2), Cm(2), Cm(2), Cm(2), Cm(1)]
-        self.add_table(df, column_widths, font_size=self.font_size)
+    def add_table_min_max(self, df: pd.DataFrame, verdict_column: str = "Ok?") -> None:
+        """Add a limit-check table, with its verdict column shaded.
+
+        Same colouring as the summary's Status column: a limit check is a
+        pass/fail statement too, and reading a column of ticks for the one
+        cross is what the colour saves.
+        """
+        self.add_table(df, LIMIT_TABLE_WIDTHS, font_size=self.font_size)
+        if verdict_column in df.columns:
+            self._shade_verdicts(self.doc.tables[-1], df, verdict_column)
 
     def add_figure(self, fig: "plt.Figure", width: float = 16) -> None:
         """

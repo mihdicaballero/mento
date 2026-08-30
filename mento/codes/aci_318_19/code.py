@@ -71,6 +71,10 @@ _UNITS_ROW_FLEXURE = {
 }
 
 
+#: The DCR column right beside it already says whether the section is enough,
+#: so this tick adds nothing to the all-beams summary.
+_SUMMARY_DROP_COLUMNS = ("Vu≤ØVn",)
+
 _SHEAR_SYMBOLS = {
     "reinforcement": "A_v",
     "demand": "V_u",
@@ -179,6 +183,7 @@ _COMMON = dict(
     summary_columns=_SUMMARY_COLUMNS,
     capacity_columns=_capacity_columns,
     shear_symbols=_SHEAR_SYMBOLS,
+    summary_drop_columns=_SUMMARY_DROP_COLUMNS,
 )
 
 ACI_318_19 = register(

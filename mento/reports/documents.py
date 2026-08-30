@@ -144,7 +144,7 @@ def flexure_report_doc(self: "RectangularBeam", force: Optional[Forces] = None) 
 
     # Add third section for limit checks
     doc_builder.add_heading("Limit checks", level=2)
-    doc_builder.add_table_data(df_data_min_max)
+    doc_builder.add_table_min_max(df_data_min_max)
 
     # Add second section for flexural checks
     doc_builder.add_heading("Flexural Capacity Top", level=2)
