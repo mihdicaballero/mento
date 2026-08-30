@@ -155,7 +155,8 @@ def capture_shear_check(beam: RectangularBeam, label: str, state: Any = None) ->
     for the codes still on the older path.
     """
     if state is not None:
-        return ShearCheck(label=label, A_v_req=state.A_v_req, A_v_min=state.A_v_min, DCR=float(state.DCR))
+        A_v_req, A_v_min = state.shear_reinforcement_quantities(beam.concrete.is_imperial)
+        return ShearCheck(label=label, A_v_req=A_v_req, A_v_min=A_v_min, DCR=float(state.DCR))
     return ShearCheck(
         label=label,
         A_v_req=getattr(beam, "_A_v_req", None),

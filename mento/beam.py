@@ -16,6 +16,7 @@ from mento.material import (
     Concrete_ACI_318_19,
     Concrete_EN_1992_2004,
 )
+from mento.precompute import refresh_section_floats
 from mento.rebar import Rebar
 from mento.units import MPa, mm, inch, kN, m, cm, kNm, dimensionless
 from mento.forces import Forces
@@ -592,6 +593,10 @@ class RectangularBeam(RectangularSection):
         self._d_top = self.height - self._c_mec_top
         # Use bottom or top effective height
         self._d_shear = min(self._d_bot, self._d_top)
+        # Every geometry and reinforcement change funnels through here, so this
+        # is the one place the float view can go stale. Rebuilt eagerly so that
+        # no check ever has to create it -- see mento.precompute.
+        refresh_section_floats(self)
 
     ##########################################################
     # CHECK & DESIGN FLEXURE

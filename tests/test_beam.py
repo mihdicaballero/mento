@@ -20,6 +20,7 @@ from mento.material import (
     Concrete_EN_1992_2004,
     Concrete_CIRSOC_201_25,
 )
+from mento.precompute import section_floats
 from mento.units import psi, kip, inch, ksi, mm, kN, cm, MPa, ft, kNm
 from mento.forces import Forces
 from mento.codes.ACI_318_19_beam import (
@@ -3726,3 +3727,52 @@ def test_flexure_check_results_leaves_the_section_completely_untouched(
     assert not changed, f"the check wrote to the section: {changed}"
     assert not added, f"the check added attributes to the section: {added}"
     assert results[0].bottom.DCR > 0
+
+
+def test_the_float_view_never_outlives_the_section_it_describes() -> None:
+    """A stale precompute would be a silently wrong answer, not a crash."""
+    beam = RectangularBeam(
+        label="restirruped",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=30 * cm,
+        height=50 * cm,
+        c_c=25 * mm,
+    )
+    beam.set_longitudinal_rebar_bot(n1=3, d_b1=20 * mm)
+    combo = [Forces(label="C1", V_z=80 * kN, M_y=90 * kNm)]
+
+    beam.set_transverse_rebar(n_stirrups=1, d_b=6 * mm, s_l=25 * cm)
+    weak = beam.shear_check_results(combo)[0].DCR
+
+    # Same section, more shear reinforcement: the check must see the new bars.
+    beam.set_transverse_rebar(n_stirrups=1, d_b=12 * mm, s_l=10 * cm)
+    strong = beam.shear_check_results(combo)[0].DCR
+
+    assert strong < weak, f"the check reused a stale float view: {strong} vs {weak}"
+
+    # And the view itself agrees with the section it was built from.
+    floats = section_floats(beam)
+    assert floats.A_v == pytest.approx(beam._A_v.to(mm).magnitude)
+    assert floats.d_shear == pytest.approx(beam._d_shear.to(mm).magnitude)
+
+
+def test_changing_the_geometry_rebuilds_the_float_view() -> None:
+    """Longitudinal rebar moves the effective depth, so the view must follow."""
+    beam = RectangularBeam(
+        label="redepth",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=30 * cm,
+        height=50 * cm,
+        c_c=25 * mm,
+    )
+    beam.set_longitudinal_rebar_bot(n1=2, d_b1=12 * mm)
+    shallow = section_floats(beam)
+
+    beam.set_longitudinal_rebar_bot(n1=2, d_b1=12 * mm, n2=2, d_b2=25 * mm)
+    deep = section_floats(beam)
+
+    assert deep is not shallow
+    assert deep.d_shear != shallow.d_shear
+    assert deep.d_shear == pytest.approx(beam._d_shear.to(mm).magnitude)

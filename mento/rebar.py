@@ -6,7 +6,8 @@ import numpy as np
 
 from mento.codes.aci_318_19.equations import shear as aci_shear_eq
 from mento.codes.en_1992_2004.equations import shear as en_shear_eq
-from mento.units import psi, mm, cm, inch, MPa
+from mento.precompute import CANONICAL, DISPLAY, section_floats
+from mento.units import mm, cm, inch
 
 if TYPE_CHECKING:
     from mento.beam import RectangularBeam
@@ -19,26 +20,27 @@ if TYPE_CHECKING:
 _CM2 = cm**2
 
 
-def max_stirrup_spacing_ACI_318_19(
-    beam: RectangularBeam, V_s_req: Quantity, A_cv: Quantity
-) -> Tuple[Quantity, Quantity]:
+def max_stirrup_spacing_ACI_318_19(beam: RectangularBeam, V_s_req: float, A_cv: float) -> Tuple[float, float]:
     """Stirrup spacing limits of ACI 318-19 Table 9.7.6.2.2, for a beam.
+
+    Floats in the beam's own unit system, in and out: the shear check runs
+    entirely in floats, so a pint signature here would put the boundary back in
+    the middle of it. :meth:`Rebar.calculate_max_spacing_ACI_318_19` wraps this
+    for the design path, which still speaks pint.
 
     A module-level function rather than a ``Rebar`` method because it needs
     nothing from the bar catalogue: building a whole ``Rebar`` for it cost more
     than the check it serves.
     """
-    is_imperial = beam.concrete.is_imperial
-    length_unit = inch if is_imperial else mm
-    s_max_l, s_max_w = aci_shear_eq.max_stirrup_spacing(
-        V_s_req.to("lbf" if is_imperial else "N").magnitude,
-        beam.concrete.f_c.to(psi if is_imperial else MPa).magnitude,
+    sec = section_floats(beam)
+    return aci_shear_eq.max_stirrup_spacing(
+        V_s_req,
+        sec.f_c,
         beam.concrete.lambda_factor,
-        A_cv.to("inch**2" if is_imperial else "mm**2").magnitude,
-        beam._d_shear.to(length_unit).magnitude,
-        is_imperial=is_imperial,
+        A_cv,
+        sec.d_shear,
+        is_imperial=sec.is_imperial,
     )
-    return s_max_l * length_unit, s_max_w * length_unit
 
 
 def max_stirrup_spacing_EN_1992_2004(beam: RectangularBeam, alpha: float) -> Tuple[Quantity, Quantity]:
@@ -137,7 +139,18 @@ class Rebar:
             (s_max_l, s_max_w): The maximum spacing across the length and width of the beam.
         """
 
-        return max_stirrup_spacing_ACI_318_19(self.beam, V_s_req, A_cv)
+        sec = section_floats(self.beam)
+        canonical = CANONICAL[sec.is_imperial]
+        display = DISPLAY[sec.is_imperial]
+        s_max_l, s_max_w = max_stirrup_spacing_ACI_318_19(
+            self.beam,
+            V_s_req.to(canonical["force"]).magnitude,
+            A_cv.to(canonical["area"]).magnitude,
+        )
+        return (
+            (s_max_l * canonical["length"]).to(display["length"]),
+            (s_max_w * canonical["length"]).to(display["length"]),
+        )
 
     def calculate_max_spacing_EN_1992_2004(self, alpha: float) -> Tuple[Quantity, Quantity]:
         """

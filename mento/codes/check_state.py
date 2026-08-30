@@ -13,116 +13,134 @@ The fields are pre-zeroed in the section's own unit system by
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from pint import Quantity
 
+from mento.precompute import CANONICAL, DISPLAY
 from mento.units import cm, inch, kip, kN, kNm, m, mm, psi, MPa, ft, dimensionless
 
 if TYPE_CHECKING:
     from mento.beam import RectangularBeam
     from mento.shear_wall import ShearWall
 
-#: The attributes a state maps onto, in the order the dataclass declares them.
-#: The compatibility layer and the tests that pin it both read this.
+#: The attributes a state maps onto, and the kind of quantity each one is.
+#: The compatibility layer wraps the float back into pint with the display unit
+#: for that kind, so the report tables read exactly what they always did.
 BEAM_ATTRIBUTES = {
-    "V_u": "_V_u",
-    "N_u": "_N_u",
-    "f_yt": "f_yt",
-    "A_s_tension": "_A_s_tension",
-    "A_cv": "_A_cv",
-    "rho_w": "_rho_w",
-    "lambda_s": "_lambda_s",
-    "sigma_Nu": "_sigma_Nu",
-    "k_c_min": "_k_c_min",
-    "V_c": "V_c",
-    "phi_V_c": "_phi_V_c",
-    "phi_V_s": "_phi_V_s",
-    "phi_V_n": "_phi_V_n",
-    "phi_V_max": "_phi_V_max",
-    "V_s_req": "_V_s_req",
-    "A_v_min": "_A_v_min",
-    "A_v_req": "_A_v_req",
-    "stirrup_s_w": "_stirrup_s_w",
-    "stirrup_s_max_l": "_stirrup_s_max_l",
-    "stirrup_s_max_w": "_stirrup_s_max_w",
-    "max_shear_ok": "_max_shear_ok",
-    "DCR": "_DCRv",
+    "V_u": ("_V_u", "force"),
+    "N_u": ("_N_u", "force"),
+    "f_yt": ("f_yt", "stress"),
+    "A_s_tension": ("_A_s_tension", "area"),
+    "A_cv": ("_A_cv", "area"),
+    "rho_w": ("_rho_w", "dimensionless"),
+    "lambda_s": ("_lambda_s", "raw"),
+    "sigma_Nu": ("_sigma_Nu", "stress"),
+    "k_c_min": ("_k_c_min", "stress"),
+    "V_c": ("V_c", "force"),
+    "phi_V_c": ("_phi_V_c", "force"),
+    "phi_V_s": ("_phi_V_s", "force"),
+    "phi_V_n": ("_phi_V_n", "force"),
+    "phi_V_max": ("_phi_V_max", "force"),
+    "V_s_req": ("_V_s_req", "force"),
+    "A_v_min": ("_A_v_min", "per_length"),
+    "A_v_req": ("_A_v_req", "per_length"),
+    "stirrup_s_w": ("_stirrup_s_w", "length"),
+    "stirrup_s_max_l": ("_stirrup_s_max_l", "length"),
+    "stirrup_s_max_w": ("_stirrup_s_max_w", "length"),
+    "max_shear_ok": ("_max_shear_ok", "raw"),
+    "DCR": ("_DCRv", "raw"),
 }
+
+
+def to_display(value: float, kind: str, imperial: bool) -> Any:
+    """Wrap a canonical float back into pint, in the unit a reader expects."""
+    if kind == "raw":
+        return value
+    if kind == "dimensionless":
+        return value * dimensionless
+    return (value * CANONICAL[imperial][kind]).to(DISPLAY[imperial][kind])
 
 
 @dataclass
 class ShearCheckState:
-    """One combination's shear result. Mutable while the check fills it in."""
+    """One combination's shear result, in the design code's own units.
 
-    V_u: Quantity
-    N_u: Quantity
-    f_yt: Quantity
-    A_s_tension: Quantity
-    A_cv: Quantity
-    rho_w: Quantity
+    Plain floats rather than quantities: a check that held pint here re-crossed
+    the boundary at every step, which measured as 82 % of its cost. See
+    :mod:`mento.precompute`.
+    """
+
+    V_u: float
+    N_u: float
+    f_yt: float
+    A_s_tension: float
+    A_cv: float
+    rho_w: float
     lambda_s: float
-    sigma_Nu: Quantity
-    k_c_min: Quantity
-    V_c: Quantity
-    phi_V_c: Quantity
-    phi_V_s: Quantity
-    phi_V_n: Quantity
-    phi_V_max: Quantity
-    V_s_req: Quantity
-    A_v_min: Quantity
-    A_v_req: Quantity
-    stirrup_s_w: Quantity
-    stirrup_s_max_l: Quantity
-    stirrup_s_max_w: Quantity
+    sigma_Nu: float
+    k_c_min: float
+    V_c: float
+    phi_V_c: float
+    phi_V_s: float
+    phi_V_n: float
+    phi_V_max: float
+    V_s_req: float
+    A_v_min: float
+    A_v_req: float
+    stirrup_s_w: float
+    stirrup_s_max_l: float
+    stirrup_s_max_w: float
     max_shear_ok: bool
     DCR: float
 
+    def shear_reinforcement_quantities(self, imperial: bool) -> tuple[Any, Any]:
+        """``(A_v_req, A_v_min)`` as quantities, for the frozen public result."""
+        return (
+            to_display(self.A_v_req, "per_length", imperial),
+            to_display(self.A_v_min, "per_length", imperial),
+        )
+
 
 def new_shear_state(section: "RectangularBeam") -> ShearCheckState:
-    """A zeroed state carrying the section's unit system."""
-    imperial = section.concrete.is_imperial
-    force = 0 * (kip if imperial else kN)
-    stress = 0 * (psi if imperial else MPa)
-    length = 0 * (inch if imperial else cm)
-    per_length = 0 * (inch**2 / ft if imperial else cm**2 / m)
-    area = 0 * (inch**2 if imperial else cm**2)
-
+    """A zeroed state. Every field is a float, so there is nothing to convert."""
     return ShearCheckState(
-        V_u=force,
-        N_u=force,
-        f_yt=stress,
-        A_s_tension=area,
-        A_cv=area,
-        rho_w=0 * dimensionless,
+        V_u=0.0,
+        N_u=0.0,
+        f_yt=0.0,
+        A_s_tension=0.0,
+        A_cv=0.0,
+        rho_w=0.0,
         lambda_s=0.0,
-        sigma_Nu=stress,
-        k_c_min=stress,
-        V_c=force,
-        phi_V_c=force,
-        phi_V_s=force,
-        phi_V_n=force,
-        phi_V_max=force,
-        V_s_req=force,
-        A_v_min=per_length,
-        A_v_req=per_length,
-        stirrup_s_w=length,
-        stirrup_s_max_l=length,
-        stirrup_s_max_w=length,
+        sigma_Nu=0.0,
+        k_c_min=0.0,
+        V_c=0.0,
+        phi_V_c=0.0,
+        phi_V_s=0.0,
+        phi_V_n=0.0,
+        phi_V_max=0.0,
+        V_s_req=0.0,
+        A_v_min=0.0,
+        A_v_req=0.0,
+        stirrup_s_w=0.0,
+        stirrup_s_max_l=0.0,
+        stirrup_s_max_w=0.0,
         max_shear_ok=False,
         DCR=0.0,
     )
 
 
 def apply_shear_state(section: "RectangularBeam", state: ShearCheckState) -> None:
-    """Copy a state onto the section.
+    """Copy a state onto the section, back in pint.
 
     The compatibility layer: the report tables and a handful of tests still read
     these attributes off the element. The values-only entry points skip this, so
-    a loop over many sections leaves every one of them untouched.
+    a loop over many sections leaves every one of them untouched -- and pays for
+    none of these conversions.
     """
-    for field_name, attribute in BEAM_ATTRIBUTES.items():
-        setattr(section, attribute, getattr(state, field_name))
+    imperial = section.concrete.is_imperial
+    for field_name, (attribute, kind) in BEAM_ATTRIBUTES.items():
+        setattr(section, attribute, to_display(getattr(state, field_name), kind, imperial))
 
 
 #: EN 1992-1-1 works with a different set of quantities than ACI, so it gets its
@@ -187,6 +205,10 @@ class ENShearCheckState:
     stirrup_s_max_w: Quantity
     max_shear_ok: bool
     DCR: float
+
+    def shear_reinforcement_quantities(self, imperial: bool) -> tuple[Any, Any]:
+        """Already quantities: this state has not been moved to floats yet."""
+        return self.A_v_req, self.A_v_min
 
 
 def new_en_shear_state(section: "RectangularBeam") -> ENShearCheckState:
