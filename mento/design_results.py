@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Optional, Sequence, Tuple
 
 from pint import Quantity
 
@@ -126,8 +126,15 @@ def capture_flexure_check(beam: RectangularBeam, label: str) -> FlexureCheck:
     return FlexureCheck(label=label, bottom=face("bot"), top=face("top"))
 
 
-def capture_shear_check(beam: RectangularBeam, label: str) -> ShearCheck:
-    """Snapshot the shear result the beam holds for the combination just run."""
+def capture_shear_check(beam: RectangularBeam, label: str, state: Any = None) -> ShearCheck:
+    """The shear result of the combination just run.
+
+    Reads ``state`` when the design code returned one — then nothing had to be
+    written to the beam for this to work. Falls back to the beam's attributes
+    for the codes still on the older path.
+    """
+    if state is not None:
+        return ShearCheck(label=label, A_v_req=state.A_v_req, A_v_min=state.A_v_min, DCR=float(state.DCR))
     return ShearCheck(
         label=label,
         A_v_req=getattr(beam, "_A_v_req", None),

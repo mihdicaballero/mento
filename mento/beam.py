@@ -43,6 +43,7 @@ from mento.codes.EN_1992_2004_beam import (
     _design_shear_EN_1992_2004,
     _design_flexure_EN_1992_2004,
 )
+from mento.codes.shear_state import ShearCheckState, apply_shear_state
 from mento.codes.ACI_318_19_beam import (
     _check_shear_ACI_318_19,
     _design_shear_ACI_318_19,
@@ -662,13 +663,15 @@ class RectangularBeam(RectangularSection):
     def shear_check_results(self, forces: list[Forces]) -> Tuple[ShearCheck, ...]:
         """Check shear and return one result per combination, building no report.
 
-        The counterpart of :meth:`flexure_check_results`; see it for the
-        trade-off and the caveat about sharing a section across stations.
+        Nothing is written to the section: the ACI check returns its result as a
+        value and only the reporting path copies it back. That is what makes a
+        loop over many stations safe — see :meth:`flexure_check_results` for the
+        flexure counterpart, which still writes.
         """
         self._shear_checks = []
         for force in forces:
-            self._run_shear_check(force, report=False)
-            self._shear_checks.append(capture_shear_check(self, force.label))
+            state = self._run_shear_check(force, report=False)
+            self._shear_checks.append(capture_shear_check(self, force.label, state))
         self._shear_checked = True
         return tuple(self._shear_checks)
 
@@ -684,13 +687,23 @@ class RectangularBeam(RectangularSection):
             _check_flexure_EN_1992_2004(self, force)
         return build_flexure_report(self, force) if report else None
 
-    def _run_shear_check(self, force: Forces, *, report: bool) -> Optional[DataFrame]:
-        """Compute one shear combination, and build its report only if asked."""
+    def _run_shear_check(self, force: Forces, *, report: bool) -> Optional[ShearCheckState]:
+        """Compute one shear combination, and build its report only if asked.
+
+        Returns the ACI state so a values-only caller never needs the section to
+        have been written to. Building a report does need that, because the
+        tables still read the element — the compatibility layer of ADR-0001.
+        """
         if self.concrete.design_code in ("ACI 318-19", "CIRSOC 201-25"):
-            _check_shear_ACI_318_19(self, force)
+            state = _check_shear_ACI_318_19(self, force)
+            if report:
+                apply_shear_state(self, state)
         else:
             _check_shear_EN_1992_2004(self, force)
-        return build_shear_report(self, force) if report else None
+            state = None
+        if report:
+            self._shear_report_row = build_shear_report(self, force)
+        return state
 
     def check_flexure(self, forces: list[Forces]) -> DataFrame:
         # Initialize variables to track limiting cases
@@ -810,7 +823,8 @@ class RectangularBeam(RectangularSection):
         self._shear_checks = []
 
         for force in forces:
-            result = self._run_shear_check(force, report=True)
+            self._run_shear_check(force, report=True)
+            result = self._shear_report_row
             self._shear_results_list.append(result)
 
             self._shear_results_detailed_list[force.id] = {

@@ -9,6 +9,7 @@ from mento.codes.flexure_design import (
     _select_safe_design as _select_safe_design_generic,
 )
 from mento.codes.aci_318_19.equations import flexure as flexure_eq
+from mento.codes.shear_state import ShearCheckState, apply_shear_state, new_shear_state
 from mento.codes.aci_318_19.equations import shear as shear_eq
 from mento.material import Concrete_ACI_318_19
 from mento.rebar import max_stirrup_spacing_ACI_318_19
@@ -55,7 +56,7 @@ def _initialize_variables_ACI_318_19(self: "RectangularBeam", M_y: Quantity) -> 
 ##########################################################
 
 
-def _calculate_shear_reinforcement_aci(self: "RectangularBeam") -> None:
+def _calculate_shear_reinforcement_aci(self: "RectangularBeam", st: ShearCheckState) -> None:
     if isinstance(self.concrete, Concrete_ACI_318_19):
         is_imperial = self.concrete.is_imperial
         length_unit = inch if is_imperial else mm
@@ -64,28 +65,28 @@ def _calculate_shear_reinforcement_aci(self: "RectangularBeam") -> None:
         # so it converts to a plain length.
         V_s = shear_eq.shear_strength_of_reinforcement(
             self._A_v.to(length_unit).magnitude,
-            self.f_yt.to(stress_unit).magnitude,
+            st.f_yt.to(stress_unit).magnitude,
             self._d_shear.to(length_unit).magnitude,
         ) * (lbf if is_imperial else N)
-        self._phi_V_s = self.concrete.phi_v * V_s  # Reduced shear contribution of reinforcement
+        st.phi_V_s = self.concrete.phi_v * V_s  # Reduced shear contribution of reinforcement
 
 
-def _calculate_effective_shear_area_aci(self: "RectangularBeam") -> None:
-    self._A_cv = self.width * self._d_shear  # Effective shear area
-    self._rho_w = self._A_s_tension.to("cm**2") / self._A_cv.to("cm**2")  # Longitudinal reinforcement ratio
+def _calculate_effective_shear_area_aci(self: "RectangularBeam", st: ShearCheckState) -> None:
+    st.A_cv = self.width * self._d_shear  # Effective shear area
+    st.rho_w = st.A_s_tension.to("cm**2") / st.A_cv.to("cm**2")  # Longitudinal reinforcement ratio
     is_imperial = self.concrete.is_imperial
     length_unit = inch if is_imperial else mm
-    self._lambda_s = shear_eq.size_effect_factor(self._d_shear.to(length_unit).magnitude, is_imperial=is_imperial)
+    st.lambda_s = shear_eq.size_effect_factor(self._d_shear.to(length_unit).magnitude, is_imperial=is_imperial)
 
 
-def _calculate_concrete_shear_strength_aci(self: "RectangularBeam") -> None:
+def _calculate_concrete_shear_strength_aci(self: "RectangularBeam", st: ShearCheckState) -> None:
     is_imperial = self.concrete.is_imperial
     stress_unit = psi if is_imperial else MPa
     f_c = self.concrete.f_c
     # Axial stress influence
-    self._sigma_Nu = (
+    st.sigma_Nu = (
         shear_eq.axial_stress_influence(
-            self._N_u.to("lbf" if is_imperial else "N").magnitude,
+            st.N_u.to("lbf" if is_imperial else "N").magnitude,
             self.A_x.to("inch**2" if is_imperial else "mm**2").magnitude,
             f_c.to(stress_unit).magnitude,
         )
@@ -93,21 +94,21 @@ def _calculate_concrete_shear_strength_aci(self: "RectangularBeam") -> None:
     )
     if isinstance(self.concrete, Concrete_ACI_318_19):
         V_cmin = 0 * (kip if is_imperial else kN)
-        has_min_rebar = not (self._A_v < self._A_v_min or self._A_v_min == 0 * cm**2 / m)
+        has_min_rebar = not (self._A_v < st.A_v_min or st.A_v_min == 0 * cm**2 / m)
 
-        if not has_min_rebar and not is_imperial and self._A_s_tension == 0 * cm**2:
+        if not has_min_rebar and not is_imperial and st.A_s_tension == 0 * cm**2:
             warnings.warn(
                 "Longitudinal rebar As cannot be zero if A_v is less than A_v_min.",
                 UserWarning,
             )
 
-        self._k_c_min = (
+        st.k_c_min = (
             shear_eq.concrete_shear_stress(
                 f_c.to(stress_unit).magnitude,
                 self.concrete.lambda_factor,
-                self._rho_w.magnitude,
-                self._sigma_Nu.to(stress_unit).magnitude,
-                self._lambda_s,
+                st.rho_w.magnitude,
+                st.sigma_Nu.to(stress_unit).magnitude,
+                st.lambda_s,
                 has_min_rebar=has_min_rebar,
                 is_imperial=is_imperial,
             )
@@ -119,18 +120,18 @@ def _calculate_concrete_shear_strength_aci(self: "RectangularBeam") -> None:
                 f_c.to(stress_unit).magnitude, self.concrete.lambda_factor, is_imperial=is_imperial
             )
             * stress_unit
-        ) * self._A_cv
-        self.V_c = min(V_cmax, max(V_cmin, self._k_c_min * self._A_cv))
-        self._phi_V_c = self.concrete.phi_v * self.V_c
+        ) * st.A_cv
+        st.V_c = min(V_cmax, max(V_cmin, st.k_c_min * st.A_cv))
+        st.phi_V_c = self.concrete.phi_v * st.V_c
 
 
-def _calculate_max_shear_capacity_aci(self: "RectangularBeam") -> None:
+def _calculate_max_shear_capacity_aci(self: "RectangularBeam", st: ShearCheckState) -> None:
     "Formula for maximum total shear capacity (V_max)"
     if isinstance(self.concrete, Concrete_ACI_318_19):
         is_imperial = self.concrete.is_imperial
         stress_unit = psi if is_imperial else MPa
         V_max = (
-            self.V_c
+            st.V_c
             + (
                 shear_eq.shear_stress_capacity_increment(
                     self.concrete.f_c.to(stress_unit).magnitude,
@@ -139,13 +140,13 @@ def _calculate_max_shear_capacity_aci(self: "RectangularBeam") -> None:
                 )
                 * stress_unit
             )
-            * self._A_cv
+            * st.A_cv
         )
-        self._phi_V_max = self.concrete.phi_v * V_max
-        self._max_shear_ok = self._V_u < self._phi_V_max
+        st.phi_V_max = self.concrete.phi_v * V_max
+        st.max_shear_ok = st.V_u < st.phi_V_max
 
 
-def _calculate_A_v_min_ACI(self: "RectangularBeam", f_c: Quantity) -> None:
+def _calculate_A_v_min_ACI(self: "RectangularBeam", st: ShearCheckState, f_c: Quantity) -> None:
     """Calculate the minimum shear reinforcement based on unit system."""
     # 'Minimum reinforcement should be placed if the factored shear Vu
     # is greater than half the shear capacity of the concrete,
@@ -156,7 +157,7 @@ def _calculate_A_v_min_ACI(self: "RectangularBeam", f_c: Quantity) -> None:
     length_unit = inch if is_imperial else mm
     stress_unit = psi if is_imperial else MPa
 
-    self._A_v_min = (
+    st.A_v_min = (
         shear_eq.min_shear_reinforcement_ratio(
             f_c.to(stress_unit).magnitude,
             f_yt.to(stress_unit).magnitude,
@@ -177,7 +178,7 @@ def _calculate_f_yt_aci(self: "RectangularBeam") -> Quantity:
     )
 
 
-def _check_minimum_reinforcement_requirement_aci(self: "RectangularBeam") -> None:
+def _check_minimum_reinforcement_requirement_aci(self: "RectangularBeam", st: ShearCheckState) -> None:
     if isinstance(self.concrete, Concrete_ACI_318_19):
         is_imperial = self.concrete.is_imperial
         stress_unit = psi if is_imperial else MPa
@@ -192,32 +193,32 @@ def _check_minimum_reinforcement_requirement_aci(self: "RectangularBeam") -> Non
                 )
                 * stress_unit
             )
-            * self._A_cv
+            * st.A_cv
         )
 
-        if self._V_u < V_threshold:
+        if st.V_u < V_threshold:
             zero_A_v = 0 * inch**2 / ft if is_imperial else 0 * cm**2 / m
-            self._A_v_req = zero_A_v
-            self._A_v_min = zero_A_v
-            self._max_shear_ok = True
+            st.A_v_req = zero_A_v
+            st.A_v_min = zero_A_v
+            st.max_shear_ok = True
         else:
-            _calculate_A_v_min_ACI(self, self.concrete.f_c)
-            self._max_shear_ok = V_threshold < self._V_u < self._phi_V_max
+            _calculate_A_v_min_ACI(self, st, self.concrete.f_c)
+            st.max_shear_ok = V_threshold < st.V_u < st.phi_V_max
 
 
-def _calculate_V_s_req(self: "RectangularBeam") -> None:
+def _calculate_V_s_req(self: "RectangularBeam", st: ShearCheckState) -> None:
     if isinstance(self.concrete, Concrete_ACI_318_19):
-        self._V_s_req = self._V_u - self._phi_V_c
-        self._A_v_req = max(
-            self._V_s_req / (self.concrete.phi_v * self.f_yt * self._d_shear),
-            self._A_v_min,
+        st.V_s_req = st.V_u - st.phi_V_c
+        st.A_v_req = max(
+            st.V_s_req / (self.concrete.phi_v * st.f_yt * self._d_shear),
+            st.A_v_min,
         ).to("cm ** 2 / m")
 
 
-def _calculate_total_shear_strength_aci(self: "RectangularBeam") -> None:
+def _calculate_total_shear_strength_aci(self: "RectangularBeam", st: ShearCheckState) -> None:
     if isinstance(self.concrete, Concrete_ACI_318_19):
-        self._phi_V_n = self.concrete.phi_v * (self.V_c + self._A_v * self.f_yt * self._d_shear)
-        V_d_max = min(self._phi_V_n, self._phi_V_max)
+        st.phi_V_n = self.concrete.phi_v * (st.V_c + self._A_v * st.f_yt * self._d_shear)
+        V_d_max = min(st.phi_V_n, st.phi_V_max)
         if V_d_max.to("kN").magnitude == 0:
             # No stirrups AND no longitudinal steel on the tension face. V_c in
             # Table 22.5.5.1 scales with rho_w**(1/3), so it collapses to zero
@@ -226,89 +227,105 @@ def _calculate_total_shear_strength_aci(self: "RectangularBeam") -> None:
             # infinite DCR rather than dividing by zero: check_shear must not
             # raise because a section is insufficient. Mirrors the guard in the
             # wall module and the phi*Mn floor in the flexure check.
-            self._DCRv = float("inf")
+            st.DCR = float("inf")
         else:
-            self._DCRv = abs((self._V_u.to("kN").magnitude / V_d_max.to("kN").magnitude))
+            st.DCR = abs((st.V_u.to("kN").magnitude / V_d_max.to("kN").magnitude))
 
 
-def _calculate_rebar_spacing_aci(self: "RectangularBeam") -> None:
+def _calculate_rebar_spacing_aci(self: "RectangularBeam", st: ShearCheckState) -> None:
     n_legs_actual = self._stirrup_n * 2  # Ensure legs are even
-    self._stirrup_s_w = (self.width - 2 * self.c_c - self._stirrup_d_b) / (n_legs_actual - 1)
+    st.stirrup_s_w = (self.width - 2 * self.c_c - self._stirrup_d_b) / (n_legs_actual - 1)
     (
-        self._stirrup_s_max_l,
-        self._stirrup_s_max_w,
-    ) = max_stirrup_spacing_ACI_318_19(self, self._V_u - self._phi_V_c, self._A_cv)
-    self._stirrup_s_l = max(self._stirrup_s_l, 0 * inch)
-    self._stirrup_s_w = max(self._stirrup_s_w, 0 * inch)
+        st.stirrup_s_max_l,
+        st.stirrup_s_max_w,
+    ) = max_stirrup_spacing_ACI_318_19(self, st.V_u - st.phi_V_c, st.A_cv)
+    st.stirrup_s_w = max(st.stirrup_s_w, 0 * inch)
 
 
-def _check_shear_ACI_318_19(self: "RectangularBeam", force: Forces) -> None:
-    """Run the ACI shear check for one combination.
+def _check_shear_ACI_318_19(self: "RectangularBeam", force: Forces) -> ShearCheckState:
+    """Run the ACI shear check for one combination and return what it found.
 
-    Calculation only: the numbers are left on the beam, and whether to turn them
-    into a report table is the caller's decision (see
-    :mod:`mento.reports.tables`). Callers that only want values read them through
-    :func:`~mento.design_results.capture_shear_check`.
+    Nothing is written to the section: the result is a value. The reporting path
+    copies it back through :func:`~mento.codes.shear_state.apply_shear_state`,
+    which is the compatibility layer for the report tables; the values-only path
+    does not, so a loop over many sections leaves every one untouched.
     """
-    if isinstance(self.concrete, Concrete_ACI_318_19):
-        # Set the initial variables
-        _initialize_variables_ACI_318_19(self, force.M_y)
-        self._N_u = force._N_x
-        self._V_u = force._V_z
+    # No isinstance guard: the dispatcher on the element only routes ACI and
+    # CIRSOC sections here, and a guard that can never fail is dead code.
+    st = new_shear_state(self)
 
-        # Minimum shear reinforcement calculation
-        _calculate_A_v_min_ACI(self, self.concrete.f_c)
-        if self._stirrup_n > 0:
-            # Shear reinforcement calculations
-            _calculate_shear_reinforcement_aci(self)
-        # A section with no stirrups assigned keeps the diameter the settings
-        # assume, exactly as the flexure check does, so d_shear is the same
-        # number in both. Dropping the layer here used to make a flexure check
-        # report differently depending on whether shear had run first. Once a
-        # design decides there are no stirrups it assigns a zero diameter, and
-        # both checks follow it.
+    # Demand, and the two material values the check needs. The moments belong to
+    # the flexure check, so they are deliberately not touched here.
+    st.N_u = force._N_x
+    st.V_u = force._V_z
+    st.f_yt = _calculate_f_yt_aci(self)
+    st.A_s_tension = self._A_s_bot if force._M_y >= 0 * kNm else self._A_s_top
 
-        # Effective shear area and longitudinal reinforcement ratio
-        _calculate_effective_shear_area_aci(self)
+    # Minimum shear reinforcement calculation
+    _calculate_A_v_min_ACI(self, st, self.concrete.f_c)
+    if self._stirrup_n > 0:
+        # Shear reinforcement calculations
+        _calculate_shear_reinforcement_aci(self, st)
+    # A section with no stirrups assigned keeps the diameter the settings
+    # assume, exactly as the flexure check does, so d_shear is the same number
+    # in both. Dropping the layer here used to make a flexure check report
+    # differently depending on whether shear had run first. Once a design
+    # decides there are no stirrups it assigns a zero diameter, and both
+    # checks follow it.
 
-        # Check if minimum reinforcement is required
-        _check_minimum_reinforcement_requirement_aci(self)
+    # Effective shear area and longitudinal reinforcement ratio
+    _calculate_effective_shear_area_aci(self, st)
 
-        # Concrete shear strength calculation
-        _calculate_concrete_shear_strength_aci(self)
+    # Check if minimum reinforcement is required
+    _check_minimum_reinforcement_requirement_aci(self, st)
 
-        # Maximum total shear capacity
-        _calculate_max_shear_capacity_aci(self)
+    # Concrete shear strength calculation
+    _calculate_concrete_shear_strength_aci(self, st)
 
-        # Calculate required shear reinforcement
-        _calculate_V_s_req(self)
+    # Maximum total shear capacity
+    _calculate_max_shear_capacity_aci(self, st)
 
-        # Total shear strength
-        _calculate_total_shear_strength_aci(self)
+    # Calculate required shear reinforcement
+    _calculate_V_s_req(self, st)
 
-        # Rebar spacing checks
-        _calculate_rebar_spacing_aci(self)
+    # Total shear strength
+    _calculate_total_shear_strength_aci(self, st)
+
+    # Rebar spacing checks
+    _calculate_rebar_spacing_aci(self, st)
+
+    return st
 
 
 def _design_shear_ACI_318_19(self: "RectangularBeam", force: Forces) -> None:
+    """Size the shear reinforcement for one combination.
+
+    Unlike the check, designing is *meant* to change the section — it assigns
+    the stirrups. It runs the same helpers over a state and then applies it,
+    so the two paths cannot drift apart.
+    """
     # Set the initial variables
     _initialize_variables_ACI_318_19(self, force.M_y)
-    self._N_u = force._N_x
-    self._V_u = force._V_z
+    st = new_shear_state(self)
+    st.N_u = force._N_x
+    st.V_u = force._V_z
+    st.f_yt = self.f_yt
+    st.A_s_tension = self._A_s_tension
     # Minimum shear reinforcement calculation
-    _calculate_A_v_min_ACI(self, self.concrete.f_c)
+    _calculate_A_v_min_ACI(self, st, self.concrete.f_c)
     # Consider that the beam has minimum reinforcement
-    self._A_v = self._A_v_min
+    self._A_v = st.A_v_min
     # Effective shear area and longitudinal reinforcement ratio
-    _calculate_effective_shear_area_aci(self)
+    _calculate_effective_shear_area_aci(self, st)
     # Concrete shear strength calculation
-    _calculate_concrete_shear_strength_aci(self)
+    _calculate_concrete_shear_strength_aci(self, st)
     # Maximum total shear capacity
-    _calculate_max_shear_capacity_aci(self)
+    _calculate_max_shear_capacity_aci(self, st)
     # Check if minimum reinforcement is required
-    _check_minimum_reinforcement_requirement_aci(self)
+    _check_minimum_reinforcement_requirement_aci(self, st)
     # Calculate required shear reinforcement
-    _calculate_V_s_req(self)
+    _calculate_V_s_req(self, st)
+    apply_shear_state(self, st)
     # Update spacing of longitudinal reinforcement calculation
     self._update_longitudinal_rebar_attributes()
 

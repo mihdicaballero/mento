@@ -3619,3 +3619,61 @@ def test_a_check_does_not_change_the_section(with_stirrups: bool) -> None:
     after = {name: getattr(beam, name) for name in identity}
     changed = [name for name in identity if repr(before[name]) != repr(after[name])]
     assert not changed, f"a check changed the section: {changed}"
+
+
+@pytest.mark.parametrize("with_stirrups", [False, True], ids=["no-stirrups", "with-stirrups"])
+def test_shear_check_results_leaves_the_section_completely_untouched(with_stirrups: bool) -> None:
+    """The ACI shear check returns its result instead of storing it.
+
+    Not just geometry and bars: *no* attribute of the section changes. That is
+    what lets a caller loop over stations without per-call cleanup, and it is
+    the difference between this entry point and ``check_shear``, which does
+    write the results back so the report tables can read them.
+    """
+    beam = RectangularBeam(
+        label="pristine",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=30 * cm,
+        height=50 * cm,
+        c_c=25 * mm,
+    )
+    beam.set_longitudinal_rebar_bot(n1=3, d_b1=20 * mm)
+    if with_stirrups:
+        beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=20 * cm)
+
+    # Bookkeeping the entry point is expected to update, and the report row it
+    # does not build here.
+    bookkeeping = ("_shear_checks", "_shear_checked", "_shear_report_row")
+    before = {k: repr(v) for k, v in vars(beam).items() if k not in bookkeeping}
+
+    results = beam.shear_check_results([Forces(label="C1", V_z=80 * kN, M_y=90 * kNm)])
+
+    after = {k: repr(v) for k, v in vars(beam).items() if k not in bookkeeping}
+    # Both directions: an attribute the check CREATES is a write too, and
+    # comparing only the keys that existed before would miss it.
+    changed = sorted(k for k in before if before[k] != after.get(k))
+    added = sorted(set(after) - set(before))
+    assert not changed, f"the check wrote to the section: {changed}"
+    assert not added, f"the check added attributes to the section: {added}"
+    assert results[0].DCR > 0
+
+
+def test_check_shear_still_writes_the_results_the_report_needs() -> None:
+    """The compatibility layer: the reporting path does copy the state back."""
+    beam = RectangularBeam(
+        label="reported",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=30 * cm,
+        height=50 * cm,
+        c_c=25 * mm,
+    )
+    beam.set_longitudinal_rebar_bot(n1=3, d_b1=20 * mm)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=20 * cm)
+
+    beam.check_shear([Forces(label="C1", V_z=80 * kN, M_y=90 * kNm)])
+
+    assert beam._DCRv > 0
+    assert beam.V_c.magnitude > 0
+    assert beam._phi_V_n.magnitude > 0
