@@ -3,13 +3,11 @@ import warnings
 
 import pytest
 import numpy as np
-import matplotlib
 import pandas as pd
 from pathlib import Path
 from pint import Quantity
 from unittest.mock import patch
 
-matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.colors import to_rgba
 from matplotlib.patches import Circle, Rectangle, FancyBboxPatch

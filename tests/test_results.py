@@ -3,11 +3,9 @@ import pandas as pd
 from docx import Document
 from typing import List, Any
 from docx.shared import Cm
-import matplotlib
-from mento.results import Formatter, TablePrinter, DocumentBuilder, configure_plot_settings
-
-matplotlib.use("Agg")  # Use non-GUI backend for testing
 import matplotlib.pyplot as plt
+
+from mento.results import Formatter, TablePrinter, DocumentBuilder, configure_plot_settings
 
 # Disable LaTeX for testing to avoid CI/CD issues
 plt.rcParams["text.usetex"] = False

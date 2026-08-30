@@ -17,18 +17,6 @@ def setup_basic_section() -> Section:
 
 
 @pytest.fixture()
-def concrete_c25() -> Concrete:
-    """Fixture for a C25 concrete."""
-    return Concrete("C25")
-
-
-@pytest.fixture()
-def steel_b500s() -> SteelBar:
-    """Fixture for B500S steel."""
-    return SteelBar(name="B500S", f_y=500 * MPa)
-
-
-@pytest.fixture()
 def basic_section(concrete_c25: Concrete, steel_b500s: SteelBar) -> Section:
     """Fixture for a basic Section instance."""
     return Section(label="V101", concrete=concrete_c25, steel_bar=steel_b500s, c_c=25 * mm)

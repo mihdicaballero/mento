@@ -1,14 +1,11 @@
 import pytest
-import matplotlib
-
-matplotlib.use("Agg")
 
 from typing import Generator
 
 from mento.column import Column
 from mento.punching import Capital, Opening, PunchingNode, PunchingSlab
 from mento.forces import Forces
-from mento.material import Concrete_ACI_318_19, Concrete_EN_1992_2004, SteelBar
+from mento.material import Concrete_ACI_318_19, Concrete_EN_1992_2004
 from mento.units import cm, mm, kN, kNm, MPa, inch, psi
 
 
@@ -33,11 +30,6 @@ def conc_aci() -> Concrete_ACI_318_19:
 @pytest.fixture
 def conc_en() -> Concrete_EN_1992_2004:
     return Concrete_EN_1992_2004(name="C25/30", f_c=25 * MPa)
-
-
-@pytest.fixture
-def steel() -> SteelBar:
-    return SteelBar(name="ADN 420", f_y=420 * MPa)
 
 
 @pytest.fixture

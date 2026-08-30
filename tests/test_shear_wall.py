@@ -22,10 +22,7 @@ Reference calculation (metric):
 
 import math
 
-import matplotlib
 import pytest
-
-matplotlib.use("Agg")  # headless backend — no display needed for plot tests
 
 from mento.forces import Forces
 from mento.material import Concrete_ACI_318_19, Concrete_EN_1992_2004, SteelBar
