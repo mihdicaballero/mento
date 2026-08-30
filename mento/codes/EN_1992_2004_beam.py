@@ -11,7 +11,7 @@ from mento.codes.en_1992_2004.equations import flexure as flexure_eq
 from mento.codes.en_1992_2004.equations import shear as shear_eq
 from mento.codes.flexure_design import _FaceDemand, _run_flexure_design
 from mento.material import Concrete_EN_1992_2004
-from mento.rebar import Rebar
+from mento.rebar import max_stirrup_spacing_EN_1992_2004
 from mento.units import MPa, mm, kNm, dimensionless, kN, N, inch
 from mento.forces import Forces
 
@@ -185,7 +185,7 @@ def _calculate_required_shear_reinforcement_EN_1992_2004(
     self._V_Rd = self._V_Rd_s
 
 
-def _check_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> DataFrame:
+def _check_shear_EN_1992_2004(self: "RectangularBeam", force: Forces, *, report: bool = True) -> DataFrame | None:
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         if self._stirrup_n == 0:
             # Set current stirrup diameter to zero
@@ -225,16 +225,18 @@ def _check_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> DataFra
             _calculate_required_shear_reinforcement_EN_1992_2004(self)
 
             # Rebar spacing checks
-            section_rebar = Rebar(self)
             n_legs_actual = self._stirrup_n * 2  # Ensure legs are even
-            self._stirrup_s_l = self._stirrup_s_l
             self._stirrup_s_w = (self.width - 2 * self.c_c - self._stirrup_d_b) / (n_legs_actual - 1)
             (
                 self._stirrup_s_max_l,
                 self._stirrup_s_max_w,
-            ) = section_rebar.calculate_max_spacing_EN_1992_2004(self._alpha)
+            ) = max_stirrup_spacing_EN_1992_2004(self, self._alpha)
 
         self._DCRv = abs((self._V_Ed_2.to("kN").magnitude / self._V_Rd.to("kN").magnitude))
+
+        if not report:
+            return None
+
         # Design results
         results = {
             "Label": self.label,  # Beam label
@@ -577,7 +579,7 @@ def _design_flexure_EN_1992_2004(self: "RectangularBeam", max_M_y_bot: Quantity,
     _run_flexure_design(self, max_M_y_bot, max_M_y_top, _required, _capacity)
 
 
-def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> pd.DataFrame:
+def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces, *, report: bool = True) -> pd.DataFrame | None:
     """ """
     # Initialize the design variables requirements using the provided force.
     _initialize_variables_EN_1992_2004(self)
@@ -628,6 +630,9 @@ def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> pd.Da
     # Calculate the longitudinal reinforcement ratios for both sides.
     self._rho_l_bot = self._A_s_bot / (self._d_bot * self.width)
     self._rho_l_top = self._A_s_bot / (self._d_top * self.width)
+
+    if not report:
+        return None
 
     # Compile the design results into a dictionary.
     results = _compile_results_EN_1992_2004_flexure_metric(self, force)

@@ -21,6 +21,7 @@ __all__ = [
     "strut_angle",
     "required_shear_reinforcement",
     "shear_reinforcement_resistance",
+    "max_stirrup_spacing",
 ]
 
 #: Coefficient on the axial stress term of Eqs. (6.2.a) and (6.2.b), EN
@@ -211,6 +212,23 @@ def required_shear_reinforcement(V_Ed: float, z: float, f_ywd: float, cot_theta:
         takes the larger of the two.
     """
     return V_Ed / (z * f_ywd * cot_theta)
+
+
+def max_stirrup_spacing(d: float, alpha: float) -> tuple[float, float]:
+    """Maximum stirrup spacing along and across the member — EN 1992-1-1 §9.2.2(6) and (8).
+
+    Args:
+        d: Effective depth for shear (mm).
+        alpha: Inclination of the shear reinforcement (radians); vertical
+            stirrups are pi/2, for which the longitudinal limit is 0.75*d.
+
+    Returns:
+        ``(s_max_l, s_max_w)`` in mm, each capped by the clause — 400 mm along
+        the member, 600 mm across it.
+    """
+    s_max_l = min(0.75 * d * (1 + 1 / math.tan(alpha)), 400.0)
+    s_max_w = min(0.75 * d, 600.0)
+    return s_max_l, s_max_w
 
 
 def shear_reinforcement_resistance(A_sw_s: float, z: float, f_ywd: float, cot_theta: float) -> float:

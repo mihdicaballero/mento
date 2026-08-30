@@ -189,6 +189,42 @@ def test_min_shear_reinforcement_ratio_scales_with_width():
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Stirrup spacing limits — Table 9.7.6.2.2
+# ---------------------------------------------------------------------------
+
+
+def test_max_stirrup_spacing_below_the_threshold():
+    # f_c = 25, lambda = 1, A_cv = 300*450 = 135000 mm²:
+    # threshold = 0.083*1*5*135000 = 56,025 N. A demand under it gets the loose
+    # limits: d/2 = 225 along, d = 450 across, both under the 600 mm cap.
+    s_l, s_w = eq.max_stirrup_spacing(50_000.0, 25.0, 1.0, 135_000.0, 450.0)
+    assert (s_l, s_w) == pytest.approx((225.0, 450.0))
+
+
+def test_max_stirrup_spacing_above_the_threshold_halves_the_limits():
+    s_l, s_w = eq.max_stirrup_spacing(60_000.0, 25.0, 1.0, 135_000.0, 450.0)
+    # d/4 = 112.5 along, d/2 = 225 across
+    assert (s_l, s_w) == pytest.approx((112.5, 225.0))
+
+
+def test_max_stirrup_spacing_is_capped_for_a_deep_member():
+    # d = 2000 mm: d/2 = 1000 and d = 2000 both exceed the 600 mm cap.
+    s_l, s_w = eq.max_stirrup_spacing(0.0, 25.0, 1.0, 135_000.0, 2000.0)
+    assert (s_l, s_w) == pytest.approx((600.0, 600.0))
+    # And above the threshold the cap is 300 mm.
+    s_l, s_w = eq.max_stirrup_spacing(1e9, 25.0, 1.0, 135_000.0, 2000.0)
+    assert (s_l, s_w) == pytest.approx((300.0, 300.0))
+
+
+def test_max_stirrup_spacing_us():
+    # f_c = 4000 psi, A_cv = 12*20 = 240 in²: threshold = 4*sqrt(4000)*240 = 60,715 lb
+    s_l, s_w = eq.max_stirrup_spacing(50_000.0, 4000.0, 1.0, 240.0, 20.0, is_imperial=True)
+    assert (s_l, s_w) == pytest.approx((10.0, 20.0))  # d/2, d — both under the 24 in cap
+    s_l, s_w = eq.max_stirrup_spacing(70_000.0, 4000.0, 1.0, 240.0, 20.0, is_imperial=True)
+    assert (s_l, s_w) == pytest.approx((5.0, 10.0))  # d/4, d/2
+
+
 def test_shear_strength_of_reinforcement():
     # A_v/s = 0.25 mm²/mm, f_yt = 420 MPa, d = 450 mm -> 47.25 kN
     assert eq.shear_strength_of_reinforcement(0.25, 420.0, 450.0) == pytest.approx(47_250.0, rel=1e-9)

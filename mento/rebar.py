@@ -4,8 +4,9 @@ import math
 import pandas as pd
 import numpy as np
 
+from mento.codes.aci_318_19.equations import shear as aci_shear_eq
+from mento.codes.en_1992_2004.equations import shear as en_shear_eq
 from mento.units import psi, mm, cm, inch, MPa
-from mento.material import Concrete_ACI_318_19
 
 if TYPE_CHECKING:
     from mento.beam import RectangularBeam
@@ -16,6 +17,34 @@ if TYPE_CHECKING:
 # builds one area Quantity per candidate it keeps, so the unit is built once here
 # instead of on every call.
 _CM2 = cm**2
+
+
+def max_stirrup_spacing_ACI_318_19(
+    beam: RectangularBeam, V_s_req: Quantity, A_cv: Quantity
+) -> Tuple[Quantity, Quantity]:
+    """Stirrup spacing limits of ACI 318-19 Table 9.7.6.2.2, for a beam.
+
+    A module-level function rather than a ``Rebar`` method because it needs
+    nothing from the bar catalogue: building a whole ``Rebar`` for it cost more
+    than the check it serves.
+    """
+    is_imperial = beam.concrete.is_imperial
+    length_unit = inch if is_imperial else mm
+    s_max_l, s_max_w = aci_shear_eq.max_stirrup_spacing(
+        V_s_req.to("lbf" if is_imperial else "N").magnitude,
+        beam.concrete.f_c.to(psi if is_imperial else MPa).magnitude,
+        beam.concrete.lambda_factor,
+        A_cv.to("inch**2" if is_imperial else "mm**2").magnitude,
+        beam._d_shear.to(length_unit).magnitude,
+        is_imperial=is_imperial,
+    )
+    return s_max_l * length_unit, s_max_w * length_unit
+
+
+def max_stirrup_spacing_EN_1992_2004(beam: RectangularBeam, alpha: float) -> Tuple[Quantity, Quantity]:
+    """Stirrup spacing limits of EN 1992-1-1 §9.2.2(6) and (8), for a beam."""
+    s_max_l, s_max_w = en_shear_eq.max_stirrup_spacing(beam._d_shear.to(mm).magnitude, alpha)
+    return s_max_l * mm, s_max_w * mm
 
 
 class RebarDesignInfeasibleError(Exception):
@@ -108,29 +137,7 @@ class Rebar:
             (s_max_l, s_max_w): The maximum spacing across the length and width of the beam.
         """
 
-        f_c = self.beam.concrete.f_c
-        if isinstance(self.beam.concrete, Concrete_ACI_318_19):
-            lambda_factor = self.beam.concrete.lambda_factor
-
-        # Determine maximum spacing based on V_s_req condition
-        # Maximum spacing for lower shear demand
-        if self.beam.concrete.unit_system == "metric":
-            if V_s_req <= 0.083 * lambda_factor * math.sqrt(f_c / MPa) * MPa * A_cv:
-                s_max_l = min(self.beam._d_shear / 2, 60 * cm)
-                s_max_w = min(self.beam._d_shear, 60 * cm)
-            else:
-                # Maximum spacing for higher shear demand
-                s_max_l = min(self.beam._d_shear / 4, 30 * cm)
-                s_max_w = min(self.beam._d_shear / 2, 30 * cm)
-        else:
-            if V_s_req <= 4 * lambda_factor * math.sqrt(f_c / psi) * psi * A_cv:
-                s_max_l = min(self.beam._d_shear / 2, 24 * inch)
-                s_max_w = min(self.beam._d_shear, 24 * inch)
-            else:
-                s_max_l = min(self.beam._d_shear / 4, 12 * inch)
-                s_max_w = min(self.beam._d_shear / 2, 12 * inch)
-
-        return s_max_l, s_max_w
+        return max_stirrup_spacing_ACI_318_19(self.beam, V_s_req, A_cv)
 
     def calculate_max_spacing_EN_1992_2004(self, alpha: float) -> Tuple[Quantity, Quantity]:
         """
@@ -146,11 +153,7 @@ class Rebar:
         tuple
             (s_max_l, s_max_w): The maximum spacing along the length and width of the beam.
         """
-        # Maximum of 40 cm for stirrup spacing
-        s_max_l = min(0.75 * self.beam._d_shear * (1 + 1 / math.tan(alpha)), 40 * cm)
-        s_max_w = min(0.75 * self.beam._d_shear, 60 * cm)
-
-        return s_max_l, s_max_w
+        return max_stirrup_spacing_EN_1992_2004(self.beam, alpha)
 
     def transverse_rebar_ACI_318_19(self, V_s_req: Quantity) -> Any:
         if self.beam.concrete.unit_system == "metric":

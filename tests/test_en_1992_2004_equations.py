@@ -367,3 +367,33 @@ def test_moment_resistance_is_continuous_at_the_ductility_limit():
     doubly = flex.moment_resistance_doubly_reinforced(A_s_lim, 1000.0, 400.0, 1.0, 20.0, 300.0, 500.0, 50.0, 200.0)
     assert doubly == pytest.approx(singly, rel=1e-12)
     assert doubly == pytest.approx(flex.limit_moment(1.0, 20.0, 300.0, 200.0, 500.0), rel=1e-12)
+
+
+# ---------------------------------------------------------------------------
+# Stirrup spacing limits — §9.2.2(6) and (8)
+# ---------------------------------------------------------------------------
+
+
+def test_max_stirrup_spacing_for_vertical_stirrups():
+    # alpha = 90 deg: cot(alpha) = 0, so s_max_l = 0.75*d and s_max_w = 0.75*d.
+    # d = 450 mm -> 337.5 mm, both under their caps (400 and 600).
+    s_l, s_w = eq.max_stirrup_spacing(450.0, math.pi / 2)
+    assert s_l == pytest.approx(337.5, rel=1e-9)
+    assert s_w == pytest.approx(337.5, rel=1e-9)
+
+
+def test_max_stirrup_spacing_is_capped_for_a_deep_member():
+    # d = 1200 mm: 0.75*d = 900, above both caps.
+    s_l, s_w = eq.max_stirrup_spacing(1200.0, math.pi / 2)
+    assert s_l == pytest.approx(400.0)
+    assert s_w == pytest.approx(600.0)
+
+
+def test_max_stirrup_spacing_grows_with_inclined_stirrups():
+    """Inclined stirrups cross the crack over a longer run, so the clause allows
+    them further apart along the member — until the 400 mm cap bites."""
+    vertical, _ = eq.max_stirrup_spacing(300.0, math.pi / 2)
+    inclined, _ = eq.max_stirrup_spacing(300.0, math.radians(45))
+    assert inclined > vertical
+    # 0.75*300*(1+1) = 450 -> capped at 400
+    assert inclined == pytest.approx(400.0)

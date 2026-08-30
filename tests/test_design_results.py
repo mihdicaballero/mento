@@ -5,7 +5,7 @@ import math
 import pytest
 from pandas import DataFrame
 
-from mento import Concrete_ACI_318_19, Forces, Node, RectangularBeam, SteelBar
+from mento import Concrete_ACI_318_19, Concrete_EN_1992_2004, Forces, Node, RectangularBeam, SteelBar
 from mento import MPa, cm, kN, kNm, m, mm
 from mento.design_results import (
     DesignNotRunError,
@@ -367,6 +367,62 @@ def test_envelope_of_nothing_is_empty() -> None:
     assert empty.A_s_req is None
     assert empty.DCR == 0.0
     assert envelope_shear([]).DCR == 0.0
+
+
+@pytest.mark.parametrize(
+    "concrete, steel",
+    [
+        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), SteelBar(name="ADN 420", f_y=420 * MPa)),
+        (Concrete_EN_1992_2004(name="C25", f_c=25 * MPa), SteelBar(name="B500S", f_y=500 * MPa)),
+    ],
+    ids=["ACI", "EN"],
+)
+def test_values_only_checks_give_the_same_numbers_as_the_reporting_ones(concrete, steel) -> None:
+    """The fast path must not be a different calculation, only a shorter one.
+
+    Both design codes, because each has its own check function and its own
+    report half to skip.
+    """
+    forces = _two_combinations()
+
+    def build() -> RectangularBeam:
+        b = RectangularBeam(label="101", concrete=concrete, steel_bar=steel, width=20 * cm, height=60 * cm, c_c=25 * mm)
+        b.set_longitudinal_rebar_bot(n1=3, d_b1=20 * mm)
+        b.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=20 * cm)
+        return b
+
+    reporting = build()
+    reporting.check_shear(forces)
+    reporting.check_flexure(forces)
+
+    values = build()
+    shear = values.shear_check_results(forces)
+    flexure = values.flexure_check_results(forces)
+
+    assert [c.DCR for c in shear] == [c.DCR for c in reporting.shear_checks]
+    assert [c.A_v_req for c in shear] == [c.A_v_req for c in reporting.shear_checks]
+    assert [c.bottom.DCR for c in flexure] == [c.bottom.DCR for c in reporting.flexure_checks]
+    assert [c.top.DCR for c in flexure] == [c.top.DCR for c in reporting.flexure_checks]
+
+
+def test_values_only_checks_still_produce_readable_designs() -> None:
+    """They mark the section as checked, so the design results are available."""
+    beam = RectangularBeam(
+        label="101",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=20 * cm,
+        height=60 * cm,
+        c_c=25 * mm,
+    )
+    beam.set_longitudinal_rebar_bot(n1=3, d_b1=20 * mm)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=20 * cm)
+
+    results = beam.shear_check_results(_two_combinations())
+    assert beam.shear_design.DCR == pytest.approx(max(c.DCR for c in results))
+
+    flexure = beam.flexure_check_results(_two_combinations())
+    assert beam.flexure_design.bottom.DCR == pytest.approx(max(c.bottom.DCR for c in flexure))
 
 
 def test_checks_expose_one_result_per_combination(

@@ -7,6 +7,8 @@ so a violation fails CI instead of needing to be noticed.
 """
 
 import ast
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -28,6 +30,42 @@ def _parse(path: Path) -> ast.Module:
 def test_equation_modules_exist():
     """Guards the other tests: an empty glob would make them vacuously pass."""
     assert EQUATION_MODULES, f"no equation modules found under {EQUATIONS_ROOT}"
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "from mento import RectangularBeam, Forces, Node",
+        "from mento.codes.aci_318_19.equations import shear",
+        "from mento.codes.en_1992_2004.equations import flexure",
+        "import mento.rebar",
+        "import mento.codes",
+    ],
+    ids=lambda s: s.split()[-1],
+)
+def test_each_entry_point_imports_in_a_fresh_interpreter(statement: str) -> None:
+    """Import cycles hide from the suite, because pytest has already imported
+    half the package by the time any test runs.
+
+    A cycle between ``mento.rebar`` and the code modules once shipped green
+    here for exactly that reason and only failed for a user typing
+    ``from mento import RectangularBeam`` first. Each of these runs cold.
+    """
+    result = subprocess.run(
+        [sys.executable, "-c", statement],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, f"`{statement}` fails from a cold interpreter:\n{result.stderr}"
+
+
+def test_importing_the_code_layer_does_not_drag_in_presentation() -> None:
+    """``mento.codes`` is calculation; matplotlib and docx belong to the report
+    layer and must not be pulled in by importing it."""
+    probe = "import sys, mento.codes; print('matplotlib' in sys.modules, 'docx' in sys.modules)"
+    result = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "False False", f"mento.codes pulled in presentation: {result.stdout!r}"
 
 
 @pytest.mark.parametrize("path", EQUATION_MODULES, ids=lambda p: p.name)

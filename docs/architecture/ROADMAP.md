@@ -499,9 +499,50 @@ DataFrame on a path that no one is going to display is what costs, and Phase 3
 is what takes them off it. The `Rebar` construction is a separate cheap win that
 belongs to the performance track, not to any phase.
 
-**Still to do in this phase:** the checks themselves still mutate the beam and
-return a DataFrame. Making them *return* results — and taking the mutation out —
-is the remainder, and it is what the §3.3 exit criterion asks for.
+**Done (2026-08-30): checks return results, and the report half is optional.**
+Every `_check_*` function takes `report: bool`; with `report=False` it computes
+the numbers and skips the report tables and the DataFrame. On top of that,
+`beam.shear_check_results(forces)` and `beam.flexure_check_results(forces)`
+return one frozen result per combination and build no report at all:
+
+```python
+worst = max(r.bottom.DCR for r in beam.flexure_check_results(combos))
+```
+
+A test asserts, for both design codes, that the two paths produce identical
+numbers — the fast path must be a shorter calculation, not a different one.
+
+| per check | report path | values path |
+| --- | --- | --- |
+| shear | 4.70 ms | **1.56 ms** (3.0×) |
+| flexure | 5.10 ms | **1.05 ms** (4.8×) |
+
+Two more clauses moved into `equations/` on the way, which is also what removed
+the last big cost: ACI Table 9.7.6.2.2 and EN §9.2.2(6)/(8), the stirrup spacing
+limits, were living in `rebar.py` and were reached by constructing an entire
+`Rebar` — the whole bar catalogue — on every check, just to read two numbers.
+They are now free functions taking the beam.
+
+**`mento/codes/__init__.py` is empty now, and that matters twice.** It used to
+re-export every code's private check functions, so importing *any* submodule —
+including a leaf equations module that imports nothing from mento — pulled the
+entire code layer in. Nothing consumed those re-exports; what they bought was an
+import cycle the moment `rebar.py` reached for an equation module. The suite did
+not catch it, because by the time any test runs pytest has already imported half
+the package; it failed only for a user typing `from mento import RectangularBeam`
+first. `tests/test_architecture_boundaries.py` now imports each entry point in a
+**fresh interpreter**, and was verified to fail when the cycle is put back.
+Emptying it also means `import mento.codes` no longer drags in matplotlib or
+docx — the Phase 3 exit criterion, met early and now guarded by a test.
+
+**Not done, and honestly not close: the checks still mutate the beam.** The
+§3.3 criterion asks for a loop that mutates no element, and `report=False` only
+removes the presentation, not the writes to `self`. Taking those out means the
+check functions stop being the thing that stores results, which in turn means
+the report layer stops reading them off the beam — **that is Phase 3, and it has
+to come first.** At 1.56 ms a shear check, 20,000 of them still take 31 s
+against the 5 s target, and what is left is the orchestrators' own pint
+arithmetic rather than anything a phase boundary hides.
 
 Only now does production code change. Extend `design_results.py` with
 check-result types; make check/design functions build and return them. Because

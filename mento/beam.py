@@ -634,6 +634,50 @@ class RectangularBeam(RectangularSection):
         """One immutable shear result per combination of the last check."""
         return tuple(self._shear_checks)
 
+    def flexure_check_results(self, forces: list[Forces]) -> Tuple[FlexureCheck, ...]:
+        """Check flexure and return one result per combination, building no report.
+
+        The same numbers as :meth:`check_flexure`, without the report tables or
+        the result DataFrame — which is most of what a check costs. This is the
+        entry point for looping over many sections::
+
+            worst = max(r.bottom.DCR for r in beam.flexure_check_results(combos))
+
+        The section is still updated in place while the check runs, so a loop
+        over many sections needs one section object per station, not one shared.
+        """
+        self._flexure_checks = []
+        for force in forces:
+            self._run_flexure_check(force, report=False)
+            self._flexure_checks.append(capture_flexure_check(self, force.label))
+        self._flexure_checked = True
+        return tuple(self._flexure_checks)
+
+    def shear_check_results(self, forces: list[Forces]) -> Tuple[ShearCheck, ...]:
+        """Check shear and return one result per combination, building no report.
+
+        The counterpart of :meth:`flexure_check_results`; see it for the
+        trade-off and the caveat about sharing a section across stations.
+        """
+        self._shear_checks = []
+        for force in forces:
+            self._run_shear_check(force, report=False)
+            self._shear_checks.append(capture_shear_check(self, force.label))
+        self._shear_checked = True
+        return tuple(self._shear_checks)
+
+    def _run_flexure_check(self, force: Forces, *, report: bool) -> Optional[DataFrame]:
+        """Dispatch one flexure check to the design code in force."""
+        if self.concrete.design_code in ("ACI 318-19", "CIRSOC 201-25"):
+            return _check_flexure_ACI_318_19(self, force, report=report)
+        return _check_flexure_EN_1992_2004(self, force, report=report)
+
+    def _run_shear_check(self, force: Forces, *, report: bool) -> Optional[DataFrame]:
+        """Dispatch one shear check to the design code in force."""
+        if self.concrete.design_code in ("ACI 318-19", "CIRSOC 201-25"):
+            return _check_shear_ACI_318_19(self, force, report=report)
+        return _check_shear_EN_1992_2004(self, force, report=report)
+
     def check_flexure(self, forces: list[Forces]) -> DataFrame:
         # Initialize variables to track limiting cases
         max_dcr_top: float = 0
@@ -649,11 +693,7 @@ class RectangularBeam(RectangularSection):
         self._flexure_checks = []
 
         for force in forces:
-            # Select the method based on design code
-            if self.concrete.design_code == "ACI 318-19" or self.concrete.design_code == "CIRSOC 201-25":
-                result = _check_flexure_ACI_318_19(self, force)
-            elif self.concrete.design_code == "EN 1992-2004":
-                result = _check_flexure_EN_1992_2004(self, force)
+            result = self._run_flexure_check(force, report=True)
             self._flexure_results_list.append(result)
 
             # Store detailed results for this force
@@ -756,12 +796,7 @@ class RectangularBeam(RectangularSection):
         self._shear_checks = []
 
         for force in forces:
-            # Select the method based on design code
-            if self.concrete.design_code == "ACI 318-19" or self.concrete.design_code == "CIRSOC 201-25":
-                result = _check_shear_ACI_318_19(self, force)
-            elif self.concrete.design_code == "EN 1992-2004":
-                result = _check_shear_EN_1992_2004(self, force)
-
+            result = self._run_shear_check(force, report=True)
             self._shear_results_list.append(result)
 
             self._shear_results_detailed_list[force.id] = {

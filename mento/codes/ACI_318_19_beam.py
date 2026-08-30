@@ -12,7 +12,7 @@ from mento.codes.flexure_design import (
 from mento.codes.aci_318_19.equations import flexure as flexure_eq
 from mento.codes.aci_318_19.equations import shear as shear_eq
 from mento.material import Concrete_ACI_318_19
-from mento.rebar import Rebar
+from mento.rebar import max_stirrup_spacing_ACI_318_19
 from mento.units import MPa, mm, N, kN, inch, psi, cm, m, kNm, ft, kip, lbf, dimensionless
 from mento.forces import Forces
 
@@ -233,18 +233,24 @@ def _calculate_total_shear_strength_aci(self: "RectangularBeam") -> None:
 
 
 def _calculate_rebar_spacing_aci(self: "RectangularBeam") -> None:
-    section_rebar = Rebar(self)
     n_legs_actual = self._stirrup_n * 2  # Ensure legs are even
     self._stirrup_s_w = (self.width - 2 * self.c_c - self._stirrup_d_b) / (n_legs_actual - 1)
     (
         self._stirrup_s_max_l,
         self._stirrup_s_max_w,
-    ) = section_rebar.calculate_max_spacing_ACI_318_19(self._V_u - self._phi_V_c, self._A_cv)
+    ) = max_stirrup_spacing_ACI_318_19(self, self._V_u - self._phi_V_c, self._A_cv)
     self._stirrup_s_l = max(self._stirrup_s_l, 0 * inch)
     self._stirrup_s_w = max(self._stirrup_s_w, 0 * inch)
 
 
-def _check_shear_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.DataFrame:
+def _check_shear_ACI_318_19(self: "RectangularBeam", force: Forces, *, report: bool = True) -> pd.DataFrame | None:
+    """Run the ACI shear check for one combination.
+
+    With ``report=False`` the numbers are computed and left on the beam, but the
+    report tables and the result DataFrame are not built — most of what a check
+    costs. Callers that only want values read them off the beam or through
+    :func:`~mento.design_results.capture_shear_check`.
+    """
     if isinstance(self.concrete, Concrete_ACI_318_19):
         # Set the initial variables
         _initialize_variables_ACI_318_19(self, force.M_y)
@@ -281,6 +287,9 @@ def _check_shear_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.DataFr
 
         # Rebar spacing checks
         _calculate_rebar_spacing_aci(self)
+
+        if not report:
+            return None
 
         # Check results and return DataFrame
         results = _compile_results_ACI_shear(self, force)
@@ -801,7 +810,7 @@ def _determine_nominal_moment_ACI_318_19(self: "RectangularBeam", force: Forces)
     return None
 
 
-def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.DataFrame:
+def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces, *, report: bool = True) -> pd.DataFrame | None:
     """
     Checks the flexural capacity of the section according to ACI 318-19 guidelines.
 
@@ -874,6 +883,9 @@ def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> pd.Data
     # Calculate the longitudinal reinforcement ratios for both sides.
     self._rho_l_bot = self._A_s_bot / (self._d_bot * self.width)
     self._rho_l_top = self._A_s_bot / (self._d_top * self.width)
+
+    if not report:
+        return None
 
     # Compile the design results into a dictionary.
     results = _compile_results_ACI_flexure_metric(self, force)

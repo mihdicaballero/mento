@@ -19,6 +19,7 @@ __all__ = [
     "max_yield_strength_for_shear",
     "min_shear_reinforcement_ratio",
     "shear_strength_of_reinforcement",
+    "max_stirrup_spacing",
 ]
 
 
@@ -169,6 +170,39 @@ def min_shear_reinforcement_ratio(f_c: float, f_yt: float, b_w: float, *, is_imp
     if is_imperial:
         return max(0.75 * math.sqrt(f_c) / f_yt, 50 / f_yt) * b_w
     return max(0.062 * math.sqrt(f_c) / f_yt, 0.35 / f_yt) * b_w
+
+
+def max_stirrup_spacing(
+    V_s_req: float,
+    f_c: float,
+    lambda_factor: float,
+    A_cv: float,
+    d: float,
+    *,
+    is_imperial: bool = False,
+) -> tuple[float, float]:
+    """Maximum stirrup spacing along and across the member — ACI 318-19 Table 9.7.6.2.2.
+
+    Once the demand on the stirrups passes the table's threshold the spacing
+    limits halve, because a wider crack needs more legs crossing it.
+
+    Args:
+        V_s_req: Shear the stirrups must carry (N, or lb).
+        f_c: Specified concrete compressive strength (MPa, or psi).
+        lambda_factor: Lightweight concrete factor lambda.
+        A_cv: Effective shear area (mm², or in²).
+        d: Effective depth for shear (mm, or in).
+
+    Returns:
+        ``(s_max_l, s_max_w)`` — the limits along the member and across its
+        width (mm, or in).
+    """
+    threshold_coeff = 4 if is_imperial else 0.083
+    cap_low, cap_high = (24.0, 12.0) if is_imperial else (600.0, 300.0)
+
+    if V_s_req <= threshold_coeff * lambda_factor * math.sqrt(f_c) * A_cv:
+        return min(d / 2, cap_low), min(d, cap_low)
+    return min(d / 4, cap_high), min(d / 2, cap_high)
 
 
 def shear_strength_of_reinforcement(A_v: float, f_yt: float, d: float) -> float:
