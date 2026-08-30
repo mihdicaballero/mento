@@ -118,7 +118,7 @@ Two facts anchor the plan:
   equations cost ~6 ms. So the mako loop — which *checks* per station and
   designs rebar once — costs ~8 ms/station today, not 375: ~2.7 min serial for
   1000 stations × 2 faces × 10 combos. Slow, but an optimization target, not a
-  blocker.
+  blocker. *(Addressed 2026-08-29 — see the performance track: 306 → 72 ms.)*
 
 ---
 
@@ -296,19 +296,38 @@ before and after; `ruff check`, `ruff format --check` and `mypy mento/` clean.
 
 ### Performance track — cheap wins, parallel to any phase
 
-Independent of the architecture work, driven by the §1.5 measurements:
+Independent of the architecture work, driven by the §1.5 measurements.
 
-- **Mechanical `.to()` fix**: replace the ~384 string conversions (`.to("cm")`)
-  with prebuilt unit objects (`.to(cm)`) in code that will *not* migrate into
-  `equations/` — rebar orchestration, presentation, elements. Measured 6.3× per
-  conversion, ~3.4× on pint-heavy paths. Zero design decisions involved.
-- **Rebar selection precompute**: `rebar.py` is 97 % of design cost. Build the
-  candidate table once per settings with float magnitudes (the zapatas-style
-  `_precompute_design_arrays` pattern) and evaluate spacing checks and penalties
-  vectorized in numpy. Expected to take `design_flexure` from ~375 ms to well
-  under 50 ms without touching any phase.
+**Rebar selection precompute — done 2026-08-29.** `rebar.py` was 97 % of design
+cost. The candidate search now strips units once and runs entirely on floats,
+re-applying pint only to the combinations it keeps; the scoring pass dropped
+`df.apply(axis=1)`, which was building a Series per candidate row.
 
-**Exit:** benchmark rerun recorded next to §1.5; `design_flexure` under 50 ms.
+| | before | after |
+| --- | --- | --- |
+| `design_flexure`, wall clock (min of 25) | 306 ms | **72 ms** (4.3×) |
+| Python function calls, one design | 2,879,215 | **709,745** (4.1×) |
+| of those, inside pint | 1,001,507 | **304,603** (3.3×) |
+
+`check_shear` and `check_flexure` are unchanged at ~12 ms, as expected — they do
+not run the search. Suite unchanged at 773 passed, coverage still 100 %.
+
+**Mechanical `.to()` fix — deprioritized, and this is the interesting part.**
+The measurement that motivated it counted 2,906 `.to()` calls per
+`design_flexure`, which put the fix at roughly 47 % of runtime. After the
+precompute there are **192** `.to()` calls left, 111 of them string-based: the
+conversions the fix would have optimized are no longer executed at all. At
+~54 µs saved per call the whole fix is now worth about **7 ms of 72**. It stays
+worth doing opportunistically when touching a file, but it is not a milestone.
+
+The general lesson for the remaining phases: measure the cheap fix *after* the
+structural one, not before — removing work beats speeding it up.
+
+**Exit:** partially met. `design_flexure` is 72 ms against a 50 ms target. What
+remains is not a hot spot but ~7,600 Quantity constructions spread thin across
+`flexure_design.py` and the ACI module — no profile peak is left in mento
+itself. Closing the last 22 ms is Phase 1's float equations (ADR-0005), not more
+micro-optimization here.
 
 ### Phase 1 — Extract pure equations
 
