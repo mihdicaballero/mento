@@ -35,6 +35,7 @@ from mento.codes.EN_1992_2004_beam import (
 from mento.results import CUSTOM_COLORS, DocumentBuilder
 from mento.settings import BeamSettings
 from mento.rebar import Rebar
+from mento.plots import _format_rebar_layer_text
 
 
 @pytest.fixture()
@@ -3364,7 +3365,7 @@ def test_format_rebar_layer_text_slab_mode(args: tuple, expected: str) -> None:
     beam = build_metric_beam()
     beam.mode = "slab"
 
-    assert beam._format_rebar_layer_text(*args) == expected
+    assert _format_rebar_layer_text(beam, *args) == expected
 
 
 @pytest.mark.parametrize(
@@ -3379,7 +3380,7 @@ def test_format_rebar_layer_text_slab_mode(args: tuple, expected: str) -> None:
 def test_format_rebar_layer_text_beam_mode(args: tuple, expected: str) -> None:
     beam = build_metric_beam()
 
-    assert beam._format_rebar_layer_text(*args) == expected
+    assert _format_rebar_layer_text(beam, *args) == expected
 
 
 def test_format_longitudinal_rebar_string_only_second_group() -> None:

@@ -3,6 +3,7 @@ from typing import Optional
 from dataclasses import dataclass, field
 from pint import Quantity
 from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 
 from mento.section import Section
 
@@ -31,7 +32,10 @@ class RectangularSection(Section):
     # Fields unique to RectangularSection
     width: Quantity = field(kw_only=True)
     height: Quantity = field(kw_only=True)
+    # The last drawing made of this section, kept so the notebook views and the
+    # Word reports can pick the figure up after plot() has run.
     _ax: Optional[Axes] = field(default=None, init=False, repr=False)
+    _fig: Optional[Figure] = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         # Width must be a physical length.

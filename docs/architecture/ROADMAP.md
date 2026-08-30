@@ -591,8 +591,32 @@ errors that surfaced were fixed rather than silenced.
 `tests/test_architecture_boundaries.py` asserts by AST that no beam code module
 defines a `_initialize_dicts_*` or `_compile_results_*` function.
 
-**Remaining:** matplotlib and docx are still inside `beam.py` (2219 lines), and
-the wall report tables (`ACI_318_19_wall.py`) have not moved.
+**Done (2026-08-30): the drawing and the Word reports are out of `beam.py`.**
+782 more lines moved by the same cut-the-text script: the seven section-drawing
+methods to `mento/plots.py`, and the two Word-report methods to
+`mento/documents.py`. `beam.plot()` and `beam.shear_results_detailed_doc()` stay
+as one-line delegations, so nothing calling them changed.
+
+| module | lines |
+| --- | --- |
+| `beam.py` | 2135 → **1441** |
+| `report_tables.py` | 986 |
+| `plots.py` | 669 |
+| `documents.py` | 217 |
+
+Like `report_tables.py`, neither new module is in mypy's `ignore_errors` list.
+That surfaced 36 real typing errors in code that had never been checked — an
+undeclared `_fig` attribute, three functions with no annotations, `Optional`
+axes and settings, and detail dictionaries inferred as `dict[str, object]`.
+All were fixed at the source (`_fig` is now declared beside `_ax` on
+`RectangularSection`; the detail dictionaries are typed where they are built)
+rather than by adding another ignore entry.
+
+**Remaining:** `beam.py` still *transitively* imports matplotlib and docx,
+because `results.py` — which supplies `Formatter` and `TablePrinter` for the
+notebook views — imports both. Splitting `results.py` so a calculation-only
+import path exists is the last piece of this phase. The wall report tables in
+`ACI_318_19_wall.py` have not moved either.
 
 **Exit:** `import mento.codes` imports neither matplotlib nor docx — met, and
 guarded by a test since the `codes/__init__` cleanup in Phase 2b.
