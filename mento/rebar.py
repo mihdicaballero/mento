@@ -43,10 +43,14 @@ def max_stirrup_spacing_ACI_318_19(beam: RectangularBeam, V_s_req: float, A_cv: 
     )
 
 
-def max_stirrup_spacing_EN_1992_2004(beam: RectangularBeam, alpha: float) -> Tuple[Quantity, Quantity]:
-    """Stirrup spacing limits of EN 1992-1-1 §9.2.2(6) and (8), for a beam."""
-    s_max_l, s_max_w = en_shear_eq.max_stirrup_spacing(beam._d_shear.to(mm).magnitude, alpha)
-    return s_max_l * mm, s_max_w * mm
+def max_stirrup_spacing_EN_1992_2004(beam: RectangularBeam, alpha: float) -> Tuple[float, float]:
+    """Stirrup spacing limits of EN 1992-1-1 §9.2.2(6) and (8), for a beam.
+
+    Floats in mm, in and out, for the same reason as the ACI counterpart.
+    :meth:`Rebar.calculate_max_spacing_EN_1992_2004` wraps it for the design
+    path, which still speaks pint.
+    """
+    return en_shear_eq.max_stirrup_spacing(section_floats(beam).d_shear, alpha)
 
 
 class RebarDesignInfeasibleError(Exception):
@@ -166,7 +170,8 @@ class Rebar:
         tuple
             (s_max_l, s_max_w): The maximum spacing along the length and width of the beam.
         """
-        return max_stirrup_spacing_EN_1992_2004(self.beam, alpha)
+        s_max_l, s_max_w = max_stirrup_spacing_EN_1992_2004(self.beam, alpha)
+        return (s_max_l * mm).to(cm), (s_max_w * mm).to(cm)
 
     def transverse_rebar_ACI_318_19(self, V_s_req: Quantity) -> Any:
         if self.beam.concrete.unit_system == "metric":

@@ -18,7 +18,7 @@ from typing import Any, TYPE_CHECKING
 from pint import Quantity
 
 from mento.precompute import CANONICAL, DISPLAY
-from mento.units import cm, inch, kip, kN, kNm, m, mm, psi, MPa, ft, dimensionless
+from mento.units import cm, inch, kip, kN, kNm, mm, psi, MPa, ft, dimensionless
 
 if TYPE_CHECKING:
     from mento.beam import RectangularBeam
@@ -146,112 +146,115 @@ def apply_shear_state(section: "RectangularBeam", state: ShearCheckState) -> Non
 #: EN 1992-1-1 works with a different set of quantities than ACI, so it gets its
 #: own state rather than a union of both.
 EN_BEAM_ATTRIBUTES = {
-    "N_Ed": "_N_Ed",
-    "V_Ed_1": "_V_Ed_1",
-    "V_Ed_2": "_V_Ed_2",
-    "f_cd": "_f_cd",
-    "f_cd_shear": "_f_cd_shear",
-    "f_ywd": "_f_ywd",
-    "A_s_tension": "_A_s_tension",
-    "A_v_min": "_A_v_min",
-    "A_v_req": "_A_v_req",
-    "rho_l_bot": "_rho_l_bot",
-    "rho_l_top": "_rho_l_top",
-    "k_value": "_k_value",
-    "sigma_cp": "_sigma_cp",
-    "theta": "_theta",
-    "cot_theta": "_cot_theta",
-    "z": "_z",
-    "V_Rd_c": "_V_Rd_c",
-    "V_Rd_s": "_V_Rd_s",
-    "V_Rd": "_V_Rd",
-    "V_Rd_max": "_V_Rd_max",
-    "V_s_req": "_V_s_req",
-    "stirrup_s_w": "_stirrup_s_w",
-    "stirrup_s_max_l": "_stirrup_s_max_l",
-    "stirrup_s_max_w": "_stirrup_s_max_w",
-    "max_shear_ok": "_max_shear_ok",
-    "DCR": "_DCRv",
+    "N_Ed": ("_N_Ed", "force"),
+    "V_Ed_1": ("_V_Ed_1", "force"),
+    "V_Ed_2": ("_V_Ed_2", "force"),
+    "f_cd": ("_f_cd", "stress"),
+    "f_cd_shear": ("_f_cd_shear", "stress"),
+    "f_ywd": ("_f_ywd", "stress"),
+    "A_s_tension": ("_A_s_tension", "area"),
+    "A_v_min": ("_A_v_min", "per_length"),
+    "A_v_req": ("_A_v_req", "per_length"),
+    "rho_l_bot": ("_rho_l_bot", "dimensionless"),
+    "rho_l_top": ("_rho_l_top", "dimensionless"),
+    "k_value": ("_k_value", "raw"),
+    "sigma_cp": ("_sigma_cp", "stress"),
+    "theta": ("_theta", "raw"),
+    "cot_theta": ("_cot_theta", "raw"),
+    "z": ("_z", "length"),
+    "V_Rd_c": ("_V_Rd_c", "force"),
+    "V_Rd_s": ("_V_Rd_s", "force"),
+    "V_Rd": ("_V_Rd", "force"),
+    "V_Rd_max": ("_V_Rd_max", "force"),
+    "V_s_req": ("_V_s_req", "force"),
+    "stirrup_s_w": ("_stirrup_s_w", "length"),
+    "stirrup_s_max_l": ("_stirrup_s_max_l", "length"),
+    "stirrup_s_max_w": ("_stirrup_s_max_w", "length"),
+    "max_shear_ok": ("_max_shear_ok", "raw"),
+    "DCR": ("_DCRv", "raw"),
 }
 
 
 @dataclass
 class ENShearCheckState:
-    """One combination's EN 1992-1-1 shear result."""
+    """One combination's EN 1992-1-1 shear result, in N, mm, mm2 and MPa.
 
-    N_Ed: Quantity
-    V_Ed_1: Quantity
-    V_Ed_2: Quantity
-    f_cd: Quantity
-    f_cd_shear: Quantity
-    f_ywd: Quantity
-    A_s_tension: Quantity
-    A_v_min: Quantity
-    A_v_req: Quantity
-    rho_l_bot: Quantity
-    rho_l_top: Quantity
+    Floats, for the same reason as :class:`ShearCheckState`. EN 1992 is metric
+    only, so there is a single unit system to be in.
+    """
+
+    N_Ed: float
+    V_Ed_1: float
+    V_Ed_2: float
+    f_cd: float
+    f_cd_shear: float
+    f_ywd: float
+    A_s_tension: float
+    A_v_min: float
+    A_v_req: float
+    rho_l_bot: float
+    rho_l_top: float
     k_value: float
-    sigma_cp: Quantity
+    sigma_cp: float
     theta: float
     cot_theta: float
-    z: Quantity
-    V_Rd_c: Quantity
-    V_Rd_s: Quantity
-    V_Rd: Quantity
-    V_Rd_max: Quantity
-    V_s_req: Quantity
-    stirrup_s_w: Quantity
-    stirrup_s_max_l: Quantity
-    stirrup_s_max_w: Quantity
+    z: float
+    V_Rd_c: float
+    V_Rd_s: float
+    V_Rd: float
+    V_Rd_max: float
+    V_s_req: float
+    stirrup_s_w: float
+    stirrup_s_max_l: float
+    stirrup_s_max_w: float
     max_shear_ok: bool
     DCR: float
 
     def shear_reinforcement_quantities(self, imperial: bool) -> tuple[Any, Any]:
-        """Already quantities: this state has not been moved to floats yet."""
-        return self.A_v_req, self.A_v_min
+        """``(A_v_req, A_v_min)`` as quantities, for the frozen public result."""
+        return (
+            to_display(self.A_v_req, "per_length", imperial),
+            to_display(self.A_v_min, "per_length", imperial),
+        )
 
 
 def new_en_shear_state(section: "RectangularBeam") -> ENShearCheckState:
-    """A zeroed EN state. Eurocode sections are metric only."""
-    force = 0 * kN
-    stress = 0 * MPa
-    length = 0 * cm
-    per_length = 0 * cm**2 / m
-    area = 0 * cm**2
+    """A zeroed state. Every field is a float, so there is nothing to convert."""
     return ENShearCheckState(
-        N_Ed=force,
-        V_Ed_1=force,
-        V_Ed_2=force,
-        f_cd=stress,
-        f_cd_shear=stress,
-        f_ywd=stress,
-        A_s_tension=area,
-        A_v_min=per_length,
-        A_v_req=per_length,
-        rho_l_bot=0 * dimensionless,
-        rho_l_top=0 * dimensionless,
+        N_Ed=0.0,
+        V_Ed_1=0.0,
+        V_Ed_2=0.0,
+        f_cd=0.0,
+        f_cd_shear=0.0,
+        f_ywd=0.0,
+        A_s_tension=0.0,
+        A_v_min=0.0,
+        A_v_req=0.0,
+        rho_l_bot=0.0,
+        rho_l_top=0.0,
         k_value=0.0,
-        sigma_cp=stress,
+        sigma_cp=0.0,
         theta=0.0,
         cot_theta=0.0,
-        z=length,
-        V_Rd_c=force,
-        V_Rd_s=force,
-        V_Rd=force,
-        V_Rd_max=force,
-        V_s_req=force,
-        stirrup_s_w=length,
-        stirrup_s_max_l=length,
-        stirrup_s_max_w=length,
+        z=0.0,
+        V_Rd_c=0.0,
+        V_Rd_s=0.0,
+        V_Rd=0.0,
+        V_Rd_max=0.0,
+        V_s_req=0.0,
+        stirrup_s_w=0.0,
+        stirrup_s_max_l=0.0,
+        stirrup_s_max_w=0.0,
         max_shear_ok=False,
         DCR=0.0,
     )
 
 
 def apply_en_shear_state(section: "RectangularBeam", state: ENShearCheckState) -> None:
-    """Copy an EN state onto the section — the same compatibility layer."""
-    for field_name, attribute in EN_BEAM_ATTRIBUTES.items():
-        setattr(section, attribute, getattr(state, field_name))
+    """Copy an EN shear state onto the section, back in pint."""
+    imperial = section.concrete.is_imperial
+    for field_name, (attribute, kind) in EN_BEAM_ATTRIBUTES.items():
+        setattr(section, attribute, to_display(getattr(state, field_name), kind, imperial))
 
 
 #: A structural wall reports different quantities again — rho_t/rho_l rather
