@@ -5,15 +5,15 @@ pint, no state. Each one cites the clause or table it comes from and is tested
 against values taken from the code itself.
 
 **Units.** Arguments and results are floats in one of two consistent systems,
-selected by the ``imperial`` keyword:
+selected by the ``is_imperial`` keyword — pass ``concrete.is_imperial``:
 
-===========  =====================  =====================
-quantity     SI (``imperial=False``) US customary (``True``)
-===========  =====================  =====================
-force        N                      lb
-length       mm                     in
-stress       MPa                    psi
-===========  =====================  =====================
+===========  ==========================  =======================
+quantity     SI (``is_imperial=False``)  US customary (``True``)
+===========  ==========================  =======================
+force        N                           lb
+length       mm                          in
+stress       MPa                         psi
+===========  ==========================  =======================
 
 ACI publishes separate, individually rounded coefficients for the two systems
 — ``0.17*sqrt(f_c[MPa])`` against ``2*sqrt(f_c[psi])``, which differ by about

@@ -22,11 +22,11 @@ __all__ = [
 ]
 
 
-def size_effect_factor(d: float, *, imperial: bool = False) -> float:
+def size_effect_factor(d: float, *, is_imperial: bool = False) -> float:
     """Size effect factor lambda_s — ACI 318-19 Eq. 22.5.5.1.3.
 
     Args:
-        d: Effective depth for shear (mm, or in when ``imperial``).
+        d: Effective depth for shear (mm, or in when ``is_imperial``).
 
     Returns:
         lambda_s, capped at 1.0.
@@ -35,7 +35,7 @@ def size_effect_factor(d: float, *, imperial: bool = False) -> float:
     V_c in deep members, so without it a shallow member (d below 250 mm / 10 in)
     would get lambda_s > 1 and an inflated V_c — the opposite of its purpose.
     """
-    if imperial:
+    if is_imperial:
         return min(math.sqrt(2 / (1 + d / 10)), 1.0)
     return min(math.sqrt(2 / (1 + 0.004 * d)), 1.0)
 
@@ -63,7 +63,7 @@ def concrete_shear_stress(
     lambda_s: float,
     *,
     has_min_rebar: bool,
-    imperial: bool = False,
+    is_imperial: bool = False,
 ) -> float:
     """Concrete shear stress v_c — ACI 318-19 Table 22.5.5.1.
 
@@ -84,19 +84,19 @@ def concrete_shear_stress(
 
     if not has_min_rebar:
         # Table 22.5.5.1(c)
-        coeff = 8 if imperial else 0.66
+        coeff = 8 if is_imperial else 0.66
         return coeff * lambda_s * lambda_factor * rho_w ** (1 / 3) * sqrt_f_c + sigma_Nu
 
     # Rows (a) and (b): the member may take whichever is larger.
-    coeff_a = 2 if imperial else 0.17
-    coeff_b = 8 if imperial else 0.66
+    coeff_a = 2 if is_imperial else 0.17
+    coeff_b = 8 if is_imperial else 0.66
     return max(
         coeff_a * lambda_factor * sqrt_f_c + sigma_Nu,
         coeff_b * lambda_factor * rho_w ** (1 / 3) * sqrt_f_c + sigma_Nu,
     )
 
 
-def max_concrete_shear_stress(f_c: float, lambda_factor: float, *, imperial: bool = False) -> float:
+def max_concrete_shear_stress(f_c: float, lambda_factor: float, *, is_imperial: bool = False) -> float:
     """Upper limit on the concrete shear stress — ACI 318-19 §22.5.5.1.1.
 
     Args:
@@ -106,11 +106,11 @@ def max_concrete_shear_stress(f_c: float, lambda_factor: float, *, imperial: boo
     Returns:
         The largest v_c the table may produce (MPa, or psi).
     """
-    coeff = 5 if imperial else 0.42
+    coeff = 5 if is_imperial else 0.42
     return coeff * lambda_factor * math.sqrt(f_c)
 
 
-def shear_stress_capacity_increment(f_c: float, lambda_factor: float, *, imperial: bool = False) -> float:
+def shear_stress_capacity_increment(f_c: float, lambda_factor: float, *, is_imperial: bool = False) -> float:
     """Largest stress the stirrups may add to V_c — ACI 318-19 §22.5.1.2.
 
     Args:
@@ -121,11 +121,11 @@ def shear_stress_capacity_increment(f_c: float, lambda_factor: float, *, imperia
         The stress that, times A_cv, bounds V_s and therefore caps the total
         shear the section may be designed for (MPa, or psi).
     """
-    coeff = 8 if imperial else 0.66
+    coeff = 8 if is_imperial else 0.66
     return coeff * lambda_factor * math.sqrt(f_c)
 
 
-def min_shear_reinforcement_threshold_stress(f_c: float, lambda_factor: float, *, imperial: bool = False) -> float:
+def min_shear_reinforcement_threshold_stress(f_c: float, lambda_factor: float, *, is_imperial: bool = False) -> float:
     """Stress below which no shear reinforcement is required — ACI 318-19 §9.6.3.1.
 
     Args:
@@ -136,11 +136,11 @@ def min_shear_reinforcement_threshold_stress(f_c: float, lambda_factor: float, *
         The stress to compare V_u/(phi_v*A_cv) against (MPa, or psi). Below it,
         the clause waives both A_v_min and A_v_req.
     """
-    coeff = 1 if imperial else 0.083
+    coeff = 1 if is_imperial else 0.083
     return coeff * lambda_factor * math.sqrt(f_c)
 
 
-def max_yield_strength_for_shear(f_y: float, *, imperial: bool = False) -> float:
+def max_yield_strength_for_shear(f_y: float, *, is_imperial: bool = False) -> float:
     """Yield strength usable for shear reinforcement — ACI 318-19 §20.2.2.4.
 
     Args:
@@ -149,11 +149,11 @@ def max_yield_strength_for_shear(f_y: float, *, imperial: bool = False) -> float
     Returns:
         f_yt, capped at 420 MPa / 60,000 psi.
     """
-    cap = 60_000.0 if imperial else 420.0
+    cap = 60_000.0 if is_imperial else 420.0
     return min(f_y, cap)
 
 
-def min_shear_reinforcement_ratio(f_c: float, f_yt: float, b_w: float, *, imperial: bool = False) -> float:
+def min_shear_reinforcement_ratio(f_c: float, f_yt: float, b_w: float, *, is_imperial: bool = False) -> float:
     """Minimum shear reinforcement A_v,min / s — ACI 318-19 Table 9.6.3.4.
 
     Args:
@@ -166,7 +166,7 @@ def min_shear_reinforcement_ratio(f_c: float, f_yt: float, b_w: float, *, imperi
         Reinforcement area per unit length along the member — mm²/mm, which is
         a length, or in²/in.
     """
-    if imperial:
+    if is_imperial:
         return max(0.75 * math.sqrt(f_c) / f_yt, 50 / f_yt) * b_w
     return max(0.062 * math.sqrt(f_c) / f_yt, 0.35 / f_yt) * b_w
 

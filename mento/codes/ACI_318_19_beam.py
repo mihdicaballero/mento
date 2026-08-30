@@ -42,45 +42,45 @@ def _initialize_variables_ACI_318_19(self: "RectangularBeam", M_y: Quantity) -> 
 
 def _calculate_shear_reinforcement_aci(self: "RectangularBeam") -> None:
     if isinstance(self.concrete, Concrete_ACI_318_19):
-        imperial = self.concrete.unit_system != "metric"
-        length_unit = inch if imperial else mm
-        stress_unit = psi if imperial else MPa
+        is_imperial = self.concrete.is_imperial
+        length_unit = inch if is_imperial else mm
+        stress_unit = psi if is_imperial else MPa
         # Shear contribution of reinforcement. A_v is an area per unit length,
         # so it converts to a plain length.
         V_s = shear_eq.shear_strength_of_reinforcement(
             self._A_v.to(length_unit).magnitude,
             self.f_yt.to(stress_unit).magnitude,
             self._d_shear.to(length_unit).magnitude,
-        ) * (lbf if imperial else N)
+        ) * (lbf if is_imperial else N)
         self._phi_V_s = self.concrete.phi_v * V_s  # Reduced shear contribution of reinforcement
 
 
 def _calculate_effective_shear_area_aci(self: "RectangularBeam") -> None:
     self._A_cv = self.width * self._d_shear  # Effective shear area
     self._rho_w = self._A_s_tension.to("cm**2") / self._A_cv.to("cm**2")  # Longitudinal reinforcement ratio
-    imperial = self.concrete.unit_system != "metric"
-    d_shear = self._d_shear.to("inch").magnitude if imperial else self._d_shear.to("mm").magnitude
-    self._lambda_s = shear_eq.size_effect_factor(d_shear, imperial=imperial)
+    is_imperial = self.concrete.is_imperial
+    length_unit = inch if is_imperial else mm
+    self._lambda_s = shear_eq.size_effect_factor(self._d_shear.to(length_unit).magnitude, is_imperial=is_imperial)
 
 
 def _calculate_concrete_shear_strength_aci(self: "RectangularBeam") -> None:
-    imperial = self.concrete.unit_system != "metric"
-    stress_unit = psi if imperial else MPa
+    is_imperial = self.concrete.is_imperial
+    stress_unit = psi if is_imperial else MPa
     f_c = self.concrete.f_c
     # Axial stress influence
     self._sigma_Nu = (
         shear_eq.axial_stress_influence(
-            self._N_u.to("lbf" if imperial else "N").magnitude,
-            self.A_x.to("inch**2" if imperial else "mm**2").magnitude,
+            self._N_u.to("lbf" if is_imperial else "N").magnitude,
+            self.A_x.to("inch**2" if is_imperial else "mm**2").magnitude,
             f_c.to(stress_unit).magnitude,
         )
         * stress_unit
     )
     if isinstance(self.concrete, Concrete_ACI_318_19):
-        V_cmin = 0 * (kip if imperial else kN)
+        V_cmin = 0 * (kip if is_imperial else kN)
         has_min_rebar = not (self._A_v < self._A_v_min or self._A_v_min == 0 * cm**2 / m)
 
-        if not has_min_rebar and not imperial and self._A_s_tension == 0 * cm**2:
+        if not has_min_rebar and not is_imperial and self._A_s_tension == 0 * cm**2:
             warnings.warn(
                 "Longitudinal rebar As cannot be zero if A_v is less than A_v_min.",
                 UserWarning,
@@ -94,14 +94,14 @@ def _calculate_concrete_shear_strength_aci(self: "RectangularBeam") -> None:
                 self._sigma_Nu.to(stress_unit).magnitude,
                 self._lambda_s,
                 has_min_rebar=has_min_rebar,
-                imperial=imperial,
+                is_imperial=is_imperial,
             )
             * stress_unit
         )
         # Maximum concrete shear strength
         V_cmax = (
             shear_eq.max_concrete_shear_stress(
-                f_c.to(stress_unit).magnitude, self.concrete.lambda_factor, imperial=imperial
+                f_c.to(stress_unit).magnitude, self.concrete.lambda_factor, is_imperial=is_imperial
             )
             * stress_unit
         ) * self._A_cv
@@ -112,13 +112,15 @@ def _calculate_concrete_shear_strength_aci(self: "RectangularBeam") -> None:
 def _calculate_max_shear_capacity_aci(self: "RectangularBeam") -> None:
     "Formula for maximum total shear capacity (V_max)"
     if isinstance(self.concrete, Concrete_ACI_318_19):
-        imperial = self.concrete.unit_system != "metric"
-        stress_unit = psi if imperial else MPa
+        is_imperial = self.concrete.is_imperial
+        stress_unit = psi if is_imperial else MPa
         V_max = (
             self.V_c
             + (
                 shear_eq.shear_stress_capacity_increment(
-                    self.concrete.f_c.to(stress_unit).magnitude, self.concrete.lambda_factor, imperial=imperial
+                    self.concrete.f_c.to(stress_unit).magnitude,
+                    self.concrete.lambda_factor,
+                    is_imperial=is_imperial,
                 )
                 * stress_unit
             )
@@ -135,41 +137,43 @@ def _calculate_A_v_min_ACI(self: "RectangularBeam", f_c: Quantity) -> None:
     # reduced by 0.5ϕVc. It is assumed that minimum reinforcement is required.
     # Rebar needed, V_u > φ_v*V_c/2 for Imperial system
     f_yt = _calculate_f_yt_aci(self)
+    is_imperial = self.concrete.is_imperial
+    length_unit = inch if is_imperial else mm
+    stress_unit = psi if is_imperial else MPa
 
-    if self.concrete.unit_system == "metric":
-        A_v_min = shear_eq.min_shear_reinforcement_ratio(
-            f_c.to("MPa").magnitude,
-            f_yt.to("MPa").magnitude,
-            self.width.to("mm").magnitude,
+    self._A_v_min = (
+        shear_eq.min_shear_reinforcement_ratio(
+            f_c.to(stress_unit).magnitude,
+            f_yt.to(stress_unit).magnitude,
+            self.width.to(length_unit).magnitude,
+            is_imperial=is_imperial,
         )
-        self._A_v_min = A_v_min * mm
-    else:
-        A_v_min = shear_eq.min_shear_reinforcement_ratio(
-            f_c.to("psi").magnitude,
-            f_yt.to("psi").magnitude,
-            self.width.to("inch").magnitude,
-            imperial=True,
-        )
-        self._A_v_min = A_v_min * inch
+        * length_unit
+    )
 
 
 def _calculate_f_yt_aci(self: "RectangularBeam") -> Quantity:
     """Determine the yield strength of steel based on unit system."""
-    if self.concrete.unit_system == "metric":
-        return shear_eq.max_yield_strength_for_shear(self.steel_bar.f_y.to("MPa").magnitude) * MPa
-    return shear_eq.max_yield_strength_for_shear(self.steel_bar.f_y.to("psi").magnitude, imperial=True) * psi
+    is_imperial = self.concrete.is_imperial
+    stress_unit = psi if is_imperial else MPa
+    return (
+        shear_eq.max_yield_strength_for_shear(self.steel_bar.f_y.to(stress_unit).magnitude, is_imperial=is_imperial)
+        * stress_unit
+    )
 
 
 def _check_minimum_reinforcement_requirement_aci(self: "RectangularBeam") -> None:
     if isinstance(self.concrete, Concrete_ACI_318_19):
-        imperial = self.concrete.unit_system != "metric"
-        stress_unit = psi if imperial else MPa
+        is_imperial = self.concrete.is_imperial
+        stress_unit = psi if is_imperial else MPa
         # Demand below which ACI 318-19 §9.6.3.1 waives shear reinforcement.
         V_threshold = (
             self.concrete.phi_v
             * (
                 shear_eq.min_shear_reinforcement_threshold_stress(
-                    self.concrete.f_c.to(stress_unit).magnitude, self.concrete.lambda_factor, imperial=imperial
+                    self.concrete.f_c.to(stress_unit).magnitude,
+                    self.concrete.lambda_factor,
+                    is_imperial=is_imperial,
                 )
                 * stress_unit
             )
@@ -177,7 +181,7 @@ def _check_minimum_reinforcement_requirement_aci(self: "RectangularBeam") -> Non
         )
 
         if self._V_u < V_threshold:
-            zero_A_v = 0 * inch**2 / ft if imperial else 0 * cm**2 / m
+            zero_A_v = 0 * inch**2 / ft if is_imperial else 0 * cm**2 / m
             self._A_v_req = zero_A_v
             self._A_v_min = zero_A_v
             self._max_shear_ok = True

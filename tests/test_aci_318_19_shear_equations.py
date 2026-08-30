@@ -41,7 +41,7 @@ def test_size_effect_factor_si(d_mm, expected):
     ],
 )
 def test_size_effect_factor_us(d_in, expected):
-    assert eq.size_effect_factor(d_in, imperial=True) == pytest.approx(expected, rel=1e-9)
+    assert eq.size_effect_factor(d_in, is_imperial=True) == pytest.approx(expected, rel=1e-9)
 
 
 def test_size_effect_factor_never_exceeds_one():
@@ -102,7 +102,7 @@ def test_concrete_shear_stress_row_c_scales_with_size_effect():
 def test_concrete_shear_stress_us():
     # f_c = 4000 psi, rho_w = 0.01: row (a) 2*sqrt(4000) = 126.49 psi governs
     # over row (b) 8*0.01**(1/3)*sqrt(4000) = 109.0 psi.
-    got = eq.concrete_shear_stress(4000.0, 1.0, 0.01, 0.0, 1.0, has_min_rebar=True, imperial=True)
+    got = eq.concrete_shear_stress(4000.0, 1.0, 0.01, 0.0, 1.0, has_min_rebar=True, is_imperial=True)
     assert got == pytest.approx(2 * math.sqrt(4000.0), rel=1e-9)
 
 
@@ -118,7 +118,7 @@ def test_concrete_shear_stress_adds_axial_term():
 
 
 @pytest.mark.parametrize(
-    "fn, f_c, imperial, expected",
+    "fn, f_c, is_imperial, expected",
     [
         (eq.max_concrete_shear_stress, 25.0, False, 0.42 * 5.0),
         (eq.max_concrete_shear_stress, 4000.0, True, 5 * math.sqrt(4000.0)),
@@ -128,8 +128,8 @@ def test_concrete_shear_stress_adds_axial_term():
         (eq.min_shear_reinforcement_threshold_stress, 4000.0, True, math.sqrt(4000.0)),
     ],
 )
-def test_stress_limits(fn, f_c, imperial, expected):
-    assert fn(f_c, 1.0, imperial=imperial) == pytest.approx(expected, rel=1e-9)
+def test_stress_limits(fn, f_c, is_imperial, expected):
+    assert fn(f_c, 1.0, is_imperial=is_imperial) == pytest.approx(expected, rel=1e-9)
 
 
 def test_stress_limits_scale_with_lambda():
@@ -149,7 +149,7 @@ def test_max_yield_strength_for_shear_si(f_y, expected):
 
 @pytest.mark.parametrize("f_y, expected", [(40_000.0, 40_000.0), (60_000.0, 60_000.0), (75_000.0, 60_000.0)])
 def test_max_yield_strength_for_shear_us(f_y, expected):
-    assert eq.max_yield_strength_for_shear(f_y, imperial=True) == pytest.approx(expected)
+    assert eq.max_yield_strength_for_shear(f_y, is_imperial=True) == pytest.approx(expected)
 
 
 # ---------------------------------------------------------------------------
@@ -175,7 +175,7 @@ def test_min_shear_reinforcement_ratio_sqrt_term_governs_at_high_fc():
 def test_min_shear_reinforcement_ratio_us():
     # f_c = 4000 psi, f_yt = 60 ksi, b_w = 12 in:
     #   0.75*sqrt(4000)/60000 = 7.906e-4 ; 50/60000 = 8.333e-4 -> floor governs
-    assert eq.min_shear_reinforcement_ratio(4000.0, 60_000.0, 12.0, imperial=True) == pytest.approx(0.01, rel=1e-6)
+    assert eq.min_shear_reinforcement_ratio(4000.0, 60_000.0, 12.0, is_imperial=True) == pytest.approx(0.01, rel=1e-6)
 
 
 def test_min_shear_reinforcement_ratio_scales_with_width():

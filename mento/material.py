@@ -34,6 +34,18 @@ class Concrete(Material):
                 f"Unsupported unit system for f_c ({self.f_c.units}). Please use MPa, Pa, kPa, psi, or ksi."
             )
 
+    @property
+    def is_imperial(self) -> bool:
+        """True when the material was given in US customary units.
+
+        ``unit_system`` only ever holds ``"metric"`` or ``"imperial"`` —
+        ``__post_init__`` rejects anything else — so this is the whole story.
+        It exists so callers that must pick between the two coefficient sets a
+        design code publishes read a positive flag instead of re-deriving one
+        with ``unit_system != "metric"`` at each site.
+        """
+        return self.unit_system == "imperial"
+
     def get_properties(self) -> Dict[str, Any]:
         # Return properties in the appropriate unit system
         properties = {"f_c": self.f_c, "density": self.density}

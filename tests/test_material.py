@@ -94,6 +94,37 @@ def test_concrete_get_properties() -> None:
     assert "design_code" not in props  # Base get_properties only includes f_c and density
 
 
+# --- Tests for is_imperial ---
+
+
+@pytest.mark.parametrize(
+    "f_c, expected_system, expected_is_imperial",
+    [
+        (25 * MPa, "metric", False),
+        (30 * MPa, "metric", False),
+        (4000 * psi, "imperial", True),
+        (4 * ksi, "imperial", True),
+    ],
+)
+def test_is_imperial_follows_the_detected_unit_system(f_c, expected_system, expected_is_imperial) -> None:
+    """The flag the design-code equations branch on must track f_c's units.
+
+    Both coefficient sets ACI publishes are reachable only through this
+    property, so an inverted comparison here would silently select the wrong
+    one everywhere at once.
+    """
+    concrete = Concrete(name="probe", f_c=f_c)
+    assert concrete.unit_system == expected_system
+    assert concrete.is_imperial is expected_is_imperial
+
+
+def test_is_imperial_is_the_exact_negation_of_metric() -> None:
+    """unit_system has only these two values; __post_init__ rejects anything else."""
+    for f_c in (25 * MPa, 4000 * psi):
+        concrete = Concrete(name="probe", f_c=f_c)
+        assert concrete.is_imperial == (concrete.unit_system != "metric")
+
+
 # --- Tests for Concrete_ACI_318_19 ---
 
 
