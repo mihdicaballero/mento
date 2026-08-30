@@ -261,10 +261,12 @@ def _check_shear_ACI_318_19(self: "RectangularBeam", force: Forces) -> None:
         if self._stirrup_n > 0:
             # Shear reinforcement calculations
             _calculate_shear_reinforcement_aci(self)
-        else:
-            # Set current stirrup diameter to zero
-            self._stirrup_d_b = 0 * mm
-            self._update_effective_heights()
+        # A section with no stirrups assigned keeps the diameter the settings
+        # assume, exactly as the flexure check does, so d_shear is the same
+        # number in both. Dropping the layer here used to make a flexure check
+        # report differently depending on whether shear had run first. Once a
+        # design decides there are no stirrups it assigns a zero diameter, and
+        # both checks follow it.
 
         # Effective shear area and longitudinal reinforcement ratio
         _calculate_effective_shear_area_aci(self)

@@ -90,7 +90,6 @@ def _initialize_shear_variables_EN_1992_2004(self: "RectangularBeam", force: For
 
 
 def _shear_without_rebar_EN_1992_2004(self: "RectangularBeam") -> Quantity:
-    self._stirrup_d_b = 0 * mm
     self._theta = 0
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         # Total shear capacity without rebar: Eq. (6.2.a), floored by Eq. (6.2.b).
@@ -186,9 +185,7 @@ def _calculate_required_shear_reinforcement_EN_1992_2004(
 def _check_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> None:
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         if self._stirrup_n == 0:
-            # Set current stirrup diameter to zero
-            self._stirrup_d_b = 0 * mm
-            self._update_effective_heights()
+            # The assumed stirrup diameter stays: see the note in the ACI check.
             # Initialize all the code related variables
             _initialize_variables_EN_1992_2004(self)
             _initialize_shear_variables_EN_1992_2004(self, force)

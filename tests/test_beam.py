@@ -351,6 +351,10 @@ def test_shear_check_EN_1992_2004_no_rebar_1(
     # Example from "EN 1992-1-1_2004 Beam Shear 01 - Metric.cpd"
     f = Forces(V_z=30 * kN)
     beam_example_EN_1992_2004_01.set_longitudinal_rebar_bot(n1=4, d_b1=16 * mm)
+    # The reference example has no stirrups at all, so say so: the section no
+    # longer infers it from n_stirrups == 0 while still assuming the settings'
+    # initial diameter for d.
+    beam_example_EN_1992_2004_01.set_transverse_rebar(n_stirrups=0, d_b=0 * mm, s_l=0 * mm)
     node = Node(section=beam_example_EN_1992_2004_01, forces=f)
     results = node.check_shear()
 
@@ -377,6 +381,10 @@ def test_shear_check_EN_1992_2004_no_rebar_2(
     beam_example_EN_1992_2004_01: RectangularBeam,
 ) -> None:
     f = Forces(V_z=30 * kN)
+    # The reference example has no stirrups at all, so say so: the section no
+    # longer infers it from n_stirrups == 0 while still assuming the settings'
+    # initial diameter for d.
+    beam_example_EN_1992_2004_01.set_transverse_rebar(n_stirrups=0, d_b=0 * mm, s_l=0 * mm)
     node = Node(section=beam_example_EN_1992_2004_01, forces=f)
     results = node.check_shear()
 
@@ -404,6 +412,10 @@ def test_shear_check_EN_1992_2004_no_rebar_3(
 ) -> None:
     f = Forces(N_x=50 * kN, V_z=30 * kN)
     beam_example_EN_1992_2004_01.set_longitudinal_rebar_bot(n1=4, d_b1=16 * mm)
+    # The reference example has no stirrups at all, so say so: the section no
+    # longer infers it from n_stirrups == 0 while still assuming the settings'
+    # initial diameter for d.
+    beam_example_EN_1992_2004_01.set_transverse_rebar(n_stirrups=0, d_b=0 * mm, s_l=0 * mm)
     node = Node(section=beam_example_EN_1992_2004_01, forces=f)
     results = node.check_shear()
 
@@ -499,6 +511,10 @@ def test_shear_check_ACI_318_19_no_rebar_1(
     # Tested with "ACI 318-19 Beam Shear 01 - Imperial.cpd" for beam that needs rebar
     f = Forces(V_z=8 * kip, N_x=0 * kip)
     beam_example_imperial.set_longitudinal_rebar_bot(n1=2, d_b1=0.625 * inch)
+    # The reference example has no stirrups at all, so say so: the section no
+    # longer infers it from n_stirrups == 0 while still assuming the settings'
+    # initial diameter for d.
+    beam_example_imperial.set_transverse_rebar(n_stirrups=0, d_b=0 * mm, s_l=0 * mm)
     node = Node(section=beam_example_imperial, forces=f)
     results = node.check_shear()
 
@@ -525,6 +541,10 @@ def test_shear_check_ACI_318_19_no_rebar_2(
     # Tested with "ACI 318-19 Beam Shear 01 - Imperial.cpd" for beem that doesn't need rebar
     f = Forces(V_z=6 * kip, N_x=0 * kip)
     beam_example_imperial.set_longitudinal_rebar_bot(n1=2, d_b1=0.625 * inch)
+    # The reference example has no stirrups at all, so say so: the section no
+    # longer infers it from n_stirrups == 0 while still assuming the settings'
+    # initial diameter for d.
+    beam_example_imperial.set_transverse_rebar(n_stirrups=0, d_b=0 * mm, s_l=0 * mm)
     node = Node(section=beam_example_imperial, forces=f)
     results = node.check_shear()
 
@@ -3497,23 +3517,13 @@ if __name__ == "__main__":
     pytest.main()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Known issue: on a section with no stirrups configured, check_shear drops the "
-        "assumed stirrup layer and recomputes the effective depths, so a flexure check "
-        "run afterwards uses a different d than one run before. Needs an engineering "
-        "decision -- flexure assumes settings.stirrup_diameter_ini, shear assumes none -- "
-        "and every way of reconciling them moves validated numbers. Remove this marker "
-        "when the two agree."
-    ),
-)
 def test_check_order_does_not_change_the_flexure_result() -> None:
     """Checking shear must not change what a flexure check then reports.
 
-    Measured today: the bottom DCR moves 1.84 % (0.59309 -> 0.58215) because
-    ``_d_bot`` goes 45.7 -> 46.5 cm. A beam that HAS stirrups is unaffected,
-    which is what localises the cause.
+    It used to: the shear check dropped the stirrup diameter the settings
+    assume and recomputed the effective depths on the section, so the bottom
+    DCR moved 1.84 % (0.59309 -> 0.58215, ``_d_bot`` 45.7 -> 46.5 cm) purely
+    from the order of the two calls. Both checks now read the same ``d``.
     """
 
     def build() -> RectangularBeam:
@@ -3564,3 +3574,48 @@ def test_check_order_is_harmless_once_stirrups_are_configured() -> None:
     shear_first = beam.flexure_check_results(combo)[0]
 
     assert flexure_first.bottom.DCR == pytest.approx(shear_first.bottom.DCR)
+
+
+@pytest.mark.parametrize("with_stirrups", [False, True], ids=["no-stirrups", "with-stirrups"])
+def test_a_check_does_not_change_the_section(with_stirrups: bool) -> None:
+    """Running a check must leave the section's own identity alone.
+
+    Geometry and reinforcement describe the section; a check only reports on
+    them. Results still land on the beam as the documented compatibility layer,
+    so this pins the geometry and the bars specifically — the part whose drift
+    made the order of two checks matter.
+    """
+    beam = RectangularBeam(
+        label="untouched",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=30 * cm,
+        height=50 * cm,
+        c_c=25 * mm,
+    )
+    beam.set_longitudinal_rebar_bot(n1=3, d_b1=20 * mm)
+    if with_stirrups:
+        beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=20 * cm)
+
+    identity = (
+        "_d_bot",
+        "_d_top",
+        "_d_shear",
+        "_c_mec_bot",
+        "_c_mec_top",
+        "_stirrup_d_b",
+        "_stirrup_n",
+        "_stirrup_s_l",
+        "_A_s_bot",
+        "_A_s_top",
+        "_A_v",
+    )
+    before = {name: getattr(beam, name) for name in identity}
+
+    combo = [Forces(label="C1", V_z=80 * kN, M_y=90 * kNm)]
+    beam.shear_check_results(combo)
+    beam.flexure_check_results(combo)
+
+    after = {name: getattr(beam, name) for name in identity}
+    changed = [name for name in identity if repr(before[name]) != repr(after[name])]
+    assert not changed, f"a check changed the section: {changed}"

@@ -535,43 +535,47 @@ first. `tests/test_architecture_boundaries.py` now imports each entry point in a
 Emptying it also means `import mento.codes` no longer drags in matplotlib or
 docx — the Phase 3 exit criterion, met early and now guarded by a test.
 
-**Investigated after Phase 3 (2026-08-30), and the answer is not a refactor.**
-With the report layer no longer reading results off the element, what a check
-still writes was measured directly. It splits in two, and only one half is a
-defect:
+**Done (2026-08-30): a check no longer changes the section.** With the report
+layer out of the way, what a check still wrote could be measured. It split in
+two, and only one half was a defect.
 
 *Results on the element* (20 attributes: `V_c`, `_DCRv`, `_phi_V_n`, ...) are
-the deprecated compatibility layer this phase explicitly sanctions. They are
-captured into a frozen `ShearCheck` immediately, so a caller never reads them.
+the deprecated compatibility layer this phase sanctions. They are captured into
+a frozen `ShearCheck` immediately, so no caller reads them.
 
-*Section state* is the real finding. When a section has **no stirrups
-configured**, `check_shear` drops the assumed stirrup layer and recomputes the
-effective depths on the section itself:
+*Section state was the defect.* On a section with no stirrups configured, the
+shear check dropped the stirrup diameter the settings assume and recomputed the
+effective depths **on the section**, so a flexure check run afterwards reported
+something else:
 
 | | flexure first | shear first |
 | --- | --- | --- |
-| bottom DCR | 0.59309 | **0.58215** (−1.84 %) |
+| bottom DCR | 0.59309 | 0.58215 (−1.84 %) |
 | `d_bot` | 45.7 cm | 46.5 cm |
 
-**Running the shear check changes what a later flexure check reports.** A
-section that has stirrups is unaffected, which localises the cause: flexure
-assumes `settings.stirrup_diameter_ini`, shear assumes none, and nothing
-reconciles them. Exposure is the check-only path — which is exactly what mako
-does per station before it decides reinforcement. `design()` hides it, because
-designing assigns stirrups.
+Flexure assumed `settings.stirrup_diameter_ini`, shear assumed none, and nothing
+reconciled them. **The resolution is that the shear check keeps the assumed
+diameter too**, so both read the same `d`; once a design decides there are no
+stirrups it assigns a zero diameter and both follow it.
 
-**This is an engineering decision, not a cleanup.** Making flexure drop the
-layer, or shear keep it, or the section decide once — every option moves
-numbers the validation suite pins. It is recorded as a `strict` xfail in
-`test_check_order_does_not_change_the_flexure_result`, paired with a passing
-test proving the coupling vanishes once stirrups exist; fixing it turns the
-xfail into a failure, which is the prompt to drop the marker.
+The five validated "no rebar" tests looked like collateral damage and were not.
+They had been relying on the check to declare "no stirrups" on their behalf —
+their fixtures never said it. Told explicitly
+(`set_transverse_rebar(n_stirrups=0, d_b=0, s_l=0)`), every one of them returns
+its **original reference number**: `d_shear` 36.0363 cm against the Calcpad
+example's 36.04. The tests are now a faithful statement of what the reference
+models, which they were not before.
+
+Guarded by `test_a_check_does_not_change_the_section`, which pins geometry and
+reinforcement across both checks and both stirrup states, and by
+`test_check_order_does_not_change_the_flexure_result`.
 
 **What full statelessness would still buy** is that `shear_check_results`
-touches no attribute at all. That needs a state object threaded through ~11
-helpers per code per check type. It is worth doing, but it is not what is
-holding mako back: at 1.56 ms a shear check, 20,000 take 31 s against the 5 s
-target, and the remaining cost is the orchestrators' own pint arithmetic.
+touches no attribute at all — the 20 result writes. That needs a state object
+threaded through ~11 helpers per code per check type. Worth doing, but it is
+not what holds mako back: at 1.56 ms a shear check, 20,000 take 31 s against
+the 5 s target, and the remaining cost is the orchestrators' own pint
+arithmetic.
 
 Only now does production code change. Extend `design_results.py` with
 check-result types; make check/design functions build and return them. Because
