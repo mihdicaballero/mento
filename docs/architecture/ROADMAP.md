@@ -826,15 +826,56 @@ by a test that runs in a fresh interpreter.
 **Exit:** `import mento.codes` imports neither matplotlib nor docx — met, and
 guarded by a test since the `codes/__init__` cleanup in Phase 2b.
 
-### Phase 4 — Code registry
+### Phase 4 — Code registry — **done 2026-08-30**
 
-Formalize the per-code subpackage protocol (structuralcodes-style
-`__title__` / `__year__` / `__materials__` metadata + a registry dict) so CIRSOC
-and future codes plug in as subpackages without touching elements. Only worth doing
-once phases 1–3 exist; a registry over today's structure would formalize the
-coupling instead of removing it.
+Formalize the per-code subpackage protocol so CIRSOC and future codes plug in as
+subpackages without touching elements. Only worth doing once phases 1–3 exist; a
+registry over today's structure would formalize the coupling instead of removing
+it.
 
-**Exit:** adding a code requires editing no file under `elements`.
+**Exit: met, and executed rather than asserted.**
+
+`mento/codes/registry.py` holds `DesignCode`, and that dataclass *is* the
+contract: metadata (`title`, `year`, `materials`), the verification and design
+hooks, the state appliers, bar selection, the attributes the code's report
+tables expect to find zeroed, and the names it gives its own quantities — ACI
+says `Mu` / `ØMn` / `ØVn` where EN says `MEd` / `MRd` / `VRd`, and the summaries
+have to name their columns one way or the other.
+
+Codes are found by walking `mento/codes/*/code.py`, so **a new code is a new
+subpackage and nothing else** — there is no list to append to. ACI 318-19 and
+CIRSOC 201-25 share every hook but the bar catalogue and the minimum stirrup
+diameter, which is exactly the case this is for: one entry each, no fork.
+
+What it replaced was `concrete.design_code == "ACI 318-19"` repeated across
+`beam.py`, `shear_wall.py`, `rebar.py`, `beam_summary.py` and three report
+modules. A code missing from one of those chains failed at runtime, in whichever
+branch nobody had updated, rather than at lookup.
+
+**Two guards, both confirmed by reintroducing the coupling.**
+`test_no_module_outside_codes_names_a_design_code` fails the build if a title
+string reappears outside `codes/`. And `test_a_new_design_code_needs_no_element_edited`
+registers a code that exists only for the duration of that test, drives a real
+beam through check and design with it, and asserts it produces ACI's own
+numbers — if any element still branched on a known title, it would fall through
+to the EN branch or raise.
+
+**Report content stays in `mento/reports/`, and that is deliberate.** The table
+builders cannot move into the code subpackages: importing them from `codes/`
+would pull pandas and docx back into a layer the Phase 3 boundary test keeps
+free of them. So report tables register separately, keyed by title, and a code
+registered without them says so rather than raising a `KeyError` from inside a
+builder. Writing a new code's tables is real per-code work, not coupling.
+
+**Two things fell out on the way.** The four `isinstance(self.concrete,
+Concrete_X)` guards at the top of the per-code table builders were always true
+once the registry routed them — but they were narrowing the type for mypy, so
+they became `cast()` rather than disappearing. And the compatibility attributes
+each code zeroes are now declared under `TYPE_CHECKING` on `RectangularBeam`:
+the type checker needs to know they exist, and a plain annotation would have
+made them dataclass constructor fields.
+
+No performance cost: 4.6 s per 20,000 sections, unchanged.
 
 ### Features in flight during the migration
 
