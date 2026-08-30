@@ -112,8 +112,29 @@ def envelope_shear(checks: Sequence[ShearCheck]) -> ShearCheck:
     )
 
 
-def capture_flexure_check(beam: RectangularBeam, label: str) -> FlexureCheck:
-    """Snapshot the flexure result the beam holds for the combination just run."""
+def capture_flexure_check(beam: RectangularBeam, label: str, state: Any = None) -> FlexureCheck:
+    """The flexure result of the combination just run.
+
+    Reads ``state`` when the design code returned one, so nothing had to be
+    written to the beam; falls back to its attributes for codes still on the
+    older path.
+    """
+    if state is not None:
+        return FlexureCheck(
+            label=label,
+            bottom=FlexureFaceCheck(
+                A_s_req=state.A_s_req_bot,
+                A_s_min=state.A_s_min_bot,
+                A_s_max=state.A_s_max_bot,
+                DCR=float(state.DCR_bot),
+            ),
+            top=FlexureFaceCheck(
+                A_s_req=state.A_s_req_top,
+                A_s_min=state.A_s_min_top,
+                A_s_max=state.A_s_max_top,
+                DCR=float(state.DCR_top),
+            ),
+        )
 
     def face(suffix: str) -> FlexureFaceCheck:
         return FlexureFaceCheck(

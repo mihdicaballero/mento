@@ -9,7 +9,13 @@ from mento.codes.flexure_design import (
     _select_safe_design as _select_safe_design_generic,
 )
 from mento.codes.aci_318_19.equations import flexure as flexure_eq
-from mento.codes.shear_state import ShearCheckState, apply_shear_state, new_shear_state
+from mento.codes.check_state import (
+    FlexureCheckState,
+    ShearCheckState,
+    apply_shear_state,
+    new_flexure_state,
+    new_shear_state,
+)
 from mento.codes.aci_318_19.equations import shear as shear_eq
 from mento.material import Concrete_ACI_318_19
 from mento.rebar import max_stirrup_spacing_ACI_318_19
@@ -246,7 +252,7 @@ def _check_shear_ACI_318_19(self: "RectangularBeam", force: Forces) -> ShearChec
     """Run the ACI shear check for one combination and return what it found.
 
     Nothing is written to the section: the result is a value. The reporting path
-    copies it back through :func:`~mento.codes.shear_state.apply_shear_state`,
+    copies it back through :func:`~mento.codes.check_state.apply_shear_state`,
     which is the compatibility layer for the report tables; the values-only path
     does not, so a loop over many sections leaves every one untouched.
     """
@@ -503,7 +509,7 @@ def _minimum_flexural_reinforcement_ratio_ACI_318_19(self: "RectangularBeam", M_
 
 def _calculate_flexural_reinforcement_ACI_318_19(
     self: "RectangularBeam", M_u: Quantity, d: float, d_prima: float
-) -> tuple[Quantity, Quantity, Quantity, Quantity, float, bool]:
+) -> tuple[Quantity, Quantity, Quantity, Quantity, float, bool, bool]:
     """
     Calculates the flexural reinforcement for a given factored moment according to ACI 318-19.
 
@@ -526,6 +532,8 @@ def _calculate_flexural_reinforcement_ACI_318_19(
             - A_s_comp (Quantity): Compression reinforcement area (if required).
             - c_d (float): Ratio of the calculated neutral axis depth to the effective depth (c/d).
             - A_s_bool: Boolean indicating if 4/3*A_s_calc is adopted instead of A_s_min
+            - doubly: True when compression reinforcement was required. Returned
+              rather than written, so a check does not mark the section.
     """
     concrete_aci = cast("Concrete_ACI_318_19", self.concrete)
     # Extract relevant properties and settings
@@ -568,6 +576,7 @@ def _calculate_flexural_reinforcement_ACI_318_19(
     c_d = clean_zero(c / d)
 
     A_s_final: Quantity = 0 * cm**2
+    doubly = False
 
     A_s_bool = False
 
@@ -615,7 +624,7 @@ def _calculate_flexural_reinforcement_ACI_318_19(
     if A_s_final <= A_s_max:
         A_s_comp = 0 * cm**2
     else:
-        self._doubly_reinforced = True
+        doubly = True
         # Same ductility limit as A_s_max above: with ACI's fixed eps_c = 0.003,
         # eps_y + 2*eps_c is exactly the eps_y + 0.006 this branch used to spell
         # out on its own, so one function covers both.
@@ -635,7 +644,7 @@ def _calculate_flexural_reinforcement_ACI_318_19(
         A_s_comp = M_n_prima / (f_s_prima_net * (d - d_prima))
         A_s_final = rho * b * d + A_s_comp * f_s_prima_net / self.steel_bar.f_y
 
-    return A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool
+    return A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool, doubly
 
 
 def _determine_nominal_moment_simple_reinf_ACI_318_19(self: "RectangularBeam", A_s: Quantity, d: Quantity) -> Quantity:
@@ -720,7 +729,7 @@ def _determine_nominal_moment_double_reinf_ACI_318_19(
     )
 
 
-def _determine_nominal_moment_ACI_318_19(self: "RectangularBeam", force: Forces) -> None:
+def _determine_nominal_moment_ACI_318_19(self: "RectangularBeam", st: FlexureCheckState, force: Forces) -> None:
     """
     Determines the nominal moment for a given section with both top and bottom reinforcement,
     calculating the nominal moment for both positive and negative moment scenarios.
@@ -748,8 +757,8 @@ def _determine_nominal_moment_ACI_318_19(self: "RectangularBeam", force: Forces)
         rho_min_bot = 0 * dimensionless
 
     # Calculate minimum and maximum bottom reinforcement areas
-    self._A_s_min_bot = rho_min_bot * self._d_bot * self.width
-    self._A_s_max_bot = rho_max * self._d_bot * self.width
+    st.A_s_min_bot = rho_min_bot * self._d_bot * self.width
+    st.A_s_max_bot = rho_max * self._d_bot * self.width
 
     # Determine the nominal moment for positive moments.
     # Three-branch dispatcher based on ductility:
@@ -760,33 +769,33 @@ def _determine_nominal_moment_ACI_318_19(self: "RectangularBeam", force: Forces)
     #   3. Over-reinforced beyond redemption: cap A_s to A_s_max_total and use
     #      doubly reinforced formula. If A_s_top = 0, the doubly reinforced
     #      formula degenerates to simple with A_s_max_bot.
-    if self._A_s_bot <= self._A_s_max_bot:
+    if self._A_s_bot <= st.A_s_max_bot:
         M_n_positive = _determine_nominal_moment_simple_reinf_ACI_318_19(self, self._A_s_bot, self._d_bot)
     else:
         # Compression steel contribution at the ductility limit determines how
         # much the tension-steel cap can be extended:
         #     A_s_max_total = A_s_max_bot + A_s_top * f_s'_net / f_y
         f_s_prima_net = _f_s_prime_net_at_ductility_limit_ACI_318_19(self, self._d_bot, self._c_mec_top)
-        A_s_max_total = self._A_s_max_bot + self._A_s_top * f_s_prima_net / self.steel_bar.f_y
+        A_s_max_total = st.A_s_max_bot + self._A_s_top * f_s_prima_net / self.steel_bar.f_y
         A_s_eff = self._A_s_bot if self._A_s_bot <= A_s_max_total else A_s_max_total
         M_n_positive = _determine_nominal_moment_double_reinf_ACI_318_19(
             self, A_s_eff, self._d_bot, self._c_mec_top, self._A_s_top
         )
 
     # Determine capacity for negative moment (tension at the top)
-    self._A_s_min_top = rho_min_top * self._d_top * self.width
-    self._A_s_max_top = rho_max * self._d_top * self.width
+    st.A_s_min_top = rho_min_top * self._d_top * self.width
+    st.A_s_max_top = rho_max * self._d_top * self.width
 
     # Determine the nominal moment for negative moments (tension on top face).
     # Mirror of the positive-moment dispatcher, plus the leading edge case of
     # zero tension steel (no top → no negative capacity).
     if self._A_s_top == 0 * cm**2:
         M_n_negative = 0 * kNm
-    elif self._A_s_top <= self._A_s_max_top:
+    elif self._A_s_top <= st.A_s_max_top:
         M_n_negative = _determine_nominal_moment_simple_reinf_ACI_318_19(self, self._A_s_top, self._d_top)
     else:
         f_s_prima_net = _f_s_prime_net_at_ductility_limit_ACI_318_19(self, self._d_top, self._c_mec_bot)
-        A_s_max_total = self._A_s_max_top + self._A_s_bot * f_s_prima_net / self.steel_bar.f_y
+        A_s_max_total = st.A_s_max_top + self._A_s_bot * f_s_prima_net / self.steel_bar.f_y
         A_s_eff = self._A_s_top if self._A_s_top <= A_s_max_total else A_s_max_total
         M_n_negative = _determine_nominal_moment_double_reinf_ACI_318_19(
             self, A_s_eff, self._d_top, self._c_mec_bot, self._A_s_bot
@@ -794,93 +803,94 @@ def _determine_nominal_moment_ACI_318_19(self: "RectangularBeam", force: Forces)
 
     # Calculate the design moment capacities for both bottom and top reinforcement
     concrete_aci = cast("Concrete_ACI_318_19", self.concrete)
-    self._phi_M_n_bot = concrete_aci._phi_t * M_n_positive
-    self._phi_M_n_top = concrete_aci._phi_t * M_n_negative
+    st.phi_M_n_bot = concrete_aci._phi_t * M_n_positive
+    st.phi_M_n_top = concrete_aci._phi_t * M_n_negative
 
     return None
 
 
-def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> None:
+def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> FlexureCheckState:
     """
     Checks the flexural capacity of the section according to ACI 318-19 guidelines.
 
-    This function accepts a single force and performs the flexural check of the section
-    following the ACI 318-19 requirements. It initializes the design variables, computes the
-    nominal moments for both top and bottom reinforcement, determines the required reinforcement
-    areas, and calculates the design capacity ratios.
-
-    Calculation only — the results are left on the beam, and turning them into a
-    report table is the caller's decision (see :mod:`mento.reports.tables`).
+    Computes the nominal moments for both faces, the required reinforcement
+    areas and the design capacity ratios, and returns them. Nothing is written
+    to the section; only the reporting path copies the result back, which is
+    what lets a caller check many sections without per-call cleanup.
 
     Parameters:
         force (Forces): The force acting on the section, which must include a single moment value.
     """
+    st = new_flexure_state(self)
 
-    # Initialize the design variables according to ACI 318-19 requirements using the provided force.
-    _initialize_variables_ACI_318_19(self, force.M_y)
+    # The demand, split by face, and the two material values the check needs.
+    st.M_u = force.M_y
+    if st.M_u > 0 * kNm:
+        st.M_u_bot = st.M_u
+        st.M_u_top = 0 * kNm
+    else:
+        st.M_u_bot = 0 * kNm
+        st.M_u_top = st.M_u
+    st.f_yt = _calculate_f_yt_aci(self)
+    st.A_s_tension = self._A_s_bot if st.M_u >= 0 * kNm else self._A_s_top
 
     # Calculate the nominal moments for both top and bottom reinforcement.
-    _determine_nominal_moment_ACI_318_19(self, force)
+    _determine_nominal_moment_ACI_318_19(self, st, force)
 
-    if self._M_u >= 0:
+    if st.M_u >= 0:
         # For positive moments, calculate the reinforcement requirements for the bottom tension side.
         (
-            self._A_s_min_bot,
-            self._A_s_max_bot,
-            self._A_s_req_bot,
-            self._A_s_req_top,
-            self._c_d_bot,
-            self._A_s_bool_bot,
+            st.A_s_min_bot,
+            st.A_s_max_bot,
+            st.A_s_req_bot,
+            st.A_s_req_top,
+            st.c_d_bot,
+            st.A_s_bool_bot,
+            st.doubly_reinforced,
         ) = _calculate_flexural_reinforcement_ACI_318_19(
             self,
-            self._M_u_bot,
+            st.M_u_bot,
             self._d_bot,
             self._c_mec_top,
         )
-        self._c_d_top = 0
+        st.c_d_top = 0
         # Calculate the design capacity ratio for the bottom side.
-        if self._phi_M_n_bot.to("kN*m").magnitude == 0:
-            self._phi_M_n_bot = 0.01 * kNm
-        self._DCRb_bot = self._M_u_bot.to("kN*m").magnitude / self._phi_M_n_bot.to("kN*m").magnitude
-        self._DCRb_top = 0
+        if st.phi_M_n_bot.to("kN*m").magnitude == 0:
+            st.phi_M_n_bot = 0.01 * kNm
+        st.DCR_bot = st.M_u_bot.to("kN*m").magnitude / st.phi_M_n_bot.to("kN*m").magnitude
+        st.DCR_top = 0
     else:
         # For negative moments, calculate the reinforcement requirements for the top tension side.
         (
-            self._A_s_min_top,
-            self._A_s_max_top,
-            self._A_s_req_top,
-            self._A_s_req_bot,
-            self._c_d_top,
-            self._A_s_bool_top,
+            st.A_s_min_top,
+            st.A_s_max_top,
+            st.A_s_req_top,
+            st.A_s_req_bot,
+            st.c_d_top,
+            st.A_s_bool_top,
+            st.doubly_reinforced,
         ) = _calculate_flexural_reinforcement_ACI_318_19(
             self,
-            abs(self._M_u_top.to("kN*m").magnitude) * kNm,
+            abs(st.M_u_top.to("kN*m").magnitude) * kNm,
             self._d_top,
             self._c_mec_bot,
         )
-        self._c_d_bot = 0
+        st.c_d_bot = 0
         # Calculate the design capacity ratio for the top side.
-        if self._phi_M_n_top.to("kN*m").magnitude == 0:
-            self._phi_M_n_top = 0.01 * kNm
-        self._DCRb_top = -self._M_u_top.to("kN*m").magnitude / self._phi_M_n_top.to("kN*m").magnitude
-        self._DCRb_bot = 0
+        if st.phi_M_n_top.to("kN*m").magnitude == 0:
+            st.phi_M_n_top = 0.01 * kNm
+        st.DCR_top = -st.M_u_top.to("kN*m").magnitude / st.phi_M_n_top.to("kN*m").magnitude
+        st.DCR_bot = 0
 
     # Determine the maximum detailing cover dimensions for top and bottom.
-    self._d_b_max_top = max(self._d_b1_t, self._d_b2_t, self._d_b3_t, self._d_b4_t)
-    self._d_b_max_bot = max(self._d_b1_b, self._d_b2_b, self._d_b3_b, self._d_b4_b)
+    st.d_b_max_top = max(self._d_b1_t, self._d_b2_t, self._d_b3_t, self._d_b4_t)
+    st.d_b_max_bot = max(self._d_b1_b, self._d_b2_b, self._d_b3_b, self._d_b4_b)
 
     # Calculate the longitudinal reinforcement ratios for both sides.
-    self._rho_l_bot = self._A_s_bot / (self._d_bot * self.width)
-    self._rho_l_top = self._A_s_bot / (self._d_top * self.width)
+    st.rho_l_bot = self._A_s_bot / (self._d_bot * self.width)
+    st.rho_l_top = self._A_s_bot / (self._d_top * self.width)
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Flexural design — ACI 318-19 hooks for the shared driver
-# ─────────────────────────────────────────────────────────────────────────────
-# The design *strategy* -- Picard loop on the mechanical covers, discrete rebar
-# selection, face reconciliation, cycle detection and final capacity
-# verification -- lives in `mento.codes.flexure_design` and is shared with
-# EN 1992-2004. Only the two hooks below are ACI-specific.
+    return st
 
 
 def _flexure_capacity_ACI_318_19(self: "RectangularBeam", face: str, M_demand: Quantity) -> Quantity:
@@ -891,8 +901,13 @@ def _flexure_capacity_ACI_318_19(self: "RectangularBeam", face: str, M_demand: Q
     """
     M_abs = abs(M_demand)
     probe_force = Forces(M_y=(M_abs if face == "bot" else -M_abs))
-    _determine_nominal_moment_ACI_318_19(self, probe_force)
-    return self._phi_M_n_bot if face == "bot" else self._phi_M_n_top
+    st = new_flexure_state(self)
+    _determine_nominal_moment_ACI_318_19(self, st, probe_force)
+    # The design wants the capacity on the beam too, so the probe's moments are
+    # applied; a check never comes through here.
+    self._phi_M_n_bot, self._phi_M_n_top = st.phi_M_n_bot, st.phi_M_n_top
+    self._A_s_min_bot, self._A_s_max_bot = st.A_s_min_bot, st.A_s_max_bot
+    return st.phi_M_n_bot if face == "bot" else st.phi_M_n_top
 
 
 def _required_areas_ACI_318_19(
@@ -910,7 +925,9 @@ def _required_areas_ACI_318_19(
         A_s_compression,
         c_d,
         A_s_bool,
+        doubly,
     ) = _calculate_flexural_reinforcement_ACI_318_19(self, M, d, d_prime)
+    self._doubly_reinforced = self._doubly_reinforced or doubly
     if face == "bot":
         self._A_s_min_bot, self._A_s_max_bot = A_s_min, A_s_max
         self._c_d_bot, self._A_s_bool_bot = c_d, A_s_bool

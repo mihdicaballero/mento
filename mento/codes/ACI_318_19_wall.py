@@ -7,6 +7,7 @@ from pint import Quantity
 
 from mento.codes.aci_318_19.equations import shear as shear_eq
 from mento.codes.aci_318_19.equations import wall as wall_eq
+from mento.codes.check_state import WallShearCheckState, apply_wall_shear_state, new_wall_shear_state
 from mento.material import Concrete_ACI_318_19
 from mento.units import MPa, cm, mm, psi, inch, dimensionless
 from mento.forces import Forces
@@ -63,20 +64,21 @@ def _calculate_f_yt_wall(self: "ShearWall") -> Quantity:
     )
 
 
-def _calculate_alpha_c(self: "ShearWall") -> float:
-    """α_c per ACI 318-19 §11.5.4.6. Stores hw/lw as a side effect on self._hw_lw."""
+def _calculate_alpha_c(self: "ShearWall", st: WallShearCheckState) -> float:
+    """α_c per ACI 318-19 §11.5.4.6. Stores hw/lw as a side effect on st.hw_lw."""
     hw_lw = (self.height / self.length).to("").magnitude
-    self._hw_lw = hw_lw
+    st.hw_lw = hw_lw
     return wall_eq.alpha_c(hw_lw, is_imperial=self.concrete.is_imperial)
 
 
-def _calculate_wall_Acv(self: "ShearWall") -> None:
+def _calculate_wall_Acv(self: "ShearWall", st: WallShearCheckState) -> None:
     """Acv = lw × t  (ACI 318-19 §11.5.4.6)."""
-    self._Acv = self.length * self.thickness
+    st.Acv = self.length * self.thickness
 
 
 def _calculate_wall_shear_strength(
     self: "ShearWall",
+    st: WallShearCheckState,
     concrete: Concrete_ACI_318_19,
 ) -> None:
     """
@@ -94,24 +96,24 @@ def _calculate_wall_shear_strength(
     stress_unit, _ = _wall_units(self)
     f_c_mag = concrete.f_c.to(stress_unit).magnitude
 
-    Vc = wall_eq.concrete_shear_stress(f_c_mag, self._alpha_c, lam) * stress_unit * self._Acv
-    Vn_max = wall_eq.max_shear_stress(f_c_mag, lam, is_imperial=is_imperial) * stress_unit * self._Acv
+    Vc = wall_eq.concrete_shear_stress(f_c_mag, st.alpha_c, lam) * stress_unit * st.Acv
+    Vn_max = wall_eq.max_shear_stress(f_c_mag, lam, is_imperial=is_imperial) * stress_unit * st.Acv
     Vs = (
-        wall_eq.reinforcement_shear_stress(float(self._rho_t), self._f_yt_wall.to(stress_unit).magnitude)
+        wall_eq.reinforcement_shear_stress(float(self._rho_t), st.f_yt_wall.to(stress_unit).magnitude)
         * stress_unit
-        * self._Acv
+        * st.Acv
     )
     Vn = Vc + Vs
 
-    self._V_c_wall = Vc.to("kN")  # type:ignore
-    self._V_s_wall = Vs.to("kN")  # type:ignore
-    self._V_n_wall = Vn.to("kN")  # type:ignore
-    self._V_n_max = Vn_max.to("kN")  # type:ignore
-    self._phi_V_n_wall = (phi_v * min(Vn, Vn_max)).to("kN")  # type:ignore
-    self._phi_V_n_max_wall = (phi_v * Vn_max).to("kN")  # type:ignore
+    st.V_c_wall = Vc.to("kN")  # type:ignore
+    st.V_s_wall = Vs.to("kN")  # type:ignore
+    st.V_n_wall = Vn.to("kN")  # type:ignore
+    st.V_n_max = Vn_max.to("kN")  # type:ignore
+    st.phi_V_n_wall = (phi_v * min(Vn, Vn_max)).to("kN")  # type:ignore
+    st.phi_V_n_max_wall = (phi_v * Vn_max).to("kN")  # type:ignore
 
 
-def _calculate_rho_min_wall(self: "ShearWall") -> None:
+def _calculate_rho_min_wall(self: "ShearWall", st: WallShearCheckState) -> None:
     """
     ACI 318-19 §11.6.1 / §11.6.2:
         ρt_min = 0.0025 (horizontal, always)
@@ -126,13 +128,11 @@ def _calculate_rho_min_wall(self: "ShearWall") -> None:
 
     ρl_req need not exceed ρt required for strength (§11.5.4.3).
     """
-    self._rho_t_min = wall_eq.MIN_REINFORCEMENT_RATIO * dimensionless
-    self._rho_l_min = (
-        wall_eq.min_vertical_reinforcement_ratio(float(self._hw_lw), float(self._rho_t_req)) * dimensionless
-    )
+    st.rho_t_min = wall_eq.MIN_REINFORCEMENT_RATIO * dimensionless
+    st.rho_l_min = wall_eq.min_vertical_reinforcement_ratio(float(st.hw_lw), float(st.rho_t_req)) * dimensionless
 
 
-def _calculate_spacing_limits_wall(self: "ShearWall") -> None:
+def _calculate_spacing_limits_wall(self: "ShearWall", st: WallShearCheckState) -> None:
     """
     ACI 318-19 §11.7.3 spacing limits.
     Horizontal: s_h,max = min(lw/5, 3t, 450 mm / 18 in)
@@ -143,8 +143,8 @@ def _calculate_spacing_limits_wall(self: "ShearWall") -> None:
     lw = self.length.to(length_unit).magnitude
     t = self.thickness.to(length_unit).magnitude
 
-    self._s_h_max = wall_eq.max_horizontal_spacing(lw, t, is_imperial=is_imperial) * length_unit
-    self._s_v_max = wall_eq.max_vertical_spacing(lw, t, is_imperial=is_imperial) * length_unit
+    st.s_h_max = wall_eq.max_horizontal_spacing(lw, t, is_imperial=is_imperial) * length_unit
+    st.s_v_max = wall_eq.max_vertical_spacing(lw, t, is_imperial=is_imperial) * length_unit
 
 
 ##########################################################
@@ -152,36 +152,38 @@ def _calculate_spacing_limits_wall(self: "ShearWall") -> None:
 ##########################################################
 
 
-def _check_shear_ACI_318_19_wall(self: "ShearWall", force: Forces) -> None:
+def _check_shear_ACI_318_19_wall(self: "ShearWall", force: Forces) -> WallShearCheckState:
     """
     ACI 318-19 Section 11 shear check for a structural wall.
 
-    Calculation only: the results are left on the wall, and turning them into a
-    report table is the caller's decision (see :mod:`mento.reports.walls`).
+    Calculation only: the result is returned as a value, and only the reporting
+    path copies it back onto the wall. See the beam's shear check for the same
+    split.
     """
     if not isinstance(self.concrete, Concrete_ACI_318_19):
         raise TypeError("ACI 318-19 wall shear check requires Concrete_ACI_318_19.")
 
     concrete = self.concrete
+    st = new_wall_shear_state(self)
 
     # 1. Demand
-    self._V_u = force._V_z.to("kN")
-    self._N_u = force._N_x.to("kN")
+    st.V_u = force._V_z.to("kN")
+    st.N_u = force._N_x.to("kN")
 
     # 2. Geometry: Acv = lw × t
-    _calculate_wall_Acv(self)
+    _calculate_wall_Acv(self, st)
 
     # 3. Material: fyt cap
-    self._f_yt_wall = _calculate_f_yt_wall(self)
+    st.f_yt_wall = _calculate_f_yt_wall(self)
 
-    # 4. α_c based on hw/lw (also sets self._hw_lw)
-    self._alpha_c = _calculate_alpha_c(self)
+    # 4. α_c based on hw/lw (also sets st.hw_lw)
+    st.alpha_c = _calculate_alpha_c(self, st)
 
     # 5. Shear strength components
-    _calculate_wall_shear_strength(self, concrete)
+    _calculate_wall_shear_strength(self, st, concrete)
 
     # 6. Spacing limits
-    _calculate_spacing_limits_wall(self)
+    _calculate_spacing_limits_wall(self, st)
 
     # 7. Required ρt for design
     phi_v = concrete.phi_v
@@ -189,21 +191,24 @@ def _check_shear_ACI_318_19_wall(self: "ShearWall", force: Forces) -> None:
     lam = concrete.lambda_factor
 
     stress_unit, _ = _wall_units(self)
-    Vc_intensity = wall_eq.concrete_shear_stress(f_c.to(stress_unit).magnitude, self._alpha_c, lam) * stress_unit
+    Vc_intensity = wall_eq.concrete_shear_stress(f_c.to(stress_unit).magnitude, st.alpha_c, lam) * stress_unit
 
-    rho_t_req_raw = ((self._V_u / phi_v) / self._Acv - Vc_intensity) / self._f_yt_wall
+    st.rho_t_min = wall_eq.MIN_REINFORCEMENT_RATIO * dimensionless
+    rho_t_req_raw = ((st.V_u / phi_v) / st.Acv - Vc_intensity) / st.f_yt_wall
     rho_t_req_raw = rho_t_req_raw.to("")
-    self._rho_t_req = max(rho_t_req_raw, self._rho_t_min)
+    st.rho_t_req = max(rho_t_req_raw, st.rho_t_min)
 
     # 8. Minimum reinforcement ratios (ρl,min depends on ρt,req per §11.6.2)
-    _calculate_rho_min_wall(self)
+    _calculate_rho_min_wall(self, st)
 
     # 9. DCR
-    phi_Vn_eff = min(self._phi_V_n_wall, self._phi_V_n_max_wall)
+    phi_Vn_eff = min(st.phi_V_n_wall, st.phi_V_n_max_wall)
     if phi_Vn_eff.magnitude == 0:  # pragma: no cover - defensive: Vc > 0 for valid concrete
-        self._DCRv_wall = float("inf")
+        st.DCR = float("inf")
     else:
-        self._DCRv_wall = float((self._V_u / phi_Vn_eff).to("").magnitude)
+        st.DCR = float((st.V_u / phi_Vn_eff).to("").magnitude)
+
+    return st
 
 
 ##########################################################
@@ -309,12 +314,16 @@ def _design_shear_wall_core(
         raise ValueError("Wall shear design requires at least one Forces object.")
 
     max_rho_t_req = 0.0
+    state = None
     for force in forces:
-        _check_shear_ACI_318_19_wall(self, force)
-        max_rho_t_req = max(max_rho_t_req, self._rho_t_req.to("").magnitude)
+        state = _check_shear_ACI_318_19_wall(self, force)
+        max_rho_t_req = max(max_rho_t_req, state.rho_t_req.to("").magnitude)
+    # Designing is meant to change the wall, so the last state is applied.
+    assert state is not None  # the empty-forces case raised above
+    apply_wall_shear_state(self, state)
 
     # ρl,min per §11.6.2 using the worst-case ρt,req (geometry-only hw/lw).
-    r_hw = max(0.5, min(self._hw_lw, 2.5))
+    r_hw = max(0.5, min(state.hw_lw, 2.5))
     rho_l_eq = 0.0025 + 0.5 * (2.5 - r_hw) * (max_rho_t_req - 0.0025)
     max_rho_l_min = max(0.0025, rho_l_eq)
 

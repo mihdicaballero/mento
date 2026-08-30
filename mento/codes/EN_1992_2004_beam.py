@@ -6,7 +6,13 @@ from typing import TYPE_CHECKING, Tuple, cast
 
 
 from mento.codes.en_1992_2004.equations import flexure as flexure_eq
-from mento.codes.shear_state import ENShearCheckState, apply_en_shear_state, new_en_shear_state
+from mento.codes.check_state import (
+    ENFlexureCheckState,
+    ENShearCheckState,
+    apply_en_shear_state,
+    new_en_flexure_state,
+    new_en_shear_state,
+)
 from mento.codes.en_1992_2004.equations import shear as shear_eq
 from mento.codes.flexure_design import _FaceDemand, _run_flexure_design
 from mento.material import Concrete_EN_1992_2004
@@ -232,8 +238,15 @@ def _design_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> None:
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         # Initialize all the code related variables
         _initialize_variables_EN_1992_2004(self)
-        # Split bottom and top moments
-        _split_top_bot_moment(self, force)
+        # Split bottom and top moments. Designing changes the section, so the
+        # moment split is applied rather than kept local.
+        flexure_st = new_en_flexure_state(self)
+        _split_top_bot_moment(self, flexure_st, force)
+        self._M_Ed, self._M_Ed_bot, self._M_Ed_top = (
+            flexure_st.M_Ed,
+            flexure_st.M_Ed_bot,
+            flexure_st.M_Ed_top,
+        )
         st = new_en_shear_state(self)
         st.f_ywd = self._f_ywd
         st.f_cd_shear = self._f_cd_shear
@@ -329,7 +342,9 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
     # Constants and material properties
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         eta = self.concrete._eta_factor()  # Factor for concrete strength (EN 1992-1-1)
-        f_cd = self._f_cd.to(MPa).magnitude
+        # Derived from the concrete rather than read off the beam: it is a
+        # material property, so a check has no reason to have stored it first.
+        f_cd = (self.concrete._alpha_cc * self.concrete.f_ck / self.concrete.gamma_c).to(MPa).magnitude
         # Define f_yd
         f_yd = (self.steel_bar.f_y / self.concrete._gamma_s).to(MPa).magnitude
 
@@ -451,7 +466,7 @@ def _simple_determine_nominal_moment_EN_1992_2004(
     return M_Rd
 
 
-def _determine_nominal_moment_EN_1992_2004(self: "RectangularBeam", force: Forces) -> None:
+def _determine_nominal_moment_EN_1992_2004(self: "RectangularBeam", st: ENFlexureCheckState, force: Forces) -> None:
     """
     Determines the nominal moment for a given section with both top and bottom reinforcement,
     calculating the nominal moment for both positive and negative moment scenarios.
@@ -477,29 +492,29 @@ def _determine_nominal_moment_EN_1992_2004(self: "RectangularBeam", force: Force
         rho_min_bot = 0 * dimensionless
 
     # Calculate minimum and maximum bottom reinforcement areas
-    self._A_s_min_bot = rho_min_bot * self._d_bot * self.width
-    self._A_s_max_bot = rho_max * self._d_bot * self.width
+    st.A_s_min_bot = rho_min_bot * self._d_bot * self.width
+    st.A_s_max_bot = rho_max * self._d_bot * self.width
     # Determine the nominal moment for positive moments
-    self._M_Rd_bot = _simple_determine_nominal_moment_EN_1992_2004(
+    st.M_Rd_bot = _simple_determine_nominal_moment_EN_1992_2004(
         self, self._A_s_bot, self._d_bot, self._A_s_top, self._c_mec_top
     )
     # Determine capacity for negative moment (tension at the top)
-    self._A_s_min_top = rho_min_top * self._d_top * self.width
-    self._A_s_max_top = rho_max * self._d_top * self.width
-    self._M_Rd_top = _simple_determine_nominal_moment_EN_1992_2004(
+    st.A_s_min_top = rho_min_top * self._d_top * self.width
+    st.A_s_max_top = rho_max * self._d_top * self.width
+    st.M_Rd_top = _simple_determine_nominal_moment_EN_1992_2004(
         self, self._A_s_top, self._d_top, self._A_s_bot, self._c_mec_bot
     )
     return None
 
 
-def _split_top_bot_moment(self: "RectangularBeam", force: Forces) -> None:
-    self._M_Ed = force._M_y
-    if self._M_Ed > 0 * kNm:
-        self._M_Ed_bot = self._M_Ed
-        self._M_Ed_top = 0 * kNm
+def _split_top_bot_moment(self: "RectangularBeam", st: ENFlexureCheckState, force: Forces) -> None:
+    st.M_Ed = force._M_y
+    if st.M_Ed > 0 * kNm:
+        st.M_Ed_bot = st.M_Ed
+        st.M_Ed_top = 0 * kNm
     else:
-        self._M_Ed_bot = 0 * kNm
-        self._M_Ed_top = self._M_Ed
+        st.M_Ed_bot = 0 * kNm
+        st.M_Ed_top = st.M_Ed
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -519,8 +534,12 @@ def _flexure_capacity_EN_1992_2004(self: "RectangularBeam", face: str, M_demand:
     """
     M_abs = abs(M_demand)
     probe_force = Forces(M_y=(M_abs if face == "bot" else -M_abs))
-    _determine_nominal_moment_EN_1992_2004(self, probe_force)
-    return self._M_Rd_bot if face == "bot" else self._M_Rd_top
+    st = new_en_flexure_state(self)
+    _determine_nominal_moment_EN_1992_2004(self, st, probe_force)
+    # The design wants the capacity on the beam too; a check never comes here.
+    self._M_Rd_bot, self._M_Rd_top = st.M_Rd_bot, st.M_Rd_top
+    self._A_s_min_bot, self._A_s_max_bot = st.A_s_min_bot, st.A_s_max_bot
+    return st.M_Rd_bot if face == "bot" else st.M_Rd_top
 
 
 def _required_areas_EN_1992_2004(
@@ -552,59 +571,67 @@ def _design_flexure_EN_1992_2004(self: "RectangularBeam", max_M_y_bot: Quantity,
     _run_flexure_design(self, max_M_y_bot, max_M_y_top, _required, _capacity)
 
 
-def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> None:
-    """ """
-    # Initialize the design variables requirements using the provided force.
-    _initialize_variables_EN_1992_2004(self)
+def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> ENFlexureCheckState:
+    """Check the flexural capacity per EN 1992-1-1 and return what it found.
+
+    Nothing is written to the section; only the reporting path copies the
+    result back. See the ACI counterpart for the same split.
+    """
+    st = new_en_flexure_state(self)
+    concrete = cast("Concrete_EN_1992_2004", self.concrete)
+
+    # The material values this check needs, carried rather than written.
+    st.f_ywd = self._f_ywk / concrete._gamma_s
+    st.f_cd_shear = concrete.f_ck / concrete.gamma_c
+    st.f_cd = concrete._alpha_cc * concrete.f_ck / concrete.gamma_c
 
     # Split bottom and top moments
-    _split_top_bot_moment(self, force)
+    _split_top_bot_moment(self, st, force)
 
     # Calculate the nominal moments for both top and bottom reinforcement.
-
-    _determine_nominal_moment_EN_1992_2004(self, force)
-    if self._M_Ed >= 0:
+    _determine_nominal_moment_EN_1992_2004(self, st, force)
+    if st.M_Ed >= 0:
         # For positive moments, calculate the reinforcement requirements for the bottom tension side.
         (
-            self._A_s_min_bot,
-            self._A_s_max_bot,
-            self._A_s_req_bot,
-            self._A_s_req_top,
-        ) = _calculate_flexural_reinforcement_EN_1992_2004(self, self._M_Ed_bot, self._d_bot, self._c_mec_top)
-        self._c_d_top = 0
+            st.A_s_min_bot,
+            st.A_s_max_bot,
+            st.A_s_req_bot,
+            st.A_s_req_top,
+        ) = _calculate_flexural_reinforcement_EN_1992_2004(self, st.M_Ed_bot, self._d_bot, self._c_mec_top)
+        st.c_d_top = 0
         # Calculate the design capacity ratio for the bottom side.
-        self._DCRb_bot = round(
-            self._M_Ed_bot.to("kN*m").magnitude / self._M_Rd_bot.to("kN*m").magnitude,
+        st.DCR_bot = round(
+            st.M_Ed_bot.to("kN*m").magnitude / st.M_Rd_bot.to("kN*m").magnitude,
             3,
         )
-        self._DCRb_top = 0
+        st.DCR_top = 0
     else:
         # For negative moments, calculate the reinforcement requirements for the top tension side.
         (
-            self._A_s_min_top,
-            self._A_s_max_top,
-            self._A_s_req_top,
-            self._A_s_req_bot,
+            st.A_s_min_top,
+            st.A_s_max_top,
+            st.A_s_req_top,
+            st.A_s_req_bot,
         ) = _calculate_flexural_reinforcement_EN_1992_2004(
-            self, abs(self._M_Ed_top / kNm) * kNm, self._d_top, self._c_mec_bot
+            self, abs(st.M_Ed_top / kNm) * kNm, self._d_top, self._c_mec_bot
         )
-        self._c_d_bot = 0
+        st.c_d_bot = 0
         # Calculate the design capacity ratio for the top side.
-        self._DCRb_top = round(
-            -self._M_Ed_top.to("kN*m").magnitude / self._M_Rd_top.to("kN*m").magnitude,
+        st.DCR_top = round(
+            -st.M_Ed_top.to("kN*m").magnitude / st.M_Rd_top.to("kN*m").magnitude,
             3,
         )
-        self._DCRb_bot = 0
+        st.DCR_bot = 0
 
     # Determine the maximum detailing cover dimensions for top and bottom.
-    self._d_b_max_top = max(self._d_b1_t, self._d_b2_t, self._d_b3_t, self._d_b4_t)
-    self._d_b_max_bot = max(self._d_b1_b, self._d_b2_b, self._d_b3_b, self._d_b4_b)
+    st.d_b_max_top = max(self._d_b1_t, self._d_b2_t, self._d_b3_t, self._d_b4_t)
+    st.d_b_max_bot = max(self._d_b1_b, self._d_b2_b, self._d_b3_b, self._d_b4_b)
 
     # Calculate the longitudinal reinforcement ratios for both sides.
-    self._rho_l_bot = self._A_s_bot / (self._d_bot * self.width)
-    self._rho_l_top = self._A_s_bot / (self._d_top * self.width)
+    st.rho_l_bot = self._A_s_bot / (self._d_bot * self.width)
+    st.rho_l_top = self._A_s_bot / (self._d_top * self.width)
 
-    return None
+    return st
 
 
 ##########################################################

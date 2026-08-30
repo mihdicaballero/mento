@@ -1245,7 +1245,7 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_05() -> None:
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
 
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool, _doubly = _calculate_flexural_reinforcement_ACI_318_19(
         beam, Mu, d, d_prima
     )
 
@@ -1402,7 +1402,7 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_03() -> None:
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
 
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool, _doubly = _calculate_flexural_reinforcement_ACI_318_19(
         beam, Mu, d, d_prima
     )
 
@@ -1485,7 +1485,7 @@ def test_calculate_flexural_reinforcement_ACI_318_19_doubly_reinforced_Test_Etab
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
 
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool, _doubly = _calculate_flexural_reinforcement_ACI_318_19(
         beam, Mu, d, d_prima
     )
 
@@ -1516,7 +1516,7 @@ def test_calculate_flexural_reinforcement_ACI_318_19_doubly_reinforced_yielding_
     d = 23.5 * inch
     d_prima = 2.5 * inch
     Mu = 500 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool, _doubly = _calculate_flexural_reinforcement_ACI_318_19(
         beam, Mu, d, d_prima
     )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(5.5828, rel=1e-2)
@@ -1567,7 +1567,7 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_04() -> None:
     d = 27.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool, _doubly = _calculate_flexural_reinforcement_ACI_318_19(
         beam, Mu, d, d_prima
     )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(1.6604, rel=1e-2)
@@ -1605,7 +1605,7 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_02() -> None:
     d = 15.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool, _doubly = _calculate_flexural_reinforcement_ACI_318_19(
         beam, Mu, d, d_prima
     )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(3.4090, rel=1e-3)
@@ -1628,7 +1628,7 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_06() -> None:
     d = 27.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool, _doubly = _calculate_flexural_reinforcement_ACI_318_19(
         beam, Mu, d, d_prima
     )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(1.8407, rel=1e-3)
@@ -1654,7 +1654,7 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_07() -> None:
     d = 27.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool, _doubly = _calculate_flexural_reinforcement_ACI_318_19(
         beam, Mu, d, d_prima
     )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(2.1868, rel=1e-3)
@@ -1680,7 +1680,7 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_08() -> None:
     d = 27.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool, _doubly = _calculate_flexural_reinforcement_ACI_318_19(
         beam, Mu, d, d_prima
     )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(2.1803, rel=1e-3)
@@ -1706,7 +1706,7 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_09() -> None:
     d = 33.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool, _doubly = _calculate_flexural_reinforcement_ACI_318_19(
         beam, Mu, d, d_prima
     )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(1.7794, rel=1e-3)
@@ -1732,7 +1732,7 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_10() -> None:
     d = 33.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool, _doubly = _calculate_flexural_reinforcement_ACI_318_19(
         beam, Mu, d, d_prima
     )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(1.7784, rel=1e-3)
@@ -1756,7 +1756,7 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_11() -> None:
     d = 17.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool, _doubly = _calculate_flexural_reinforcement_ACI_318_19(
         beam, Mu, d, d_prima
     )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(2.5865, rel=1e-3)
@@ -1782,7 +1782,7 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_12() -> None:
     d = 21.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool, _doubly = _calculate_flexural_reinforcement_ACI_318_19(
         beam, Mu, d, d_prima
     )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(1.9373, rel=1e-3)
@@ -1809,7 +1809,7 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_13() -> None:
     d = 21.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool, _doubly = _calculate_flexural_reinforcement_ACI_318_19(
         beam, Mu, d, d_prima
     )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(1.9009, rel=1e-3)
@@ -1832,7 +1832,7 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_14() -> None:
     d = 21.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool, _doubly = _calculate_flexural_reinforcement_ACI_318_19(
         beam, Mu, d, d_prima
     )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(1.8245, rel=1e-3)
@@ -1855,7 +1855,7 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_15() -> None:
     d = 15.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool, _doubly = _calculate_flexural_reinforcement_ACI_318_19(
         beam, Mu, d, d_prima
     )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(2.5605, rel=1e-3)
@@ -1878,7 +1878,7 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_16() -> None:
     d = 17.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool, _doubly = _calculate_flexural_reinforcement_ACI_318_19(
         beam, Mu, d, d_prima
     )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(2.1735, rel=1e-3)
@@ -1901,7 +1901,7 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_17() -> None:
     d = 16.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool, _doubly = _calculate_flexural_reinforcement_ACI_318_19(
         beam, Mu, d, d_prima
     )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(2.2991, rel=1e-3)
@@ -1928,7 +1928,7 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_18() -> None:
     d = 57.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool, _doubly = _calculate_flexural_reinforcement_ACI_318_19(
         beam, Mu, d, d_prima
     )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(1.7280, rel=1e-3)
@@ -1952,7 +1952,7 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_19() -> None:
     d = 12.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool, _doubly = _calculate_flexural_reinforcement_ACI_318_19(
         beam, Mu, d, d_prima
     )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(3.0764, rel=1e-3)
@@ -1975,7 +1975,7 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_20() -> None:
     d = 9.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool, _doubly = _calculate_flexural_reinforcement_ACI_318_19(
         beam, Mu, d, d_prima
     )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(4.1408, rel=1e-3)
@@ -2009,7 +2009,7 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_22() -> None:
     d = 9.5 * inch
     d_prima = 2.5 * inch
     Mu = 200 * kip * ft
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool = _calculate_flexural_reinforcement_ACI_318_19(
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool, _doubly = _calculate_flexural_reinforcement_ACI_318_19(
         beam, Mu, d, d_prima
     )
     assert A_s_final.to("inch**2").magnitude == pytest.approx(3.9783, rel=1e-3)
@@ -3660,6 +3660,7 @@ def test_shear_check_results_leaves_the_section_completely_untouched(
     results = beam.shear_check_results([Forces(label="C1", V_z=80 * kN, M_y=90 * kNm)])
 
     after = {k: repr(v) for k, v in vars(beam).items() if k not in bookkeeping}
+    assert results  # the check produced something, so the comparison means anything
     # Both directions: an attribute the check CREATES is a write too, and
     # comparing only the keys that existed before would miss it.
     changed = sorted(k for k in before if before[k] != after.get(k))
@@ -3687,3 +3688,41 @@ def test_check_shear_still_writes_the_results_the_report_needs() -> None:
     assert beam._DCRv > 0
     assert beam.V_c.magnitude > 0
     assert beam._phi_V_n.magnitude > 0
+
+
+@pytest.mark.parametrize("with_stirrups", [False, True], ids=["no-stirrups", "with-stirrups"])
+@pytest.mark.parametrize(
+    "concrete, steel",
+    [
+        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), SteelBar(name="ADN 420", f_y=420 * MPa)),
+        (Concrete_EN_1992_2004(name="C25", f_c=25 * MPa), SteelBar(name="B500S", f_y=500 * MPa)),
+    ],
+    ids=["ACI", "EN"],
+)
+def test_flexure_check_results_leaves_the_section_completely_untouched(
+    concrete: Concrete_ACI_318_19, steel: SteelBar, with_stirrups: bool
+) -> None:
+    """The flexure check returns its result too — same contract as shear."""
+    beam = RectangularBeam(
+        label="pristine-flexure",
+        concrete=concrete,
+        steel_bar=steel,
+        width=30 * cm,
+        height=50 * cm,
+        c_c=25 * mm,
+    )
+    beam.set_longitudinal_rebar_bot(n1=3, d_b1=20 * mm)
+    if with_stirrups:
+        beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=20 * cm)
+
+    bookkeeping = ("_flexure_checks", "_flexure_checked", "_flexure_report_row")
+    before = {k: repr(v) for k, v in vars(beam).items() if k not in bookkeeping}
+
+    results = beam.flexure_check_results([Forces(label="C1", V_z=80 * kN, M_y=90 * kNm)])
+
+    after = {k: repr(v) for k, v in vars(beam).items() if k not in bookkeeping}
+    changed = sorted(k for k in before if before[k] != after.get(k))
+    added = sorted(set(after) - set(before))
+    assert not changed, f"the check wrote to the section: {changed}"
+    assert not added, f"the check added attributes to the section: {added}"
+    assert results[0].bottom.DCR > 0

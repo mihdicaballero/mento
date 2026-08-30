@@ -17,6 +17,7 @@ from mento.settings import BeamSettings
 from mento.units import cm, dimensionless, kN, mm
 
 from mento.codes.ACI_318_19_wall import _check_shear_ACI_318_19_wall
+from mento.codes.check_state import apply_wall_shear_state
 from mento.plots.walls import plot_wall_elevation
 from mento.reports import walls as wall_reports
 
@@ -202,7 +203,10 @@ class ShearWall(RectangularBeam):
 
         for force in forces:
             if self.concrete.design_code == "ACI 318-19" or self.concrete.design_code == "CIRSOC 201-25":
-                _check_shear_ACI_318_19_wall(self, force)
+                state = _check_shear_ACI_318_19_wall(self, force)
+                # The report tables read the wall, so the state is applied here
+                # and not on a values-only path.
+                apply_wall_shear_state(self, state)
                 result = wall_reports.build_wall_shear_report(self, force)
             else:
                 raise NotImplementedError(

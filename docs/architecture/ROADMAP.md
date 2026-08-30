@@ -449,7 +449,7 @@ the public API exposes. Group 2 — `_stirrup_s_w`, `_d_shear`, `_lambda_s`,
 `_phi_M_n_bot`, `_s_b1_t` and the `ShearWall` surface — is genuinely missing
 public API, not a test problem, and is tracked with issue #125.
 
-### Phase 2b — Checks return result dataclasses *(in progress)*
+### Phase 2b — Checks return result dataclasses — **done 2026-08-30**
 
 **Done (2026-08-30): the reinforcement view.** Phase 2a found that
 `flexure_design` and `shear_design` conflate two different things —
@@ -579,7 +579,7 @@ and only the reporting path copies it back through `apply_shear_state`, which
 is the compatibility layer the report tables still read. The design path shares
 the same helpers and applies the state at the end, because designing *is* meant
 to change the section — so the two paths cannot drift apart.
-`codes/shear_state.py` holds both states (ACI and EN differ enough to warrant
+`codes/check_state.py` holds both states (ACI and EN differ enough to warrant
 one each), a constructor that pre-zeroes every field in the section's unit
 system so nothing is `Optional`, and the attribute map the compatibility layer
 walks.
@@ -596,22 +596,59 @@ keys present beforehand, so an attribute the check *created* went undetected —
 it checks both directions now, and the guard was confirmed by reintroducing a
 write.
 
-**Still on the element:** the flexure check. It writes its results the same way
-shear used to, and the same conversion applies. Shear was the one mako's loop
-runs per station, which is why it went first.
+**Done (2026-08-30): every check writes nothing — flexure and walls too.**
+The conversion shear proved out now covers all of them. Measured across both
+codes and both stirrup states, eight paths, zero attributes changed and zero
+created:
 
-Only now does production code change. Extend `design_results.py` with
-check-result types; make check/design functions build and return them. Because
-the tests already assert through the public API (Phase 2a), this phase does not
-touch them: if they pass, behavior was preserved. Private beam attributes are
-kept synchronized as a deprecated compatibility layer (`DeprecationWarning` on
-documented ones). The envelope accumulators are deleted — enveloping becomes a
-pure operation over the returned list. Together with Phase 1's float equations,
-this is what unblocks mako: immutability for correctness and parallelism, float
-equations for speed.
+| | ACI shear | ACI flexure | EN shear | EN flexure |
+| --- | --- | --- | --- | --- |
+| no stirrups | untouched | untouched | untouched | untouched |
+| with stirrups | untouched | untouched | untouched | untouched |
 
-**Exit:** the §3.3 mako loop runs without mutating any element; the §1.5
-benchmark is rerun and meets the < 5 s / 20,000-checks target.
+`codes/shear_state.py` became `codes/check_state.py` and holds five states —
+`ShearCheckState`, `ENShearCheckState`, `WallShearCheckState`,
+`FlexureCheckState`, `ENFlexureCheckState` — each with its zeroing constructor
+and the attribute map its `apply_*` walks. One state per code and check rather
+than a shared one, because the fields genuinely differ and a union of them
+would be mostly-empty on every path.
+
+Two things surfaced that a shared mutable section had been hiding:
+
+- **`_doubly_reinforced` was order-dependent.** Copying the state back per
+  combination made the *last* one checked decide the flag, so a section that
+  needed compression steel for combination 3 reported none if combination 4 did
+  not. It means "some combination needed it", so `apply_flexure_state` ORs it in
+  rather than assigning. `_calculate_flexural_reinforcement_ACI_318_19` returns
+  the flag now instead of writing it mid-calculation.
+- **EN flexure read `_f_cd` off the beam** — a *material* property that only
+  existed because some earlier check had stored it. Once the check stopped
+  writing it, the shared helper divided by zero. It derives `α_cc·f_ck/γ_c`
+  from the concrete in place; nothing has to run first for it to be right.
+
+`test_flexure_check_results_leaves_the_section_completely_untouched` joins the
+shear guard, both parametrized over code × stirrup state.
+
+**Exit: half met, and the measurement says which half.** The mako loop runs
+without mutating any element — that part is done and guarded. The < 5 s /
+20,000-checks target is **not** met:
+
+| values path | per check | 20,000 checks |
+| --- | --- | --- |
+| shear | 1.43 ms | 28.6 s |
+| flexure | 1.12 ms | 22.4 s |
+
+But the profile now says something it could not say before Phase 3 took the
+report tables off this path: **the remaining cost is entirely the pint
+boundary.** 13,307 calls per shear check, of which 11,100 are `Quantity.to()`
+and 3,300 are unit *string* parsing — the `.to("cm")` literals the
+counterproposal flagged (371 of them across `mento/`), worth ~24 % of profiled
+time. There is no calculation left to optimize; ADR-0005's boundary is the only
+thing between here and the target.
+
+**That is the performance track's job, not this phase's.** Phase 2b was about
+immutability and it achieved it. The 5 s target moves to the precompute work,
+which now has an unambiguous target to aim at and a clean path to measure on.
 
 ### Phase 3 — Extract presentation — **done 2026-08-30**
 

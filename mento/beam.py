@@ -43,7 +43,12 @@ from mento.codes.EN_1992_2004_beam import (
     _design_shear_EN_1992_2004,
     _design_flexure_EN_1992_2004,
 )
-from mento.codes.shear_state import apply_en_shear_state, apply_shear_state
+from mento.codes.check_state import (
+    apply_en_flexure_state,
+    apply_en_shear_state,
+    apply_flexure_state,
+    apply_shear_state,
+)
 from mento.codes.ACI_318_19_beam import (
     _check_shear_ACI_318_19,
     _design_shear_ACI_318_19,
@@ -650,13 +655,13 @@ class RectangularBeam(RectangularSection):
 
             worst = max(r.bottom.DCR for r in beam.flexure_check_results(combos))
 
-        The section is still updated in place while the check runs, so a loop
-        over many sections needs one section object per station, not one shared.
+        Nothing is written to the section on the ACI and CIRSOC path: the check
+        returns its result and only the reporting path copies it back.
         """
         self._flexure_checks = []
         for force in forces:
-            self._run_flexure_check(force, report=False)
-            self._flexure_checks.append(capture_flexure_check(self, force.label))
+            state = self._run_flexure_check(force, report=False)
+            self._flexure_checks.append(capture_flexure_check(self, force.label, state))
         self._flexure_checked = True
         return tuple(self._flexure_checks)
 
@@ -675,17 +680,26 @@ class RectangularBeam(RectangularSection):
         self._shear_checked = True
         return tuple(self._shear_checks)
 
-    def _run_flexure_check(self, force: Forces, *, report: bool) -> Optional[DataFrame]:
+    def _run_flexure_check(self, force: Forces, *, report: bool) -> Optional[Any]:
         """Compute one flexure combination, and build its report only if asked.
 
-        The design code does the calculation; assembling the row and the detail
-        tables is presentation and lives in :mod:`mento.reports.tables`.
+        The design code does the calculation and returns it; assembling the row
+        and the detail tables is presentation and lives in
+        :mod:`mento.reports.tables`, which still reads the element — so the
+        state is copied back only when a report is wanted.
         """
+        state: Any = None
         if self.concrete.design_code in ("ACI 318-19", "CIRSOC 201-25"):
-            _check_flexure_ACI_318_19(self, force)
+            state = _check_flexure_ACI_318_19(self, force)
+            if report:
+                apply_flexure_state(self, state)
         else:
-            _check_flexure_EN_1992_2004(self, force)
-        return build_flexure_report(self, force) if report else None
+            state = _check_flexure_EN_1992_2004(self, force)
+            if report:
+                apply_en_flexure_state(self, state)
+        if report:
+            self._flexure_report_row = build_flexure_report(self, force)
+        return state
 
     def _run_shear_check(self, force: Forces, *, report: bool) -> Optional[Any]:
         """Compute one shear combination, and build its report only if asked.
@@ -722,7 +736,8 @@ class RectangularBeam(RectangularSection):
         self._flexure_checks = []
 
         for force in forces:
-            result = self._run_flexure_check(force, report=True)
+            self._run_flexure_check(force, report=True)
+            result = self._flexure_report_row
             self._flexure_results_list.append(result)
 
             # Store detailed results for this force
