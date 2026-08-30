@@ -189,9 +189,14 @@ def _initialize_dicts_ACI_318_19_shear(self: "RectangularBeam") -> None:
             "Unit": ["kN", "kN"],
         }
         # Min max lists
+        # With no stirrup contribution there is no stirrup to report. This used to
+        # be done by zeroing the section's own diameter, which made building a
+        # report change the section it describes; it is a local now.
+        zero_d_b = 0 * mm if self.concrete.unit_system == "metric" else 0 * inch
+        d_b_shown = self._stirrup_d_b
         if self._phi_V_s == 0 * kN:
-            db_min = 0 * mm if self.concrete.unit_system == "metric" else 0 * inch
-            self._stirrup_d_b = 0 * mm if self.concrete.unit_system == "metric" else 0 * inch
+            db_min = zero_d_b
+            d_b_shown = zero_d_b
         else:
             if self.concrete.design_code == "ACI 318-19":
                 db_min = 10 * mm if self.concrete.unit_system == "metric" else 3 / 8 * inch
@@ -213,7 +218,7 @@ def _initialize_dicts_ACI_318_19_shear(self: "RectangularBeam") -> None:
             self._stirrup_s_l,
             self._stirrup_s_w,
             self._A_v,
-            self._stirrup_d_b,
+            d_b_shown,
         ]  # Current values to check
         # Generate check marks based on the range conditions
         checks = [
@@ -233,7 +238,7 @@ def _initialize_dicts_ACI_318_19_shear(self: "RectangularBeam") -> None:
                 round(self._stirrup_s_l.to("cm").magnitude, 2),
                 round(self._stirrup_s_w.to("cm").magnitude, 2),
                 round(self._A_v.to("cm**2/m").magnitude, 2),
-                round(self._stirrup_d_b.to("mm").magnitude, 0),
+                round(d_b_shown.to("mm").magnitude, 0),
             ],
             "Min.": [
                 "",
@@ -263,7 +268,7 @@ def _initialize_dicts_ACI_318_19_shear(self: "RectangularBeam") -> None:
             "Variable": ["ns", "db", "s", "d", "Av,min", "Av,req", "Av", "ØVs"],
             "Value": [
                 self._stirrup_n,
-                round(self._stirrup_d_b.to("mm").magnitude, 3),
+                round(d_b_shown.to("mm").magnitude, 3),
                 round(self._stirrup_s_l.to("cm").magnitude, 3),
                 round(self._d_shear.to("cm").magnitude, 2),
                 round(self._A_v_min.to("cm**2/m").magnitude, 2),
@@ -652,8 +657,10 @@ def _initialize_dicts_EN_1992_2004_shear(self: "RectangularBeam") -> None:
             "Unit": ["kN", "kN"],
         }
         # Min max lists
+        # Same as the ACI table above: a local, not a write to the section.
+        d_b_shown = self._stirrup_d_b
         if self._V_Rd_s == 0 * kN:
-            self._stirrup_d_b = 0 * mm if self.concrete.unit_system == "metric" else 0 * inch
+            d_b_shown = 0 * mm if self.concrete.unit_system == "metric" else 0 * inch
         # Min max lists
         min_values = [
             None,
@@ -711,7 +718,7 @@ def _initialize_dicts_EN_1992_2004_shear(self: "RectangularBeam") -> None:
             "Variable": ["ns", "db", "s", "d", "Asw,min", "Asw,req", "Asw", "VRd,s"],
             "Value": [
                 self._stirrup_n,
-                self._stirrup_d_b.to("mm").magnitude,
+                d_b_shown.to("mm").magnitude,
                 self._stirrup_s_l.to("cm").magnitude,
                 round(self._d_shear.to("cm").magnitude, 2),
                 round(self._A_v_min.to("cm**2/m").magnitude, 2),
