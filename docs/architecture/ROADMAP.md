@@ -570,12 +570,35 @@ Guarded by `test_a_check_does_not_change_the_section`, which pins geometry and
 reinforcement across both checks and both stirrup states, and by
 `test_check_order_does_not_change_the_flexure_result`.
 
-**What full statelessness would still buy** is that `shear_check_results`
-touches no attribute at all — the 20 result writes. That needs a state object
-threaded through ~11 helpers per code per check type. Worth doing, but it is
-not what holds mako back: at 1.56 ms a shear check, 20,000 take 31 s against
-the 5 s target, and the remaining cost is the orchestrators' own pint
-arithmetic.
+**Done (2026-08-30): `shear_check_results` writes nothing.** Measured, not
+assumed — zero attributes changed and zero created, for ACI and for EN, with
+and without stirrups.
+
+The shear helpers take a state and fill it; the check builds one, returns it,
+and only the reporting path copies it back through `apply_shear_state`, which
+is the compatibility layer the report tables still read. The design path shares
+the same helpers and applies the state at the end, because designing *is* meant
+to change the section — so the two paths cannot drift apart.
+`codes/shear_state.py` holds both states (ACI and EN differ enough to warrant
+one each), a constructor that pre-zeroes every field in the section's unit
+system so nothing is `Optional`, and the attribute map the compatibility layer
+walks.
+
+Two couplings fell out on the way. The ACI shear check was setting `_M_u`,
+`_M_u_bot` and `_M_u_top` — the *flexure* check's — from the combination's
+moment; it now derives only `f_yt` and the tension-face area. And EN was
+recomputing `_A_v` from the section's own stirrups, duplicating what the setter
+already did.
+
+`test_shear_check_results_leaves_the_section_completely_untouched` guards it
+across both codes and both stirrup states. Its first version compared only the
+keys present beforehand, so an attribute the check *created* went undetected —
+it checks both directions now, and the guard was confirmed by reintroducing a
+write.
+
+**Still on the element:** the flexure check. It writes its results the same way
+shear used to, and the same conversion applies. Shear was the one mako's loop
+runs per station, which is why it went first.
 
 Only now does production code change. Extend `design_results.py` with
 check-result types; make check/design functions build and return them. Because

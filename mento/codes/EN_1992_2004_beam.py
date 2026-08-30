@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Tuple, cast
 
 
 from mento.codes.en_1992_2004.equations import flexure as flexure_eq
+from mento.codes.shear_state import ENShearCheckState, apply_en_shear_state, new_en_shear_state
 from mento.codes.en_1992_2004.equations import shear as shear_eq
 from mento.codes.flexure_design import _FaceDemand, _run_flexure_design
 from mento.material import Concrete_EN_1992_2004
@@ -42,15 +43,15 @@ def _initialize_variables_EN_1992_2004(self: "RectangularBeam") -> None:
 ##########################################################
 
 
-def _initialize_shear_variables_EN_1992_2004(self: "RectangularBeam", force: Forces) -> None:
+def _initialize_shear_variables_EN_1992_2004(self: "RectangularBeam", st: ENShearCheckState, force: Forces) -> None:
     """
     Initialize variables for EN 1992-2004 design code.
     """
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         # Set the initial variables
-        self._N_Ed = force.N_x
-        self._V_Ed_1 = force.V_z  # Consider the same shear at the edge of support and in d
-        self._V_Ed_2 = force.V_z  # Consider the same shear at the edge of support and in d
+        st.N_Ed = force.N_x
+        st.V_Ed_1 = force.V_z  # Consider the same shear at the edge of support and in d
+        st.V_Ed_2 = force.V_z  # Consider the same shear at the edge of support and in d
 
         # Minimum shear reinforcement calculation. Eq. (9.5N) gives the ratio;
         # §9.2.2(5) defines it as A_sw/(s*b_w*sin(alpha)), hence the geometry here.
@@ -58,54 +59,53 @@ def _initialize_shear_variables_EN_1992_2004(self: "RectangularBeam", force: For
             self.concrete.f_ck.to(MPa).magnitude,
             self._f_ywk.to(MPa).magnitude,
         )
-        self._A_v_min = rho_min * self.width * math.sin(self._alpha)
+        st.A_v_min = rho_min * self.width * math.sin(self._alpha)
 
         # Consider bottom or top tension reinforcement
-        self._A_s_tension = self._A_s_bot if force._M_y >= 0 * kNm else self._A_s_top
+        st.A_s_tension = self._A_s_bot if force._M_y >= 0 * kNm else self._A_s_top
         # Compression stress, positive
         if force._M_y >= 0 * kNm:
-            self._rho_l_bot = min(
-                (self._A_s_tension.to("cm**2") + self._A_p.to("cm**2"))
-                / (self.width.to("cm") * self._d_shear.to("cm")),
+            st.rho_l_bot = min(
+                (st.A_s_tension.to("cm**2") + self._A_p.to("cm**2")) / (self.width.to("cm") * self._d_shear.to("cm")),
                 0.02 * dimensionless,
             )
         else:
-            self._rho_l_top = min(
-                (self._A_s_tension + self._A_p) / (self.width * self._d_shear),
+            st.rho_l_top = min(
+                (st.A_s_tension + self._A_p) / (self.width * self._d_shear),
                 0.02 * dimensionless,
             )
 
         # Shear calculation for sections without rebar
-        self._k_value = shear_eq.size_effect_factor(self._d_shear.to(mm).magnitude)
+        st.k_value = shear_eq.size_effect_factor(self._d_shear.to(mm).magnitude)
 
         # Positive of compression
-        self._sigma_cp = (
+        st.sigma_cp = (
             shear_eq.axial_stress(
-                self._N_Ed.to(N).magnitude,
+                st.N_Ed.to(N).magnitude,
                 self.A_x.to(_mm2).magnitude,
-                self._f_cd_shear.to(MPa).magnitude,
+                st.f_cd_shear.to(MPa).magnitude,
             )
             * MPa
         )
 
 
-def _shear_without_rebar_EN_1992_2004(self: "RectangularBeam") -> Quantity:
-    self._theta = 0
+def _shear_without_rebar_EN_1992_2004(self: "RectangularBeam", st: ENShearCheckState) -> Quantity:
+    st.theta = 0
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         # Total shear capacity without rebar: Eq. (6.2.a), floored by Eq. (6.2.b).
         f_ck = self.concrete.f_ck.to(MPa).magnitude
         b_w = self.width.to(mm).magnitude
         d = self._d_shear.to(mm).magnitude
-        sigma_cp = self._sigma_cp.to(MPa).magnitude
-        rho_l = self._rho_l_bot if self._M_Ed >= 0 * kNm else self._rho_l_top
-        V_Rd_c_min = (
-            shear_eq.min_shear_resistance_without_reinforcement(f_ck, self._k_value, sigma_cp, b_w, d) * N
-        ).to(kN)
+        sigma_cp = st.sigma_cp.to(MPa).magnitude
+        rho_l = st.rho_l_bot if self._M_Ed >= 0 * kNm else st.rho_l_top
+        V_Rd_c_min = (shear_eq.min_shear_resistance_without_reinforcement(f_ck, st.k_value, sigma_cp, b_w, d) * N).to(
+            kN
+        )
         V_Rd_c = (
             shear_eq.shear_resistance_without_reinforcement(
                 f_ck,
                 self.concrete.gamma_c,
-                self._k_value,
+                st.k_value,
                 rho_l.to(dimensionless).magnitude,
                 sigma_cp,
                 b_w,
@@ -116,7 +116,7 @@ def _shear_without_rebar_EN_1992_2004(self: "RectangularBeam") -> Quantity:
     return max(V_Rd_c_min, V_Rd_c)
 
 
-def _calculate_max_shear_strength_EN_1992_2004(self: "RectangularBeam") -> None:
+def _calculate_max_shear_strength_EN_1992_2004(self: "RectangularBeam", st: ENShearCheckState) -> None:
     """
     Calculate the maximum shear strength (V_Rd_max) and the corresponding strut angle (θ).
     """
@@ -124,9 +124,9 @@ def _calculate_max_shear_strength_EN_1992_2004(self: "RectangularBeam") -> None:
         alpha_cw = 1.0  # Non-prestressed members or members subject to tensile stress due to axial force
         nu_1 = shear_eq.strut_strength_reduction_factor(self.concrete.f_ck.to(MPa).magnitude)
         b_w = self.width.to(mm).magnitude
-        f_cd = self._f_cd_shear.to(MPa).magnitude
+        f_cd = st.f_cd_shear.to(MPa).magnitude
         z = shear_eq.lever_arm(self._d_shear.to(mm).magnitude)
-        self._z = z * mm  # Lever arm
+        st.z = z * mm  # Lever arm
 
         # The θ angle is limited between 21.8° ≤ θ ≤ 45° (1 ≤ cot(θ) ≤ 2.5)
         # Check the minimum strut angle θ = 21.8° (cot(θ) = 2.5)
@@ -134,12 +134,12 @@ def _calculate_max_shear_strength_EN_1992_2004(self: "RectangularBeam") -> None:
         cot_theta_min: float = 1 / math.tan(theta_min)
         V_Rd_max_min_angle = (shear_eq.max_shear_resistance(alpha_cw, b_w, z, nu_1, f_cd, theta_min) * N).to(kN)
 
-        if self._V_Ed_1 <= V_Rd_max_min_angle:
+        if st.V_Ed_1 <= V_Rd_max_min_angle:
             # If within the minimum angle
-            self._theta = theta_min
-            self._cot_theta = cot_theta_min
-            self._V_Rd_max = V_Rd_max_min_angle
-            self._max_shear_ok = True
+            st.theta = theta_min
+            st.cot_theta = cot_theta_min
+            st.V_Rd_max = V_Rd_max_min_angle
+            st.max_shear_ok = True
         else:
             # Check the maximum strut angle θ = 45° (cot(θ) = 1.0)
             theta_max: float = math.radians(45)
@@ -147,100 +147,103 @@ def _calculate_max_shear_strength_EN_1992_2004(self: "RectangularBeam") -> None:
                 shear_eq.max_shear_resistance(alpha_cw, b_w, z, nu_1, f_cd, theta_max) * N
             ).to(kN)
 
-            if self._V_Ed_1 > V_Rd_max_max_angle:
-                self._theta = theta_max
-                self._cot_theta = 1 / math.tan(self._theta)
-                self._V_Rd_max = V_Rd_max_max_angle
-                self._max_shear_ok = False
+            if st.V_Ed_1 > V_Rd_max_max_angle:
+                st.theta = theta_max
+                st.cot_theta = 1 / math.tan(st.theta)
+                st.V_Rd_max = V_Rd_max_max_angle
+                st.max_shear_ok = False
             else:
-                self._max_shear_ok = True
+                st.max_shear_ok = True
                 # Determine the angle θ of the strut based on the shear force
-                self._theta = shear_eq.strut_angle(self._V_Ed_1.to(kN).magnitude, V_Rd_max_max_angle.to(kN).magnitude)
-                self._cot_theta = 1 / math.tan(self._theta)
-                self._V_Rd_max = (shear_eq.max_shear_resistance(alpha_cw, b_w, z, nu_1, f_cd, self._theta) * N).to(kN)
+                st.theta = shear_eq.strut_angle(st.V_Ed_1.to(kN).magnitude, V_Rd_max_max_angle.to(kN).magnitude)
+                st.cot_theta = 1 / math.tan(st.theta)
+                st.V_Rd_max = (shear_eq.max_shear_resistance(alpha_cw, b_w, z, nu_1, f_cd, st.theta) * N).to(kN)
 
 
-def _calculate_required_shear_reinforcement_EN_1992_2004(
-    self: "RectangularBeam",
-) -> None:
+def _calculate_required_shear_reinforcement_EN_1992_2004(self: "RectangularBeam", st: ENShearCheckState) -> None:
     """
     Calculate the required shear reinforcement area (A_v_req).
     """
-    z = self._z.to(mm).magnitude
-    f_ywd = self._f_ywd.to(MPa).magnitude
+    z = st.z.to(mm).magnitude
+    f_ywd = st.f_ywd.to(MPa).magnitude
     # Calculate the required shear reinforcement area
-    self._A_v_req = max(
-        shear_eq.required_shear_reinforcement(self._V_Ed_2.to(N).magnitude, z, f_ywd, self._cot_theta)
+    st.A_v_req = max(
+        shear_eq.required_shear_reinforcement(st.V_Ed_2.to(N).magnitude, z, f_ywd, st.cot_theta)
         * mm,  # Required area based on shear force, as an area per unit length
-        self._A_v_min,  # Minimum required area
+        st.A_v_min,  # Minimum required area
     )
-    self._V_Rd_s = (
-        shear_eq.shear_reinforcement_resistance(self._A_v.to(mm).magnitude, z, f_ywd, self._cot_theta) * N
-    ).to(kN)
-    self._V_s_req = self._V_Rd_s
+    st.V_Rd_s = (shear_eq.shear_reinforcement_resistance(self._A_v.to(mm).magnitude, z, f_ywd, st.cot_theta) * N).to(kN)
+    st.V_s_req = st.V_Rd_s
     # Maximum shear capacity is the same as the steel capacity
-    self._V_Rd = self._V_Rd_s
+    st.V_Rd = st.V_Rd_s
 
 
-def _check_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> None:
-    if isinstance(self.concrete, Concrete_EN_1992_2004):
-        if self._stirrup_n == 0:
-            # The assumed stirrup diameter stays: see the note in the ACI check.
-            # Initialize all the code related variables
-            _initialize_variables_EN_1992_2004(self)
-            _initialize_shear_variables_EN_1992_2004(self, force)
-            # Calculate V_Rd_c
-            self._V_Rd_c = _shear_without_rebar_EN_1992_2004(self)
-            # According to EN1992-1-1 §6.2.1(4) minimum shear reinforcement should nevertheless be provided
-            # according to EN1992-1-1 §9.2.2. The minimum shear reinforcement may be omitted in members where
-            # transverse redistribution of loads is possible (such as slabs) and members of minor importance
-            # which do not contribute significantly to the overall resistance and stability of the structure.
-            self._A_v_req = self._A_v_min
-            # Maximum shear capacity is the same as the concrete capacity
-            self._V_Rd = self._V_Rd_c
-            self._V_Rd_max = self._V_Rd
-            self._max_shear_ok = self._V_Ed_1 <= self._V_Rd_max
+def _check_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> ENShearCheckState:
+    """Run the EN shear check for one combination and return what it found.
 
-        else:
-            # Initialize all the code related variables
-            _initialize_variables_EN_1992_2004(self)
-            _initialize_shear_variables_EN_1992_2004(self, force)
-            # Shear reinforcement calculations
-            d_bs = self._stirrup_d_b
-            s_l = self._stirrup_s_l
-            n_legs = self._stirrup_n * 2
-            A_db = (d_bs**2) * math.pi / 4  # Area of one stirrup leg
-            A_vs = n_legs * A_db  # Total area of stirrups
-            self._A_v = A_vs / s_l  # Stirrup area per unit length
+    Nothing is written to the section; see the ACI counterpart for the split
+    between this and the reporting path.
+    """
+    st = new_en_shear_state(self)
+    concrete = cast("Concrete_EN_1992_2004", self.concrete)
 
-            # Calculate maximum shear strength
-            _calculate_max_shear_strength_EN_1992_2004(self)
+    # The material values the shear check needs. _f_cd belongs to flexure as
+    # well, so it is carried rather than written.
+    st.f_ywd = self._f_ywk / concrete._gamma_s
+    alpha_cc_shear = 1  # Take this as 1.00 for shear design and not 0.85, as in Eurocode Applied.
+    st.f_cd_shear = alpha_cc_shear * concrete.f_ck / concrete.gamma_c
+    st.f_cd = concrete._alpha_cc * concrete.f_ck / concrete.gamma_c
 
-            # Calculate required shear reinforcement area
-            _calculate_required_shear_reinforcement_EN_1992_2004(self)
+    _initialize_shear_variables_EN_1992_2004(self, st, force)
 
-            # Rebar spacing checks
-            n_legs_actual = self._stirrup_n * 2  # Ensure legs are even
-            self._stirrup_s_w = (self.width - 2 * self.c_c - self._stirrup_d_b) / (n_legs_actual - 1)
-            (
-                self._stirrup_s_max_l,
-                self._stirrup_s_max_w,
-            ) = max_stirrup_spacing_EN_1992_2004(self, self._alpha)
+    if self._stirrup_n == 0:
+        # The assumed stirrup diameter stays: see the note in the ACI check.
+        st.V_Rd_c = _shear_without_rebar_EN_1992_2004(self, st)
+        # According to EN1992-1-1 §6.2.1(4) minimum shear reinforcement should nevertheless be provided
+        # according to EN1992-1-1 §9.2.2. The minimum shear reinforcement may be omitted in members where
+        # transverse redistribution of loads is possible (such as slabs) and members of minor importance
+        # which do not contribute significantly to the overall resistance and stability of the structure.
+        st.A_v_req = st.A_v_min
+        # Maximum shear capacity is the same as the concrete capacity
+        st.V_Rd = st.V_Rd_c
+        st.V_Rd_max = st.V_Rd
+        st.max_shear_ok = st.V_Ed_1 <= st.V_Rd_max
+    else:
+        # The provided stirrup area per unit length is what the section already
+        # carries; the setter computed it from the same geometry.
+        _calculate_max_shear_strength_EN_1992_2004(self, st)
+        _calculate_required_shear_reinforcement_EN_1992_2004(self, st)
 
-        self._DCRv = abs((self._V_Ed_2.to("kN").magnitude / self._V_Rd.to("kN").magnitude))
+        # Rebar spacing checks
+        n_legs_actual = self._stirrup_n * 2  # Ensure legs are even
+        st.stirrup_s_w = (self.width - 2 * self.c_c - self._stirrup_d_b) / (n_legs_actual - 1)
+        (
+            st.stirrup_s_max_l,
+            st.stirrup_s_max_w,
+        ) = max_stirrup_spacing_EN_1992_2004(self, self._alpha)
+
+    st.DCR = abs((st.V_Ed_2.to("kN").magnitude / st.V_Rd.to("kN").magnitude))
+    return st
 
 
 def _design_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> None:
+    """Size the shear reinforcement. Designing is meant to change the section,
+    so this runs the same helpers over a state and then applies it."""
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         # Initialize all the code related variables
         _initialize_variables_EN_1992_2004(self)
         # Split bottom and top moments
         _split_top_bot_moment(self, force)
-        _initialize_shear_variables_EN_1992_2004(self, force)
+        st = new_en_shear_state(self)
+        st.f_ywd = self._f_ywd
+        st.f_cd_shear = self._f_cd_shear
+        st.f_cd = self._f_cd
+        _initialize_shear_variables_EN_1992_2004(self, st, force)
         # Calculate maximum shear strength
-        _calculate_max_shear_strength_EN_1992_2004(self)
+        _calculate_max_shear_strength_EN_1992_2004(self, st)
         # Calculate required shear reinforcement area
-        _calculate_required_shear_reinforcement_EN_1992_2004(self)
+        _calculate_required_shear_reinforcement_EN_1992_2004(self, st)
+        apply_en_shear_state(self, st)
 
         return None
 

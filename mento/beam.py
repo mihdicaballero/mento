@@ -43,7 +43,7 @@ from mento.codes.EN_1992_2004_beam import (
     _design_shear_EN_1992_2004,
     _design_flexure_EN_1992_2004,
 )
-from mento.codes.shear_state import ShearCheckState, apply_shear_state
+from mento.codes.shear_state import apply_en_shear_state, apply_shear_state
 from mento.codes.ACI_318_19_beam import (
     _check_shear_ACI_318_19,
     _design_shear_ACI_318_19,
@@ -687,7 +687,7 @@ class RectangularBeam(RectangularSection):
             _check_flexure_EN_1992_2004(self, force)
         return build_flexure_report(self, force) if report else None
 
-    def _run_shear_check(self, force: Forces, *, report: bool) -> Optional[ShearCheckState]:
+    def _run_shear_check(self, force: Forces, *, report: bool) -> Optional[Any]:
         """Compute one shear combination, and build its report only if asked.
 
         Returns the ACI state so a values-only caller never needs the section to
@@ -699,8 +699,10 @@ class RectangularBeam(RectangularSection):
             if report:
                 apply_shear_state(self, state)
         else:
-            _check_shear_EN_1992_2004(self, force)
-            state = None
+            en_state = _check_shear_EN_1992_2004(self, force)
+            if report:
+                apply_en_shear_state(self, en_state)
+            state = en_state
         if report:
             self._shear_report_row = build_shear_report(self, force)
         return state

@@ -3622,8 +3622,18 @@ def test_a_check_does_not_change_the_section(with_stirrups: bool) -> None:
 
 
 @pytest.mark.parametrize("with_stirrups", [False, True], ids=["no-stirrups", "with-stirrups"])
-def test_shear_check_results_leaves_the_section_completely_untouched(with_stirrups: bool) -> None:
-    """The ACI shear check returns its result instead of storing it.
+@pytest.mark.parametrize(
+    "concrete, steel",
+    [
+        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), SteelBar(name="ADN 420", f_y=420 * MPa)),
+        (Concrete_EN_1992_2004(name="C25", f_c=25 * MPa), SteelBar(name="B500S", f_y=500 * MPa)),
+    ],
+    ids=["ACI", "EN"],
+)
+def test_shear_check_results_leaves_the_section_completely_untouched(
+    concrete: Concrete_ACI_318_19, steel: SteelBar, with_stirrups: bool
+) -> None:
+    """The shear check returns its result instead of storing it.
 
     Not just geometry and bars: *no* attribute of the section changes. That is
     what lets a caller loop over stations without per-call cleanup, and it is
@@ -3632,8 +3642,8 @@ def test_shear_check_results_leaves_the_section_completely_untouched(with_stirru
     """
     beam = RectangularBeam(
         label="pristine",
-        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
-        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        concrete=concrete,
+        steel_bar=steel,
         width=30 * cm,
         height=50 * cm,
         c_c=25 * mm,
