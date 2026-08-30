@@ -1,3 +1,5 @@
+import warnings
+
 import pandas as pd
 from typing import Optional, List, Any
 from tabulate import tabulate
@@ -499,13 +501,23 @@ class DocumentBuilder:
         # checks wider than the page. Missing ones repeat the last width given:
         # a trailing run of similar columns is the usual shape, and a fixed
         # fallback made the narrowest columns of a wide table the widest.
-        widths += [widths[-1]] * (n_columns - len(widths))
+        if len(widths) < n_columns:
+            # Padding keeps the table renderable, but a short list is a caller
+            # bug: it is what made the last columns of Beam Data take a
+            # fallback width and squeezed the rest. Say so rather than let the
+            # layout be the only evidence.
+            warnings.warn(
+                f"table has {n_columns} columns but {len(widths)} widths were given; "
+                f"the last width was repeated for the rest",
+                UserWarning,
+                stacklevel=3,
+            )
+            widths += [widths[-1]] * (n_columns - len(widths))
 
         # Scale down to the text width when the total overruns it, keeping the
         # proportions the caller asked for. A table narrower than the page is
         # left narrow -- only the all-beams summaries are meant to span it.
-        section = self.doc.sections[0]
-        usable = section.page_width - section.left_margin - section.right_margin
+        usable = self.usable_width.emu
         total = sum(w.emu for w in widths)
         if total > usable:
             widths = [Emu(int(w.emu * usable / total)) for w in widths]
@@ -586,6 +598,12 @@ class DocumentBuilder:
 
         return table
 
+    @property
+    def usable_width(self) -> Emu:
+        """The text column: page width less both margins."""
+        section = self.doc.sections[0]
+        return Emu(Emu(section.page_width).emu - Emu(section.left_margin).emu - Emu(section.right_margin).emu)
+
     def content_widths(self, df: pd.DataFrame, min_cm: float = 0.75) -> List[Cm]:
         """Widths proportional to the longest text in each column.
 
@@ -597,8 +615,7 @@ class DocumentBuilder:
         The result fills the text column exactly, so these tables still span
         the line, which is what distinguishes them from the per-element ones.
         """
-        section = self.doc.sections[0]
-        usable_cm = Emu(section.page_width - section.left_margin - section.right_margin).cm
+        usable_cm = self.usable_width.cm
 
         lengths = [max([len(str(column))] + [len(str(value)) for value in df[column]]) for column in df.columns]
         # A floor so a one-character column is still readable, then the rest of

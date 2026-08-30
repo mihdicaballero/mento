@@ -1349,18 +1349,40 @@ def test_a_failed_limit_check_is_shaded_red(
     assert _cell_fill(passed) == "C6EFCE"
 
 
-def test_the_shear_summary_drops_the_redundant_capacity_tick(
-    beam_summary: BeamSummary, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The DCR column beside it already says whether the section is enough."""
+def test_the_shear_summary_drops_the_capacity_ticks(beam_summary: BeamSummary, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The DCR column beside them already says whether the section is enough.
+
+    They are dropped from the Word summary only: ``check_shear`` still reports
+    both, which is where a caller reads them programmatically.
+    """
     doc = _built_document(beam_summary, monkeypatch)
-    # The shear summary is the one carrying Av,min; the third from the end.
     header = [cell.text for cell in doc.tables[-2].rows[0].cells]
 
     assert "Av,min" in header, f"expected the shear summary, got {header}"
     assert "Vu≤ØVn" not in header
-    assert "Vu≤ØVmax" in header, "the maximum-capacity check is still worth reporting"
-    assert "DCR" in header
+    assert "Vu≤ØVmax" not in header
+    # The capacities themselves stay, so the margin is still readable.
+    assert {"ØVn", "ØVmax", "DCR"} <= set(header)
+
+    shown = beam_summary.shear_results(capacity_check=False)
+    assert {"Vu≤ØVn", "Vu≤ØVmax"} <= set(shown.columns)
+
+
+def test_no_table_in_the_report_relies_on_padded_widths(
+    beam_summary: BeamSummary, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every table lists one width per column.
+
+    A short list still renders -- the last width is repeated -- so dropping a
+    column from a table leaves no visible trace until someone looks at the
+    page. The builder warns; this asserts the report never triggers it.
+    """
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        _built_document(beam_summary, monkeypatch)
+
+    padded = [str(w.message) for w in caught if "widths were given" in str(w.message)]
+    assert not padded, padded
 
 
 def test_beam_data_lists_the_section_and_its_bars_only(
@@ -1462,3 +1484,28 @@ def test_a_section_that_only_just_passes_is_not_reported_as_failing(
     assert 0.995 <= beam._DCRv < 1.0, f"the fixture stopped being a knife-edge case: {beam._DCRv}"
     assert round(beam._DCRv, 2) == 1.0, "rounding no longer hides the margin, so this proves nothing"
     assert results[VERDICT_COLUMN][1] == PASS_MARK
+
+
+def test_the_flexure_summary_drops_the_codes_own_capacity_tick(
+    sample_steel: SteelBar, sample_input_dataframe: pd.DataFrame, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Same reasoning as the shear ticks, and the same declaration.
+
+    A code lists what its summaries leave out once; the flexure and shear
+    tables both read that list, so dropping a column does not mean finding
+    every table that carries it.
+    """
+    summary = BeamSummary(
+        concrete=Concrete_EN_1992_2004(name="C25/30", f_c=25 * MPa),
+        steel_bar=sample_steel,
+        beam_list=sample_input_dataframe,
+    )
+    header = [cell.text for cell in _built_document(summary, monkeypatch).tables[-3].rows[0].cells]
+
+    assert "MRd" in header, f"expected the flexure summary, got {header}"
+    assert "MEd≤MRd" not in header
+    # The demand and the resistance stay, so the margin is still readable.
+    assert {"MEd", "MRd", "DCR"} <= set(header)
+
+    shown = summary.flexure_results(capacity_check=False)
+    assert "MEd≤MRd" in shown.columns

@@ -71,9 +71,11 @@ _UNITS_ROW_FLEXURE = {
 }
 
 
-#: The DCR column right beside it already says whether the section is enough,
-#: so this tick adds nothing to the all-beams summary.
-_SUMMARY_DROP_COLUMNS = ("Vu≤ØVn",)
+#: Both capacity ticks come out of the all-beams summary. The DCR column beside
+#: them already says whether the section is enough, and the OVn and OVmax
+#: columns are right there for a reader who wants the margin. They stay in
+#: `check_shear`, which is where a caller reads them programmatically.
+_SUMMARY_DROP_COLUMNS = ("Vu≤ØVn", "Vu≤ØVmax")
 
 _SHEAR_SYMBOLS = {
     "reinforcement": "A_v",

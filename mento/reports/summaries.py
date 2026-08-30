@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Dict, Optional, cast
 
 import pandas as pd
-from docx.shared import Cm
+from docx.shared import Cm, Emu
 
 from mento._version import __version__ as MENTO_VERSION
 from mento.codes.registry import design_code
@@ -55,6 +55,19 @@ BEAM_DATA_COLUMNS = (
 #: The label needs room for a beam name and the dimensions for two digits; the
 #: eleven rebar columns hold a count or a diameter and no more.
 BEAM_DATA_WIDTHS = [Cm(2), Cm(1), Cm(1), Cm(1)] + [Cm(0.9)] * 11
+
+
+def _without_dropped_columns(self: "BeamSummary", df: pd.DataFrame) -> pd.DataFrame:
+    """Drop the columns the active design code keeps out of its Word summary."""
+    dropped = design_code(self.concrete).summary_drop_columns
+    return df.drop(columns=[column for column in dropped if column in df.columns])
+
+
+def _label_then_even_widths(doc_builder: DocumentBuilder, df: pd.DataFrame, *leading: Cm) -> list:
+    """The leading columns as given, and the rest sharing the remaining width."""
+    rest = len(df.columns) - len(leading)
+    spare = doc_builder.usable_width.emu - sum(width.emu for width in leading)
+    return list(leading) + [Emu(spare // rest)] * rest
 
 
 def _details(value: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -201,23 +214,24 @@ def beam_summary_doc(self: "BeamSummary", index: int = 1) -> None:
         font_size=SUMMARY_FONT_SIZE,
     )
 
+    # The label and the combination name are the only columns holding words;
+    # the rest hold a number each and share what is left. Shared rather than
+    # listed because the column count is the code's: each code drops a
+    # different set of columns below, so one hand-written list cannot serve
+    # both without going quietly out of step the next time one is dropped.
     doc_builder.add_heading("Flexure Results", level=3)
-    df_flex_all = self.flexure_results(capacity_check=False)
+    df_flex_all = _without_dropped_columns(self, self.flexure_results(capacity_check=False))
     doc_builder.add_table_data(
         df_flex_all,
-        column_widths=[Cm(2), Cm(4), Cm(1.3), Cm(1.2), Cm(1.6), Cm(1.6), Cm(1.2), Cm(1.2), Cm(1.2), Cm(1.5), Cm(1)],
+        column_widths=_label_then_even_widths(doc_builder, df_flex_all, Cm(2), Cm(4)),
         font_size=SUMMARY_FONT_SIZE,
     )
 
     doc_builder.add_heading("Shear Results", level=3)
-    df_shear_all = self.shear_results(capacity_check=False)
-
-    # Columns the active code does not carry into the Word summary.
-    cols_to_remove = design_code(self.concrete).summary_drop_columns
-    df_shear_all = df_shear_all.drop(columns=[c for c in cols_to_remove if c in df_shear_all.columns])
+    df_shear_all = _without_dropped_columns(self, self.shear_results(capacity_check=False))
     doc_builder.add_table_data(
         df_shear_all,
-        column_widths=[Cm(2), Cm(4), Cm(1.2), Cm(1.2), Cm(1.1), Cm(1.2), Cm(1.2), Cm(1.2), Cm(1.2), Cm(1.3), Cm(1)],
+        column_widths=_label_then_even_widths(doc_builder, df_shear_all, Cm(2), Cm(4)),
         font_size=SUMMARY_FONT_SIZE,
     )
 
@@ -251,8 +265,8 @@ def beam_summary_doc(self: "BeamSummary", index: int = 1) -> None:
             Cm(2),
             Cm(1),
             Cm(1),
-            Cm(1.4),
-            Cm(1.4),
+            Cm(1.9),
+            Cm(1.9),
             Cm(1.4),
             Cm(1.2),
             Cm(1.2),

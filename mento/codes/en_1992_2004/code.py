@@ -69,9 +69,12 @@ _SHEAR_SYMBOLS = {
     "capacity_row": 6,
 }
 
-#: EN's shear summary has no separate max-strut and resistance check columns in
-#: the Word tables; they are already in the detailed output.
-_SUMMARY_DROP_COLUMNS = ("VEd,1≤VRd,max", "VEd,2≤VRd")
+#: Columns the all-beams summaries leave out. The ticks repeat what the DCR
+#: column beside them already says, and the resistances are right there for a
+#: reader who wants the margin; VEd,1 is the demand at the support edge, which
+#: the detailed output carries. They all stay in `check_shear` and
+#: `check_flexure`, which is where a caller reads them programmatically.
+_SUMMARY_DROP_COLUMNS = ("VEd,1", "VEd,1≤VRd,max", "VEd,2≤VRd", "MEd≤MRd")
 
 
 _SUMMARY_COLUMNS = {
