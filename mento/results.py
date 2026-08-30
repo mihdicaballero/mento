@@ -89,11 +89,11 @@ def round_for_display(df: pd.DataFrame) -> pd.DataFrame:
 #: the page, so a table that describes one beam does not span the line the way
 #: the all-beams summaries do. With the fixed layout `add_table` sets, anything
 #: longer wraps rather than being clipped.
-DETAIL_TABLE_WIDTHS = [Cm(7.2), Cm(2.2), Cm(3.0), Cm(1.4)]
+DETAIL_TABLE_WIDTHS = [Cm(6.1), Cm(2.2), Cm(3.0), Cm(1.4)]
 
 #: The same, for a limit check: description, unit, value, minimum, maximum and
 #: the verdict.
-LIMIT_TABLE_WIDTHS = [Cm(7.0), Cm(1.5), Cm(1.9), Cm(1.7), Cm(1.7), Cm(1.2)]
+LIMIT_TABLE_WIDTHS = [Cm(5.5), Cm(1.5), Cm(1.5), Cm(1.5), Cm(1.5), Cm(1.2)]
 
 CUSTOM_COLORS = {
     "blue": "#1f77b4",  # Default Matplotlib blue

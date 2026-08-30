@@ -12,11 +12,12 @@ import warnings
 from typing import Any, Optional
 
 from docx.oxml.ns import qn
-from docx.shared import Emu
+from docx.shared import Cm, Emu
 from pathlib import Path
 
 from mento import MPa, mm, cm, kN, kNm, m
 from mento.beam_summary import BeamSummary
+from mento.reports.summaries import BEAM_DATA_COLUMNS, SUMMARY_FONT_SIZE
 from mento.material import Concrete_ACI_318_19, SteelBar, Concrete_EN_1992_2004
 from mento.node import Node
 from mento.results import DocumentBuilder, FAIL_MARK, PASS_MARK, VERDICT_COLUMN
@@ -1225,7 +1226,7 @@ def test_the_all_beam_tables_are_set_a_point_smaller(
             for run in paragraph.runs
             if run.font.size is not None
         }
-        assert sizes == {8.0}, f"expected 8 pt throughout, found {sizes}"
+        assert sizes == {float(SUMMARY_FONT_SIZE)}, f"expected {SUMMARY_FONT_SIZE} pt throughout, found {sizes}"
 
 
 def _table_width_cm(table: Any) -> float:
@@ -1362,26 +1363,25 @@ def test_the_shear_summary_drops_the_redundant_capacity_tick(
     assert "DCR" in header
 
 
-def test_beam_data_columns_are_sized_to_what_they_hold(
+def test_beam_data_lists_the_section_and_its_bars_only(
     beam_summary: BeamSummary, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """One column per input field, so the widths are measured, not listed.
+    """The demands each beam was checked for belong to the tables below it.
 
-    A hand-written list that fell short of the column count left the last
-    columns at a fallback width -- making the narrowest data in the table the
-    widest column -- and squeezed everything else to fit.
+    They are reported there per combination, which is where a demand means
+    something; repeating the input row here only widened the table.
     """
     doc = _built_document(beam_summary, monkeypatch)
     # Beam Data is the first of the four all-beams tables.
     table = doc.tables[-4]
     header = [cell.text for cell in table.rows[0].cells]
-    assert header[0] == "Label" and header[-1] == "db4", f"expected Beam Data, got {header}"
 
-    widths = [Emu(cell.width).cm for cell in table.rows[0].cells]
-    assert len(widths) == len(header)
-    # The rebar-count columns hold one or two characters; none of them may be
-    # wider than the label column, which holds the beam name.
-    assert max(widths[-4:]) <= widths[0]
+    assert header == list(BEAM_DATA_COLUMNS)
+    for dropped in ("Comb.", "Nx", "Vz", "My"):
+        assert dropped not in header
+
+    widths = [round(Emu(cell.width).cm, 2) for cell in table.rows[0].cells]
+    assert widths == [round(Cm(w).cm, 2) for w in [2, 1, 1, 1] + [0.9] * 11]
     assert _table_width_cm(table) <= _usable_width_cm(doc) + 0.05
 
 

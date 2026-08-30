@@ -29,7 +29,32 @@ if TYPE_CHECKING:
 
 #: The all-beams tables are much wider than the running text, so they are set
 #: a point smaller to keep every column on the page.
-SUMMARY_FONT_SIZE = 8
+SUMMARY_FONT_SIZE = 7
+
+#: What the Beam Data table lists: the section and the bars it carries. The
+#: input frame also holds the position and the demands, which belong to the
+#: per-combination tables rather than to a list of sections.
+BEAM_DATA_COLUMNS = (
+    "Label",
+    "b",
+    "h",
+    "cc",
+    "ns",
+    "dbs",
+    "sl",
+    "n1",
+    "db1",
+    "n2",
+    "db2",
+    "n3",
+    "db3",
+    "n4",
+    "db4",
+)
+
+#: The label needs room for a beam name and the dimensions for two digits; the
+#: eleven rebar columns hold a count or a diameter and no more.
+BEAM_DATA_WIDTHS = [Cm(2), Cm(1), Cm(1), Cm(1)] + [Cm(0.9)] * 11
 
 
 def _details(value: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -166,13 +191,13 @@ def beam_summary_doc(self: "BeamSummary", index: int = 1) -> None:
     # --- SUMMARY TABLES FOR ALL BEAMS ---
     doc_builder.add_heading("Summary - All Beams", level=2)
     doc_builder.add_heading("Beam Data", level=3)
-    beam_data_out = self.beam_list.fillna("")
-    # Measured rather than listed: this table has one column per input field,
-    # and the list it used to carry was four short of that, so the last four
-    # columns fell back to a default width and the rest were squeezed.
+    # Geometry and reinforcement only: the demands each beam was checked for
+    # are reported by the flexure and shear tables below, per combination,
+    # which is where they mean something.
+    beam_data_out = self.beam_list.fillna("")[list(BEAM_DATA_COLUMNS)]
     doc_builder.add_table_data(
         beam_data_out,
-        column_widths=doc_builder.content_widths(beam_data_out),
+        column_widths=BEAM_DATA_WIDTHS,
         font_size=SUMMARY_FONT_SIZE,
     )
 
@@ -180,7 +205,7 @@ def beam_summary_doc(self: "BeamSummary", index: int = 1) -> None:
     df_flex_all = self.flexure_results(capacity_check=False)
     doc_builder.add_table_data(
         df_flex_all,
-        column_widths=[Cm(2), Cm(2), Cm(2), Cm(2), Cm(2), Cm(1.5), Cm(1.5), Cm(1.5), Cm(1.5), Cm(1.5), Cm(1.5)],
+        column_widths=[Cm(2), Cm(4), Cm(1.3), Cm(1.2), Cm(1.6), Cm(1.6), Cm(1.2), Cm(1.2), Cm(1.2), Cm(1.5), Cm(1)],
         font_size=SUMMARY_FONT_SIZE,
     )
 
@@ -190,13 +215,11 @@ def beam_summary_doc(self: "BeamSummary", index: int = 1) -> None:
     # Columns the active code does not carry into the Word summary.
     cols_to_remove = design_code(self.concrete).summary_drop_columns
     df_shear_all = df_shear_all.drop(columns=[c for c in cols_to_remove if c in df_shear_all.columns])
-
-    # Label and demand columns are wide, the check columns narrow, whatever is
-    # left wide again. Derived from the frame rather than listed per code: the
-    # two lists only ever differed by the columns a code drops above.
-    n = len(df_shear_all.columns)
-    widths = [Cm(2)] * min(5, n) + [Cm(1.5)] * max(0, min(6, n - 5)) + [Cm(2)] * max(0, n - 11)
-    doc_builder.add_table_data(df_shear_all, column_widths=widths, font_size=SUMMARY_FONT_SIZE)
+    doc_builder.add_table_data(
+        df_shear_all,
+        column_widths=[Cm(2), Cm(4), Cm(1.2), Cm(1.2), Cm(1.1), Cm(1.2), Cm(1.2), Cm(1.2), Cm(1.2), Cm(1.3), Cm(1)],
+        font_size=SUMMARY_FONT_SIZE,
+    )
 
     doc_builder.add_heading("Design Check Summary", level=3)
     # The closing table answers one question -- did every beam pass, and on
@@ -225,17 +248,17 @@ def beam_summary_doc(self: "BeamSummary", index: int = 1) -> None:
     doc_builder.add_table_status(
         df_check,
         column_widths=[
+            Cm(2),
+            Cm(1),
+            Cm(1),
             Cm(1.4),
-            Cm(0.8),
-            Cm(0.8),
-            Cm(1.9),
-            Cm(1.9),
-            Cm(1.9),
+            Cm(1.4),
+            Cm(1.4),
             Cm(1.2),
-            Cm(1.1),
-            Cm(1.1),
-            Cm(1.3),
-            Cm(1.3),
+            Cm(1.2),
+            Cm(1.2),
+            Cm(1.5),
+            Cm(1.5),
             Cm(1.1),
             Cm(1.0),
         ],
