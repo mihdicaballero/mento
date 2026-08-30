@@ -18,7 +18,7 @@ from typing import Any, TYPE_CHECKING
 from pint import Quantity
 
 from mento.precompute import CANONICAL, DISPLAY
-from mento.units import cm, inch, kip, kN, kNm, mm, psi, MPa, ft, dimensionless
+from mento.units import cm, inch, kip, kN, kNm, mm, psi, MPa, dimensionless
 
 if TYPE_CHECKING:
     from mento.beam import RectangularBeam
@@ -342,55 +342,58 @@ def apply_wall_shear_state(section: "ShearWall", state: WallShearCheckState) -> 
 
 #: Flexure reports per face, so its state nests two of them.
 FLEXURE_BEAM_ATTRIBUTES = {
-    "M_u": "_M_u",
-    "M_u_bot": "_M_u_bot",
-    "M_u_top": "_M_u_top",
-    "f_yt": "f_yt",
-    "A_s_tension": "_A_s_tension",
-    "A_s_min_bot": "_A_s_min_bot",
-    "A_s_min_top": "_A_s_min_top",
-    "A_s_max_bot": "_A_s_max_bot",
-    "A_s_max_top": "_A_s_max_top",
-    "A_s_req_bot": "_A_s_req_bot",
-    "A_s_req_top": "_A_s_req_top",
-    "phi_M_n_bot": "_phi_M_n_bot",
-    "phi_M_n_top": "_phi_M_n_top",
-    "c_d_bot": "_c_d_bot",
-    "c_d_top": "_c_d_top",
-    "d_b_max_bot": "_d_b_max_bot",
-    "d_b_max_top": "_d_b_max_top",
-    "rho_l_bot": "_rho_l_bot",
-    "rho_l_top": "_rho_l_top",
-    "DCR_bot": "_DCRb_bot",
-    "DCR_top": "_DCRb_top",
-    "A_s_bool_bot": "_A_s_bool_bot",
-    "A_s_bool_top": "_A_s_bool_top",
+    "M_u": ("_M_u", "moment"),
+    "M_u_bot": ("_M_u_bot", "moment"),
+    "M_u_top": ("_M_u_top", "moment"),
+    "f_yt": ("f_yt", "stress"),
+    "A_s_tension": ("_A_s_tension", "area"),
+    "A_s_min_bot": ("_A_s_min_bot", "area"),
+    "A_s_min_top": ("_A_s_min_top", "area"),
+    "A_s_max_bot": ("_A_s_max_bot", "area"),
+    "A_s_max_top": ("_A_s_max_top", "area"),
+    "A_s_req_bot": ("_A_s_req_bot", "area"),
+    "A_s_req_top": ("_A_s_req_top", "area"),
+    "phi_M_n_bot": ("_phi_M_n_bot", "moment"),
+    "phi_M_n_top": ("_phi_M_n_top", "moment"),
+    "c_d_bot": ("_c_d_bot", "raw"),
+    "c_d_top": ("_c_d_top", "raw"),
+    "d_b_max_bot": ("_d_b_max_bot", "length"),
+    "d_b_max_top": ("_d_b_max_top", "length"),
+    "rho_l_bot": ("_rho_l_bot", "dimensionless"),
+    "rho_l_top": ("_rho_l_top", "dimensionless"),
+    "DCR_bot": ("_DCRb_bot", "raw"),
+    "DCR_top": ("_DCRb_top", "raw"),
+    "A_s_bool_bot": ("_A_s_bool_bot", "raw"),
+    "A_s_bool_top": ("_A_s_bool_top", "raw"),
 }
 
 
 @dataclass
 class FlexureCheckState:
-    """One combination's flexure result, both faces."""
+    """One combination's flexure result, both faces, in the code's own units.
 
-    M_u: Quantity
-    M_u_bot: Quantity
-    M_u_top: Quantity
-    f_yt: Quantity
-    A_s_tension: Quantity
-    A_s_min_bot: Quantity
-    A_s_min_top: Quantity
-    A_s_max_bot: Quantity
-    A_s_max_top: Quantity
-    A_s_req_bot: Quantity
-    A_s_req_top: Quantity
-    phi_M_n_bot: Quantity
-    phi_M_n_top: Quantity
+    Floats, for the reason given on :class:`ShearCheckState`.
+    """
+
+    M_u: float
+    M_u_bot: float
+    M_u_top: float
+    f_yt: float
+    A_s_tension: float
+    A_s_min_bot: float
+    A_s_min_top: float
+    A_s_max_bot: float
+    A_s_max_top: float
+    A_s_req_bot: float
+    A_s_req_top: float
+    phi_M_n_bot: float
+    phi_M_n_top: float
     c_d_bot: float
     c_d_top: float
-    d_b_max_bot: Quantity
-    d_b_max_top: Quantity
-    rho_l_bot: Quantity
-    rho_l_top: Quantity
+    d_b_max_bot: float
+    d_b_max_top: float
+    rho_l_bot: float
+    rho_l_top: float
     DCR_bot: float
     DCR_top: float
     A_s_bool_bot: bool
@@ -399,32 +402,27 @@ class FlexureCheckState:
 
 
 def new_flexure_state(section: "RectangularBeam") -> FlexureCheckState:
-    """A zeroed flexure state carrying the section's unit system."""
-    imperial = section.concrete.is_imperial
-    stress = 0 * (psi if imperial else MPa)
-    length = 0 * (inch if imperial else mm)
-    area = 0 * (inch**2 if imperial else cm**2)
-    moment = 0 * (kip * ft if imperial else kNm)
+    """A zeroed flexure state. Every field is a float, so nothing is converted."""
     return FlexureCheckState(
-        M_u=moment,
-        M_u_bot=moment,
-        M_u_top=moment,
-        f_yt=stress,
-        A_s_tension=area,
-        A_s_min_bot=area,
-        A_s_min_top=area,
-        A_s_max_bot=area,
-        A_s_max_top=area,
-        A_s_req_bot=area,
-        A_s_req_top=area,
-        phi_M_n_bot=moment,
-        phi_M_n_top=moment,
+        M_u=0.0,
+        M_u_bot=0.0,
+        M_u_top=0.0,
+        f_yt=0.0,
+        A_s_tension=0.0,
+        A_s_min_bot=0.0,
+        A_s_min_top=0.0,
+        A_s_max_bot=0.0,
+        A_s_max_top=0.0,
+        A_s_req_bot=0.0,
+        A_s_req_top=0.0,
+        phi_M_n_bot=0.0,
+        phi_M_n_top=0.0,
         c_d_bot=0.0,
         c_d_top=0.0,
-        d_b_max_bot=length,
-        d_b_max_top=length,
-        rho_l_bot=0 * dimensionless,
-        rho_l_top=0 * dimensionless,
+        d_b_max_bot=0.0,
+        d_b_max_top=0.0,
+        rho_l_bot=0.0,
+        rho_l_top=0.0,
         DCR_bot=0.0,
         DCR_top=0.0,
         A_s_bool_bot=False,
@@ -434,9 +432,10 @@ def new_flexure_state(section: "RectangularBeam") -> FlexureCheckState:
 
 
 def apply_flexure_state(section: "RectangularBeam", state: FlexureCheckState) -> None:
-    """Copy a flexure state onto the section — the same compatibility layer."""
-    for field_name, attribute in FLEXURE_BEAM_ATTRIBUTES.items():
-        setattr(section, attribute, getattr(state, field_name))
+    """Copy a flexure state onto the section, back in pint."""
+    imperial = section.concrete.is_imperial
+    for field_name, (attribute, kind) in FLEXURE_BEAM_ATTRIBUTES.items():
+        setattr(section, attribute, to_display(getattr(state, field_name), kind, imperial))
     # Sticky rather than copied: the flag means "some combination needed
     # compression steel", so the last one checked must not clear it.
     section._doubly_reinforced = section._doubly_reinforced or state.doubly_reinforced

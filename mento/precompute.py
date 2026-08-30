@@ -21,7 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from mento.units import cm, ft, inch, kip, kN, lbf, m, mm, MPa, N, psi
+from mento.units import cm, ft, inch, kip, kN, kNm, lbf, m, mm, MPa, N, psi
 
 if TYPE_CHECKING:
     from mento.beam import RectangularBeam
@@ -30,14 +30,21 @@ if TYPE_CHECKING:
 #: publishes separately rounded coefficients for SI and US customary (ADR-0005),
 #: so the system is a property of the section, not a preference.
 CANONICAL = {
-    False: {"length": mm, "area": mm**2, "stress": MPa, "force": N},
-    True: {"length": inch, "area": inch**2, "stress": psi, "force": lbf},
+    False: {"length": mm, "area": mm**2, "stress": MPa, "force": N, "moment": N * mm},
+    True: {"length": inch, "area": inch**2, "stress": psi, "force": lbf, "moment": lbf * inch},
 }
 
 #: The units the compatibility layer and the report tables expect to read back.
 DISPLAY = {
-    False: {"length": cm, "area": cm**2, "stress": MPa, "force": kN, "per_length": cm**2 / m},
-    True: {"length": inch, "area": inch**2, "stress": psi, "force": kip, "per_length": inch**2 / ft},
+    False: {"length": cm, "area": cm**2, "stress": MPa, "force": kN, "per_length": cm**2 / m, "moment": kNm},
+    True: {
+        "length": inch,
+        "area": inch**2,
+        "stress": psi,
+        "force": kip,
+        "per_length": inch**2 / ft,
+        "moment": kip * ft,
+    },
 }
 
 # A per-length reinforcement ratio (area per unit length) has the dimension of a
@@ -66,11 +73,14 @@ class SectionFloats:
     A_x: float
     A_s_bot: float
     A_s_top: float
+    c_mec_bot: float
+    c_mec_top: float
     A_v: float
     stirrup_d_b: float
     stirrup_n: int
     f_c: float
     f_y: float
+    E_s: float
     # lambda_factor and phi_v are deliberately absent: they are plain floats
     # on the concrete already, and code-specific. Nothing to convert, so
     # nothing to precompute.
@@ -113,12 +123,15 @@ def refresh_section_floats(section: "RectangularBeam") -> SectionFloats:
         A_x=section._A_x.to(area).magnitude,
         A_s_bot=section._A_s_bot.to(area).magnitude,
         A_s_top=section._A_s_top.to(area).magnitude,
+        c_mec_bot=section._c_mec_bot.to(length).magnitude,
+        c_mec_top=section._c_mec_top.to(length).magnitude,
         # An area per unit length converts to a plain length.
         A_v=section._A_v.to(length).magnitude,
         stirrup_d_b=section._stirrup_d_b.to(length).magnitude,
         stirrup_n=section._stirrup_n,
         f_c=section.concrete.f_c.to(stress).magnitude,
         f_y=section.steel_bar.f_y.to(stress).magnitude,
+        E_s=section.steel_bar._E_s.to(stress).magnitude,
     )
     section.__dict__["_floats"] = floats
     return floats
