@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from IPython.display import Markdown, display
 from typing import TYPE_CHECKING, Any, Optional, Dict, Tuple
 
 if TYPE_CHECKING:
@@ -9,7 +8,6 @@ import numpy as np
 import pandas as pd
 from pandas import DataFrame
 import math
-import warnings
 from numbers import Integral
 # from devtools import debug
 
@@ -20,13 +18,12 @@ from mento.material import (
 )
 from mento.rebar import Rebar
 from mento.units import MPa, mm, inch, kN, m, cm, kNm, dimensionless
-from mento.results import Formatter, TablePrinter
-from mento.i18n import get_language, translate
 from mento.forces import Forces
 from mento.settings import BeamSettings
-from mento.documents import flexure_report_doc, shear_report_doc
-from mento.plots import plot_beam_section
-from mento.report_tables import build_flexure_report, build_shear_report
+from mento.reports import views
+from mento.reports.documents import flexure_report_doc, shear_report_doc
+from mento.plots.sections import plot_beam_section
+from mento.reports.tables import build_flexure_report, build_shear_report
 from mento.design_results import (
     FlexureCheck,
     FlexureDesign,
@@ -170,6 +167,12 @@ class RectangularBeam(RectangularSection):
         self._initialize_code_attributes()
         # Longitudinal rebar attributes
         self._initialize_longitudinal_rebar_attributes()
+
+        # Rendered Markdown of the last view asked for, kept so a caller can
+        # read the text back instead of only seeing it displayed.
+        self._md_data: str = ""
+        self._md_flexure_results: str = ""
+        self._md_shear_results: str = ""
 
         # Results attributes
         self._materials_shear: Dict = {}
@@ -673,7 +676,7 @@ class RectangularBeam(RectangularSection):
         """Compute one flexure combination, and build its report only if asked.
 
         The design code does the calculation; assembling the row and the detail
-        tables is presentation and lives in :mod:`mento.report_tables`.
+        tables is presentation and lives in :mod:`mento.reports.tables`.
         """
         if self.concrete.design_code in ("ACI 318-19", "CIRSOC 201-25"):
             _check_flexure_ACI_318_19(self, force)
@@ -1000,161 +1003,50 @@ class RectangularBeam(RectangularSection):
         """
         return build_shear_design(self)
 
-    # Beam results for Jupyter Notebook
+    ##########################################################
+    # PRESENTATION — every one of these delegates
+    ##########################################################
+    # Rendering a result is a presentation choice, not part of the beam, so the
+    # notebook views live in `mento.reports.views`, the Word reports in
+    # `mento.reports.documents` and the drawing in `mento.plots.sections`.
+
     @property
     def data(self) -> None:
-        type = self.mode.capitalize()
-        markdown_content = (
-            f"{type} {self.label}, $b$={self.width.to('cm')}"
-            f", $h$={self.height.to('cm')}, $c_{{c}}$={self.c_c.to('cm')}, \
-                            Concrete {self.concrete.name}, Rebar {self.steel_bar.name}."
-        )
-        self._md_data = markdown_content
-        # Display the combined content
-        display(Markdown(markdown_content))  # type: ignore
-
-        return None
+        """Show the section's basic data as Markdown."""
+        return views.data(self)
 
     @property
     def flexure_results(self) -> None:
-        if not self._flexure_checked:
-            warnings.warn(
-                "Flexural design has not been performed yet. Call _check_flexure() or design_flexure() first.",
-                UserWarning,
-            )
-            self._md_flexure_results = "Flexural results are not available."
-            return None
-        # Check if limiting case details exist
-        top_details = self._limiting_case_flexure_top_details or {}
-        bot_details = self._limiting_case_flexure_bot_details or {}
-        # Use limiting case results
-        top_result_data = top_details.get("flexure_capacity_top")
-        bot_result_data = bot_details.get("flexure_capacity_bot")
-
-        checks_pass_top = top_details.get("checks_pass")
-        checks_pass_bot = bot_details.get("checks_pass")
-        warning_top = "⚠️ Some checks failed, see detailed results." if not checks_pass_top else ""
-        warning_bot = "⚠️ Some checks failed, see detailed results." if not checks_pass_bot else ""
-
-        # Pending for approval
-        # all_checks_top = top_details.get('flexure_check')
-        # all_checks_bot = bot_details.get('flexure_check')
-        # all_checks = all_checks_top and all_checks_bot
-
-        # Formatter instance for DCR formatting
-        markdown_content = ""
-        formatter = Formatter()
-        symbols = self._flexure_symbols
-        md_demand = symbols["md_demand"]
-        md_capacity = symbols["md_capacity"]
-
-        # Handle top result data
-        if top_result_data:
-            top_rebar_1 = top_result_data["Value"][0]
-            top_rebar_2 = top_result_data["Value"][1]
-            area_top = top_result_data["Value"][7]
-            Mu_top = self._limiting_case_flexure_top_details["forces"]["Value"][0]
-            Mn_top = top_result_data["Value"][9]
-            DCR_top = top_result_data["Value"][10]
-
-            rebar_top = f"{top_rebar_1}" + (f" ++ {top_rebar_2}" if top_rebar_2 != "-" else "")
-            formatted_DCR_top = formatter.DCR(DCR_top)
-
-            markdown_content += (
-                f"Top longitudinal rebar: {rebar_top}, $A_{{s,top}}$ = {area_top} cm², "
-                f"${md_demand}$ = {Mu_top} kNm, "
-                f"${md_capacity}$ = {Mn_top} kNm → {formatted_DCR_top} {warning_top}\n\n"
-            )
-        else:
-            markdown_content += "No top moment to check.\n\n"
-
-        # Handle bottom result data
-        if bot_result_data:
-            bot_rebar_1 = bot_result_data["Value"][0]
-            bot_rebar_2 = bot_result_data["Value"][1]
-            area_bot = bot_result_data["Value"][7]
-            Mu_bot = self._limiting_case_flexure_bot_details["forces"]["Value"][1]
-            Mn_bot = bot_result_data["Value"][9]
-            DCR_bot = bot_result_data["Value"][10]
-
-            rebar_bot = f"{bot_rebar_1}" + (f" ++ {bot_rebar_2}" if bot_rebar_2 != "-" else "")
-            formatted_DCR_bot = formatter.DCR(DCR_bot)
-
-            markdown_content += (
-                f"Bottom longitudinal rebar: {rebar_bot}, $A_{{s,bot}}$ = {area_bot} cm², "
-                f"${md_demand}$ = {Mu_bot} kNm, "
-                f"${md_capacity}$ = {Mn_bot} kNm → {formatted_DCR_bot} {warning_bot}"
-            )
-        else:
-            markdown_content += "No bottom moment to check."
-
-        # markdown_content += 'Beam flexure checks PASS ✔️' if all_checks else "Beam flexure checks FAIL ❌"
-
-        self._md_flexure_results = markdown_content
-        display(Markdown(markdown_content))
+        """Show a summary of the flexure results as Markdown."""
+        return views.flexure_results(self)
 
     @property
     def shear_results(self) -> None:
-        if not self._shear_checked:
-            warnings.warn(
-                "Shear design has not been performed yet. Call check_shear() or design_shear() first.",
-                UserWarning,
-            )
-            self._md_shear_results = "Shear results are not available."
-            return None
+        """Show a summary of the shear results as Markdown."""
+        return views.shear_results(self)
 
-        # Check if limiting case details exist
-        shear_details = self._limiting_case_shear_details or {}
-        # Use limiting case results
-        limiting_reinforcement = shear_details.get("shear_reinforcement")
-        limiting_forces = shear_details.get("forces")
-        limiting_shear_concrete = shear_details.get("shear_concrete")
-        checks_pass = shear_details.get("checks_pass")
-        markdown_content = ""
-        if shear_details:
-            # Create FUFormatter instance and format FU value
-            formatter = Formatter()
-            formatted_DCR = formatter.DCR(limiting_shear_concrete["Value"][-1])
-            if self._A_v == 0 * cm:
-                rebar_v = "not assigned"
-            else:
-                rebar_v = (
-                    f"{int(limiting_reinforcement['Value'][0])}eØ{limiting_reinforcement['Value'][1]}/"
-                    f"{limiting_reinforcement['Value'][2]} cm"
-                )
-            # Limitng cases checks
-            warning = "⚠️ Some checks failed, see detailed results." if not checks_pass else ""
-            if self.concrete.design_code == "ACI 318-19" or self.concrete.design_code == "CIRSOC 201-25":
-                markdown_content = (
-                    f"Shear reinforcing {rebar_v}, $A_v$={limiting_reinforcement['Value'][6]} cm²/m"
-                    f", $V_u$={limiting_forces['Value'][1]} kN, $\\phi V_n$={limiting_shear_concrete['Value'][7]} kN → {formatted_DCR} {warning}"
-                )  # noqa: E501
-            else:  # self.concrete.design_code == "EN 1992-2004"
-                markdown_content = (
-                    f"Shear reinforcing {rebar_v}, $A_{{sw}}$={limiting_reinforcement['Value'][6]} cm²/m"
-                    f", $V_{{Ed,2}}$={limiting_forces['Value'][1]} kN, $V_{{Rd}}$={limiting_shear_concrete['Value'][6]} kN → {formatted_DCR} {warning}"
-                )  # noqa: E501
-        else:
-            markdown_content += "No shear to check."
-        self._md_shear_results = markdown_content
-        display(Markdown(markdown_content))
-
-        return None
-
-    # Beam results for Jupyter Notebook
     @property
     def results(self) -> None:
-        """
-        Ensure that properties, flexure results, and shear results are available and display them.
-        Handles cases where flexure or shear results are not yet available.
-        """
-        if not hasattr(self, "_md_properties"):
-            self.data  # This will generate _md_properties
-        if self._flexure_checked:
-            self.flexure_results  # This will generate _md_flexure_results
-        if self._shear_checked:
-            self.shear_results  # This will generate _md_shear_results
-        return None
+        """Show every available result as Markdown."""
+        return views.results(self)
+
+    def flexure_results_detailed(self, force: Optional[Forces] = None) -> None:
+        """Print the detailed flexure tables for one combination."""
+        return views.flexure_results_detailed(self, force)
+
+    def shear_results_detailed(self, force: Optional[Forces] = None) -> None:
+        """Print the detailed shear tables for one combination."""
+        return views.shear_results_detailed(self, force)
+
+    @property
+    def _report_text(self) -> Dict[str, str]:
+        """Translated headings shared by the views and the Word reports."""
+        return views._report_text(self)
+
+    def _report_file_name(self, heading_key: str) -> str:
+        return views._report_file_name(self, heading_key)
+
+    # Beam results for Jupyter Notebook
 
     @property
     def _flexure_symbols(self) -> Dict[str, str]:
@@ -1184,221 +1076,19 @@ class RectangularBeam(RectangularSection):
             "md_capacity": "\\phi M_n",
         }
 
-    @property
-    def _report_text(self) -> Dict[str, str]:
-        """Report wording of this element, so a slab is not reported as a beam.
-
-        ``ShearWall`` overrides the detailed report methods with its own wording,
-        so only the beam and the slab are covered here. The strings double as the
-        keys of the language catalog in :mod:`mento.i18n`.
-        """
-        if self.mode == "slab":
-            return {
-                "flexure_banner": "===== SLAB FLEXURE DETAILED RESULTS =====",
-                "shear_banner": "===== SLAB SHEAR DETAILED RESULTS =====",
-                "flexure_doc_title": "Concrete slab flexure check",
-                "shear_doc_title": "Concrete slab shear check",
-                "flexure_heading": "Slab {label} flexure check",
-                "shear_heading": "Slab {label} shear check",
-            }
-        return {
-            "flexure_banner": "===== BEAM FLEXURE DETAILED RESULTS =====",
-            "shear_banner": "===== BEAM SHEAR DETAILED RESULTS =====",
-            "flexure_doc_title": "Concrete beam flexure check",
-            "shear_doc_title": "Concrete beam shear check",
-            "flexure_heading": "Beam {label} flexure check",
-            "shear_heading": "Beam {label} shear check",
-        }
-
-    def _report_file_name(self, heading_key: str) -> str:
-        """Name of the Word file of a report.
-
-        Built from the English heading whatever the report language is, so a
-        project keeps one naming scheme.
-        """
-        heading = self._report_text[heading_key].format(label=self.label)
-        return f"{heading} {self.concrete.design_code}.docx"
-
-    def flexure_results_detailed(self, force: Optional[Forces] = None) -> None:
-        """
-        Displays detailed flexure results.
-
-        Parameters
-        ----------
-        forces : Forces, optional
-            The specific Forces object to display results for. If None, displays results for the limiting case.
-        Returns
-        -------
-        None
-        """
-        if not self._flexure_checked:
-            warnings.warn(
-                "Flexural check has not been performed yet. Call _check_flexure or design_flexure first.",
-                UserWarning,
-            )
-            self._md_flexure_results = "Flexure results are not available."
-            return None
-
-        # Determine which results to display (limiting case by default)
-        if force:
-            if force.id not in self._flexure_results_detailed_list:
-                raise ValueError(f"No results found for Forces object with ID {force.id}.")
-            result_data = self._flexure_results_detailed_list[force.id]
-            top_result_data = result_data["flexure_capacity_top"]
-            bot_result_data = result_data["flexure_capacity_bot"]
-            forces_result = result_data["forces"]
-            min_max_result = result_data["min_max"]
-        else:
-            if self._limiting_case_flexure_top_details is None:
-                raise ValueError("Top limiting case details are not available.")
-            if self._limiting_case_flexure_bot_details is None:
-                raise ValueError("Bottom limiting case details are not available.")
-            # Use the worst-case top and bottom scenarios
-            top_result_data = self._limiting_case_flexure_top_details["flexure_capacity_top"]
-            bot_result_data = self._limiting_case_flexure_bot_details["flexure_capacity_bot"]
-            forces_result = {
-                "Design forces": [
-                    "Top max moment",
-                    "Bottom max moment",
-                ],
-                "Variable": [
-                    self._flexure_symbols["demand_top"],
-                    self._flexure_symbols["demand_bot"],
-                ],
-                "Value": [
-                    round(self._limiting_case_flexure_top_details["forces"]["Value"][0], 2),
-                    round(self._limiting_case_flexure_bot_details["forces"]["Value"][1], 2),
-                ],
-                "Unit": ["kNm", "kNm"],
-            }
-            min_max_result = {
-                "Check": [
-                    "Min/Max As rebar top",
-                    "Minimum spacing top",
-                    "Min/Max As rebar bottom",
-                    "Minimum spacing bottom",
-                ],
-                "Unit": ["cm²", "mm", "cm²", "mm"],
-                "Value": [
-                    round(
-                        self._limiting_case_flexure_top_details["min_max"]["Value"][0],
-                        2,
-                    ),  # Top limiting case As
-                    round(
-                        self._limiting_case_flexure_top_details["min_max"]["Value"][1],
-                        2,
-                    ),  # Top limiting case spacing
-                    round(
-                        self._limiting_case_flexure_bot_details["min_max"]["Value"][2],
-                        2,
-                    ),  # Bottom limiting case As
-                    round(
-                        self._limiting_case_flexure_bot_details["min_max"]["Value"][3],
-                        2,
-                    ),  # Bottom limiting case spacing
-                ],
-                "Min.": [
-                    round(self._limiting_case_flexure_top_details["min_max"]["Min."][0], 2),  # Top limiting case As_min
-                    self._limiting_case_flexure_top_details["min_max"]["Min."][1],  # Top limiting case spacing min
-                    round(
-                        self._limiting_case_flexure_bot_details["min_max"]["Min."][2], 2
-                    ),  # Bottom limiting case As_min
-                    self._limiting_case_flexure_bot_details["min_max"]["Min."][3],  # Bottom limiting case spacing min
-                ],
-                "Max.": [
-                    round(self._limiting_case_flexure_top_details["min_max"]["Max."][0], 2),  # Top limiting case As_max
-                    "",  # No max constraint for spacing
-                    round(
-                        self._limiting_case_flexure_bot_details["min_max"]["Max."][2], 2
-                    ),  # Bottom limiting case As_max
-                    "",  # No max constraint for spacing
-                ],
-                "Ok?": [
-                    self._limiting_case_flexure_top_details["min_max"]["Ok?"][0],  # Top As check
-                    self._limiting_case_flexure_top_details["min_max"]["Ok?"][1],  # Top spacing check
-                    self._limiting_case_flexure_bot_details["min_max"]["Ok?"][2],  # Bottom As check
-                    self._limiting_case_flexure_bot_details["min_max"]["Ok?"][3],  # Bottom spacing check
-                ],
-            }
-
-        # Create TablePrinter instances for detailed display
-        language = get_language()
-        print(translate(self._report_text["flexure_banner"], language))
-        materials_printer = TablePrinter("MATERIALS", language)
-        materials_printer.print_table_data(self._materials_flexure, headers="keys")
-
-        geometry_printer = TablePrinter("GEOMETRY", language)
-        geometry_printer.print_table_data(self._geometry_flexure, headers="keys")
-
-        forces_printer = TablePrinter("FORCES", language)
-        forces_printer.print_table_data(forces_result, headers="keys")
-
-        min_max_printer = TablePrinter("MAX AND MIN LIMIT CHECKS", language)
-        min_max_printer.print_table_data(min_max_result, headers="keys")
-
-        capacity_printer = TablePrinter("FLEXURAL CAPACITY - TOP", language)
-        capacity_printer.print_table_data(top_result_data, headers="keys")
-        capacity_printer = TablePrinter("FLEXURAL CAPACITY - BOTTOM", language)
-        capacity_printer.print_table_data(bot_result_data, headers="keys")
-
     def flexure_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
         """Write the detailed flexure results to a Word document.
 
-        The assembly lives in :mod:`mento.documents`.
+        The assembly lives in :mod:`mento.reports.documents`.
         """
         flexure_report_doc(self, force)
 
     def shear_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
         """Write the detailed shear results to a Word document.
 
-        The assembly lives in :mod:`mento.documents`.
+        The assembly lives in :mod:`mento.reports.documents`.
         """
         shear_report_doc(self, force)
-
-    def shear_results_detailed(self, force: Optional[Forces] = None) -> None:
-        """
-        Displays detailed shear results.
-
-        Parameters
-        ----------
-        forces : Forces, optional
-            The specific Forces object to display results for. If None, displays results for the limiting case.
-        Returns
-        -------
-        None
-        """
-        if not self._shear_checked:
-            warnings.warn(
-                "Shear check has not been performed yet. Call check_shear or design_shear first.",
-                UserWarning,
-            )
-            self._md_shear_results = "Shear results are not available."
-            return None
-        # Determine which results to display (limiting case by default)
-        if force:
-            force_id = force.id
-            if force_id not in self._shear_results_detailed_list:
-                raise ValueError(f"No results found for Forces object with ID {force_id}.")
-            result_data = self._shear_results_detailed_list[force_id]
-        else:
-            # Default to limiting case
-            result_data = self._limiting_case_shear_details
-
-        # Create a TablePrinter instance and display tables
-        language = get_language()
-        print(translate(self._report_text["shear_banner"], language))
-        materials_printer = TablePrinter("MATERIALS", language)
-        materials_printer.print_table_data(self._materials_shear, headers="keys")
-        geometry_printer = TablePrinter("GEOMETRY", language)
-        geometry_printer.print_table_data(self._geometry_shear, headers="keys")
-        forces_printer = TablePrinter("FORCES", language)
-        forces_printer.print_table_data(result_data["forces"], headers="keys")
-        steel_printer = TablePrinter("SHEAR STRENGTH", language)
-        steel_printer.print_table_data(result_data["shear_reinforcement"], headers="keys")
-        min_max_printer = TablePrinter("MAX AND MIN LIMIT CHECKS", language)
-        min_max_printer.print_table_data(result_data["min_max"], headers="keys")
-        concrete_printer = TablePrinter("CONCRETE STRENGTH", language)
-        concrete_printer.print_table_data(result_data["shear_concrete"], headers="keys")
 
     def _format_longitudinal_rebar_string(self, n1: int, d_b1: Quantity, n2: int = 0, d_b2: Quantity = 0 * mm) -> str:
         """
@@ -1437,7 +1127,7 @@ class RectangularBeam(RectangularSection):
     def plot(self, show: bool = False) -> "Figure":
         """Draw the cross-section with its reinforcement.
 
-        The drawing itself lives in :mod:`mento.plots`; keeping it out of this
+        The drawing itself lives in :mod:`mento.plots.sections`; keeping it out of this
         class is what stops the element from being part matplotlib.
         """
         return plot_beam_section(self, show=show)

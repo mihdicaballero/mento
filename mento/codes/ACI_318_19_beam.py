@@ -247,7 +247,7 @@ def _check_shear_ACI_318_19(self: "RectangularBeam", force: Forces) -> None:
 
     Calculation only: the numbers are left on the beam, and whether to turn them
     into a report table is the caller's decision (see
-    :mod:`mento.report_tables`). Callers that only want values read them through
+    :mod:`mento.reports.tables`). Callers that only want values read them through
     :func:`~mento.design_results.capture_shear_check`.
     """
     if isinstance(self.concrete, Concrete_ACI_318_19):
@@ -791,7 +791,7 @@ def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> None:
     areas, and calculates the design capacity ratios.
 
     Calculation only — the results are left on the beam, and turning them into a
-    report table is the caller's decision (see :mod:`mento.report_tables`).
+    report table is the caller's decision (see :mod:`mento.reports.tables`).
 
     Parameters:
         force (Forces): The force acting on the section, which must include a single moment value.

@@ -35,7 +35,7 @@ from mento.codes.EN_1992_2004_beam import (
 from mento.results import CUSTOM_COLORS, DocumentBuilder
 from mento.settings import BeamSettings
 from mento.rebar import Rebar
-from mento.plots import _format_rebar_layer_text
+from mento.plots.sections import _format_rebar_layer_text
 
 
 @pytest.fixture()
@@ -2743,7 +2743,7 @@ def sample_beam() -> RectangularBeam:
 
 def test_beam_data_property(sample_beam: RectangularBeam) -> None:
     """Test the data property displays beam information."""
-    with patch("mento.beam.display") as mock_display:
+    with patch("mento.reports.views.display") as mock_display:
         # Call the property
         result = sample_beam.data
 
@@ -2761,7 +2761,7 @@ def test_beam_data_property(sample_beam: RectangularBeam) -> None:
 
 def test_flexure_results_property_not_checked(sample_beam: RectangularBeam) -> None:
     """Test flexure_results property when flexure not checked."""
-    with patch("mento.beam.display"):
+    with patch("mento.reports.views.display"):
         with pytest.warns(UserWarning, match="Flexural design has not been performed"):
             result = sample_beam.flexure_results
 
@@ -2788,7 +2788,7 @@ def test_flexure_results_property_after_check() -> None:
     node = Node(beam, forces)
     node.check_flexure()
 
-    with patch("mento.beam.display") as mock_display:
+    with patch("mento.reports.views.display") as mock_display:
         result = beam.flexure_results
 
         # Should return None
@@ -2804,7 +2804,7 @@ def test_flexure_results_property_after_check() -> None:
 
 def test_shear_results_property_not_checked(sample_beam: RectangularBeam) -> None:
     """Test shear_results property when shear not checked."""
-    with patch("mento.beam.display"):
+    with patch("mento.reports.views.display"):
         with pytest.warns(UserWarning, match="Shear design has not been performed"):
             result = sample_beam.shear_results
 
@@ -2830,7 +2830,7 @@ def test_shear_results_property_after_check() -> None:
     node = Node(beam, forces)
     node.check_shear()
 
-    with patch("mento.beam.display") as mock_display:
+    with patch("mento.reports.views.display") as mock_display:
         result = beam.shear_results
 
         assert result is None
@@ -2858,7 +2858,7 @@ def test_results_property_combined() -> None:
     node = Node(beam, forces)
     node.check()
 
-    with patch("mento.beam.display") as mock_display:
+    with patch("mento.reports.views.display") as mock_display:
         result = beam.results
 
         assert result is None

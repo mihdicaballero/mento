@@ -4,7 +4,7 @@ The document assembly used to live on ``RectangularBeam``. Phase 3 of the
 architecture roadmap moves it here; the beam keeps one-line delegating methods,
 so ``beam.shear_results_detailed_doc()`` still works.
 
-These read the report tables that :mod:`mento.report_tables` leaves on the beam
+These read the report tables that :mod:`mento.reports.tables` leaves on the beam
 and hand them to :class:`~mento.results.DocumentBuilder`.
 """
 

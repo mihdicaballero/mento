@@ -68,6 +68,63 @@ def test_importing_the_code_layer_does_not_drag_in_presentation() -> None:
     assert result.stdout.strip() == "False False", f"mento.codes pulled in presentation: {result.stdout!r}"
 
 
+MENTO_ROOT = EQUATIONS_ROOT.parent
+
+# Every element: the classes a user builds and calls a check on.
+ELEMENT_MODULES = [
+    MENTO_ROOT / name
+    for name in (
+        "beam.py",
+        "slab.py",
+        "shear_wall.py",
+        "punching.py",
+        "beam_summary.py",
+        "shear_wall_summary.py",
+    )
+]
+
+PRESENTATION_LIBRARIES = {"matplotlib", "docx", "IPython"}
+
+
+@pytest.mark.parametrize("path", ELEMENT_MODULES, ids=lambda p: p.name)
+def test_elements_do_not_import_presentation_libraries(path: Path) -> None:
+    """Phase 3: an element is geometry and orchestration, not a renderer.
+
+    Drawing lives in ``mento.plots``, tables and reports in ``mento.reports``,
+    and the element only ever delegates. Importing matplotlib, python-docx or
+    IPython here is the signal that presentation has leaked back in.
+
+    A ``TYPE_CHECKING`` import is fine — a return annotation costs nothing at
+    runtime — so only real imports count.
+    """
+    tree = _parse(path)
+    type_checking_only = {
+        id(node)
+        for parent in ast.walk(tree)
+        if isinstance(parent, ast.If)
+        and (
+            (isinstance(parent.test, ast.Name) and parent.test.id == "TYPE_CHECKING")
+            or (isinstance(parent.test, ast.Attribute) and parent.test.attr == "TYPE_CHECKING")
+        )
+        for node in ast.walk(parent)
+    }
+
+    offenders = []
+    for node in ast.walk(tree):
+        if id(node) in type_checking_only:
+            continue
+        if isinstance(node, ast.Import):
+            offenders += [a.name for a in node.names if a.name.split(".")[0] in PRESENTATION_LIBRARIES]
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            if node.module.split(".")[0] in PRESENTATION_LIBRARIES:
+                offenders.append(node.module)
+
+    assert not offenders, (
+        f"{path.name} imports presentation libraries {offenders}. "
+        "Move the rendering into mento.plots or mento.reports and delegate to it."
+    )
+
+
 BEAM_CODE_MODULES = [
     EQUATIONS_ROOT / "ACI_318_19_beam.py",
     EQUATIONS_ROOT / "EN_1992_2004_beam.py",

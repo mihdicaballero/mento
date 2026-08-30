@@ -3,7 +3,6 @@ from pandas import DataFrame
 import pandas as pd
 import copy
 from collections import OrderedDict
-from docx.shared import Cm
 
 from mento.material import (
     Concrete,
@@ -14,8 +13,7 @@ from mento.forces import Forces
 from mento.beam import RectangularBeam
 from mento import mm, cm, kN, MPa, m, inch, ft, kNm
 from mento.node import Node
-from mento.results import DocumentBuilder
-from mento._version import __version__ as MENTO_VERSION
+from mento.reports.summaries import beam_summary_doc
 
 
 class BeamSummary:
@@ -578,209 +576,13 @@ class BeamSummary:
         print("✅ Beam design imported and summary data updated.")
 
     def results_detailed_doc(self, index: int = 1) -> None:
-        """
-        Export detailed results to Word document.
-        Shows detailed shear/flexure for one beam, then summary tables for all.
+        """Export detailed results for one beam, plus summary tables for all, to Word.
+
+        The assembly lives in :mod:`mento.reports.summaries`.
 
         Parameters
         ----------
         index : int
             1-based index of the beam to show detailed results for (default: 1)
         """
-
-        if index < 1 or index > len(self.nodes):
-            raise IndexError(f"Index {index} out of range. Valid: 1 to {len(self.nodes)}")
-
-        node = self.nodes[index - 1]
-        beam: RectangularBeam = node.section  # type: ignore
-
-        # Run checks if not already done
-        node.check_flexure()
-        node.check_shear()
-
-        # Create document with smaller font
-        doc_builder = DocumentBuilder(title="Beam Summary Analysis", font_size=8)
-        doc_builder.add_heading("Beam Summary Analysis", level=1)
-        doc_builder.add_text(f"Made with mento {MENTO_VERSION}. Design code: {self.concrete.design_code}")
-        doc_builder.add_text(
-            "This report presents the detailed results for the first beam of the summary, followed by summary tables for all beams."
-        )
-
-        # --- DETAILED FLEXURE RESULTS FOR SELECTED BEAM ---
-        doc_builder.add_heading(f"Beam {beam.label} flexure check", level=2)
-
-        # Build dataframes same as flexure_results_detailed_doc
-        top_result_data = beam._limiting_case_flexure_top_details["flexure_capacity_top"]
-        bot_result_data = beam._limiting_case_flexure_bot_details["flexure_capacity_bot"]
-        forces_result = {
-            "Design forces": ["Top max moment", "Bottom max moment"],
-            "Variable": [
-                beam._flexure_symbols["demand_top"],
-                beam._flexure_symbols["demand_bot"],
-            ],
-            "Value": [
-                round(beam._limiting_case_flexure_top_details["forces"]["Value"][0], 2),
-                round(beam._limiting_case_flexure_bot_details["forces"]["Value"][1], 2),
-            ],
-            "Unit": ["kNm", "kNm"],
-        }
-        min_max_result = {
-            "Check": [
-                "Min/Max As rebar top",
-                "Minimum spacing top",
-                "Min/Max As rebar bottom",
-                "Minimum spacing bottom",
-            ],
-            "Unit": ["cm²", "mm", "cm²", "mm"],
-            "Value": [
-                round(beam._limiting_case_flexure_top_details["min_max"]["Value"][0], 2),
-                round(beam._limiting_case_flexure_top_details["min_max"]["Value"][1], 2),
-                round(beam._limiting_case_flexure_bot_details["min_max"]["Value"][2], 2),
-                round(beam._limiting_case_flexure_bot_details["min_max"]["Value"][3], 2),
-            ],
-            "Min.": [
-                round(beam._limiting_case_flexure_top_details["min_max"]["Min."][0], 2),
-                beam._limiting_case_flexure_top_details["min_max"]["Min."][1],
-                round(beam._limiting_case_flexure_bot_details["min_max"]["Min."][2], 2),
-                beam._limiting_case_flexure_bot_details["min_max"]["Min."][3],
-            ],
-            "Max.": [
-                round(beam._limiting_case_flexure_top_details["min_max"]["Max."][0], 2),
-                "",
-                round(beam._limiting_case_flexure_bot_details["min_max"]["Max."][2], 2),
-                "",
-            ],
-            "Ok?": [
-                beam._limiting_case_flexure_top_details["min_max"]["Ok?"][0],
-                beam._limiting_case_flexure_top_details["min_max"]["Ok?"][1],
-                beam._limiting_case_flexure_bot_details["min_max"]["Ok?"][2],
-                beam._limiting_case_flexure_bot_details["min_max"]["Ok?"][3],
-            ],
-        }
-
-        df_flex_materials = pd.DataFrame(beam._materials_flexure)
-        df_flex_geometry = pd.DataFrame(beam._geometry_flexure)
-        df_flex_forces = pd.DataFrame(forces_result)
-        df_flex_min_max = pd.DataFrame(min_max_result)
-        df_flex_capacity_top = pd.DataFrame(top_result_data)
-        df_flex_capacity_bot = pd.DataFrame(bot_result_data)
-
-        doc_builder.add_heading("Materials", level=3)
-        doc_builder.add_table_data(df_flex_materials)
-        doc_builder.add_table_data(df_flex_geometry)
-        doc_builder.add_table_data(df_flex_forces)
-        doc_builder.add_heading("Limit checks", level=3)
-        doc_builder.add_table_data(df_flex_min_max)
-        doc_builder.add_heading("Flexural Capacity Top", level=3)
-        doc_builder.add_table_dcr(df_flex_capacity_top)
-        doc_builder.add_heading("Flexural Capacity Bottom", level=3)
-        doc_builder.add_table_dcr(df_flex_capacity_bot)
-
-        # --- DETAILED SHEAR RESULTS FOR SELECTED BEAM ---
-        doc_builder.add_heading(f"Beam {beam.label} shear check", level=2)
-
-        result_data = beam._limiting_case_shear_details
-        df_shear_materials = pd.DataFrame(beam._materials_shear)
-        df_shear_geometry = pd.DataFrame(beam._geometry_shear)
-        df_shear_forces = pd.DataFrame(result_data["forces"])
-        df_shear_reinforcement = pd.DataFrame(result_data["shear_reinforcement"])
-        df_shear_min_max = pd.DataFrame(result_data["min_max"])
-        df_shear_concrete = pd.DataFrame(result_data["shear_concrete"])
-
-        doc_builder.add_heading("Materials", level=3)
-        doc_builder.add_table_data(df_shear_materials)
-        doc_builder.add_table_data(df_shear_geometry)
-        doc_builder.add_table_data(df_shear_forces)
-        doc_builder.add_heading("Limit checks", level=3)
-        doc_builder.add_table_min_max(df_shear_min_max)
-        doc_builder.add_heading("Design checks", level=3)
-        doc_builder.add_table_data(df_shear_reinforcement)
-        doc_builder.add_table_dcr(df_shear_concrete)
-
-        # --- SUMMARY TABLES FOR ALL BEAMS ---
-        doc_builder.add_heading("Summary - All Beams", level=2)
-        doc_builder.add_heading("Beam Data", level=3)
-        beam_data_out = self.beam_list.fillna("")
-        doc_builder.add_table_data(
-            beam_data_out,
-            column_widths=[
-                Cm(1),
-                Cm(1),
-                Cm(1),
-                Cm(1),
-                Cm(1),
-                Cm(1.5),
-                Cm(1.5),
-                Cm(1),
-                Cm(1),
-                Cm(1),
-                Cm(1),
-                Cm(1),
-                Cm(1),
-                Cm(1),
-                Cm(1),
-            ],
-        )
-
-        doc_builder.add_heading("Flexure Results", level=3)
-        df_flex_all = self.flexure_results(capacity_check=False)
-        doc_builder.add_table_data(
-            df_flex_all,
-            column_widths=[Cm(2), Cm(2), Cm(2), Cm(2), Cm(2), Cm(1.5), Cm(1.5), Cm(1.5), Cm(1.5), Cm(1.5), Cm(1.5)],
-        )
-
-        doc_builder.add_heading("Shear Results", level=3)
-        df_shear_all = self.shear_results(capacity_check=False)
-
-        if isinstance(self.concrete, Concrete_EN_1992_2004):
-            # Remove Eurocode-specific columns
-            cols_to_remove = ["VEd,1≤VRd,max", "VEd,2≤VRd"]
-            df_shear_all = df_shear_all.drop(columns=[c for c in cols_to_remove if c in df_shear_all.columns])
-
-            doc_builder.add_table_data(
-                df_shear_all,
-                column_widths=[
-                    Cm(2),
-                    Cm(2),
-                    Cm(2),
-                    Cm(2),
-                    Cm(2),
-                    Cm(1.5),
-                    Cm(1.5),
-                    Cm(1.5),
-                    Cm(1.5),
-                    Cm(1.5),
-                    Cm(1.5),
-                    Cm(2),
-                ],
-            )
-        else:
-            doc_builder.add_table_data(
-                df_shear_all,
-                column_widths=[
-                    Cm(2),
-                    Cm(2),
-                    Cm(2),
-                    Cm(2),
-                    Cm(2),
-                    Cm(1.5),
-                    Cm(1.5),
-                    Cm(1.5),
-                    Cm(1.5),
-                    Cm(1.5),
-                    Cm(1.5),
-                    Cm(2),
-                    Cm(2),
-                    Cm(2),
-                ],
-            )
-
-        doc_builder.add_heading("Design Check Summary", level=3)
-        df_check = self.check()
-        doc_builder.add_table_data(
-            df_check, column_widths=[Cm(1.7), Cm(1), Cm(1), Cm(3), Cm(3), Cm(2), Cm(1.5), Cm(1.5), Cm(1.2), Cm(1.2)]
-        )
-
-        # Save
-        doc_builder.save(f"Beam_Summary_{self.concrete.design_code}.docx")
-        print(f"✅ Results exported to Beam_Summary_{self.concrete.design_code}.docx")
+        beam_summary_doc(self, index)

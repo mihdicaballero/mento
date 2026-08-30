@@ -612,11 +612,45 @@ All were fixed at the source (`_fig` is now declared beside `_ax` on
 `RectangularSection`; the detail dictionaries are typed where they are built)
 rather than by adding another ignore entry.
 
-**Remaining:** `beam.py` still *transitively* imports matplotlib and docx,
-because `results.py` — which supplies `Formatter` and `TablePrinter` for the
-notebook views — imports both. Splitting `results.py` so a calculation-only
-import path exists is the last piece of this phase. The wall report tables in
-`ACI_318_19_wall.py` have not moved either.
+**Done (2026-08-30): every element, and the flat modules became packages.**
+The first pass only covered the beam and left three flat modules at the top
+level; §3 of this document already prescribed `plots/` and `reports/` as
+packages, so they are packages now, and every element got the same treatment.
+
+```
+mento/reports/   tables.py  views.py  documents.py  walls.py  summaries.py
+mento/plots/     sections.py  walls.py  punching.py
+```
+
+| element | lines | what moved |
+| --- | --- | --- |
+| `beam.py` | 2135 → **1134** | notebook views (362) |
+| `shear_wall.py` | 557 → **352** | drawing, views, Word reports |
+| `punching.py` | 339 → **184** | the perimeter drawing |
+| `beam_summary.py` | 786 → **588** | the summary Word report |
+| `shear_wall_summary.py` | 361 → **315** | idem |
+
+The notebook views moved for the same reason as the Word reports, which is the
+point: rendering a result to Markdown and rendering it to `.docx` are the same
+job in two media, and neither is part of the element.
+
+`tests/test_architecture_boundaries.py` now asserts by AST that no element
+module imports matplotlib, python-docx or IPython — `TYPE_CHECKING` imports are
+allowed, since a return annotation costs nothing at runtime. Verified by adding
+a real import to `slab.py` and watching it fail.
+
+**`results.py` is not being split, and the measurement is why.** It holds
+`Formatter`, `TablePrinter` and `DocumentBuilder` — the presentation
+*primitives*, which §3 of this document already lists as part of the
+presentation layer, so it is where they belong. Splitting it would only pay off
+alongside lazy imports in the elements, and that combination buys a one-time
+**~600 ms** of interpreter start-up (matplotlib 514 ms, docx 104 ms) and
+nothing per check. mako's cost is per check. The criterion that does matter —
+`import mento.codes` free of both — holds and is guarded by a test.
+
+**Remaining:** the wall report tables in `codes/ACI_318_19_wall.py`
+(`_compile_wall_shear_dicts`, `_compile_results_wall_shear`) are the last
+presentation left inside `codes/`.
 
 **Exit:** `import mento.codes` imports neither matplotlib nor docx — met, and
 guarded by a test since the `codes/__init__` cleanup in Phase 2b.
