@@ -1,6 +1,5 @@
 from pint import Quantity
 import pandas as pd
-import numpy as np
 from typing import TYPE_CHECKING, Dict, Any, cast
 import warnings
 # from devtools import debug
@@ -10,6 +9,7 @@ from mento.codes.flexure_design import (
     _run_flexure_design,
     _select_safe_design as _select_safe_design_generic,
 )
+from mento.codes.aci_318_19.equations import flexure as flexure_eq
 from mento.codes.aci_318_19.equations import shear as shear_eq
 from mento.material import Concrete_ACI_318_19
 from mento.rebar import Rebar
@@ -19,6 +19,22 @@ from mento.forces import Forces
 
 if TYPE_CHECKING:
     from ..beam import RectangularBeam  # Import Beam for type checking only
+
+# Composite units built once; `N * mm` is a pint Unit multiplication, not free.
+_MOMENT_SI = N * mm
+_MOMENT_US = lbf * inch
+
+
+def _flexure_units(self: "RectangularBeam") -> tuple[Any, Any, Any, Any]:
+    """(stress, length, area, moment) units for the beam's unit system.
+
+    The equations layer works in floats, so every flexure call site needs the
+    same four units to strip and re-apply. Picking them in one place keeps the
+    pairing (MPa with mm, psi with inch) from drifting apart.
+    """
+    if self.concrete.is_imperial:
+        return psi, inch, inch**2, _MOMENT_US
+    return MPa, mm, mm**2, _MOMENT_SI
 
 
 def _initialize_variables_ACI_318_19(self: "RectangularBeam", M_y: Quantity) -> None:
@@ -377,18 +393,15 @@ def _maximum_flexural_reinforcement_ratio_ACI_318_19(self: "RectangularBeam") ->
     """
     # Cast the concrete object to the specific ACI subclass
     concrete_aci = cast("Concrete_ACI_318_19", self.concrete)
+    stress_unit, _, _, _ = _flexure_units(self)
 
-    # Calculate maximum reinforcement ratio (ρ_max)
-    # From CRSI Guide - Beam Theory page 6-3
-    rho_max = (
-        0.85
-        * concrete_aci.beta_1
-        * self.concrete.f_c
-        / self.steel_bar.f_y
-        * (concrete_aci._epsilon_c / (self.steel_bar.epsilon_y + concrete_aci._epsilon_c * 2))
+    return flexure_eq.max_reinforcement_ratio(
+        self.concrete.f_c.to(stress_unit).magnitude,
+        self.steel_bar.f_y.to(stress_unit).magnitude,
+        concrete_aci.beta_1,
+        concrete_aci._epsilon_c,
+        self.steel_bar.epsilon_y,
     )
-
-    return rho_max
 
 
 def _c_neutral_axis_at_ductility_limit_ACI_318_19(self: "RectangularBeam", d: Quantity) -> Quantity:
@@ -402,7 +415,10 @@ def _c_neutral_axis_at_ductility_limit_ACI_318_19(self: "RectangularBeam", d: Qu
     Sections with c < c_t are ductile (tension-controlled); with c > c_t are
     over-reinforced (brittle failure).
     """
-    return 0.003 * d / (self.steel_bar.epsilon_y + 0.006)
+    _, length_unit, _, _ = _flexure_units(self)
+    return (
+        flexure_eq.neutral_axis_at_ductility_limit(d.to(length_unit).magnitude, self.steel_bar.epsilon_y) * length_unit
+    )
 
 
 def _f_s_prime_net_at_ductility_limit_ACI_318_19(self: "RectangularBeam", d: Quantity, d_prime: Quantity) -> Quantity:
@@ -419,12 +435,21 @@ def _f_s_prime_net_at_ductility_limit_ACI_318_19(self: "RectangularBeam", d: Qua
     volume was already contributing to equilibrium via the 0.85·f_c·a·b
     block, so it cannot be counted twice.
     """
+    stress_unit, length_unit, _, _ = _flexure_units(self)
     c_t = _c_neutral_axis_at_ductility_limit_ACI_318_19(self, d)
-    f_s_prime = min(0.003 * self.steel_bar.E_s * (1 - d_prime / c_t), self.steel_bar.f_y)
-    return f_s_prime - 0.85 * self.concrete.f_c
+    return (
+        flexure_eq.compression_steel_net_stress(
+            d_prime.to(length_unit).magnitude,
+            c_t.to(length_unit).magnitude,
+            self.steel_bar.E_s.to(stress_unit).magnitude,
+            self.steel_bar.f_y.to(stress_unit).magnitude,
+            self.concrete.f_c.to(stress_unit).magnitude,
+        )
+        * stress_unit
+    )
 
 
-def _minimum_flexural_reinforcement_ratio_ACI_318_19(self: "RectangularBeam", M_u: Quantity) -> Quantity:
+def _minimum_flexural_reinforcement_ratio_ACI_318_19(self: "RectangularBeam", M_u: Quantity) -> float:
     """
     Calculates the minimum flexural reinforcement ratio according to ACI 318-19
     provisions based on the factored moment, M_u.
@@ -467,19 +492,14 @@ def _minimum_flexural_reinforcement_ratio_ACI_318_19(self: "RectangularBeam", M_
     (ACI 318-19) and Commentary", American Concrete Institute, 2019.
     """
     if M_u == 0 * kNm:
-        minimum_ratio = 0 * dimensionless
-    else:
-        if self.concrete.unit_system == "metric":
-            minimum_ratio = max(
-                (0.25 * np.sqrt(self.concrete.f_c / MPa) * MPa / self.steel_bar.f_y),
-                (1.4 * MPa / self.steel_bar.f_y),
-            )
-        else:
-            minimum_ratio = max(
-                (3 * np.sqrt(self.concrete.f_c / psi) * psi / self.steel_bar.f_y),
-                (200 * psi / self.steel_bar.f_y),
-            )
-    return minimum_ratio
+        return 0.0
+
+    stress_unit, _, _, _ = _flexure_units(self)
+    return flexure_eq.min_reinforcement_ratio(
+        self.concrete.f_c.to(stress_unit).magnitude,
+        self.steel_bar.f_y.to(stress_unit).magnitude,
+        is_imperial=self.concrete.is_imperial,
+    )
 
 
 def _calculate_flexural_reinforcement_ACI_318_19(
@@ -521,18 +541,26 @@ def _calculate_flexural_reinforcement_ACI_318_19(
     A_s_max = rho_max * d * b
 
     # Calculate required reinforcement based on the nominal moment capacity
-    R_n = M_u / (concrete_aci._phi_t * b * d**2)
+    stress_unit, length_unit, area_unit, moment_unit = _flexure_units(self)
+    f_c_mag = self.concrete.f_c.to(stress_unit).magnitude
+    f_y_mag = self.steel_bar.f_y.to(stress_unit).magnitude
+    b_mag = b.to(length_unit).magnitude
+    d_mag = d.to(length_unit).magnitude
+
+    R_n = flexure_eq.flexural_resistance_factor(M_u.to(moment_unit).magnitude, concrete_aci._phi_t, b_mag, d_mag)
     # Verify if the value under the square root is negative
-    sqrt_value = 1 - 2 * R_n / (0.85 * self.concrete.f_c)
-    if sqrt_value < 0:
+    if flexure_eq.singly_reinforced_discriminant(R_n, f_c_mag) < 0:
         # Here we assign A_s_max so that the calculation does not break,
         # resulting in a DCR greater than 1.
         A_s_calc = A_s_max
     else:
-        A_s_calc = 0.85 * self.concrete.f_c * b * d / self.steel_bar.f_y * (1 - np.sqrt(sqrt_value))
+        A_s_calc = flexure_eq.tension_steel_for_moment(R_n, f_c_mag, f_y_mag, b_mag, d_mag) * area_unit
 
     # Calculate the neutral axis depth based on equilibrium: 0.85 * f_c * c * beta_1 * b = A_s * f_y
-    c = A_s_calc * self.steel_bar.f_y / (0.85 * self.concrete.f_c * b * concrete_aci._beta_1)
+    c = (
+        flexure_eq.neutral_axis_depth(A_s_calc.to(area_unit).magnitude, f_y_mag, f_c_mag, b_mag, concrete_aci._beta_1)
+        * length_unit
+    )
 
     # Helper function to clean near-zero values
     def clean_zero(value: float, tolerance: float = 1e-6) -> float:
@@ -589,12 +617,11 @@ def _calculate_flexural_reinforcement_ACI_318_19(
         A_s_comp = 0 * cm**2
     else:
         self._doubly_reinforced = True
-        rho = (
-            0.85
-            * concrete_aci._beta_1
-            * self.concrete.f_c.to(psi).magnitude
-            / self.steel_bar.f_y.to(psi).magnitude
-            * (0.003 / (self.steel_bar.epsilon_y + 0.006))
+        # Same ductility limit as A_s_max above: with ACI's fixed eps_c = 0.003,
+        # eps_y + 2*eps_c is exactly the eps_y + 0.006 this branch used to spell
+        # out on its own, so one function covers both.
+        rho = flexure_eq.max_reinforcement_ratio(
+            f_c_mag, f_y_mag, concrete_aci._beta_1, concrete_aci._epsilon_c, self.steel_bar.epsilon_y
         )
         # Whitney block depth at the ductility limit (exact, not approximated):
         #     a_max = beta_1 * c_t
@@ -630,11 +657,17 @@ def _determine_nominal_moment_simple_reinf_ACI_318_19(self: "RectangularBeam", A
     Returns:
         Quantity: The nominal moment (M_n) calculated as A_s * f_y * (d - a/2).
     """
-    # Calculate the depth of the equivalent rectangular stress block (a)
-    a = A_s * self.steel_bar.f_y / (0.85 * self.concrete.f_c * self.width)
-    # Calculate the nominal moment (M_n)
-    M_n = A_s * self.steel_bar.f_y * (d - a / 2)
-    return M_n
+    stress_unit, length_unit, area_unit, moment_unit = _flexure_units(self)
+    return (
+        flexure_eq.nominal_moment_singly_reinforced(
+            A_s.to(area_unit).magnitude,
+            self.steel_bar.f_y.to(stress_unit).magnitude,
+            self.concrete.f_c.to(stress_unit).magnitude,
+            self.width.to(length_unit).magnitude,
+            d.to(length_unit).magnitude,
+        )
+        * moment_unit
+    )
 
 
 def _determine_nominal_moment_double_reinf_ACI_318_19(
@@ -667,77 +700,25 @@ def _determine_nominal_moment_double_reinf_ACI_318_19(
     Returns:
         Quantity: The nominal moment (M_n) of the doubly reinforced section.
     """
-    f_c = self.concrete.f_c
-    if isinstance(self.concrete, Concrete_ACI_318_19):
-        beta_1 = self.concrete._beta_1
-        epsilon_c = self.concrete._epsilon_c
+    concrete_aci = cast("Concrete_ACI_318_19", self.concrete)
+    stress_unit, length_unit, area_unit, moment_unit = _flexure_units(self)
 
-    f_y = self.steel_bar.f_y
-    E_s = self.steel_bar._E_s
-    epsilon_y = self.steel_bar._epsilon_y
-    b = self.width
-
-    # -------------------------------------------------------------------------
-    # Step 1: Assume that the compression steel is yielding (f_s_prime = f_y).
-    # Based on equilibrium WITH displaced-concrete correction:
-    #   A_s * f_y = 0.85 * f_c * a * b + A_s_prime * (f_y - 0.85 * f_c)
-    # The A_s_prime bar physically occupies a volume where the 0.85*f_c*a*b
-    # block already accounts for compression; the effective contribution of the
-    # compression steel is therefore (f_y - 0.85*f_c), not f_y.
-    # Solving for the neutral axis depth 'c_assumed' (a = beta_1 * c):
-    c_assumed = (A_s * f_y - A_s_prime * (f_y - 0.85 * f_c)) / (0.85 * f_c * b * beta_1)
-
-    # Compute the strain in the compression reinforcement with the assumed c value:
-    epsilon_s = (c_assumed - d_prime) / c_assumed * epsilon_c if c_assumed > 0 else 0
-    # 0 is an arbitrary value, for example, when As top and Bottom are equal, c_assumed is 0,
-    # and compression steel is not yielding, so epsilon_s must be calculated.
-
-    # -------------------------------------------------------------------------
-    # Step 2: Check if the assumed compression steel strain exceeds the yield strain.
-    if epsilon_s >= epsilon_y:
-        # The assumption is valid (compression reinforcement yields).
-        # M_n uses (f_y - 0.85*f_c) for the compression-steel contribution to
-        # avoid double-counting the displaced concrete already included in the
-        # 0.85*f_c*a*b block.
-        a_assumed = c_assumed * beta_1
-        M_n = 0.85 * f_c * a_assumed * b * (d - a_assumed / 2) + A_s_prime * (f_y - 0.85 * f_c) * (d - d_prime)
-        return M_n
-    else:
-        # The assumption is invalid, so determine the actual neutral axis depth
-        # 'c' using the quadratic equation.
-        # Based on equilibrium WITH displaced-concrete correction:
-        #   A_s * f_y = 0.85 * f_c * b * beta_1 * c
-        #             + A_s_prime * [ epsilon_c * E_s * (c - d_prime) / c
-        #                             - 0.85 * f_c ]
-        # Multiplying by c and rearranging into A*c^2 + B*c + C = 0:
-        A = 0.85 * f_c * b * beta_1
-        B = A_s_prime * (epsilon_c * E_s - 0.85 * f_c) - A_s * f_y
-        C = -d_prime * A_s_prime * epsilon_c * E_s
-
-        # Solve for c using the quadratic formula:
-        c = (-B + np.sqrt(B**2 - 4 * A * C)) / (2 * A)
-
-        # Compute the corresponding depth of the equivalent rectangular stress block:
-        a = c * beta_1
-
-        # Recompute the strain and stress in the compression reinforcement,
-        # then apply the displaced-concrete correction:
-        epsilon_s_prime = (c - d_prime) / c * epsilon_c
-        f_s_prime = epsilon_s_prime * E_s
-        f_s_prime_net = f_s_prime - 0.85 * f_c
-
-        # Determine the adjusted areas for tension reinforcement:
-        # a portion of the tensile reinforcement is balanced by the (net)
-        # compression reinforcement contribution.
-        A_s_2 = A_s_prime * f_s_prime_net / f_y
-        A_s_1 = A_s - A_s_2
-
-        # Calculate the nominal moment contributions:
-        M_n_1 = A_s_1 * f_y * (d - a / 2)
-        M_n_2 = A_s_prime * f_s_prime_net * (d - d_prime)
-        M_n = M_n_1 + M_n_2
-
-        return M_n
+    return (
+        flexure_eq.nominal_moment_doubly_reinforced(
+            A_s.to(area_unit).magnitude,
+            A_s_prime.to(area_unit).magnitude,
+            self.steel_bar.f_y.to(stress_unit).magnitude,
+            self.concrete.f_c.to(stress_unit).magnitude,
+            self.width.to(length_unit).magnitude,
+            d.to(length_unit).magnitude,
+            d_prime.to(length_unit).magnitude,
+            concrete_aci._beta_1,
+            concrete_aci._epsilon_c,
+            self.steel_bar._epsilon_y,
+            self.steel_bar._E_s.to(stress_unit).magnitude,
+        )
+        * moment_unit
+    )
 
 
 def _determine_nominal_moment_ACI_318_19(self: "RectangularBeam", force: Forces) -> None:

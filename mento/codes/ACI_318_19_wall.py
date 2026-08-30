@@ -6,8 +6,10 @@ from typing import TYPE_CHECKING
 import pandas as pd
 from pint import Quantity
 
+from mento.codes.aci_318_19.equations import shear as shear_eq
+from mento.codes.aci_318_19.equations import wall as wall_eq
 from mento.material import Concrete_ACI_318_19
-from mento.units import MPa, cm, mm, ksi, inch, dimensionless
+from mento.units import MPa, cm, mm, psi, inch, dimensionless
 from mento.forces import Forces
 
 if TYPE_CHECKING:
@@ -46,36 +48,27 @@ _WALL_BAR_CAP_IMPERIAL = 0.5 * inch  # #4
 ##########################################################
 
 
+def _wall_units(self: "ShearWall") -> tuple[Quantity, Quantity]:
+    """(stress, length) units for the wall's unit system."""
+    return (psi, inch) if self.concrete.is_imperial else (MPa, mm)
+
+
 def _calculate_f_yt_wall(self: "ShearWall") -> Quantity:
     """Cap fyt at 420 MPa (metric) / 60 ksi (imperial) per ACI 318-19 §20.2.2.4."""
-    if self.concrete.unit_system == "metric":
-        return min(self.steel_bar.f_y, 420 * MPa)
-    else:
-        return min(self.steel_bar.f_y, 60 * ksi)
+    stress_unit, _ = _wall_units(self)
+    return (
+        shear_eq.max_yield_strength_for_shear(
+            self.steel_bar.f_y.to(stress_unit).magnitude, is_imperial=self.concrete.is_imperial
+        )
+        * stress_unit
+    )
 
 
 def _calculate_alpha_c(self: "ShearWall") -> float:
-    """
-    ACI 318-19 §11.5.4.6 — α_c as a function of hw/lw.
-    Metric:   0.25 (hw/lw ≤ 1.5) to 0.17 (hw/lw ≥ 2.0), linear interpolation.
-    Imperial: 3.0  (hw/lw ≤ 1.5) to 2.0  (hw/lw ≥ 2.0), linear interpolation.
-    Stores hw_lw ratio as side-effect on self._hw_lw.
-    """
+    """α_c per ACI 318-19 §11.5.4.6. Stores hw/lw as a side effect on self._hw_lw."""
     hw_lw = (self.height / self.length).to("").magnitude
     self._hw_lw = hw_lw
-
-    if self.concrete.unit_system == "metric":
-        alpha_hi, alpha_lo = 0.25, 0.17
-    else:
-        alpha_hi, alpha_lo = 3.0, 2.0
-
-    if hw_lw <= 1.5:
-        return alpha_hi
-    elif hw_lw >= 2.0:
-        return alpha_lo
-    else:
-        t = (hw_lw - 1.5) / 0.5
-        return alpha_hi + t * (alpha_lo - alpha_hi)
+    return wall_eq.alpha_c(hw_lw, is_imperial=self.concrete.is_imperial)
 
 
 def _calculate_wall_Acv(self: "ShearWall") -> None:
@@ -96,24 +89,19 @@ def _calculate_wall_shear_strength(
                   8   × λ × √f'c × Acv  (imperial)
     Acv
     """
-    f_c = concrete.f_c
     lam = concrete.lambda_factor
     phi_v = concrete.phi_v
+    is_imperial = concrete.is_imperial
+    stress_unit, _ = _wall_units(self)
+    f_c_mag = concrete.f_c.to(stress_unit).magnitude
 
-    from mento.units import psi
-
-    if concrete.unit_system == "metric":
-        # take magnitude for sqrt to avoid applying math.sqrt to a Quantity/Unit
-        sqrt_fc_term = math.sqrt((f_c / MPa).magnitude) * MPa
-        Vc = self._alpha_c * lam * sqrt_fc_term * self._Acv
-        Vn_max = 0.66 * lam * sqrt_fc_term * self._Acv
-    else:
-        # imperial branch: use psi magnitude for sqrt
-        sqrt_fc_term = math.sqrt((f_c / psi).magnitude) * psi
-        Vc = self._alpha_c * lam * sqrt_fc_term * self._Acv
-        Vn_max = 8.0 * lam * sqrt_fc_term * self._Acv
-
-    Vs = self._rho_t * self._f_yt_wall * self._Acv
+    Vc = wall_eq.concrete_shear_stress(f_c_mag, self._alpha_c, lam) * stress_unit * self._Acv
+    Vn_max = wall_eq.max_shear_stress(f_c_mag, lam, is_imperial=is_imperial) * stress_unit * self._Acv
+    Vs = (
+        wall_eq.reinforcement_shear_stress(float(self._rho_t), self._f_yt_wall.to(stress_unit).magnitude)
+        * stress_unit
+        * self._Acv
+    )
     Vn = Vc + Vs
 
     self._V_c_wall = Vc.to("kN")  # type:ignore
@@ -139,11 +127,10 @@ def _calculate_rho_min_wall(self: "ShearWall") -> None:
 
     ρl_req need not exceed ρt required for strength (§11.5.4.3).
     """
-    self._rho_t_min = 0.0025 * dimensionless
-
-    r_hw = max(0.5, min(float(self._hw_lw), 2.5))
-    rho_l_eq = 0.0025 + 0.5 * (2.5 - r_hw) * (float(self._rho_t_req) - 0.0025)
-    self._rho_l_min = max(0.0025, rho_l_eq) * dimensionless
+    self._rho_t_min = wall_eq.MIN_REINFORCEMENT_RATIO * dimensionless
+    self._rho_l_min = (
+        wall_eq.min_vertical_reinforcement_ratio(float(self._hw_lw), float(self._rho_t_req)) * dimensionless
+    )
 
 
 def _calculate_spacing_limits_wall(self: "ShearWall") -> None:
@@ -152,15 +139,13 @@ def _calculate_spacing_limits_wall(self: "ShearWall") -> None:
     Horizontal: s_h,max = min(lw/5, 3t, 450 mm / 18 in)
     Vertical:   s_v,max = min(lw/3, 3t, 450 mm / 18 in)
     """
-    lw = self.length
-    t = self.thickness
-    if self.concrete.unit_system == "metric":
-        abs_max = 450 * mm
-    else:
-        abs_max = 18 * inch
+    is_imperial = self.concrete.is_imperial
+    _, length_unit = _wall_units(self)
+    lw = self.length.to(length_unit).magnitude
+    t = self.thickness.to(length_unit).magnitude
 
-    self._s_h_max = min(lw / 5, 3 * t, abs_max)
-    self._s_v_max = min(lw / 3, 3 * t, abs_max)
+    self._s_h_max = wall_eq.max_horizontal_spacing(lw, t, is_imperial=is_imperial) * length_unit
+    self._s_v_max = wall_eq.max_vertical_spacing(lw, t, is_imperial=is_imperial) * length_unit
 
 
 def _compile_wall_shear_dicts(self: "ShearWall", force: Forces) -> None:
@@ -368,12 +353,8 @@ def _check_shear_ACI_318_19_wall(self: "ShearWall", force: Forces) -> pd.DataFra
     f_c = concrete.f_c
     lam = concrete.lambda_factor
 
-    if self.concrete.unit_system == "metric":
-        Vc_intensity = self._alpha_c * lam * math.sqrt(f_c / MPa) * MPa
-    else:
-        from mento.units import psi
-
-        Vc_intensity = self._alpha_c * lam * math.sqrt(f_c.to("psi").magnitude) * psi
+    stress_unit, _ = _wall_units(self)
+    Vc_intensity = wall_eq.concrete_shear_stress(f_c.to(stress_unit).magnitude, self._alpha_c, lam) * stress_unit
 
     rho_t_req_raw = ((self._V_u / phi_v) / self._Acv - Vc_intensity) / self._f_yt_wall
     rho_t_req_raw = rho_t_req_raw.to("")
