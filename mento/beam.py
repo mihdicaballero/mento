@@ -1,47 +1,38 @@
 from dataclasses import dataclass
-from IPython.display import Markdown, display
-from typing import Any, Optional, Dict
-import matplotlib.pyplot as plt
-from matplotlib.patches import Circle, Rectangle, FancyBboxPatch
+from typing import TYPE_CHECKING, Any, Optional, Dict, Tuple
+
+if TYPE_CHECKING:
+    from matplotlib.figure import Figure
 from pint import Quantity
 import numpy as np
 import pandas as pd
 from pandas import DataFrame
 import math
-import warnings
 from numbers import Integral
 # from devtools import debug
 
 from mento.rectangular import RectangularSection
-from mento.material import (
-    Concrete_ACI_318_19,
-    Concrete_EN_1992_2004,
-)
+from mento.codes.registry import design_code
+from mento.precompute import refresh_section_floats
 from mento.rebar import Rebar
-from mento.units import MPa, mm, inch, kN, m, cm, kNm, dimensionless
-from mento.results import Formatter, TablePrinter, DocumentBuilder, CUSTOM_COLORS
-from mento.i18n import get_language, translate
+from mento.units import mm, inch, kN, m, cm, dimensionless
 from mento.forces import Forces
 from mento.settings import BeamSettings
+from mento.reports import views
+from mento.reports.documents import flexure_report_doc, shear_report_doc
+from mento.plots.sections import plot_beam_section
+from mento.reports.tables import build_flexure_report, build_shear_report
 from mento.design_results import (
+    FlexureCheck,
     FlexureDesign,
+    SectionReinforcement,
+    ShearCheck,
     ShearDesign,
     build_flexure_design,
+    build_reinforcement,
     build_shear_design,
-)
-from mento._version import __version__ as MENTO_VERSION
-
-from mento.codes.EN_1992_2004_beam import (
-    _check_shear_EN_1992_2004,
-    _check_flexure_EN_1992_2004,
-    _design_shear_EN_1992_2004,
-    _design_flexure_EN_1992_2004,
-)
-from mento.codes.ACI_318_19_beam import (
-    _check_shear_ACI_318_19,
-    _design_shear_ACI_318_19,
-    _check_flexure_ACI_318_19,
-    _design_flexure_ACI_318_19,
+    capture_flexure_check,
+    capture_shear_check,
 )
 
 
@@ -138,10 +129,11 @@ class RectangularBeam(RectangularSection):
         self._DCRv: float = 0
         self._DCRb_top: float = 0
         self._DCRb_bot: float = 0
-        # Worst value of each per-combination quantity, kept by check_flexure and
-        # check_shear. The attributes above only hold the combination that ran last.
-        self._flexure_envelope: dict[str, dict[str, Any]] = {}
-        self._shear_envelope: dict[str, Any] = {}
+        # One immutable result per load combination, appended by check_flexure and
+        # check_shear. The attributes above only hold the combination that ran last;
+        # enveloping is a pure operation over these lists.
+        self._flexure_checks: list[FlexureCheck] = []
+        self._shear_checks: list[ShearCheck] = []
         self._alpha: float = math.radians(90)
         self._V_s_req: Quantity = 0 * kN
 
@@ -160,6 +152,12 @@ class RectangularBeam(RectangularSection):
         self._initialize_code_attributes()
         # Longitudinal rebar attributes
         self._initialize_longitudinal_rebar_attributes()
+
+        # Rendered Markdown of the last view asked for, kept so a caller can
+        # read the text back instead of only seeing it displayed.
+        self._md_data: str = ""
+        self._md_flexure_results: str = ""
+        self._md_shear_results: str = ""
 
         # Results attributes
         self._materials_shear: Dict = {}
@@ -180,11 +178,81 @@ class RectangularBeam(RectangularSection):
         self._flexure_capacity_top: Dict = {}
         self._flexure_all_checks: bool = False
 
+    # ------------------------------------------------------------------
+    # The ADR-0001 compatibility layer: declared, never assigned here.
+    #
+    # A check no longer writes its results to the section. These exist because
+    # the report tables still read them off the element, and each design code
+    # zeroes its own set through ``DesignCode.initialize_attributes``, so a
+    # table asked for before any check has run finds a number instead of an
+    # AttributeError.
+    #
+    # Declared under TYPE_CHECKING for two reasons: the type checker needs to
+    # know they exist and what they hold, and ``RectangularBeam`` is a
+    # dataclass, so a plain annotation here would become a constructor field.
+    #
+    # They leave with the compatibility layer. A new design code should not add
+    # to this list -- its report tables should read the check state instead.
+    # ------------------------------------------------------------------
+    if TYPE_CHECKING:
+        # ACI 318-19 and CIRSOC 201-25
+        _phi_V_n: Quantity
+        _phi_V_s: Quantity
+        _phi_V_c: Quantity
+        _phi_V_max: Quantity
+        _V_u: Quantity
+        _M_u: Quantity
+        _M_u_bot: Quantity
+        _M_u_top: Quantity
+        _N_u: Quantity
+        _A_cv: Quantity
+        _k_c_min: Quantity
+        _sigma_Nu: Quantity
+        V_c: Quantity
+        _rho_w: Quantity
+        f_yt: Quantity
+        _phi_M_n_bot: Quantity
+        _phi_M_n_top: Quantity
+        _d_b_max_bot: Quantity
+        _d_b_max_top: Quantity
+        _lambda_s: float
+        _max_shear_ok: bool
+        _A_s_bool_bot: bool
+        _A_s_bool_top: bool
+        # EN 1992-2004
+        _V_Ed_1: Quantity
+        _V_Ed_2: Quantity
+        _N_Ed: Quantity
+        _M_Ed: Quantity
+        _M_Ed_bot: Quantity
+        _M_Ed_top: Quantity
+        _M_Rd_bot: Quantity
+        _M_Rd_top: Quantity
+        _sigma_cd: Quantity
+        _sigma_cp: Quantity
+        _V_Rd_c: Quantity
+        _V_Rd_s: Quantity
+        _V_Rd_max: Quantity
+        _V_Rd: Quantity
+        _f_ywk: Quantity
+        _f_ywd: Quantity
+        _f_cd: Quantity
+        _f_cd_shear: Quantity
+        _A_p: Quantity
+        _z: Quantity
+        _k_value: float
+        _theta: float
+        _cot_theta: float
+        # Both
+        _A_s_min_bot: Quantity
+        _A_s_min_top: Quantity
+        _A_s_max_bot: Quantity
+        _A_s_max_top: Quantity
+        flexure_design_results_bot: Any
+        flexure_design_results_top: Any
+
     def _initialize_code_attributes(self) -> None:
-        if isinstance(self.concrete, Concrete_ACI_318_19):
-            self._initialize_ACI_318_attributes()
-        elif isinstance(self.concrete, Concrete_EN_1992_2004):
-            self._initialize_EN_1992_2004_attributes()
+        design_code(self.concrete).initialize_attributes(self)
 
     def _initialize_longitudinal_rebar_attributes(self) -> None:
         """Initialize all rebar-related attributes with default values."""
@@ -253,72 +321,6 @@ class RectangularBeam(RectangularSection):
             self.set_longitudinal_rebar_top(0, 0 * mm)
         else:
             self.set_longitudinal_rebar_top(0, 0 * inch)
-
-    def _initialize_ACI_318_attributes(self) -> None:
-        if isinstance(self.concrete, Concrete_ACI_318_19):
-            self._phi_V_n: Quantity = 0 * kN
-            self._phi_V_s: Quantity = 0 * kN
-            self._phi_V_c: Quantity = 0 * kN
-            self._phi_V_max: Quantity = 0 * kN
-            self._V_u: Quantity = 0 * kN
-            self._M_u: Quantity = 0 * kNm
-            self._M_u_bot: Quantity = 0 * kNm
-            self._M_u_top: Quantity = 0 * kNm
-            self._N_u: Quantity = 0 * kN
-            self._A_cv: Quantity = 0 * cm**2
-            self._k_c_min: Quantity = 0 * MPa
-            self._sigma_Nu: Quantity = 0 * MPa
-            self.V_c: Quantity = 0 * kN
-            self._rho_w: Quantity = 0 * dimensionless
-            self._lambda_s: float = 0
-            self.f_yt: Quantity = 0 * MPa
-            self._max_shear_ok: bool = False
-            self._A_s_min_bot: Quantity = 0 * cm**2
-            self._A_s_min_top: Quantity = 0 * cm**2
-            self._A_s_max_bot: Quantity = 0 * cm**2
-            self._A_s_max_top: Quantity = 0 * cm**2
-            self._phi_M_n_bot: Quantity = 0 * kNm
-            self._phi_M_n_top: Quantity = 0 * kNm
-            self._d_b_max_bot: Quantity = 0 * mm
-            self._d_b_max_top: Quantity = 0 * mm
-            self.flexure_design_results_bot: Any = None
-            self.flexure_design_results_top: Any = None
-            self._A_s_bool_bot: bool = False
-            self._A_s_bool_top: bool = False
-
-    def _initialize_EN_1992_2004_attributes(self) -> None:
-        if isinstance(self.concrete, Concrete_EN_1992_2004):
-            self._V_Ed_1: Quantity = 0 * kN
-            self._V_Ed_2: Quantity = 0 * kN
-            self._N_Ed: Quantity = 0 * kN
-            self._M_Ed: Quantity = 0 * kNm
-            self._sigma_cd: Quantity = 0 * MPa
-            self._V_Rd_c: Quantity = 0 * kN
-            self._V_Rd_s: Quantity = 0 * kN
-            self._V_Rd_max: Quantity = 0 * kN
-            self._V_Rd: Quantity = 0 * kN
-            self._k_value: float = 0
-            self._f_ywk = self.steel_bar.f_y
-            self._f_ywd: Quantity = 0 * MPa
-            self._f_cd: Quantity = 0 * MPa
-            self._f_cd_shear: Quantity = 0 * MPa
-            self._A_p = 0 * cm**2  # No prestressed for now
-            self._sigma_cp: Quantity = 0 * MPa
-            self._theta: float = 0
-            self._cot_theta: float = 0
-            self._z: Quantity = 0 * cm
-            self._M_Rd_bot: Quantity = 0 * kNm
-            self._M_Rd_top: Quantity = 0 * kNm
-            self._M_Ed_bot: Quantity = 0 * kNm
-            self._M_Ed_top: Quantity = 0 * kNm
-            # Shared with the ACI branch: the flexural design driver and the
-            # results tables read these before any check has run.
-            self._A_s_min_bot: Quantity = 0 * cm**2
-            self._A_s_min_top: Quantity = 0 * cm**2
-            self._A_s_max_bot: Quantity = 0 * cm**2
-            self._A_s_max_top: Quantity = 0 * cm**2
-            self.flexure_design_results_bot: Any = None
-            self.flexure_design_results_top: Any = None
 
     ##########################################################
     # SET LONGITUDINAL AND TRANSVERSE REBAR AND UPDATE ATTRIBUTES
@@ -573,6 +575,10 @@ class RectangularBeam(RectangularSection):
         self._d_top = self.height - self._c_mec_top
         # Use bottom or top effective height
         self._d_shear = min(self._d_bot, self._d_top)
+        # Every geometry and reinforcement change funnels through here, so this
+        # is the one place the float view can go stale. Rebuilt eagerly so that
+        # no check ever has to create it -- see mento.precompute.
+        refresh_section_floats(self)
 
     ##########################################################
     # CHECK & DESIGN FLEXURE
@@ -603,46 +609,91 @@ class RectangularBeam(RectangularSection):
                 max_M_y_bot = force._M_y
                 self._limiting_case_top = force
         # Design flexural reinforcement for the limiting cases
-        if self.concrete.design_code == "ACI 318-19" or self.concrete.design_code == "CIRSOC 201-25":
-            _design_flexure_ACI_318_19(self, max_M_y_bot, max_M_y_top)
-        elif self.concrete.design_code == "EN 1992-2004":
-            _design_flexure_EN_1992_2004(self, max_M_y_bot, max_M_y_top)
+        design_code(self.concrete).design_flexure(self, max_M_y_bot, max_M_y_top)
 
         # Check flexural capacity for all forces with the assigned reinforcement
         all_results = self.check_flexure(forces)
         return all_results
 
-    def _update_flexure_envelope(self, suffix: str) -> None:
-        """Fold the flexure results of the current combination into the envelope.
+    @property
+    def flexure_checks(self) -> Tuple[FlexureCheck, ...]:
+        """One immutable flexure result per combination of the last check.
 
-        The check functions leave the values of the combination they just ran on the
-        beam, so a reader of ``_A_s_req_bot`` after checking several combinations gets
-        whichever one happened to run last — zero, for a face that combination did not
-        put in tension. The envelope keeps the worst of each quantity instead, which is
-        what the public results in :mod:`mento.design_results` report.
+        The beam's own attributes describe whichever combination ran last;
+        these describe all of them, so enveloping is a plain ``max`` over the
+        tuple rather than something the check has to accumulate as it goes.
         """
-        face = self._flexure_envelope.setdefault(suffix, {})
-        for name in ("A_s_req", "A_s_min", "A_s_max"):
-            value = getattr(self, f"_{name}_{suffix}", None)
-            if value is None:
-                continue
-            current = face.get(name)
-            face[name] = value if current is None else max(current, value)
-        face["DCR"] = max(face.get("DCR", 0.0), getattr(self, f"_DCRb_{suffix}", 0.0))
+        return tuple(self._flexure_checks)
 
-    def _update_shear_envelope(self) -> None:
-        """Fold the shear results of the current combination into the envelope.
+    @property
+    def shear_checks(self) -> Tuple[ShearCheck, ...]:
+        """One immutable shear result per combination of the last check."""
+        return tuple(self._shear_checks)
 
-        Same reasoning as :meth:`_update_flexure_envelope`: ``_A_v_req`` and ``_DCRv``
-        describe the combination that ran last, not the one that governs.
+    def flexure_check_results(self, forces: list[Forces]) -> Tuple[FlexureCheck, ...]:
+        """Check flexure and return one result per combination, building no report.
+
+        The same numbers as :meth:`check_flexure`, without the report tables or
+        the result DataFrame — which is most of what a check costs. This is the
+        entry point for looping over many sections::
+
+            worst = max(r.bottom.DCR for r in beam.flexure_check_results(combos))
+
+        Nothing is written to the section on the ACI and CIRSOC path: the check
+        returns its result and only the reporting path copies it back.
         """
-        for name in ("A_v_req", "A_v_min"):
-            value = getattr(self, f"_{name}", None)
-            if value is None:
-                continue
-            current = self._shear_envelope.get(name)
-            self._shear_envelope[name] = value if current is None else max(current, value)
-        self._shear_envelope["DCR"] = max(self._shear_envelope.get("DCR", 0.0), self._DCRv)
+        self._flexure_checks = []
+        for force in forces:
+            state = self._run_flexure_check(force, report=False)
+            self._flexure_checks.append(capture_flexure_check(self, force.label, state))
+        self._flexure_checked = True
+        return tuple(self._flexure_checks)
+
+    def shear_check_results(self, forces: list[Forces]) -> Tuple[ShearCheck, ...]:
+        """Check shear and return one result per combination, building no report.
+
+        Nothing is written to the section: the ACI check returns its result as a
+        value and only the reporting path copies it back. That is what makes a
+        loop over many stations safe — see :meth:`flexure_check_results` for the
+        flexure counterpart, which still writes.
+        """
+        self._shear_checks = []
+        for force in forces:
+            state = self._run_shear_check(force, report=False)
+            self._shear_checks.append(capture_shear_check(self, force.label, state))
+        self._shear_checked = True
+        return tuple(self._shear_checks)
+
+    def _run_flexure_check(self, force: Forces, *, report: bool) -> Optional[Any]:
+        """Compute one flexure combination, and build its report only if asked.
+
+        The design code does the calculation and returns it; assembling the row
+        and the detail tables is presentation and lives in
+        :mod:`mento.reports.tables`, which still reads the element — so the
+        state is copied back only when a report is wanted.
+        """
+        code = design_code(self.concrete)
+        state: Any = code.check_flexure(self, force)
+        if report:
+            code.apply_flexure_state(self, state)
+        if report:
+            self._flexure_report_row = build_flexure_report(self, force)
+        return state
+
+    def _run_shear_check(self, force: Forces, *, report: bool) -> Optional[Any]:
+        """Compute one shear combination, and build its report only if asked.
+
+        Returns the ACI state so a values-only caller never needs the section to
+        have been written to. Building a report does need that, because the
+        tables still read the element — the compatibility layer of ADR-0001.
+        """
+        code = design_code(self.concrete)
+        state = code.check_shear(self, force)
+        if report:
+            code.apply_shear_state(self, state)
+        if report:
+            self._shear_report_row = build_shear_report(self, force)
+        return state
 
     def check_flexure(self, forces: list[Forces]) -> DataFrame:
         # Initialize variables to track limiting cases
@@ -655,15 +706,12 @@ class RectangularBeam(RectangularSection):
 
         # To compile results for all forces
         self._flexure_results_list = []  # Store individual results for each force
-        self._flexure_results_detailed_list = {}  # Store detailed results by force ID
-        self._flexure_envelope = {}
+        self._flexure_results_detailed_list: Dict[Any, Dict[str, Any]] = {}  # Store detailed results by force ID
+        self._flexure_checks = []
 
         for force in forces:
-            # Select the method based on design code
-            if self.concrete.design_code == "ACI 318-19" or self.concrete.design_code == "CIRSOC 201-25":
-                result = _check_flexure_ACI_318_19(self, force)
-            elif self.concrete.design_code == "EN 1992-2004":
-                result = _check_flexure_EN_1992_2004(self, force)
+            self._run_flexure_check(force, report=True)
+            result = self._flexure_report_row
             self._flexure_results_list.append(result)
 
             # Store detailed results for this force
@@ -675,10 +723,9 @@ class RectangularBeam(RectangularSection):
                 "checks_pass": self._all_flexure_checks_passed,
             }
 
-            # Keep the worst value of each face across combinations, before the next
-            # one overwrites the attributes this combination just left on the beam.
-            self._update_flexure_envelope("bot")
-            self._update_flexure_envelope("top")
+            # Capture this combination's result as a value, before the next one
+            # overwrites the attributes it just left on the beam.
+            self._flexure_checks.append(capture_flexure_check(self, force.label))
 
             # Extract the DCR values for top and bottom from the results
             current_dcr_top = self._DCRb_top
@@ -727,10 +774,7 @@ class RectangularBeam(RectangularSection):
 
         # Step 1: Identify the worst-case force
         for force in forces:
-            if self.concrete.design_code == "ACI 318-19" or self.concrete.design_code == "CIRSOC 201-25":
-                _design_shear_ACI_318_19(self, force)
-            elif self.concrete.design_code == "EN 1992-2004":
-                _design_shear_EN_1992_2004(self, force)
+            design_code(self.concrete).design_shear(self, force)
             # Check if this result is the limiting case
             current_A_v_req = self._A_v_req
             if current_A_v_req >= max_A_v_req:
@@ -761,18 +805,14 @@ class RectangularBeam(RectangularSection):
     # Factory method to select the shear check method
     def check_shear(self, forces: list[Forces]) -> DataFrame:
         self._shear_results_list = []  # Store individual results for each force
-        self._shear_results_detailed_list = {}  # Store detailed results by force ID
+        self._shear_results_detailed_list: Dict[Any, Dict[str, Any]] = {}  # Store detailed results by force ID
         max_dcr = 0  # Track the maximum DCR to identify the limiting case
         self._limiting_case_shear_details = None
-        self._shear_envelope = {}
+        self._shear_checks = []
 
         for force in forces:
-            # Select the method based on design code
-            if self.concrete.design_code == "ACI 318-19" or self.concrete.design_code == "CIRSOC 201-25":
-                result = _check_shear_ACI_318_19(self, force)
-            elif self.concrete.design_code == "EN 1992-2004":
-                result = _check_shear_EN_1992_2004(self, force)
-
+            self._run_shear_check(force, report=True)
+            result = self._shear_report_row
             self._shear_results_list.append(result)
 
             self._shear_results_detailed_list[force.id] = {
@@ -783,9 +823,9 @@ class RectangularBeam(RectangularSection):
                 "shear_concrete": self._shear_concrete.copy(),
             }
 
-            # Keep the worst value across combinations, before the next one
-            # overwrites the attributes this combination just left on the beam.
-            self._update_shear_envelope()
+            # Capture this combination's result as a value, before the next one
+            # overwrites the attributes it just left on the beam.
+            self._shear_checks.append(capture_shear_check(self, force.label))
 
             # Check if this result is the limiting case
             current_dcr = result["DCR"][0]
@@ -806,95 +846,13 @@ class RectangularBeam(RectangularSection):
         return all_results
 
     def _get_units_row_shear(self) -> pd.DataFrame:
-        if isinstance(self.concrete, Concrete_EN_1992_2004):
-            # Orden exacto de columnas para EN 1992
-            return pd.DataFrame(
-                [
-                    {
-                        "Label": "",
-                        "Comb.": "",
-                        "Av,min": "cm²/m",
-                        "Av,req": "cm²/m",
-                        "Av": "cm²/m",
-                        "NEd": "kN",
-                        "VEd,1": "kN",
-                        "VEd,2": "kN",
-                        "VRd,c": "kN",
-                        "VRd,s": "kN",
-                        "VRd": "kN",
-                        "VRd,max": "kN",
-                        "VEd,1≤VRd,max": "",
-                        "VEd,2≤VRd": "",
-                        "DCR": "",
-                    }
-                ]
-            )
-        else:
-            return pd.DataFrame(
-                [
-                    {
-                        "Label": "",
-                        "Comb.": "",
-                        "Av,min": "cm²/m",
-                        "Av,req": "cm²/m",
-                        "Av": "cm²/m",
-                        "Vu": "kN",
-                        "Nu": "kN",
-                        "ØVc": "kN",
-                        "ØVs": "kN",
-                        "ØVn": "kN",
-                        "ØVmax": "kN",
-                        "Vu≤ØVmax": "",
-                        "Vu≤ØVn": "",
-                        "DCR": "",
-                    }
-                ]
-            )
+        """The unit row of the shear summary, in the active code's own names."""
+        return pd.DataFrame([design_code(self.concrete).units_row_shear])
 
     def _get_units_row_flexure(self) -> pd.DataFrame:
+        """The unit row of the flexure summary, in the active code's own names."""
         # TODO: Add imperial units row output
-        if self.concrete.design_code == "ACI 318-19" or self.concrete.design_code == "CIRSOC 201-25":
-            units_row = pd.DataFrame(
-                [
-                    {
-                        "Label": "",
-                        "Comb.": "",
-                        "Position": "",
-                        "As,min": "cm²",
-                        "As,req top": "cm²",
-                        "As,req bot": "cm²",
-                        "As": "cm²",
-                        # "c/d": "",  # Uncomment if you include this field later
-                        "Mu": "kNm",
-                        "ØMn": "kNm",
-                        "Mu≤ØMn": "",
-                        "DCR": "",
-                    }
-                ]
-            )
-        elif self.concrete.design_code == "EN 1992-2004":
-            units_row = pd.DataFrame(
-                [
-                    {
-                        "Label": "",
-                        "Comb.": "",
-                        "Position": "",
-                        "As,min": "cm²",
-                        "As,req top": "cm²",
-                        "As,req bot": "cm²",
-                        "As": "cm²",
-                        # "c/d": "",  # Uncomment if you include this field later
-                        "MEd": "kNm",
-                        "MRd": "kNm",
-                        "MEd≤MRd": "",
-                        "DCR": "",
-                    }
-                ]
-            )
-        else:
-            raise ValueError(f"Flexure design method not implemented for concrete type: {type(self.concrete).__name__}")  # noqa: E501
-
-        return units_row
+        return pd.DataFrame([design_code(self.concrete).units_row_flexure])
 
     ##########################################################
     # CHECK & DESIGN ALL
@@ -918,6 +876,22 @@ class RectangularBeam(RectangularSection):
     ##########################################################
     # RESULTS
     ##########################################################
+
+    @property
+    def reinforcement(self) -> SectionReinforcement:
+        """The reinforcement this beam currently carries, as plain data.
+
+        Readable at any time — it describes the section, not a result, so it
+        does not need a check to have run::
+
+            beam.set_longitudinal_rebar_bot(n1=4, d_b1=16 * mm)
+            beam.reinforcement.bottom.A_s
+            beam.reinforcement.transverse.n_legs
+
+        For what a check *demanded* of that reinforcement (``A_s_req``,
+        ``DCR``), use :attr:`flexure_design` and :attr:`shear_design`.
+        """
+        return build_reinforcement(self)
 
     @property
     def flexure_design(self) -> FlexureDesign:
@@ -949,585 +923,74 @@ class RectangularBeam(RectangularSection):
         """
         return build_shear_design(self)
 
-    # Beam results for Jupyter Notebook
+    ##########################################################
+    # PRESENTATION — every one of these delegates
+    ##########################################################
+    # Rendering a result is a presentation choice, not part of the beam, so the
+    # notebook views live in `mento.reports.views`, the Word reports in
+    # `mento.reports.documents` and the drawing in `mento.plots.sections`.
+
     @property
     def data(self) -> None:
-        type = self.mode.capitalize()
-        markdown_content = (
-            f"{type} {self.label}, $b$={self.width.to('cm')}"
-            f", $h$={self.height.to('cm')}, $c_{{c}}$={self.c_c.to('cm')}, \
-                            Concrete {self.concrete.name}, Rebar {self.steel_bar.name}."
-        )
-        self._md_data = markdown_content
-        # Display the combined content
-        display(Markdown(markdown_content))  # type: ignore
-
-        return None
+        """Show the section's basic data as Markdown."""
+        return views.data(self)
 
     @property
     def flexure_results(self) -> None:
-        if not self._flexure_checked:
-            warnings.warn(
-                "Flexural design has not been performed yet. Call _check_flexure() or design_flexure() first.",
-                UserWarning,
-            )
-            self._md_flexure_results = "Flexural results are not available."
-            return None
-        # Check if limiting case details exist
-        top_details = self._limiting_case_flexure_top_details or {}
-        bot_details = self._limiting_case_flexure_bot_details or {}
-        # Use limiting case results
-        top_result_data = top_details.get("flexure_capacity_top")
-        bot_result_data = bot_details.get("flexure_capacity_bot")
-
-        checks_pass_top = top_details.get("checks_pass")
-        checks_pass_bot = bot_details.get("checks_pass")
-        warning_top = "⚠️ Some checks failed, see detailed results." if not checks_pass_top else ""
-        warning_bot = "⚠️ Some checks failed, see detailed results." if not checks_pass_bot else ""
-
-        # Pending for approval
-        # all_checks_top = top_details.get('flexure_check')
-        # all_checks_bot = bot_details.get('flexure_check')
-        # all_checks = all_checks_top and all_checks_bot
-
-        # Formatter instance for DCR formatting
-        markdown_content = ""
-        formatter = Formatter()
-        symbols = self._flexure_symbols
-        md_demand = symbols["md_demand"]
-        md_capacity = symbols["md_capacity"]
-
-        # Handle top result data
-        if top_result_data:
-            top_rebar_1 = top_result_data["Value"][0]
-            top_rebar_2 = top_result_data["Value"][1]
-            area_top = top_result_data["Value"][7]
-            Mu_top = self._limiting_case_flexure_top_details["forces"]["Value"][0]
-            Mn_top = top_result_data["Value"][9]
-            DCR_top = top_result_data["Value"][10]
-
-            rebar_top = f"{top_rebar_1}" + (f" ++ {top_rebar_2}" if top_rebar_2 != "-" else "")
-            formatted_DCR_top = formatter.DCR(DCR_top)
-
-            markdown_content += (
-                f"Top longitudinal rebar: {rebar_top}, $A_{{s,top}}$ = {area_top} cm², "
-                f"${md_demand}$ = {Mu_top} kNm, "
-                f"${md_capacity}$ = {Mn_top} kNm → {formatted_DCR_top} {warning_top}\n\n"
-            )
-        else:
-            markdown_content += "No top moment to check.\n\n"
-
-        # Handle bottom result data
-        if bot_result_data:
-            bot_rebar_1 = bot_result_data["Value"][0]
-            bot_rebar_2 = bot_result_data["Value"][1]
-            area_bot = bot_result_data["Value"][7]
-            Mu_bot = self._limiting_case_flexure_bot_details["forces"]["Value"][1]
-            Mn_bot = bot_result_data["Value"][9]
-            DCR_bot = bot_result_data["Value"][10]
-
-            rebar_bot = f"{bot_rebar_1}" + (f" ++ {bot_rebar_2}" if bot_rebar_2 != "-" else "")
-            formatted_DCR_bot = formatter.DCR(DCR_bot)
-
-            markdown_content += (
-                f"Bottom longitudinal rebar: {rebar_bot}, $A_{{s,bot}}$ = {area_bot} cm², "
-                f"${md_demand}$ = {Mu_bot} kNm, "
-                f"${md_capacity}$ = {Mn_bot} kNm → {formatted_DCR_bot} {warning_bot}"
-            )
-        else:
-            markdown_content += "No bottom moment to check."
-
-        # markdown_content += 'Beam flexure checks PASS ✔️' if all_checks else "Beam flexure checks FAIL ❌"
-
-        self._md_flexure_results = markdown_content
-        display(Markdown(markdown_content))
+        """Show a summary of the flexure results as Markdown."""
+        return views.flexure_results(self)
 
     @property
     def shear_results(self) -> None:
-        if not self._shear_checked:
-            warnings.warn(
-                "Shear design has not been performed yet. Call check_shear() or design_shear() first.",
-                UserWarning,
-            )
-            self._md_shear_results = "Shear results are not available."
-            return None
+        """Show a summary of the shear results as Markdown."""
+        return views.shear_results(self)
 
-        # Check if limiting case details exist
-        shear_details = self._limiting_case_shear_details or {}
-        # Use limiting case results
-        limiting_reinforcement = shear_details.get("shear_reinforcement")
-        limiting_forces = shear_details.get("forces")
-        limiting_shear_concrete = shear_details.get("shear_concrete")
-        checks_pass = shear_details.get("checks_pass")
-        markdown_content = ""
-        if shear_details:
-            # Create FUFormatter instance and format FU value
-            formatter = Formatter()
-            formatted_DCR = formatter.DCR(limiting_shear_concrete["Value"][-1])
-            if self._A_v == 0 * cm:
-                rebar_v = "not assigned"
-            else:
-                rebar_v = (
-                    f"{int(limiting_reinforcement['Value'][0])}eØ{limiting_reinforcement['Value'][1]}/"
-                    f"{limiting_reinforcement['Value'][2]} cm"
-                )
-            # Limitng cases checks
-            warning = "⚠️ Some checks failed, see detailed results." if not checks_pass else ""
-            if self.concrete.design_code == "ACI 318-19" or self.concrete.design_code == "CIRSOC 201-25":
-                markdown_content = (
-                    f"Shear reinforcing {rebar_v}, $A_v$={limiting_reinforcement['Value'][6]} cm²/m"
-                    f", $V_u$={limiting_forces['Value'][1]} kN, $\\phi V_n$={limiting_shear_concrete['Value'][7]} kN → {formatted_DCR} {warning}"
-                )  # noqa: E501
-            else:  # self.concrete.design_code == "EN 1992-2004"
-                markdown_content = (
-                    f"Shear reinforcing {rebar_v}, $A_{{sw}}$={limiting_reinforcement['Value'][6]} cm²/m"
-                    f", $V_{{Ed,2}}$={limiting_forces['Value'][1]} kN, $V_{{Rd}}$={limiting_shear_concrete['Value'][6]} kN → {formatted_DCR} {warning}"
-                )  # noqa: E501
-        else:
-            markdown_content += "No shear to check."
-        self._md_shear_results = markdown_content
-        display(Markdown(markdown_content))
-
-        return None
-
-    # Beam results for Jupyter Notebook
     @property
     def results(self) -> None:
-        """
-        Ensure that properties, flexure results, and shear results are available and display them.
-        Handles cases where flexure or shear results are not yet available.
-        """
-        if not hasattr(self, "_md_properties"):
-            self.data  # This will generate _md_properties
-        if self._flexure_checked:
-            self.flexure_results  # This will generate _md_flexure_results
-        if self._shear_checked:
-            self.shear_results  # This will generate _md_shear_results
-        return None
+        """Show every available result as Markdown."""
+        return views.results(self)
 
-    @property
-    def _flexure_symbols(self) -> Dict[str, str]:
-        """Flexural symbols of the active design code.
+    def flexure_results_detailed(self, force: Optional[Forces] = None) -> None:
+        """Print the detailed flexure tables for one combination."""
+        return views.flexure_results_detailed(self, force)
 
-        ACI 318-19 and CIRSOC 201-25 work with a factored demand :math:`M_u` and a
-        reduced capacity :math:`\\phi M_n`; EN 1992-2004 works with :math:`M_{Ed}`
-        and :math:`M_{Rd}`. The per-code result dictionaries already carry the right
-        wording, but the limiting-case summaries assembled here have to pick it.
-
-        ``md_*`` entries are LaTeX for the Jupyter markdown line; the others are the
-        plain variable names used in the detailed tables and Word reports.
-        """
-        if self.concrete.design_code == "EN 1992-2004":
-            return {
-                "demand": "MEd",
-                "demand_top": "MEd,top",
-                "demand_bot": "MEd,bot",
-                "md_demand": "M_{Ed}",
-                "md_capacity": "M_{Rd}",
-            }
-        return {
-            "demand": "Mu",
-            "demand_top": "Mu,top",
-            "demand_bot": "Mu,bot",
-            "md_demand": "M_u",
-            "md_capacity": "\\phi M_n",
-        }
+    def shear_results_detailed(self, force: Optional[Forces] = None) -> None:
+        """Print the detailed shear tables for one combination."""
+        return views.shear_results_detailed(self, force)
 
     @property
     def _report_text(self) -> Dict[str, str]:
-        """Report wording of this element, so a slab is not reported as a beam.
-
-        ``ShearWall`` overrides the detailed report methods with its own wording,
-        so only the beam and the slab are covered here. The strings double as the
-        keys of the language catalog in :mod:`mento.i18n`.
-        """
-        if self.mode == "slab":
-            return {
-                "flexure_banner": "===== SLAB FLEXURE DETAILED RESULTS =====",
-                "shear_banner": "===== SLAB SHEAR DETAILED RESULTS =====",
-                "flexure_doc_title": "Concrete slab flexure check",
-                "shear_doc_title": "Concrete slab shear check",
-                "flexure_heading": "Slab {label} flexure check",
-                "shear_heading": "Slab {label} shear check",
-            }
-        return {
-            "flexure_banner": "===== BEAM FLEXURE DETAILED RESULTS =====",
-            "shear_banner": "===== BEAM SHEAR DETAILED RESULTS =====",
-            "flexure_doc_title": "Concrete beam flexure check",
-            "shear_doc_title": "Concrete beam shear check",
-            "flexure_heading": "Beam {label} flexure check",
-            "shear_heading": "Beam {label} shear check",
-        }
+        """Translated headings shared by the views and the Word reports."""
+        return views._report_text(self)
 
     def _report_file_name(self, heading_key: str) -> str:
-        """Name of the Word file of a report.
+        return views._report_file_name(self, heading_key)
 
-        Built from the English heading whatever the report language is, so a
-        project keeps one naming scheme.
+    # Beam results for Jupyter Notebook
+
+    @property
+    def _flexure_symbols(self) -> Dict[str, str]:
+        r"""Flexural symbols of the active design code.
+
+        ACI 318-19 and CIRSOC 201-25 work with a factored demand :math:`M_u` and a
+        reduced capacity :math:`\phi M_n`; EN 1992-2004 works with :math:`M_{Ed}`
+        and :math:`M_{Rd}`. Each code declares its own in its registry entry.
         """
-        heading = self._report_text[heading_key].format(label=self.label)
-        return f"{heading} {self.concrete.design_code}.docx"
-
-    def flexure_results_detailed(self, force: Optional[Forces] = None) -> None:
-        """
-        Displays detailed flexure results.
-
-        Parameters
-        ----------
-        forces : Forces, optional
-            The specific Forces object to display results for. If None, displays results for the limiting case.
-        Returns
-        -------
-        None
-        """
-        if not self._flexure_checked:
-            warnings.warn(
-                "Flexural check has not been performed yet. Call _check_flexure or design_flexure first.",
-                UserWarning,
-            )
-            self._md_flexure_results = "Flexure results are not available."
-            return None
-
-        # Determine which results to display (limiting case by default)
-        if force:
-            if force.id not in self._flexure_results_detailed_list:
-                raise ValueError(f"No results found for Forces object with ID {force.id}.")
-            result_data = self._flexure_results_detailed_list[force.id]
-            top_result_data = result_data["flexure_capacity_top"]
-            bot_result_data = result_data["flexure_capacity_bot"]
-            forces_result = result_data["forces"]
-            min_max_result = result_data["min_max"]
-        else:
-            if self._limiting_case_flexure_top_details is None:
-                raise ValueError("Top limiting case details are not available.")
-            if self._limiting_case_flexure_bot_details is None:
-                raise ValueError("Bottom limiting case details are not available.")
-            # Use the worst-case top and bottom scenarios
-            top_result_data = self._limiting_case_flexure_top_details["flexure_capacity_top"]
-            bot_result_data = self._limiting_case_flexure_bot_details["flexure_capacity_bot"]
-            forces_result = {
-                "Design forces": [
-                    "Top max moment",
-                    "Bottom max moment",
-                ],
-                "Variable": [
-                    self._flexure_symbols["demand_top"],
-                    self._flexure_symbols["demand_bot"],
-                ],
-                "Value": [
-                    round(self._limiting_case_flexure_top_details["forces"]["Value"][0], 2),
-                    round(self._limiting_case_flexure_bot_details["forces"]["Value"][1], 2),
-                ],
-                "Unit": ["kNm", "kNm"],
-            }
-            min_max_result = {
-                "Check": [
-                    "Min/Max As rebar top",
-                    "Minimum spacing top",
-                    "Min/Max As rebar bottom",
-                    "Minimum spacing bottom",
-                ],
-                "Unit": ["cm²", "mm", "cm²", "mm"],
-                "Value": [
-                    round(
-                        self._limiting_case_flexure_top_details["min_max"]["Value"][0],
-                        2,
-                    ),  # Top limiting case As
-                    round(
-                        self._limiting_case_flexure_top_details["min_max"]["Value"][1],
-                        2,
-                    ),  # Top limiting case spacing
-                    round(
-                        self._limiting_case_flexure_bot_details["min_max"]["Value"][2],
-                        2,
-                    ),  # Bottom limiting case As
-                    round(
-                        self._limiting_case_flexure_bot_details["min_max"]["Value"][3],
-                        2,
-                    ),  # Bottom limiting case spacing
-                ],
-                "Min.": [
-                    round(self._limiting_case_flexure_top_details["min_max"]["Min."][0], 2),  # Top limiting case As_min
-                    self._limiting_case_flexure_top_details["min_max"]["Min."][1],  # Top limiting case spacing min
-                    round(
-                        self._limiting_case_flexure_bot_details["min_max"]["Min."][2], 2
-                    ),  # Bottom limiting case As_min
-                    self._limiting_case_flexure_bot_details["min_max"]["Min."][3],  # Bottom limiting case spacing min
-                ],
-                "Max.": [
-                    round(self._limiting_case_flexure_top_details["min_max"]["Max."][0], 2),  # Top limiting case As_max
-                    "",  # No max constraint for spacing
-                    round(
-                        self._limiting_case_flexure_bot_details["min_max"]["Max."][2], 2
-                    ),  # Bottom limiting case As_max
-                    "",  # No max constraint for spacing
-                ],
-                "Ok?": [
-                    self._limiting_case_flexure_top_details["min_max"]["Ok?"][0],  # Top As check
-                    self._limiting_case_flexure_top_details["min_max"]["Ok?"][1],  # Top spacing check
-                    self._limiting_case_flexure_bot_details["min_max"]["Ok?"][2],  # Bottom As check
-                    self._limiting_case_flexure_bot_details["min_max"]["Ok?"][3],  # Bottom spacing check
-                ],
-            }
-
-        # Create TablePrinter instances for detailed display
-        language = get_language()
-        print(translate(self._report_text["flexure_banner"], language))
-        materials_printer = TablePrinter("MATERIALS", language)
-        materials_printer.print_table_data(self._materials_flexure, headers="keys")
-
-        geometry_printer = TablePrinter("GEOMETRY", language)
-        geometry_printer.print_table_data(self._geometry_flexure, headers="keys")
-
-        forces_printer = TablePrinter("FORCES", language)
-        forces_printer.print_table_data(forces_result, headers="keys")
-
-        min_max_printer = TablePrinter("MAX AND MIN LIMIT CHECKS", language)
-        min_max_printer.print_table_data(min_max_result, headers="keys")
-
-        capacity_printer = TablePrinter("FLEXURAL CAPACITY - TOP", language)
-        capacity_printer.print_table_data(top_result_data, headers="keys")
-        capacity_printer = TablePrinter("FLEXURAL CAPACITY - BOTTOM", language)
-        capacity_printer.print_table_data(bot_result_data, headers="keys")
+        return design_code(self.concrete).flexure_symbols
 
     def flexure_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
+        """Write the detailed flexure results to a Word document.
+
+        The assembly lives in :mod:`mento.reports.documents`.
         """
-        Prints detailed flexure results in Word.
-
-        Parameters
-        ----------
-        forces : Forces, optional
-            The specific Forces object to display results for. If None, displays results for the limiting case.
-        """
-        if not self._flexure_checked:
-            warnings.warn(
-                "Flexural check has not been performed yet. Call _check_flexure or design_flexure first.",
-                UserWarning,
-            )
-            self._md_flexure_results = "Flexural results are not available."
-            return None
-
-        # Determine which results to display (limiting case by default)
-        if force:
-            if force.id not in self._flexure_results_detailed_list:
-                raise ValueError(f"No results found for Forces object with ID {force.id}.")
-            result_data = self._flexure_results_detailed_list[force.id]
-            top_result_data = result_data["flexure_capacity_top"]
-            bot_result_data = result_data["flexure_capacity_bot"]
-            forces_result = result_data["forces"]
-            min_max_result = result_data["min_max"]
-        else:
-            if self._limiting_case_flexure_top_details is None:
-                raise ValueError("Top limiting case details are not available.")
-            if self._limiting_case_flexure_bot_details is None:
-                raise ValueError("Bottom limiting case details are not available.")
-            # Use the worst-case top and bottom scenarios
-            top_result_data = self._limiting_case_flexure_top_details["flexure_capacity_top"]
-            bot_result_data = self._limiting_case_flexure_bot_details["flexure_capacity_bot"]
-            forces_result = {
-                "Design forces": [
-                    "Top max moment",
-                    "Bottom max moment",
-                ],
-                "Variable": [
-                    self._flexure_symbols["demand_top"],
-                    self._flexure_symbols["demand_bot"],
-                ],
-                "Value": [
-                    round(self._limiting_case_flexure_top_details["forces"]["Value"][0], 2),
-                    round(self._limiting_case_flexure_bot_details["forces"]["Value"][1], 2),
-                ],
-                "Unit": ["kNm", "kNm"],
-            }
-            min_max_result = {
-                "Check": [
-                    "Min/Max As rebar top",
-                    "Minimum spacing top",
-                    "Min/Max As rebar bottom",
-                    "Minimum spacing bottom",
-                ],
-                "Unit": ["cm²", "mm", "cm²", "mm"],
-                "Value": [
-                    round(
-                        self._limiting_case_flexure_top_details["min_max"]["Value"][0],
-                        2,
-                    ),  # Top limiting case As
-                    round(
-                        self._limiting_case_flexure_top_details["min_max"]["Value"][1],
-                        2,
-                    ),  # Top limiting case spacing
-                    round(
-                        self._limiting_case_flexure_bot_details["min_max"]["Value"][2],
-                        2,
-                    ),  # Bottom limiting case As
-                    round(
-                        self._limiting_case_flexure_bot_details["min_max"]["Value"][3],
-                        2,
-                    ),  # Bottom limiting case spacing
-                ],
-                "Min.": [
-                    round(self._limiting_case_flexure_top_details["min_max"]["Min."][0], 2),  # Top limiting case As_min
-                    self._limiting_case_flexure_top_details["min_max"]["Min."][1],  # Top limiting case spacing min
-                    round(
-                        self._limiting_case_flexure_bot_details["min_max"]["Min."][2], 2
-                    ),  # Bottom limiting case As_min
-                    self._limiting_case_flexure_bot_details["min_max"]["Min."][3],  # Bottom limiting case spacing min
-                ],
-                "Max.": [
-                    round(self._limiting_case_flexure_top_details["min_max"]["Max."][0], 2),  # Top limiting case As_max
-                    "",  # No max constraint for spacing
-                    round(
-                        self._limiting_case_flexure_bot_details["min_max"]["Max."][2], 2
-                    ),  # Bottom limiting case As_max
-                    "",  # No max constraint for spacing
-                ],
-                "Ok?": [
-                    self._limiting_case_flexure_top_details["min_max"]["Ok?"][0],  # Top As check
-                    self._limiting_case_flexure_top_details["min_max"]["Ok?"][1],  # Top spacing check
-                    self._limiting_case_flexure_bot_details["min_max"]["Ok?"][2],  # Bottom As check
-                    self._limiting_case_flexure_bot_details["min_max"]["Ok?"][3],  # Bottom spacing check
-                ],
-            }
-
-        # Convert output Dicts into DataFrames
-        df_materials = pd.DataFrame(self._materials_flexure)
-        df_geometry = pd.DataFrame(self._geometry_flexure)
-        df_forces = pd.DataFrame(forces_result)
-        df_data_min_max = pd.DataFrame(min_max_result)
-        df_flexure_capacity_top = pd.DataFrame(top_result_data)
-        df_flexure_capacity_bottom = pd.DataFrame(bot_result_data)
-
-        # Create a document builder instance
-        doc_builder = DocumentBuilder(title=self._report_text["flexure_doc_title"], language=get_language())
-
-        # Add first section and table
-        doc_builder.add_heading(self._report_text["flexure_heading"], level=1, label=self.label)
-        doc_builder.add_text(
-            "Made with mento {version}. Design code: {design_code}",
-            version=MENTO_VERSION,
-            design_code=self.concrete.design_code,
-        )
-        doc_builder.add_heading("Materials", level=2)
-        doc_builder.add_table_data(df_materials)
-        doc_builder.add_table_data(df_geometry)
-        doc_builder.add_table_data(df_forces)
-
-        # Add third section for limit checks
-        doc_builder.add_heading("Limit checks", level=2)
-        doc_builder.add_table_data(df_data_min_max)
-
-        # Add second section for flexural checks
-        doc_builder.add_heading("Flexural Capacity Top", level=2)
-        doc_builder.add_table_dcr(df_flexure_capacity_top)
-        doc_builder.add_heading("Flexural Capacity Bottom", level=2)
-        doc_builder.add_table_dcr(df_flexure_capacity_bottom)
-
-        # Save the Word doc
-        doc_builder.save(self._report_file_name("flexure_heading"))
-
-    def shear_results_detailed(self, force: Optional[Forces] = None) -> None:
-        """
-        Displays detailed shear results.
-
-        Parameters
-        ----------
-        forces : Forces, optional
-            The specific Forces object to display results for. If None, displays results for the limiting case.
-        Returns
-        -------
-        None
-        """
-        if not self._shear_checked:
-            warnings.warn(
-                "Shear check has not been performed yet. Call check_shear or design_shear first.",
-                UserWarning,
-            )
-            self._md_shear_results = "Shear results are not available."
-            return None
-        # Determine which results to display (limiting case by default)
-        if force:
-            force_id = force.id
-            if force_id not in self._shear_results_detailed_list:
-                raise ValueError(f"No results found for Forces object with ID {force_id}.")
-            result_data = self._shear_results_detailed_list[force_id]
-        else:
-            # Default to limiting case
-            result_data = self._limiting_case_shear_details
-
-        # Create a TablePrinter instance and display tables
-        language = get_language()
-        print(translate(self._report_text["shear_banner"], language))
-        materials_printer = TablePrinter("MATERIALS", language)
-        materials_printer.print_table_data(self._materials_shear, headers="keys")
-        geometry_printer = TablePrinter("GEOMETRY", language)
-        geometry_printer.print_table_data(self._geometry_shear, headers="keys")
-        forces_printer = TablePrinter("FORCES", language)
-        forces_printer.print_table_data(result_data["forces"], headers="keys")
-        steel_printer = TablePrinter("SHEAR STRENGTH", language)
-        steel_printer.print_table_data(result_data["shear_reinforcement"], headers="keys")
-        min_max_printer = TablePrinter("MAX AND MIN LIMIT CHECKS", language)
-        min_max_printer.print_table_data(result_data["min_max"], headers="keys")
-        concrete_printer = TablePrinter("CONCRETE STRENGTH", language)
-        concrete_printer.print_table_data(result_data["shear_concrete"], headers="keys")
+        flexure_report_doc(self, force)
 
     def shear_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
+        """Write the detailed shear results to a Word document.
+
+        The assembly lives in :mod:`mento.reports.documents`.
         """
-        Prints detailed shear results in Word.
-
-        Parameters
-        ----------
-        forces : Forces, optional
-            The specific Forces object to display results for. If None, displays results for the limiting case.
-        """
-        if not self._shear_checked:
-            warnings.warn(
-                "Shear check has not been performed yet. Call check_shear or design_shear first.",
-                UserWarning,
-            )
-            self._md_shear_results = "Shear results are not available."
-            return None
-        # Determine which results to display (limiting case by default)
-        if force:
-            force_id = force.id
-            if force_id not in self._shear_results_detailed_list:
-                raise ValueError(f"No results found for Forces object with ID {force_id}.")
-            result_data = self._shear_results_detailed_list[force_id]
-        else:
-            # Default to limiting case
-            result_data = self._limiting_case_shear_details
-
-        # Convert output Dicts into DataFrames
-        df_materials = pd.DataFrame(self._materials_shear)
-        df_geometry = pd.DataFrame(self._geometry_shear)
-        df_forces = pd.DataFrame(result_data["forces"])
-        df_shear_reinforcement = pd.DataFrame(result_data["shear_reinforcement"])
-        df_data_min_max = pd.DataFrame(result_data["min_max"])
-        df_shear_concrete = pd.DataFrame(result_data["shear_concrete"])
-
-        # Create a document builder instance
-        doc_builder = DocumentBuilder(title=self._report_text["shear_doc_title"], language=get_language())
-
-        # Add first section and table
-        doc_builder.add_heading(self._report_text["shear_heading"], level=1, label=self.label)
-        doc_builder.add_text(
-            "Made with mento {version}. Design code: {design_code}",
-            version=MENTO_VERSION,
-            design_code=self.concrete.design_code,
-        )
-        doc_builder.add_heading("Materials", level=2)
-        doc_builder.add_table_data(df_materials)
-        doc_builder.add_table_data(df_geometry)
-        doc_builder.add_table_data(df_forces)
-
-        # Add second section and another table (can use different data)
-        doc_builder.add_heading("Limit checks", level=2)
-        doc_builder.add_table_min_max(df_data_min_max)
-        doc_builder.add_heading("Design checks", level=2)
-        doc_builder.add_table_data(df_shear_reinforcement)
-        doc_builder.add_table_dcr(df_shear_concrete)
-
-        # Save the Word doc
-        doc_builder.save(self._report_file_name("shear_heading"))
+        shear_report_doc(self, force)
 
     def _format_longitudinal_rebar_string(self, n1: int, d_b1: Quantity, n2: int = 0, d_b2: Quantity = 0 * mm) -> str:
         """
@@ -1563,608 +1026,10 @@ class RectangularBeam(RectangularSection):
     # PLOT BEAM SECTION WITH REBAR
     ##########################################################
 
-    def _plot_rebar_layer(
-        self,
-        width_cm: float,
-        height_cm: float,
-        c_c_cm: float,
-        stirrup_d_b_cm: float,
-        layers_spacing_cm: float,
-        n1: int,
-        d_b1: Quantity,
-        n2: int,
-        d_b2: Quantity,
-        max_db: Quantity,
-        is_bottom: bool = True,
-        is_second_layer: bool = False,
-    ) -> None:
+    def plot(self, show: bool = False) -> "Figure":
+        """Draw the cross-section with its reinforcement.
+
+        The drawing itself lives in :mod:`mento.plots.sections`; keeping it out of this
+        class is what stops the element from being part matplotlib.
         """
-        Helper method to plot a single layer of rebars.
-        """
-        # Calculate y-position based on layer and bottom/top
-        y_base = c_c_cm + stirrup_d_b_cm if is_bottom else height_cm - c_c_cm - stirrup_d_b_cm
-
-        if is_second_layer:
-            y_base += (
-                layers_spacing_cm + max_db.to("cm").magnitude
-                if is_bottom
-                else -layers_spacing_cm - max_db.to("cm").magnitude
-            )
-
-        # Plot side bars (position 1 or 3)
-        if n1 > 0:
-            diameter_cm = d_b1.to("cm").magnitude
-            radius_cm = diameter_cm / 2.0
-
-            # nominal vertical center before corner correction
-            y_center_nominal = y_base + radius_cm if is_bottom else y_base - radius_cm
-
-            # width available between inner faces of stirrup legs, for this bar diameter
-            clear_span = width_cm - 2 * (c_c_cm + stirrup_d_b_cm + radius_cm)
-
-            # corner offset depends on stirrup diameter (controls bend radius)
-            corner_offset = 0.43 * stirrup_d_b_cm  # tune factor if needed
-
-            for i in range(n1):
-                # even if n1 == 1, just center it
-                if n1 == 1:
-                    x_nominal = width_cm / 2.0
-                else:
-                    x_nominal = c_c_cm + stirrup_d_b_cm + radius_cm + i * (clear_span / (n1 - 1))
-
-                # default: no shift
-                x_shift = 0.0
-                y_shift = 0.0
-
-                # leftmost bar
-                if i == 0:
-                    x_shift = corner_offset  # push inward (to the right)
-                    y_shift = corner_offset if is_bottom else -corner_offset
-                # rightmost bar
-                elif i == n1 - 1:
-                    x_shift = -corner_offset  # push inward (to the left)
-                    y_shift = corner_offset if is_bottom else -corner_offset
-
-                x_plot = x_nominal + x_shift
-                y_plot = y_center_nominal + y_shift
-
-                circle = Circle(
-                    (x_plot, y_plot),
-                    radius_cm,
-                    color=CUSTOM_COLORS["dark_gray"],
-                    fill=True,
-                )
-                self._ax.add_patch(circle)
-
-        # ---------------------------------
-        # Plot intermediate bars (group n2)
-        # ---------------------------------
-        if n2 > 0:
-            diameter_cm = d_b2.to("cm").magnitude
-            radius_cm = diameter_cm / 2.0
-
-            y_center_nominal = y_base + radius_cm if is_bottom else y_base - radius_cm
-
-            clear_span = width_cm - 2 * (c_c_cm + stirrup_d_b_cm + radius_cm)
-
-            for i in range(n2):
-                x_nominal = c_c_cm + stirrup_d_b_cm + radius_cm + (i + 1) * (clear_span / (n2 + 1))
-
-                # intermediate bars: no special offset
-                x_plot = x_nominal
-                y_plot = y_center_nominal
-
-                circle = Circle(
-                    (x_plot, y_plot),
-                    radius_cm,
-                    color=CUSTOM_COLORS["dark_gray"],
-                    fill=True,
-                )
-                self._ax.add_patch(circle)
-
-    def _format_rebar_layer_text(
-        self,
-        n1: int,
-        d_b1: Quantity,
-        n2: int,
-        d_b2: Quantity,
-    ) -> str:
-        """
-        Devuelve un string tipo '2Ø16+3Ø10' a partir de n1, d1, n2, d2.
-        Si un grupo tiene n=0, no se incluye.
-        Diámetros en mm.
-
-        En slab:
-            - Siempre combina en un único grupo: '5Ø12'.
-        En beam:
-            - Si n1 y n2 tienen el mismo diámetro, combina: '4Ø16'.
-            - Si son distintos, deja el formato '2Ø16+3Ø10'.
-        """
-
-        mode = getattr(self, "mode", "beam")
-
-        # -------------------------------
-        # MODO SLAB: siempre combinar
-        # -------------------------------
-        if mode == "slab":
-            total_bars = n1 + n2
-            if total_bars == 0:
-                return ""
-
-            # Tomar el diámetro "no nulo"
-            if n1 > 0 and d_b1 is not None:
-                phi = d_b1.to("mm").magnitude
-            elif n2 > 0 and d_b2 is not None:
-                phi = d_b2.to("mm").magnitude
-            else:
-                return ""  # por seguridad
-
-            return f"{total_bars}Ø{phi:.0f}"
-
-        # -------------------------------
-        # MODO BEAM
-        # -------------------------------
-        # Si n1 y n2 tienen el mismo diámetro y ambos > 0 → combinar
-        if n1 > 0 and n2 > 0 and d_b1 is not None and d_b2 is not None:
-            phi1 = d_b1.to("mm").magnitude
-            phi2 = d_b2.to("mm").magnitude
-
-            # Igualdad con una pequeña tolerancia
-            if abs(phi1 - phi2) < 1e-6:
-                total_bars = n1 + n2
-                return f"{total_bars}Ø{phi1:.0f}"
-
-        # Caso general: como lo tenías antes
-        parts: list[str] = []
-
-        if n1 > 0 and d_b1 is not None:
-            phi1 = d_b1.to("mm").magnitude
-            parts.append(f"{n1}Ø{phi1:.0f}")
-
-        if n2 > 0 and d_b2 is not None:
-            phi2 = d_b2.to("mm").magnitude
-            parts.append(f"{n2}Ø{phi2:.0f}")
-
-        return "+".join(parts) if parts else ""
-
-    def _annotate_rebar_layer_text(
-        self,
-        width_cm: float,
-        height_cm: float,
-        c_c_cm: float,
-        stirrup_d_b_cm: float,
-        layers_spacing_cm: float,
-        n1: int,
-        d_b1: Quantity,
-        n2: int,
-        d_b2: Quantity,
-        max_db: Quantity,
-        is_bottom: bool = True,
-        is_second_layer: bool = False,
-    ) -> None:
-        """
-        Escribe a la derecha de la sección la leyenda de armadura para un layer.
-        Ejemplo: '2Ø16+3Ø10'.
-        """
-
-        text = self._format_rebar_layer_text(n1, d_b1, n2, d_b2)
-        if not text:
-            return  # nada que mostrar
-
-        # misma lógica de y_base que en _plot_rebar_layer
-        y_base = c_c_cm + stirrup_d_b_cm if is_bottom else height_cm - c_c_cm - stirrup_d_b_cm
-
-        if is_second_layer:
-            shift = layers_spacing_cm + max_db.to("cm").magnitude
-            y_base = y_base + shift if is_bottom else y_base - shift
-
-        # posición vertical aproximada del centro del layer
-        rep_db_cm = max_db.to("cm").magnitude
-        y_center = y_base + rep_db_cm / 2.0 if is_bottom else y_base - rep_db_cm / 2.0
-
-        # posición horizontal del texto (a la derecha de la sección)
-        x_text = width_cm + 0.1 * width_cm
-
-        self._ax.text(  # type: ignore
-            x_text,
-            y_center,
-            text,
-            ha="left",
-            va="center",
-            color=CUSTOM_COLORS["dark_gray"],
-            # fontsize=10,
-        )
-
-    def _annotate_stirrups_text(
-        self,
-        width_cm: float,
-        height_cm: float,
-    ) -> None:
-        """
-        Escribe la leyenda de estribos a la derecha, a media altura.
-        Ejemplo: '1eØ6/20' o '2eØ6/20'.
-        """
-        if self._stirrup_n == 0:
-            return  # nothing to show
-
-        phi_mm = self._stirrup_d_b.to("mm").magnitude
-        s_cm = self._stirrup_s_l.to("cm").magnitude
-
-        text = f"{self._stirrup_n:.0f}eØ{phi_mm:.0f}/{s_cm:.0f}"
-
-        x_text = width_cm + 0.1 * width_cm
-        y_text = height_cm / 2.0
-
-        self._ax.text(  # type: ignore
-            x_text,
-            y_text,
-            text,
-            ha="left",
-            va="center",
-            color=CUSTOM_COLORS["dark_gray"],
-            # fontsize=10,
-        )
-
-    def _add_rounded_stirrup(
-        self,
-        x0: float,
-        y0: float,
-        width: float,
-        height: float,
-        db_cm: float,
-        facecolor: str,
-    ) -> None:
-        """
-        Add one closed stirrup with rounded corners and thickness db_cm.
-
-        All dimensions in cm.
-        (x0, y0) is bottom-left of the OUTER stirrup line.
-        """
-        # corner radii (same logic you already have)
-        inner_radius = 4 * db_cm / 2
-        outer_radius = inner_radius + db_cm
-
-        outer = FancyBboxPatch(
-            (x0, y0),
-            width,
-            height,
-            boxstyle=f"Round, pad=0, rounding_size={outer_radius}",
-            edgecolor=CUSTOM_COLORS["dark_blue"],
-            facecolor="white",
-            linewidth=db_cm,  # thickness of the steel
-        )
-        self._ax.add_patch(outer)
-
-        inner = FancyBboxPatch(
-            (x0 + db_cm, y0 + db_cm),
-            width - 2 * db_cm,
-            height - 2 * db_cm,
-            boxstyle=f"Round, pad=0, rounding_size={inner_radius}",
-            edgecolor=CUSTOM_COLORS["dark_blue"],
-            facecolor=facecolor,
-            linewidth=1,
-        )
-        self._ax.add_patch(inner)
-
-    def _plot_stirrups_in_section(
-        self,
-        c_c_cm: float,
-        section_width_cm: float,
-        section_height_cm: float,
-        stirrup_db_cm: float,
-        n_stirrups: int,
-    ) -> None:
-        """
-        Plot 1, 2 or 3 stirrups inside the beam section.
-
-        Rules:
-        - 1 stirrup: full width (current behavior).
-        - 2 stirrups: outer full width, inner with 1/2 width, centered.
-        - 3 stirrups: outer full width, plus 2 inner stirrups whose total
-        occupied width is about 1/4 of the section width (each ~1/8), placed
-        symmetrically left/right.
-        """
-
-        # base geometry (outer stirrup like now)
-        stirrup_width = section_width_cm - 2 * c_c_cm
-        stirrup_height = section_height_cm - 2 * c_c_cm
-
-        # Always draw the outer stirrup
-        self._add_rounded_stirrup(
-            x0=c_c_cm,
-            y0=c_c_cm,
-            width=stirrup_width,
-            height=stirrup_height,
-            db_cm=stirrup_db_cm,
-            facecolor=CUSTOM_COLORS["light_gray"],
-        )
-
-        if n_stirrups <= 1:
-            return
-
-        # Case 2 stirrups: inner one with 1/2 width, centered
-        if n_stirrups == 2:
-            inner_width = 0.5 * stirrup_width
-            x_center = c_c_cm + stirrup_width / 2
-            x0_inner = x_center - inner_width / 2
-
-            self._add_rounded_stirrup(
-                x0=x0_inner,
-                y0=c_c_cm,
-                width=inner_width,
-                height=stirrup_height,
-                db_cm=stirrup_db_cm,
-                facecolor=CUSTOM_COLORS["light_gray"],
-            )
-            return
-
-        # Case 3+ stirrups: outer + 2 small inner ones.
-        # Clamp so it doesn't exceed outer stirrup
-        inner_width = min(0.25 * section_width_cm, 0.4 * stirrup_width)
-
-        # Place inner stirrups roughly at quarter points of the outer stirrup
-        # -> centers at 1/3 and 2/3 of stirrup span
-        x_left_center = c_c_cm + stirrup_width * (1 / 3) - stirrup_db_cm / 2
-        x_right_center = c_c_cm + stirrup_width * (2 / 3) + stirrup_db_cm / 2
-
-        x0_left = x_left_center - inner_width / 2 - stirrup_db_cm / 2
-        x0_right = x_right_center - inner_width / 2 + stirrup_db_cm / 2
-
-        self._add_rounded_stirrup(
-            x0=x0_left,
-            y0=c_c_cm,
-            width=inner_width,
-            height=stirrup_height,
-            db_cm=stirrup_db_cm,
-            facecolor=CUSTOM_COLORS["light_gray"],
-        )
-        self._add_rounded_stirrup(
-            x0=x0_right,
-            y0=c_c_cm,
-            width=inner_width,
-            height=stirrup_height,
-            db_cm=stirrup_db_cm,
-            facecolor=CUSTOM_COLORS["light_gray"],
-        )
-
-    def plot(self, show: bool = False) -> plt.Figure:  # type: ignore
-        """
-        Plots the rectangular section with a dark gray border, light gray hatch, and dimensions.
-        Also plots the stirrup with rounded corners and thickness.
-        """
-
-        # Convert dimensions to consistent units (cm)
-        width_cm: float = self.width.to("cm").magnitude
-        height_cm: float = self.height.to("cm").magnitude
-        c_c_cm: float = self.c_c.to("cm").magnitude
-        stirrup_d_b_cm: float = self._stirrup_d_b.to("cm").magnitude
-        layers_spacing_cm: float = self.settings.layers_spacing.to("cm").magnitude
-
-        # Create figure and axis
-        fig, self._ax = plt.subplots()
-
-        # Create a rectangle patch for the section
-        rect = Rectangle(
-            (0, 0),
-            width_cm,
-            height_cm,
-            linewidth=1.3,
-            edgecolor=CUSTOM_COLORS["dark_gray"],
-            facecolor=CUSTOM_COLORS["light_gray"],
-        )
-        self._ax.add_patch(rect)
-
-        if self.mode == "beam":
-            db = self._stirrup_d_b.to("cm").magnitude  # bar diameter Ø
-
-            # Cap at 3 for drawing (you can show 1, 2, or 3)
-            n_stirrups = max(1, min(3, self._stirrup_n))
-
-            self._plot_stirrups_in_section(
-                c_c_cm=c_c_cm,
-                section_width_cm=width_cm,
-                section_height_cm=height_cm,
-                stirrup_db_cm=db,
-                n_stirrups=n_stirrups,
-            )
-
-        # Set plot limits with some padding
-        padding = max(width_cm, height_cm) * 0.2
-        self._ax.set_xlim(-padding, width_cm + padding)
-        self._ax.set_ylim(-padding, height_cm + padding)
-
-        # Text and dimension offsets
-        dim_offset = 2.5
-        text_offset = dim_offset + 2
-        # Add width dimension
-        self._ax.annotate(
-            "",  # No text here, text is added separately
-            xy=(0, -dim_offset),  # Start of arrow (left side)
-            xytext=(width_cm, -dim_offset),  # End of arrow (right side)
-            arrowprops={
-                "arrowstyle": "<->",
-                "lw": 1,
-                "color": CUSTOM_COLORS["dark_blue"],
-            },
-        )
-        if self.concrete.unit_system == "imperial":
-            # Example: format to 2 decimal places, then use pint's compact (~P) format
-            width = "{:.0f~P}".format(self.width.to("inch"))
-            height = "{:.0f~P}".format(self.height.to("inch"))
-        else:
-            width = "{:.0f~P}".format(self.width.to("cm"))
-            height = "{:.0f~P}".format(self.height.to("cm"))
-        # Add width dimension text below the arrow
-        self._ax.text(
-            width_cm / 2,  # Center of the arrow
-            -text_offset,  # Slightly below the arrow
-            width,
-            ha="center",
-            va="top",
-            color=CUSTOM_COLORS["dark_gray"],
-        )
-
-        # Add height dimension
-        self._ax.annotate(
-            "",  # No text here, text is added separately
-            xy=(-dim_offset, 0),  # Start of arrow (bottom)
-            xytext=(-dim_offset, height_cm),  # End of arrow (top)
-            arrowprops={
-                "arrowstyle": "<->",
-                "lw": 1,
-                "color": CUSTOM_COLORS["dark_blue"],
-            },
-        )
-        # Add height dimension text to the left of the arrow
-        self._ax.text(
-            -text_offset,  # Slightly to the left of the arrow
-            height_cm / 2,  # Center of the arrow
-            height,
-            ha="right",
-            va="center",
-            color=CUSTOM_COLORS["dark_gray"],
-            rotation=90,  # Rotate text vertically
-        )
-
-        # Set aspect of the plot to be equal
-        self._ax.set_aspect("equal")
-        # Remove axes for better visualization
-        self._ax.axis("off")
-
-        # Calculate rebar positions
-        # Bottom rebars
-        self._plot_rebar_layer(
-            width_cm,
-            height_cm,
-            c_c_cm,
-            stirrup_d_b_cm,
-            layers_spacing_cm,
-            self._n1_b,
-            self._d_b1_b,
-            self._n2_b,
-            self._d_b2_b,
-            max_db=self._d_b1_b,
-            is_bottom=True,
-        )
-        self._plot_rebar_layer(
-            width_cm,
-            height_cm,
-            c_c_cm,
-            stirrup_d_b_cm,
-            layers_spacing_cm,
-            self._n3_b,
-            self._d_b3_b,
-            self._n4_b,
-            self._d_b4_b,
-            max_db=self._d_b1_b,
-            is_bottom=True,
-            is_second_layer=True,
-        )
-
-        # Top rebars
-        self._plot_rebar_layer(
-            width_cm,
-            height_cm,
-            c_c_cm,
-            stirrup_d_b_cm,
-            layers_spacing_cm,
-            self._n1_t,
-            self._d_b1_t,
-            self._n2_t,
-            self._d_b2_t,
-            max_db=self._d_b1_t,
-            is_bottom=False,
-        )
-        self._plot_rebar_layer(
-            width_cm,
-            height_cm,
-            c_c_cm,
-            stirrup_d_b_cm,
-            layers_spacing_cm,
-            self._n3_t,
-            self._d_b3_t,
-            self._n4_t,
-            self._d_b4_t,
-            max_db=self._d_b1_t,
-            is_bottom=False,
-            is_second_layer=True,
-        )
-
-        ### REBAR TEXT ANNOTATIONS
-        # Bottom, 1st layer
-        self._annotate_rebar_layer_text(
-            width_cm,
-            height_cm,
-            c_c_cm,
-            stirrup_d_b_cm,
-            layers_spacing_cm,
-            self._n1_b,
-            self._d_b1_b,
-            self._n2_b,
-            self._d_b2_b,
-            max_db=self._d_b1_b,
-            is_bottom=True,
-            is_second_layer=False,
-        )
-
-        # Bottom, 2nd layer
-        self._annotate_rebar_layer_text(
-            width_cm,
-            height_cm,
-            c_c_cm,
-            stirrup_d_b_cm,
-            layers_spacing_cm,
-            self._n3_b,
-            self._d_b3_b,
-            self._n4_b,
-            self._d_b4_b,
-            max_db=self._d_b1_b,
-            is_bottom=True,
-            is_second_layer=True,
-        )
-
-        # Top, 1st layer
-        self._annotate_rebar_layer_text(
-            width_cm,
-            height_cm,
-            c_c_cm,
-            stirrup_d_b_cm,
-            layers_spacing_cm,
-            self._n1_t,
-            self._d_b1_t,
-            self._n2_t,
-            self._d_b2_t,
-            max_db=self._d_b1_t,
-            is_bottom=False,
-            is_second_layer=False,
-        )
-
-        # Top, 2nd layer
-        self._annotate_rebar_layer_text(
-            width_cm,
-            height_cm,
-            c_c_cm,
-            stirrup_d_b_cm,
-            layers_spacing_cm,
-            self._n3_t,
-            self._d_b3_t,
-            self._n4_t,
-            self._d_b4_t,
-            max_db=self._d_b1_t,
-            is_bottom=False,
-            is_second_layer=True,
-        )
-
-        # Stirrups text
-        self._annotate_stirrups_text(width_cm, height_cm)
-
-        # Store the section figure
-        self._fig = fig
-
-        if show:
-            plt.show()
-
-        # # Close the figure so notebooks don't auto-display it twice
-        plt.close(fig)
-
-        return fig
+        return plot_beam_section(self, show=show)

@@ -1,13 +1,13 @@
+import warnings
+
 import pytest
 import pandas as pd
 from docx import Document
 from typing import List, Any
-from docx.shared import Cm
-import matplotlib
-from mento.results import Formatter, TablePrinter, DocumentBuilder, configure_plot_settings
-
-matplotlib.use("Agg")  # Use non-GUI backend for testing
+from docx.shared import Cm, Emu
 import matplotlib.pyplot as plt
+
+from mento.results import Formatter, TablePrinter, DocumentBuilder, configure_plot_settings
 
 # Disable LaTeX for testing to avoid CI/CD issues
 plt.rcParams["text.usetex"] = False
@@ -406,3 +406,32 @@ def test_document_builder_full_workflow(tmp_path: Any) -> None:
 
 if __name__ == "__main__":
     pytest.main()
+
+
+def test_a_short_width_list_pads_and_says_so() -> None:
+    """Padding keeps the table renderable; the warning is what makes it visible.
+
+    A width list that falls short of the column count still renders -- the last
+    width is repeated -- so without this the only evidence is the rendered
+    page, which is how the Beam Data columns went wrong unnoticed.
+    """
+    builder = DocumentBuilder(title="widths")
+    df = pd.DataFrame({"a": [1], "b": [2], "c": [3], "d": [4]})
+
+    with pytest.warns(UserWarning, match="4 columns but 2 widths were given"):
+        builder.add_table(df, [Cm(3), Cm(2)])
+
+    widths = [round(Emu(cell.width).cm, 2) for cell in builder.doc.tables[-1].rows[0].cells]
+    assert widths == [3.0, 2.0, 2.0, 2.0]
+
+
+def test_a_complete_width_list_is_left_alone() -> None:
+    """One width per column is the normal case and must stay silent."""
+    builder = DocumentBuilder(title="widths")
+    df = pd.DataFrame({"a": [1], "b": [2]})
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        builder.add_table(df, [Cm(3), Cm(2)])
+
+    assert not [w for w in caught if "widths were given" in str(w.message)]

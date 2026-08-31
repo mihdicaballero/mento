@@ -7,16 +7,6 @@ from mento.rectangular import RectangularSection  # Assuming this is the module 
 
 
 @pytest.fixture()
-def concrete_c25() -> Concrete:
-    return Concrete("C25")
-
-
-@pytest.fixture()
-def steel_b500s() -> SteelBar:
-    return SteelBar(name="B500S", f_y=500 * MPa)
-
-
-@pytest.fixture()
 def basic_rectangular_section(concrete_c25: Concrete, steel_b500s: SteelBar) -> RectangularSection:
     """Fixture for a basic RectangularSection instance."""
     return RectangularSection(

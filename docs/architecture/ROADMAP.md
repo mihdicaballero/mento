@@ -1,6 +1,9 @@
 # mento architecture roadmap
 
-Status: accepted (2026-08-26). Companion decision records live in [`adr/`](adr/).
+Status: accepted (2026-08-26); amended 2026-08-29 with the measured performance
+baseline (§1.5), the equation-signature decision (ADR-0005), the Phase 2 split,
+per-phase exit criteria, and the performance track. Companion decision records
+live in [`adr/`](adr/).
 
 This document describes where mento's internal architecture is today, what the two
 closest open-source reference projects do, the target architecture we are converging
@@ -66,15 +69,56 @@ Both are patches on top of the cause rather than its removal.
 - The one clean boundary today is `results.py` (`Formatter`, `TablePrinter`,
   `DocumentBuilder`), which does not know about beam.
 
-### 1.4 Hygiene findings (cheap to fix, tracked in Phase 0)
+### 1.4 Hygiene findings (resolved — Phase 0, 2026-08-29)
 
-- `build/lib/mento/` (a stale copy of the package) and `docs/build/` are committed.
-- Two contradictory pytest configs: `pyproject.toml` (`testpaths = ["tests"]`) and
-  `tests/pytest.ini` (`testpaths = test`, a nonexistent directory).
-- No `conftest.py`; beam fixtures are re-declared per test file.
-- `tests/modules_testing.py` (829 lines) contains no tests — it is a manual
-  exploration script living inside `tests/`.
-- 17 generated `.docx`/`.xlsx` artifacts are versioned under `docs/source/examples/`.
+- ~~`build/lib/mento/` and `docs/build/` are committed.~~ Already untracked when
+  Phase 0 ran; `.gitignore`'s `build/` pattern matches at any depth. The stale
+  copies remain on disk as local build artifacts only.
+- Two contradictory pytest configs. **Worse than diagnosed:** `tests/pytest.ini`
+  won — running `pytest tests/` set rootdir to `tests/` and used it, so
+  `pyproject.toml`'s coverage `addopts` were silently ignored. Only CI, which
+  passes `--cov` explicitly, was measuring coverage. `pytest.ini` is deleted;
+  `pyproject.toml` is now the configfile.
+- No `conftest.py`; fixtures re-declared per test file. Three fixtures were
+  declared identically in two modules each (`concrete_c25`, `steel_b500s`,
+  `steel`) and now live in `tests/conftest.py`, which also sets the `Agg`
+  backend that four modules were each setting by hand.
+- `tests/modules_testing.py` (829 lines) contains no tests. Moved to
+  `scripts/modules_testing.py`.
+- ~~17 generated `.docx`/`.xlsx` artifacts are versioned.~~ Already untracked; the
+  `*.docx`/`*.xlsx`/`*.pdf` ignore rules cover them.
+
+One trap found and deliberately left alone: `beam_example_imperial` is defined in
+both `test_beam.py` and `test_rebar.py` with **different** geometry and settings.
+Same name, different fixture — hoisting either into `conftest.py` would silently
+change the other module's expected values.
+
+### 1.5 Performance baseline (measured 2026-08-29)
+
+Profiled on rame-env / Python 3.12, commit 6299b78 (ACI 318-19, 30×50 section,
+M = 120 kNm); consistent with an independent measurement of ~331 ms on another
+machine:
+
+| Call | Cost today |
+| --- | --- |
+| `design_flexure` | 375 ms |
+| `check_shear` | 8.3 ms |
+| `check_flexure` (designed beam) | 7.3 ms |
+
+Two facts anchor the plan:
+
+- **pint is the multiplier.** ~65 % of profiler self-time is pint-internal
+  (~967k pint calls vs ~2.8k mento calls per design). A representative flexure
+  chain runs 1071 µs/call with pint + string units, 313 µs with prebuilt unit
+  objects, **0.9 µs with plain floats** (~1200×). This is what decides the
+  equation signature — see ADR-0005.
+- **The design cost is rebar selection, not equations.** 97 % of
+  `design_flexure` is the combinatorial search in `rebar.py` (hundreds of
+  spacing/penalty evaluations, each doing pint arithmetic). The flexure
+  equations cost ~6 ms. So the mako loop — which *checks* per station and
+  designs rebar once — costs ~8 ms/station today, not 375: ~2.7 min serial for
+  1000 stations × 2 faces × 10 combos. Slow, but an optimization target, not a
+  blocker. *(Addressed 2026-08-29 — see the performance track: 306 → 72 ms.)*
 
 ---
 
@@ -132,29 +176,42 @@ foundation        units.py, material.py, forces.py, — leaves; already clean to
 Per design code, a subpackage with two kinds of modules:
 
 ```python
-# codes/aci_318_19/equations/shear.py — ONLY formulas; cite the clause; tested
-# against the code's own tables.
-def V_c(f_c, lambda_, rho_w, b_w, d, sigma_Nu) -> Quantity:
-    """Concrete shear strength — ACI 318-19, Table 22.5.5.1(c)."""
+# codes/aci_318_19/equations/shear.py — ONLY formulas; cite the clause; floats in
+# N/mm/MPa per ADR-0005; tested against the code's own tables.
+def V_c(f_c: float, lambda_: float, rho_w: float, b_w: float, d: float, sigma_Nu: float) -> float:
+    """Concrete shear strength [N] — ACI 318-19, Table 22.5.5.1(c).
 
-def s_max(d: Quantity, V_s: Quantity, threshold: Quantity) -> Quantity:
-    """Maximum stirrup spacing — ACI 318-19 §9.7.6.2.2."""
+    f_c [MPa], b_w [mm], d [mm], sigma_Nu [MPa].
+    """
+
+def s_max(d: float, V_s: float, threshold: float) -> float:
+    """Maximum stirrup spacing [mm] — ACI 318-19 §9.7.6.2.2."""
 ```
 
 ```python
-# codes/aci_318_19/checker.py — ONLY factors + orchestration + result assembly.
+# codes/aci_318_19/checker.py — ONLY factors + unit boundary + orchestration +
+# result assembly. Converts pint → float once on entry (prebuilt unit objects,
+# never strings), wraps float → pint once in the result.
 class ACI318_19:
     phi_v = 0.75
 
     def check_shear(self, section, force, settings) -> ShearCheckResult:
-        Vc = eq.V_c(f_c=section.concrete.f_c, b_w=section.width, ...)
+        Vc = eq.V_c(f_c=section.concrete.f_c.to(MPa).magnitude, b_w=section.width.to(mm).magnitude, ...)
         Vs = eq.V_s(...)
-        return ShearCheckResult(V_c=Vc, phi_V_n=self.phi_v * (Vc + Vs), ...)
+        return ShearCheckResult(V_c=Vc * N, phi_V_n=self.phi_v * (Vc + Vs) * N, ...)
 ```
 
 The discipline that keeps this honest: **the checker does not compute — it calls
-equations and assembles the result.** If a checker method starts containing algebra,
-that algebra belongs in `equations/`.
+equations and assembles the result — and the equations do not convert.** If a
+checker method starts containing algebra, that algebra belongs in `equations/`.
+This boundary is enforced mechanically, not by review: a test walks the AST of
+every `checker.py` and fails on arithmetic between quantities, and another fails
+on any pint import inside `equations/`.
+
+Equation signatures are floats in a fixed N/mm/MPa/N·mm system (ADR-0005): the
+measured pint overhead (~1000× on the hot chain, see §1.5) rules out Quantities
+inside the equations layer, and pint stays in everything users touch — inputs,
+results, reports.
 
 Why hybrid and not pure-functions-only (structuralcodes) or class-only
 (concrete-properties): the equations get the testability and the low contribution
@@ -195,6 +252,13 @@ results = [
 If a change makes this loop need a mutable element, a display import, or per-call
 state cleanup, the change is wrong.
 
+**Performance target:** 20,000 checks (1000 stations × 2 faces × 10 combinations)
+in **under 5 seconds, serial**, measured at the close of Phase 2b against the
+§1.5 baseline. With float equations (ADR-0005) the per-check cost becomes boundary
+conversion plus dataclass assembly, so the target is comfortable — it exists so we
+know when to stop optimizing, and so a regression is a failed exit criterion
+rather than an opinion.
+
 ### 3.4 Presentation as its own layer (see ADR-0004)
 
 Word reports, plots, styled tables, and pint display formatting are kept as
@@ -203,53 +267,623 @@ first-class features — implemented in modules that consume result dataclasses:
 - `_initialize_dicts_*` table builders move out of `codes/` into the report layer.
 - Section/rebar plotting moves out of `beam.py` into a plotting module (adopting a
   `plotting_context`-style helper to centralize matplotlib boilerplate).
-- Display units follow concrete-properties: calculations run in pint quantities;
-  *rounding and unit choice for display* belong to the presentation layer.
+- Units follow concrete-properties more closely than first stated: the equations
+  layer is float-only in a consistent base system, and pint lives at the
+  boundaries — inputs, result dataclasses, and display (ADR-0005). *Rounding and
+  unit choice for display* belong to the presentation layer.
 
 ---
 
 ## 4. Migration phases
 
 Incremental; the package imports and the full test suite passes after every phase.
-Each phase is independently mergeable.
+Each phase is independently mergeable, and each has an **exit criterion** beyond
+green tests — green only says nothing broke, not that the phase achieved its goal.
 
-### Phase 0 — Hygiene (no risk, do first)
+### Phase 0 — Hygiene (no risk, do first) — **done 2026-08-29**
 
-- Remove `build/` and `docs/build/` from version control; extend `.gitignore`.
-- Delete `tests/pytest.ini`; `pyproject.toml` is the single pytest config.
-- Add `tests/conftest.py`; move the shared beam/material fixtures there.
-- Move `tests/modules_testing.py` out of `tests/` (e.g. `scripts/` or delete).
-- Stop versioning generated `.docx`/`.xlsx` under `docs/source/examples/`.
+- ~~Remove `build/` and `docs/build/` from version control; extend
+  `.gitignore`.~~ Already clean; no change needed (see §1.4).
+- Delete `tests/pytest.ini`; `pyproject.toml` is the single pytest config. ✔
+- Add `tests/conftest.py`; move the shared fixtures there. ✔
+- Move `tests/modules_testing.py` out of `tests/` → `scripts/`. ✔
+- ~~Stop versioning generated `.docx`/`.xlsx`.~~ Already clean.
 
-### Phase 1 — Extract pure equations
+**Exit met:** one pytest config (`configfile: pyproject.toml`, rootdir at the
+repo root); shared fixtures and the `Agg` backend live in `conftest.py`; no
+generated artifacts tracked. Suite unchanged at **733 passed, 1 skipped**
+before and after; `ruff check`, `ruff format --check` and `mypy mento/` clean.
+
+### Performance track — cheap wins, parallel to any phase
+
+Independent of the architecture work, driven by the §1.5 measurements.
+
+**Rebar selection precompute — done 2026-08-29.** `rebar.py` was 97 % of design
+cost. The candidate search now strips units once and runs entirely on floats,
+re-applying pint only to the combinations it keeps; the scoring pass dropped
+`df.apply(axis=1)`, which was building a Series per candidate row.
+
+| | before | after |
+| --- | --- | --- |
+| `design_flexure`, wall clock (min of 25) | 306 ms | **72 ms** (4.3×) |
+| Python function calls, one design | 2,879,215 | **709,745** (4.1×) |
+| of those, inside pint | 1,001,507 | **304,603** (3.3×) |
+
+`check_shear` and `check_flexure` are unchanged at ~12 ms, as expected — they do
+not run the search. Suite unchanged at 773 passed, coverage still 100 %.
+
+**Mechanical `.to()` fix — deprioritized, and this is the interesting part.**
+The measurement that motivated it counted 2,906 `.to()` calls per
+`design_flexure`, which put the fix at roughly 47 % of runtime. After the
+precompute there are **192** `.to()` calls left, 111 of them string-based: the
+conversions the fix would have optimized are no longer executed at all. At
+~54 µs saved per call the whole fix is now worth about **7 ms of 72**. It stays
+worth doing opportunistically when touching a file, but it is not a milestone.
+
+The general lesson for the remaining phases: measure the cheap fix *after* the
+structural one, not before — removing work beats speeding it up.
+
+*Amended 2026-08-30, from the check paths (Phase 2b):* "the fix is worth ~54 µs
+per call" holds only for conversions that **do not change units**. Those cost
+50 µs as a string against 4 µs as a unit object. A conversion that really
+converts costs ~58 µs either way, and the fix buys nothing. So the 111
+string-based calls left here are worth roughly that much only to the extent
+they are no-ops — which is exactly the case that turned out to dominate EN
+flexure. Worth re-counting on this path with that split in mind.
+
+**Exit:** partially met. `design_flexure` is 72 ms against a 50 ms target. What
+remains is not a hot spot but ~7,600 Quantity constructions spread thin across
+`flexure_design.py` and the ACI module — no profile peak is left in mento
+itself. Closing the last 22 ms is Phase 1's float equations (ADR-0005), not more
+micro-optimization here.
+
+### Phase 1 — Extract pure equations — **done 2026-08-29**
 
 Inside `codes/`, split code formulas out of the mutating orchestrators into
-`equations/` modules (pure in / pure out, clause in docstring). The existing
-orchestrators keep mutating the beam **but now call the pure functions**. Add
+`equations/` modules — **plain floats per ADR-0005**, clause in docstring. The
+existing orchestrators keep mutating the beam **but now call the pure
+functions**, converting at the call site with prebuilt unit objects. Add
 parametrized tests against code tables for each extracted equation. No public
 behavior changes; this phase only *creates the layer that does not exist yet*.
+The boundary gets teeth from day one: the AST test of §3.1 (no algebra in
+checkers, no pint in `equations/`) lands with the first extracted module.
 
-### Phase 2 — Checks return result dataclasses
+**Done (2026-08-29): ACI 318-19 — shear, flexure and walls.**
 
-Extend `design_results.py` with check-result types; make check/design functions
-build and return them. Private beam attributes are kept synchronized as a
-deprecated compatibility layer (`DeprecationWarning` on documented ones). The
-envelope accumulators are deleted — enveloping becomes a pure operation over the
-returned list. This is the phase that unblocks mako.
+| module | clauses covered |
+| --- | --- |
+| `aci_318_19/equations/shear.py` | Eq. 22.5.5.1.3, Table 22.5.5.1, §22.5.5.1.1, §22.5.1.2, §9.6.3.1, §20.2.2.4, Table 9.6.3.4, §22.5.8.5.3 |
+| `aci_318_19/equations/flexure.py` | §21.2.2, §9.6.1.2, §22.2, §22.2.2.4.1, §22.3 |
+| `aci_318_19/equations/wall.py` | §11.5.4.3, §11.5.4.6, §11.6.1, Eq. 11.6.2, §11.7.3 |
 
-### Phase 3 — Extract presentation
+`ACI_318_19_beam.py` no longer imports `math` **or** `numpy`: every inline
+formula in the module is gone. `tests/test_architecture_boundaries.py` enforces
+the boundary by AST and was verified to fail on a deliberate violation, not just
+to pass. Packaging moved to automatic discovery so a new code subpackage cannot
+be left out of the wheel; verified by building one and listing its contents.
+
+Two duplications collapsed on the way: the doubly-reinforced design branch was
+re-deriving rho_max with `0.003/(eps_y+0.006)` spelled out, which is exactly
+`eps_c/(eps_y+2*eps_c)` for ACI's fixed eps_c, and the wall module had its own
+copy of the §20.2.2.4 f_yt cap — it now calls the beam one, since the clause is
+the same.
+
+**CIRSOC 201-25 needs no equations module.** It subclasses
+`Concrete_ACI_318_19` and reuses the ACI provisions verbatim; what differs is
+the bar diameter catalogue, which is data, not formulas. Recorded here so nobody
+goes looking for `codes/cirsoc_201_25/equations/`.
+
+**Done (2026-08-29): EN 1992-1-1:2004 — shear and flexure.**
+
+| module | clauses covered |
+| --- | --- |
+| `en_1992_2004/equations/shear.py` | §6.2.2(1) Eqs. (6.2.a)/(6.2.b)/(6.3N), §6.2.3 Eqs. (6.8)/(6.9)/(6.6N), §9.2.2(5) Eq. (9.5N) |
+| `en_1992_2004/equations/flexure.py` | §3.1.7(3), §3.2.7(2), §5.5(4) Eqs. (5.10a)/(5.10b), §6.1, §9.2.1.1 Eq. (9.1N) |
+
+EN is metric-only, so these take no `is_imperial` keyword — the unit system is a
+parameter only where a code publishes two coefficient sets, which EN does not.
+The recommended values a National Annex may override (`C_Rd,c = 0.18/gamma_c`,
+`k_1 = 0.15`, `v_min`, `rho_w,min`) are named and marked as recommended rather
+than buried as literals, which is what will make a National Annex layer
+possible later without another archaeology pass.
+
+The flexure module keeps the neutral axis `x_u` and the stress block depth
+`x_eff = lambda*x_u` explicitly apart, stating in every signature which one it
+takes. Conflating them is the standard EN implementation bug and the old inline
+code gave the reader nothing to check it against.
+
+Only trigonometry (cot from tan) stayed inline in the EN orchestrator, which is
+right: it is arithmetic, not a clause.
+
+**Nothing to extract from `punching.py`** — the check still raises
+`NotImplementedError`, so its formulas do not exist yet. When they land they
+should be written into `equations/` directly rather than extracted later.
+`flexure_design.py` and `slab.py` hold orchestration and bar geometry, no code
+clauses.
+
+**Exit met.** Zero `self.` and zero pint imports inside `equations/`; every
+public function cites its clause and has tests derived from the printed code;
+the boundary test runs in CI and is parametrized over every equations module, so
+a new code subpackage is covered the moment it exists. Suite 773 → 930 passing,
+coverage still 100 %.
+
+### Phase 2a — Migrate tests to the public API — **done 2026-08-30**
+
+Before touching production code, move the tests that read private attributes to
+`flexure_design` / `shear_design`. The suite keeps passing against **unchanged**
+production code — if any expected value has to change, the migration was not
+faithful and it shows immediately.
+
+**Result: 116 candidate reads, 52 migrated, 64 left.** `test_rebar.py` is fully
+clean. Suite unchanged at 930 passed, 1 skipped, and the diff touches `tests/`
+only — not one line of `mento/`.
+
+**The exit criterion as written cannot be met yet, and finding out why was the
+point of the phase.** The 64 remaining reads fall into four groups, only one of
+which is a test-side problem:
+
+1. **No public read-back of the configured reinforcement (the big one, ~35
+   reads).** `flexure_design` and `shear_design` raise `DesignNotRunError`
+   unless a check has run, but they also carry `layers`, `A_s`, `n_stirrups`,
+   `d_b`, `s_l`, `A_v` — which are not results at all, they are *what the
+   section carries*. Every test that asserts a setter worked, or that the
+   constructor defaults are right, reads that state before any check exists, so
+   it has no public way to. **Design input for Phase 2b: the section needs a
+   reinforcement view separate from the design-result view.** Phase 2b removing
+   `DesignNotRunError` is necessary but not sufficient — the split is the real
+   fix.
+2. **No public equivalent at all** — `_stirrup_s_w` (spacing across the width),
+   `_d_shear`, `_lambda_s`, `_phi_M_n_bot`, and the whole `ShearWall` result
+   surface, which is issue #125.
+3. **Empty-layer assertions** — `layers` deliberately omits layers with no
+   bars, so `_n3_b == 0` has no `layers[2]` to read. Where the total area pins
+   the layout, `len(layers)` replaces it; otherwise it stays.
+4. **`test_design_results.py` (12 reads) is exempt by construction** — it tests
+   the adapter, so comparing the public API against the private attributes it
+   maps from is the assertion. Migrating those would make them `x == x`.
+
+One migration was caught and reverted by the suite, which is the phase working
+as designed: an `_A_s_bot` read in `test_flexure_check_EN_1992_2004_01` sits
+*before* the `check_flexure()` call in the same test, so it asserts the layout
+that was just set, not a result. A whole-function regex says the test checks
+flexure; only the ordering says otherwise.
+
+**Exit met, once Phase 2b landed the reinforcement view** (see below). Final
+count: **116 candidate reads at the start, 14 left**, of which 12 are
+`test_design_results.py` and the other 2 are deliberate *writes*
+(`beam._d_b2_b = None`, injecting a state no public API can produce, to prove
+the area calculation survives it). No test reads a private beam attribute that
+the public API exposes. Group 2 — `_stirrup_s_w`, `_d_shear`, `_lambda_s`,
+`_phi_M_n_bot`, `_s_b1_t` and the `ShearWall` surface — is genuinely missing
+public API, not a test problem, and is tracked with issue #125.
+
+### Phase 2b — Checks return result dataclasses — **done 2026-08-30**
+
+**Done (2026-08-30): the reinforcement view.** Phase 2a found that
+`flexure_design` and `shear_design` conflate two different things —
+`layers`/`A_s`/`n_stirrups`/`d_b`/`s_l`/`A_v` are *what the section carries*,
+while `A_s_req`/`A_s_min`/`A_s_max`/`DCR` are *what a check demanded* — and gate
+both behind `DesignNotRunError`. So there was no way to read back a layout that
+had just been set.
+
+`section.reinforcement` now answers that, and never raises:
+
+```python
+beam.set_longitudinal_rebar_bot(n1=4, d_b1=16 * mm)
+beam.reinforcement.bottom.A_s          # 8.04 cm², no check needed
+beam.reinforcement.transverse.n_legs
+```
+
+It returns a frozen `SectionReinforcement(bottom, top, transverse)` — a
+snapshot, not a live view. The result objects are unchanged, so nothing breaks;
+they simply stop being the only way to ask what a section carries. This is the
+first piece of the ADR-0001 split that the rest of the phase completes.
+
+**Done (2026-08-30): the envelope accumulators are gone.**
+`_update_flexure_envelope` and `_update_shear_envelope`, and the
+`_flexure_envelope` / `_shear_envelope` dicts they folded into, no longer exist.
+Each check now appends one frozen `FlexureCheck` / `ShearCheck` to a list, and
+enveloping is a pure function over it — `envelope_flexure_face(checks, "bottom")`
+— evaluated when a result is read rather than accumulated as the loop runs. Each
+quantity is enveloped independently, because the combination that governs
+`A_s_req` need not be the one that governs `DCR`. The per-combination results are
+public as `beam.flexure_checks` / `beam.shear_checks`, so a caller that wants to
+envelope them itself — mako does — no longer has to reach into the beam.
+
+**Measured, and it changes which phase unblocks mako.** With the accumulators
+gone and Phase 1's equations in place, a shear check costs **5.31 ms**, so
+20,000 checks take **106 s** against the 5 s target of §3.3. The profile says
+the remaining cost is not calculation at all:
+
+| per check | what |
+| --- | --- |
+| ~1.7 ms | `_initialize_dicts_ACI_318_19_shear` — building report tables |
+| ~1.1 ms | constructing a fresh `Rebar` designer, only to read a spacing limit |
+| ~0.8 ms | assembling the result DataFrame row |
+
+The equations are now noise. **This roadmap said Phase 2b "is the phase that
+unblocks mako"; the measurement says Phase 3 is.** Building UI tables and a
+DataFrame on a path that no one is going to display is what costs, and Phase 3
+is what takes them off it. The `Rebar` construction is a separate cheap win that
+belongs to the performance track, not to any phase.
+
+**Done (2026-08-30): checks return results, and the report half is optional.**
+Every `_check_*` function takes `report: bool`; with `report=False` it computes
+the numbers and skips the report tables and the DataFrame. On top of that,
+`beam.shear_check_results(forces)` and `beam.flexure_check_results(forces)`
+return one frozen result per combination and build no report at all:
+
+```python
+worst = max(r.bottom.DCR for r in beam.flexure_check_results(combos))
+```
+
+A test asserts, for both design codes, that the two paths produce identical
+numbers — the fast path must be a shorter calculation, not a different one.
+
+| per check | report path | values path |
+| --- | --- | --- |
+| shear | 4.70 ms | **1.56 ms** (3.0×) |
+| flexure | 5.10 ms | **1.05 ms** (4.8×) |
+
+Two more clauses moved into `equations/` on the way, which is also what removed
+the last big cost: ACI Table 9.7.6.2.2 and EN §9.2.2(6)/(8), the stirrup spacing
+limits, were living in `rebar.py` and were reached by constructing an entire
+`Rebar` — the whole bar catalogue — on every check, just to read two numbers.
+They are now free functions taking the beam.
+
+**`mento/codes/__init__.py` is empty now, and that matters twice.** It used to
+re-export every code's private check functions, so importing *any* submodule —
+including a leaf equations module that imports nothing from mento — pulled the
+entire code layer in. Nothing consumed those re-exports; what they bought was an
+import cycle the moment `rebar.py` reached for an equation module. The suite did
+not catch it, because by the time any test runs pytest has already imported half
+the package; it failed only for a user typing `from mento import RectangularBeam`
+first. `tests/test_architecture_boundaries.py` now imports each entry point in a
+**fresh interpreter**, and was verified to fail when the cycle is put back.
+Emptying it also means `import mento.codes` no longer drags in matplotlib or
+docx — the Phase 3 exit criterion, met early and now guarded by a test.
+
+**Done (2026-08-30): a check no longer changes the section.** With the report
+layer out of the way, what a check still wrote could be measured. It split in
+two, and only one half was a defect.
+
+*Results on the element* (20 attributes: `V_c`, `_DCRv`, `_phi_V_n`, ...) are
+the deprecated compatibility layer this phase sanctions. They are captured into
+a frozen `ShearCheck` immediately, so no caller reads them.
+
+*Section state was the defect.* On a section with no stirrups configured, the
+shear check dropped the stirrup diameter the settings assume and recomputed the
+effective depths **on the section**, so a flexure check run afterwards reported
+something else:
+
+| | flexure first | shear first |
+| --- | --- | --- |
+| bottom DCR | 0.59309 | 0.58215 (−1.84 %) |
+| `d_bot` | 45.7 cm | 46.5 cm |
+
+Flexure assumed `settings.stirrup_diameter_ini`, shear assumed none, and nothing
+reconciled them. **The resolution is that the shear check keeps the assumed
+diameter too**, so both read the same `d`; once a design decides there are no
+stirrups it assigns a zero diameter and both follow it.
+
+The five validated "no rebar" tests looked like collateral damage and were not.
+They had been relying on the check to declare "no stirrups" on their behalf —
+their fixtures never said it. Told explicitly
+(`set_transverse_rebar(n_stirrups=0, d_b=0, s_l=0)`), every one of them returns
+its **original reference number**: `d_shear` 36.0363 cm against the Calcpad
+example's 36.04. The tests are now a faithful statement of what the reference
+models, which they were not before.
+
+Guarded by `test_a_check_does_not_change_the_section`, which pins geometry and
+reinforcement across both checks and both stirrup states, and by
+`test_check_order_does_not_change_the_flexure_result`.
+
+**Done (2026-08-30): `shear_check_results` writes nothing.** Measured, not
+assumed — zero attributes changed and zero created, for ACI and for EN, with
+and without stirrups.
+
+The shear helpers take a state and fill it; the check builds one, returns it,
+and only the reporting path copies it back through `apply_shear_state`, which
+is the compatibility layer the report tables still read. The design path shares
+the same helpers and applies the state at the end, because designing *is* meant
+to change the section — so the two paths cannot drift apart.
+`codes/check_state.py` holds both states (ACI and EN differ enough to warrant
+one each), a constructor that pre-zeroes every field in the section's unit
+system so nothing is `Optional`, and the attribute map the compatibility layer
+walks.
+
+Two couplings fell out on the way. The ACI shear check was setting `_M_u`,
+`_M_u_bot` and `_M_u_top` — the *flexure* check's — from the combination's
+moment; it now derives only `f_yt` and the tension-face area. And EN was
+recomputing `_A_v` from the section's own stirrups, duplicating what the setter
+already did.
+
+`test_shear_check_results_leaves_the_section_completely_untouched` guards it
+across both codes and both stirrup states. Its first version compared only the
+keys present beforehand, so an attribute the check *created* went undetected —
+it checks both directions now, and the guard was confirmed by reintroducing a
+write.
+
+**Done (2026-08-30): every check writes nothing — flexure and walls too.**
+The conversion shear proved out now covers all of them. Measured across both
+codes and both stirrup states, eight paths, zero attributes changed and zero
+created:
+
+| | ACI shear | ACI flexure | EN shear | EN flexure |
+| --- | --- | --- | --- | --- |
+| no stirrups | untouched | untouched | untouched | untouched |
+| with stirrups | untouched | untouched | untouched | untouched |
+
+`codes/shear_state.py` became `codes/check_state.py` and holds five states —
+`ShearCheckState`, `ENShearCheckState`, `WallShearCheckState`,
+`FlexureCheckState`, `ENFlexureCheckState` — each with its zeroing constructor
+and the attribute map its `apply_*` walks. One state per code and check rather
+than a shared one, because the fields genuinely differ and a union of them
+would be mostly-empty on every path.
+
+Two things surfaced that a shared mutable section had been hiding:
+
+- **`_doubly_reinforced` was order-dependent.** Copying the state back per
+  combination made the *last* one checked decide the flag, so a section that
+  needed compression steel for combination 3 reported none if combination 4 did
+  not. It means "some combination needed it", so `apply_flexure_state` ORs it in
+  rather than assigning. `_calculate_flexural_reinforcement_ACI_318_19` returns
+  the flag now instead of writing it mid-calculation.
+- **EN flexure read `_f_cd` off the beam** — a *material* property that only
+  existed because some earlier check had stored it. Once the check stopped
+  writing it, the shared helper divided by zero. It derives `α_cc·f_ck/γ_c`
+  from the concrete in place; nothing has to run first for it to be right.
+
+`test_flexure_check_results_leaves_the_section_completely_untouched` joins the
+shear guard, both parametrized over code × stirrup state.
+
+**Exit: half met, and the measurement says which half.** The mako loop runs
+without mutating any element — that part is done and guarded. The < 5 s /
+20,000-checks target is **not** met:
+
+| values path | per check | 20,000 checks |
+| --- | --- | --- |
+| shear | 1.43 ms | 28.6 s |
+| flexure | 1.12 ms | 22.4 s |
+
+But the profile now says something it could not say before Phase 3 took the
+report tables off this path: **the remaining cost is entirely the pint
+boundary.** 13,307 calls per shear check, of which 11,100 are `Quantity.to()`
+and 3,300 are unit *string* parsing — the `.to("cm")` literals the
+counterproposal flagged (371 of them across `mento/`), worth ~24 % of profiled
+time. There is no calculation left to optimize; ADR-0005's boundary is the only
+thing between here and the target.
+
+**Done (2026-08-30): the precompute, and the target is met.** The float view
+of §5 landed, and with it the 5 s target:
+
+| values path | before | after | factor | 20,000 checks |
+| --- | --- | --- | --- | --- |
+| ACI shear | 1.432 ms | **0.090 ms** | 16.0× | 1.8 s |
+| ACI flexure | 1.114 ms | **0.184 ms** | 6.1× | 3.7 s |
+| EN shear | 1.044 ms | **0.113 ms** | 9.2× | 2.3 s |
+| EN flexure | 1.105 ms | **0.077 ms** | 14.3× | 1.5 s |
+
+Shear *and* flexure on one section: 2.35 ms → **0.23 ms**, so the §3.3 loop of
+20,000 sections runs in **4.6 s** against the 5 s target. **Phase 2b's exit
+criteria are both met.**
+
+What it took was not a new layer. ADR-0005 already said floats in the
+equations and pint at the boundary; what was missing is that the *state* was
+still pint, so each helper unwrapped its inputs and re-wrapped its output and
+the boundary was re-crossed at every step. All five check states hold floats
+now, `mento/precompute.py` publishes the section's geometry and materials the
+same way — converted once, rebuilt only when the section changes — and pint
+reappears only in `apply_*_state` and the frozen public results.
+
+**Two measurements worth keeping, because they point opposite ways.**
+
+*A conversion is expensive only when it converts.* 58 µs when the units
+actually change, 4 µs when they do not. The 19 unit-changing conversions in an
+ACI shear check were 1.17 ms of its 1.43 ms; nothing else was.
+
+*But a unit spelled as a string is parsed every time.* This is where the
+counterproposal's `.to("cm")` → `.to(cm)` point is right, and where this
+roadmap first got it wrong:
+
+| | string | unit object |
+| --- | --- | --- |
+| no-op (`f_c.to("MPa")` on MPa) | 50.34 µs | **3.97 µs** |
+| real (`d.to("mm")` from cm) | 59.09 µs | 60.34 µs |
+
+Parsing costs ~46 µs. Beside a real conversion's work it is invisible — which
+is why the first measurement, taken only on real conversions, concluded the
+spelling did not matter. On a *no-op* it is the whole cost. EN flexure stalled
+at 0.392 ms with a single conversion left, and the culprit was
+`Concrete_EN_1992_2004._lambda_factor` / `._eta_factor` calling
+`self._f_ck.to("MPa")` six times per check on a value fixed at construction.
+Converting it once took EN flexure to 0.077 ms. Neither check path parses a
+unit string any more.
+
+**The eager refresh is what keeps the guards strict.** The float view is
+rebuilt from `_update_effective_heights` — the one place every geometry and
+reinforcement change funnels through — rather than filled lazily on first use.
+A lazily-filled memo would appear in the section's `__dict__` after a check and
+be indistinguishable, to the untouched-section guards, from a check writing
+its results back. Seven refreshes per design against thousands of conversions
+saved per check, so there is nothing to trade off. Two tests pin it, both
+confirmed by sabotaging the refresh: a stale view would be a silently wrong
+answer, not a crash.
+
+### Phase 3 — Extract presentation — **done 2026-08-30**
 
 Move `_initialize_dicts_*` out of the code modules into the report layer; move
 matplotlib and docx code out of `beam.py`. After this phase, `codes/` contains only
 equations + checkers, and elements contain only geometry + thin orchestration.
 
-### Phase 4 — Code registry
+**Done (2026-08-30): the report tables are out of `codes/`.** 889 lines — the
+four `_initialize_dicts_*` builders and the `_compile_results_*` row builders —
+moved to `mento/report_tables.py`. They were about a third of each code module.
 
-Formalize the per-code subpackage protocol (structuralcodes-style
-`__title__` / `__year__` / `__materials__` metadata + a registry dict) so CIRSOC
-and future codes plug in as subpackages without touching elements. Only worth doing
-once phases 1–3 exist; a registry over today's structure would formalize the
-coupling instead of removing it.
+| module | before | after |
+| --- | --- | --- |
+| `codes/ACI_318_19_beam.py` | 1445 | **938** |
+| `codes/EN_1992_2004_beam.py` | 1073 | **612** |
+
+The move was done by a script that cuts the exact source text rather than by
+hand: 889 lines of labels, rounding and unit strings is precisely where a
+transcription error hides, and a numeric regression suite would not necessarily
+catch a wrong column header.
+
+More than relocation, the *call* moved too. `_check_shear_*` and
+`_check_flexure_*` are calculation only now — they return `None` and no longer
+know that reports exist. `RectangularBeam._run_shear_check(force, report=...)`
+decides whether to build one, which is what lets `shear_check_results` skip the
+whole thing. The `report: bool` flag that Phase 2b threaded through the code
+modules is gone with it.
+
+`mento/report_tables.py` is also **not** in mypy's `ignore_errors` list, so 889
+lines that were previously unchecked are now type-checked; the six `Optional`
+errors that surfaced were fixed rather than silenced.
+
+`tests/test_architecture_boundaries.py` asserts by AST that no beam code module
+defines a `_initialize_dicts_*` or `_compile_results_*` function.
+
+**Done (2026-08-30): the drawing and the Word reports are out of `beam.py`.**
+782 more lines moved by the same cut-the-text script: the seven section-drawing
+methods to `mento/plots.py`, and the two Word-report methods to
+`mento/documents.py`. `beam.plot()` and `beam.shear_results_detailed_doc()` stay
+as one-line delegations, so nothing calling them changed.
+
+| module | lines |
+| --- | --- |
+| `beam.py` | 2135 → **1441** |
+| `report_tables.py` | 986 |
+| `plots.py` | 669 |
+| `documents.py` | 217 |
+
+Like `report_tables.py`, neither new module is in mypy's `ignore_errors` list.
+That surfaced 36 real typing errors in code that had never been checked — an
+undeclared `_fig` attribute, three functions with no annotations, `Optional`
+axes and settings, and detail dictionaries inferred as `dict[str, object]`.
+All were fixed at the source (`_fig` is now declared beside `_ax` on
+`RectangularSection`; the detail dictionaries are typed where they are built)
+rather than by adding another ignore entry.
+
+**Done (2026-08-30): every element, and the flat modules became packages.**
+The first pass only covered the beam and left three flat modules at the top
+level; §3 of this document already prescribed `plots/` and `reports/` as
+packages, so they are packages now, and every element got the same treatment.
+
+```
+mento/reports/   tables.py  views.py  documents.py  walls.py  summaries.py
+mento/plots/     sections.py  walls.py  punching.py
+```
+
+| element | lines | what moved |
+| --- | --- | --- |
+| `beam.py` | 2135 → **1134** | notebook views (362) |
+| `shear_wall.py` | 557 → **352** | drawing, views, Word reports |
+| `punching.py` | 339 → **184** | the perimeter drawing |
+| `beam_summary.py` | 786 → **588** | the summary Word report |
+| `shear_wall_summary.py` | 361 → **315** | idem |
+
+The notebook views moved for the same reason as the Word reports, which is the
+point: rendering a result to Markdown and rendering it to `.docx` are the same
+job in two media, and neither is part of the element.
+
+`tests/test_architecture_boundaries.py` now asserts by AST that no element
+module imports matplotlib, python-docx or IPython — `TYPE_CHECKING` imports are
+allowed, since a return annotation costs nothing at runtime. Verified by adding
+a real import to `slab.py` and watching it fail.
+
+**`results.py` is not being split, and the measurement is why.** It holds
+`Formatter`, `TablePrinter` and `DocumentBuilder` — the presentation
+*primitives*, which §3 of this document already lists as part of the
+presentation layer, so it is where they belong. Splitting it would only pay off
+alongside lazy imports in the elements, and that combination buys a one-time
+**~600 ms** of interpreter start-up (matplotlib 514 ms, docx 104 ms) and
+nothing per check. mako's cost is per check. The criterion that does matter —
+`import mento.codes` free of both — holds and is guarded by a test.
+
+**Done (2026-08-30): `codes/` holds calculation only.** The wall's report
+tables (`_compile_wall_shear_dicts`, `_compile_results_wall_shear`, 160 lines)
+moved to `reports/walls.py`, and `_check_shear_ACI_318_19_wall` returns `None`
+— the wall decides when to build a report, exactly as the beam does.
+`ACI_318_19_wall.py` is 512 → 343 lines.
+
+The boundary test now walks **every** module under `codes/` instead of the two
+beam ones, and fails on any `_initialize_dicts_*` or `_compile_*` function.
+Verified by adding one back to the wall module and watching it fail.
+
+**Phase 3 is complete.** `codes/` is equations and orchestration, the elements
+are geometry and thin delegation, and the presentation layer is one place:
+
+| layer | lines |
+| --- | --- |
+| `mento/reports/` | 1929 |
+| `mento/plots/` | 991 |
+| `mento/codes/` (calculation) | 2276 |
+
+**Exit met:** `import mento.codes` imports neither matplotlib nor docx, guarded
+by a test that runs in a fresh interpreter.
+
+**Exit:** `import mento.codes` imports neither matplotlib nor docx — met, and
+guarded by a test since the `codes/__init__` cleanup in Phase 2b.
+
+### Phase 4 — Code registry — **done 2026-08-30**
+
+Formalize the per-code subpackage protocol so CIRSOC and future codes plug in as
+subpackages without touching elements. Only worth doing once phases 1–3 exist; a
+registry over today's structure would formalize the coupling instead of removing
+it.
+
+**Exit: met, and executed rather than asserted.**
+
+`mento/codes/registry.py` holds `DesignCode`, and that dataclass *is* the
+contract: metadata (`title`, `year`, `materials`), the verification and design
+hooks, the state appliers, bar selection, the attributes the code's report
+tables expect to find zeroed, and the names it gives its own quantities — ACI
+says `Mu` / `ØMn` / `ØVn` where EN says `MEd` / `MRd` / `VRd`, and the summaries
+have to name their columns one way or the other.
+
+Codes are found by walking `mento/codes/*/code.py`, so **a new code is a new
+subpackage and nothing else** — there is no list to append to. ACI 318-19 and
+CIRSOC 201-25 share every hook but the bar catalogue and the minimum stirrup
+diameter, which is exactly the case this is for: one entry each, no fork.
+
+What it replaced was `concrete.design_code == "ACI 318-19"` repeated across
+`beam.py`, `shear_wall.py`, `rebar.py`, `beam_summary.py` and three report
+modules. A code missing from one of those chains failed at runtime, in whichever
+branch nobody had updated, rather than at lookup.
+
+**Two guards, both confirmed by reintroducing the coupling.**
+`test_no_module_outside_codes_names_a_design_code` fails the build if a title
+string reappears outside `codes/`. And `test_a_new_design_code_needs_no_element_edited`
+registers a code that exists only for the duration of that test, drives a real
+beam through check and design with it, and asserts it produces ACI's own
+numbers — if any element still branched on a known title, it would fall through
+to the EN branch or raise.
+
+**Report content stays in `mento/reports/`, and that is deliberate.** The table
+builders cannot move into the code subpackages: importing them from `codes/`
+would pull pandas and docx back into a layer the Phase 3 boundary test keeps
+free of them. So report tables register separately, keyed by title, and a code
+registered without them says so rather than raising a `KeyError` from inside a
+builder. Writing a new code's tables is real per-code work, not coupling.
+
+**Two things fell out on the way.** The four `isinstance(self.concrete,
+Concrete_X)` guards at the top of the per-code table builders were always true
+once the registry routed them — but they were narrowing the type for mypy, so
+they became `cast()` rather than disappearing. And the compatibility attributes
+each code zeroes are now declared under `TYPE_CHECKING` on `RectangularBeam`:
+the type checker needs to know they exist, and a plain annotation would have
+made them dataclass constructor fields.
+
+No performance cost: 4.6 s per 20,000 sections, unchanged.
+
+### Features in flight during the migration
+
+Open `help wanted` issues (#123, #124, #125, #127) are not frozen, but they
+follow the layer that exists when they land: once Phase 1 creates `equations/`
+for a code, new verifications for that code write their formulas there from the
+start; until then they follow the current style and are listed in the issue as
+migration debt. Nothing is written in the old style *silently*.
 
 ---
 

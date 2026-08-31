@@ -1,16 +1,101 @@
+import warnings
+
 import pandas as pd
 from typing import Optional, List, Any
 from tabulate import tabulate
 from docx import Document
-from docx.shared import Pt, Cm, RGBColor
+from docx.shared import Pt, Cm, Emu, RGBColor
 import seaborn as sns
 import matplotlib.pyplot as plt
 from docx.oxml import parse_xml
-from docx.oxml.ns import nsdecls
+from docx.oxml.ns import nsdecls, qn
 from io import BytesIO
 from pandas.io.formats.style import Styler
 
 from mento.i18n import DEFAULT_LANGUAGE, translate, translate_dataframe, translate_table
+
+#: The verdict marks a summary's Status column carries. Named because the Word
+#: builder shades that column by matching them: a literal on one side and a
+#: different literal on the other would simply stop colouring, silently.
+PASS_MARK = "✅"
+FAIL_MARK = "❌"
+
+#: What the pass/fail column is called. The limit-check tables already asked
+#: "Ok?", and the summaries agreeing with them keeps the column narrow.
+VERDICT_COLUMN = "Ok?"
+
+#: Decimals for the reported numbers. Forces and moments are quoted in kN and
+#: kN*m, where a second decimal is below what any of these calculations can
+#: claim and only widens the column; a DCR is a ratio around 1, where two
+#: decimals is the resolution a reader acts on.
+FORCE_DECIMALS = 1
+DCR_DECIMALS = 2
+
+#: The units a force or a moment is quoted in. A value in one of these is
+#: rounded to `FORCE_DECIMALS` for display.
+FORCE_DISPLAY_UNITS = {"kN", "kNm", "kN*m", "kN·m", "kip", "kip*ft", "kip·ft"}
+
+
+def _rounded(value: Any, decimals: int) -> Any:
+    """Round a float, and leave anything else -- a label, a tick -- alone."""
+    return round(value, decimals) if isinstance(value, float) else value
+
+
+def round_for_display(df: pd.DataFrame) -> pd.DataFrame:
+    """A copy of ``df`` with forces at one decimal and DCRs at two.
+
+    Display only, and deliberately so. The frames themselves keep the
+    precision they were built with, because they are also the programmatic
+    result and the validation suite compares them against Calcpad and ETABS
+    references at more decimals than a report has room to show.
+
+    Two shapes reach a Word table: a detail table, which carries the unit
+    beside each value, and an all-rows summary, which carries the units on its
+    first row. The unit is what decides, so a column of areas keeps its second
+    decimal either way.
+    """
+    out = df.copy()
+
+    if "Unit" in out.columns and "Value" in out.columns:
+        variables = out["Variable"].astype(str) if "Variable" in out.columns else pd.Series([""] * len(out))
+        for column in ("Value", "Min.", "Max."):
+            if column not in out.columns:
+                continue
+            out[column] = [
+                _rounded(value, DCR_DECIMALS)
+                if variable == "DCR"
+                else _rounded(value, FORCE_DECIMALS)
+                if str(unit) in FORCE_DISPLAY_UNITS
+                else value
+                for value, unit, variable in zip(out[column], out["Unit"], variables)
+            ]
+        return out
+
+    # A summary always carries its units on the first row; a frame without one
+    # is a bug in whoever built it, and should say so rather than be skipped.
+    units = out.iloc[0]
+    for column in out.columns:
+        if str(column).startswith("DCR"):
+            decimals = DCR_DECIMALS
+        elif str(units[column]) in FORCE_DISPLAY_UNITS:
+            decimals = FORCE_DECIMALS
+        else:
+            continue
+        out[column] = [_rounded(value, decimals) for value in out[column]]
+    return out
+
+
+#: Column widths for a per-element detail table: a description, then a symbol,
+#: a value and a unit. Sized to the longest description these tables carry
+#: ("Depth of equivalent strength block ratio", 40 characters) rather than to
+#: the page, so a table that describes one beam does not span the line the way
+#: the all-beams summaries do. With the fixed layout `add_table` sets, anything
+#: longer wraps rather than being clipped.
+DETAIL_TABLE_WIDTHS = [Cm(6.1), Cm(2.2), Cm(3.0), Cm(1.4)]
+
+#: The same, for a limit check: description, unit, value, minimum, maximum and
+#: the verdict.
+LIMIT_TABLE_WIDTHS = [Cm(5.5), Cm(1.5), Cm(1.5), Cm(1.5), Cm(1.5), Cm(1.2)]
 
 CUSTOM_COLORS = {
     "blue": "#1f77b4",  # Default Matplotlib blue
@@ -409,8 +494,46 @@ class DocumentBuilder:
         -------
         None
         """
+        n_columns = len(table.columns)
+        widths = list(column_widths[:n_columns])
+        # A caller that gives fewer widths than there are columns used to leave
+        # the rest at Word's default, which is what made the flexure limit
+        # checks wider than the page. Missing ones repeat the last width given:
+        # a trailing run of similar columns is the usual shape, and a fixed
+        # fallback made the narrowest columns of a wide table the widest.
+        if len(widths) < n_columns:
+            # Padding keeps the table renderable, but a short list is a caller
+            # bug: it is what made the last columns of Beam Data take a
+            # fallback width and squeezed the rest. Say so rather than let the
+            # layout be the only evidence.
+            warnings.warn(
+                f"table has {n_columns} columns but {len(widths)} widths were given; "
+                f"the last width was repeated for the rest",
+                UserWarning,
+                stacklevel=3,
+            )
+            widths += [widths[-1]] * (n_columns - len(widths))
+
+        # Scale down to the text width when the total overruns it, keeping the
+        # proportions the caller asked for. A table narrower than the page is
+        # left narrow -- only the all-beams summaries are meant to span it.
+        usable = self.usable_width.emu
+        total = sum(w.emu for w in widths)
+        if total > usable:
+            widths = [Emu(int(w.emu * usable / total)) for w in widths]
+
+        # Word honours cell widths only with autofit off and a fixed layout;
+        # without both it stretches every table to the full text width and the
+        # widths set below are ignored.
+        table.autofit = False
+        table.allow_autofit = False
+        tbl_pr = table._tbl.tblPr
+        for existing in tbl_pr.findall(qn("w:tblLayout")):
+            tbl_pr.remove(existing)
+        tbl_pr.append(parse_xml(f'<w:tblLayout {nsdecls("w")} w:type="fixed"/>'))
+
         for row in table.rows:
-            for idx, width in enumerate(column_widths):
+            for idx, width in enumerate(widths):
                 row.cells[idx].width = width
 
     def add_table(
@@ -438,7 +561,7 @@ class DocumentBuilder:
         """
         from docx.shared import Pt
 
-        df = translate_dataframe(df, self.language)
+        df = translate_dataframe(round_for_display(df), self.language)
 
         # --- Create and style table ---
         table = self.doc.add_table(rows=df.shape[0] + 1, cols=df.shape[1])
@@ -475,45 +598,117 @@ class DocumentBuilder:
 
         return table
 
-    def add_table_data(self, df: pd.DataFrame, column_widths=[Cm(12), Cm(2), Cm(2), Cm(2)]) -> None:
-        self.add_table(df, column_widths, font_size=self.font_size)
+    @property
+    def usable_width(self) -> Emu:
+        """The text column: page width less both margins."""
+        section = self.doc.sections[0]
+        return Emu(Emu(section.page_width).emu - Emu(section.left_margin).emu - Emu(section.right_margin).emu)
 
-    def add_table_dcr(self, df: pd.DataFrame) -> None:
+    def content_widths(self, df: pd.DataFrame, min_cm: float = 0.75) -> List[Cm]:
+        """Widths proportional to the longest text in each column.
+
+        The wide all-rows tables -- one line per beam or wall -- have too many
+        columns to size by hand, and a hand-written list that falls short of
+        the column count is not visibly wrong until it is rendered. Measuring
+        the frame cannot fall short.
+
+        The result fills the text column exactly, so these tables still span
+        the line, which is what distinguishes them from the per-element ones.
         """
-        Adds a table using `add_table` and modifies the last row's DCR cell color.
+        usable_cm = self.usable_width.cm
 
-        - Green if DCR < 1
-        - Red if DCR >= 1
+        lengths = [max([len(str(column))] + [len(str(value)) for value in df[column]]) for column in df.columns]
+        # A floor so a one-character column is still readable, then the rest of
+        # the width shared out in proportion to what each column has to show.
+        spare = usable_cm - min_cm * len(lengths)
+        total = sum(lengths)
+        return [Cm(min_cm + spare * length / total) for length in lengths]
+
+    def add_table_data(
+        self,
+        df: pd.DataFrame,
+        column_widths=DETAIL_TABLE_WIDTHS,
+        font_size: Optional[float] = None,
+    ) -> None:
+        """Add a data table. ``font_size`` overrides the document default.
+
+        Wide summary tables need a smaller face than the running text to fit
+        the page, so the caller can ask for one.
         """
-        column_widths = [Cm(12), Cm(2), Cm(2), Cm(2)]
-        self.add_table(df, column_widths, font_size=self.font_size)
-        # Get the last table added to the document
-        table = self.doc.tables[-1]  # Retrieve the most recent table
+        self.add_table(df, column_widths, font_size=font_size or self.font_size)
 
-        # Apply color to DCR cell (third column of the last row)
-        last_row_idx = df.shape[0]  # Last row index
-        dcr_column_idx = 2  # Third column index (zero-based)
+    def _shade_verdicts(self, table: Any, df: pd.DataFrame, column: str) -> None:
+        """Shade every cell of ``column`` that holds a verdict, green or red.
 
-        dcr_value = float(df.iat[-1, dcr_column_idx])  # Extract DCR value
-        if dcr_value < 1:
-            shading_color = "C6EFCE"  # Green
-            font_color = "006100"  # Green font
-        else:
-            shading_color = "FFC7CE"  # Red
-            font_color = "9C0006"  # Red font
-
-        # Apply shading and font color to the entire last row
-        for cell in table.rows[last_row_idx].cells:
-            # Apply background color
-            cell._element.get_or_add_tcPr().append(parse_xml(f'<w:shd {nsdecls("w")} w:fill="{shading_color}"/>'))
-            # Apply font color
+        Cells that hold neither mark -- a units row, a blank -- are left alone,
+        so the colouring says something wherever it appears.
+        """
+        column_idx = df.columns.get_loc(column)
+        for row_offset in range(df.shape[0]):
+            verdict = str(df.iat[row_offset, column_idx])
+            if verdict not in (PASS_MARK, FAIL_MARK):
+                continue
+            passed = verdict == PASS_MARK
+            cell = table.rows[row_offset + 1].cells[column_idx]
+            fill = "C6EFCE" if passed else "FFC7CE"
+            font_color = "006100" if passed else "9C0006"
+            cell._element.get_or_add_tcPr().append(parse_xml(f'<w:shd {nsdecls("w")} w:fill="{fill}"/>'))
             for paragraph in cell.paragraphs:
                 for run in paragraph.runs:
                     run.font.color.rgb = RGBColor.from_string(font_color)
 
-    def add_table_min_max(self, df: pd.DataFrame) -> None:
-        column_widths = [Cm(9), Cm(2), Cm(2), Cm(2), Cm(2), Cm(1)]
-        self.add_table(df, column_widths, font_size=self.font_size)
+    def add_table_status(
+        self,
+        df: pd.DataFrame,
+        column_widths: List[Cm],
+        status_column: str = VERDICT_COLUMN,
+        font_size: Optional[float] = None,
+    ) -> None:
+        """Add a table whose pass/fail column is shaded green or red.
+
+        The same colours :meth:`add_table_dcr` gives the governing row of a
+        detailed result, applied per row to one column instead: a reader scans
+        the summary for red rather than reading every tick.
+        """
+        self.add_table(df, column_widths, font_size=font_size or self.font_size)
+        self._shade_verdicts(self.doc.tables[-1], df, status_column)
+
+    def add_table_dcr(self, df: pd.DataFrame) -> None:
+        """Add a capacity table, with the governing row shaded green or red.
+
+        The whole row, not one cell: this table ends on the combination that
+        governs, and that row is the answer the reader came for.
+        """
+        self.add_table(df, DETAIL_TABLE_WIDTHS, font_size=self.font_size)
+        table = self.doc.tables[-1]
+
+        last_row_idx = df.shape[0]
+        dcr_column_idx = 2  # Third column holds the DCR
+
+        dcr_value = float(df.iat[-1, dcr_column_idx])
+        if dcr_value < 1:
+            shading_color = "C6EFCE"  # Green
+            font_color = "006100"
+        else:
+            shading_color = "FFC7CE"  # Red
+            font_color = "9C0006"
+
+        for cell in table.rows[last_row_idx].cells:
+            cell._element.get_or_add_tcPr().append(parse_xml(f'<w:shd {nsdecls("w")} w:fill="{shading_color}"/>'))
+            for paragraph in cell.paragraphs:
+                for run in paragraph.runs:
+                    run.font.color.rgb = RGBColor.from_string(font_color)
+
+    def add_table_min_max(self, df: pd.DataFrame, verdict_column: str = VERDICT_COLUMN) -> None:
+        """Add a limit-check table, with its verdict column shaded.
+
+        Same colouring as the summary's Status column: a limit check is a
+        pass/fail statement too, and reading a column of ticks for the one
+        cross is what the colour saves.
+        """
+        self.add_table(df, LIMIT_TABLE_WIDTHS, font_size=self.font_size)
+        if verdict_column in df.columns:
+            self._shade_verdicts(self.doc.tables[-1], df, verdict_column)
 
     def add_figure(self, fig: "plt.Figure", width: float = 16) -> None:
         """

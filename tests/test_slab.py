@@ -71,7 +71,7 @@ def test_slab_initialization_sets_slab_mode_and_defaults() -> None:
     slab = build_slab()
 
     assert slab.mode == "slab"
-    assert slab._stirrup_d_b.magnitude == 0
+    assert slab.reinforcement.transverse.d_b.magnitude == 0
     assert slab.settings.max_bars_per_layer >= 200
 
 
@@ -80,8 +80,9 @@ def test_set_slab_transverse_rebar_computes_shear_area() -> None:
 
     slab.set_slab_transverse_rebar(d_b=10 * mm, s_long=20 * cm, s_trans=25 * cm)
 
-    assert slab._A_v.magnitude > 0
-    assert slab._stirrup_s_l == 20 * cm
+    transverse = slab.reinforcement.transverse
+    assert transverse.A_v.magnitude > 0
+    assert transverse.s_l == 20 * cm
 
 
 def test_set_slab_transverse_rebar_zero_spacing_clears_shear_area() -> None:
@@ -91,8 +92,9 @@ def test_set_slab_transverse_rebar_zero_spacing_clears_shear_area() -> None:
     # Clearing the stirrups must not divide by the zero spacing
     slab.set_slab_transverse_rebar()
 
-    assert slab._stirrup_s_l.magnitude == 0
-    assert slab._A_v.to("cm**2/m").magnitude == 0
+    transverse = slab.reinforcement.transverse
+    assert transverse.s_l.magnitude == 0
+    assert transverse.A_v.to("cm**2/m").magnitude == 0
 
 
 def test_longitudinal_rebar_spacing_updates_counts() -> None:
@@ -101,12 +103,17 @@ def test_longitudinal_rebar_spacing_updates_counts() -> None:
     slab.set_slab_longitudinal_rebar_bot(d_b1=12 * mm, s_b1=30 * cm, d_b3=10 * mm, s_b3=25 * cm)
     slab.set_slab_longitudinal_rebar_top(d_b1=8 * mm, s_b1=40 * cm)
 
-    assert slab._n1_b == 4  # ceil(120/30)
-    assert slab._n3_b == 5  # ceil(120/25)
-    assert slab._n1_t == 3  # ceil(120/40)
-    assert slab._n3_t == 0  # spacing left as default zero
+    # A slab only ever fills positions 1 and 3, so the layers of a face are
+    # position 1 first and position 3 second, with the empty ones omitted.
+    bottom = slab.reinforcement.bottom
+    top = slab.reinforcement.top
+    assert bottom.layers[0].n == 4  # ceil(120/30)
+    assert bottom.layers[1].n == 5  # ceil(120/25)
+    assert top.layers[0].n == 3  # ceil(120/40)
+    assert len(top.layers) == 1  # position 3 spacing left as default zero
 
     # ensure defaults are preserved when zero values are provided
+    # The per-position spacing has no equivalent on the public reinforcement view.
     previous_spacing = slab._s_b1_t
     slab.set_slab_longitudinal_rebar_top(s_b3=0 * mm)
     assert slab._s_b1_t == previous_spacing
@@ -213,6 +220,7 @@ def test_lambda_s_is_capped_at_one_imperial(height, cover, expected_capped) -> N
     slab.set_slab_longitudinal_rebar_bot(d_b1=0.5 * inch, s_b1=10 * inch)
     Node(section=slab, forces=Forces(V_z=1.52 * kip)).check_shear()
 
+    # d_shear and lambda_s have no equivalent on the public shear result yet.
     d_in = slab._d_shear.to("inch").magnitude
     uncapped = math.sqrt(2 / (1 + d_in / 10))
     assert (uncapped > 1.0) is expected_capped
@@ -233,6 +241,7 @@ def test_lambda_s_is_capped_at_one_metric() -> None:
     slab.set_slab_longitudinal_rebar_bot(d_b1=10 * mm, s_b1=20 * cm)
     Node(section=slab, forces=Forces(V_z=30 * kN)).check_shear()
 
+    # d_shear and lambda_s have no equivalent on the public shear result yet.
     d_mm = slab._d_shear.to("mm").magnitude
     assert d_mm < 250  # the regime where the cap bites
     assert math.sqrt(2 / (1 + 0.004 * d_mm)) > 1.0
@@ -261,13 +270,13 @@ def test_shear_check_with_no_tension_reinforcement_warns_and_does_not_raise() ->
         height=20 * cm,
         c_c=25 * mm,
     )
-    assert slab._A_s_bot.magnitude == 0
+    assert slab.reinforcement.bottom.A_s.magnitude == 0
 
     with pytest.warns(UserWarning, match="Longitudinal rebar As cannot be zero"):
         Node(section=slab, forces=Forces(V_z=5 * kN)).check_shear()
 
     assert slab.V_c.magnitude == 0
-    assert slab._DCRv == float("inf")
+    assert slab.shear_design.DCR == float("inf")
 
 
 def test_flexure_check_with_no_bottom_reinforcement_floors_phi_Mn() -> None:
@@ -288,7 +297,8 @@ def test_flexure_check_with_no_bottom_reinforcement_floors_phi_Mn() -> None:
     )
     results = Node(section=slab, forces=Forces(M_y=0 * kNm)).check_flexure()
 
+    # phi*Mn has no equivalent on the public flexure result yet.
     assert slab._phi_M_n_bot.to("kN*m").magnitude == pytest.approx(0.01)
-    assert slab._DCRb_bot == 0
+    assert slab.flexure_design.bottom.DCR == 0
     assert results.iloc[1]["Position"] == "Bottom"
     assert results.iloc[1]["As"] == 0

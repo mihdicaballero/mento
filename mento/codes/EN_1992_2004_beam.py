@@ -1,21 +1,37 @@
 import math
 from pint import Quantity
-from typing import TYPE_CHECKING, Dict, Any, Tuple, cast
-import pandas as pd
-from pandas import DataFrame
+from typing import TYPE_CHECKING, Tuple, cast
 
 # from devtools import debug
 
 
+from mento.codes.en_1992_2004.equations import flexure as flexure_eq
+from mento.codes.check_state import (
+    to_display,
+    ENFlexureCheckState,
+    ENShearCheckState,
+    apply_en_shear_state,
+    new_en_flexure_state,
+    new_en_shear_state,
+)
+from mento.codes.en_1992_2004.equations import shear as shear_eq
 from mento.codes.flexure_design import _FaceDemand, _run_flexure_design
 from mento.material import Concrete_EN_1992_2004
-from mento.rebar import Rebar
-from mento.units import MPa, mm, kNm, dimensionless, kN, inch, cm
+from mento.precompute import section_floats
+from mento.rebar import max_stirrup_spacing_EN_1992_2004
+from mento.units import MPa, mm, kNm, N
 from mento.forces import Forces
 
 
 if TYPE_CHECKING:
     from ..beam import RectangularBeam  # Import Beam for type checking only
+
+# Prebuilt unit objects for the boundary conversions of ADR-0005. The equation
+# layer works in N, mm, mm², MPa and N·mm; these are the only units crossing
+# into and out of it, and building them once keeps the conversion off the hot
+# path (`.to(_mm2)`, never `.to("mm**2")`).
+_mm2 = mm**2
+_Nmm = N * mm
 
 
 def _initialize_variables_EN_1992_2004(self: "RectangularBeam") -> None:
@@ -35,210 +51,201 @@ def _initialize_variables_EN_1992_2004(self: "RectangularBeam") -> None:
 ##########################################################
 
 
-def _initialize_shear_variables_EN_1992_2004(self: "RectangularBeam", force: Forces) -> None:
+def _initialize_shear_variables_EN_1992_2004(self: "RectangularBeam", st: ENShearCheckState, force: Forces) -> None:
     """
     Initialize variables for EN 1992-2004 design code.
     """
     if isinstance(self.concrete, Concrete_EN_1992_2004):
+        sec = section_floats(self)
         # Set the initial variables
-        self._N_Ed = force.N_x
-        self._V_Ed_1 = force.V_z  # Consider the same shear at the edge of support and in d
-        self._V_Ed_2 = force.V_z  # Consider the same shear at the edge of support and in d
+        st.N_Ed = force._N_x.to(N).magnitude
+        st.V_Ed_1 = force._V_z.to(N).magnitude  # Same shear at the edge of support and in d
+        st.V_Ed_2 = st.V_Ed_1
 
-        # Minimum shear reinforcement calculation
-        rho_min = 0.08 * math.sqrt(self.concrete.f_ck.to("MPa").magnitude) / (self._f_ywk) * MPa
-        self._A_v_min = rho_min * self.width * math.sin(self._alpha)
+        # Minimum shear reinforcement calculation. Eq. (9.5N) gives the ratio;
+        # §9.2.2(5) defines it as A_sw/(s*b_w*sin(alpha)), hence the geometry here.
+        rho_min = shear_eq.min_shear_reinforcement_ratio(
+            sec.f_c,
+            self._f_ywk.to(MPa).magnitude,
+        )
+        st.A_v_min = rho_min * sec.width * math.sin(self._alpha)
 
         # Consider bottom or top tension reinforcement
-        self._A_s_tension = self._A_s_bot if force._M_y >= 0 * kNm else self._A_s_top
-        # Compression stress, positive
+        st.A_s_tension = sec.A_s_bot if force._M_y >= 0 * kNm else sec.A_s_top
+        # _A_p is a placeholder for prestressing steel, always zero for now, and
+        # is initialized too late to belong in the section's float view.
+        A_p = self._A_p.to(_mm2).magnitude
+        rho_l = min((st.A_s_tension + A_p) / (sec.width * sec.d_shear), 0.02)
         if force._M_y >= 0 * kNm:
-            self._rho_l_bot = min(
-                (self._A_s_tension.to("cm**2") + self._A_p.to("cm**2"))
-                / (self.width.to("cm") * self._d_shear.to("cm")),
-                0.02 * dimensionless,
-            )
+            st.rho_l_bot = rho_l
         else:
-            self._rho_l_top = min(
-                (self._A_s_tension + self._A_p) / (self.width * self._d_shear),
-                0.02 * dimensionless,
-            )
+            st.rho_l_top = rho_l
 
         # Shear calculation for sections without rebar
-        self._k_value = min(1 + math.sqrt(200 / self._d_shear.to("mm").magnitude), 2)
+        st.k_value = shear_eq.size_effect_factor(sec.d_shear)
 
         # Positive of compression
-        self._sigma_cp = min(self._N_Ed / self.A_x, 0.2 * self._f_cd_shear)
+        st.sigma_cp = shear_eq.axial_stress(st.N_Ed, sec.A_x, st.f_cd_shear)
 
 
-def _shear_without_rebar_EN_1992_2004(self: "RectangularBeam") -> Quantity:
-    self._stirrup_d_b = 0 * mm
-    self._theta = 0
+def _shear_without_rebar_EN_1992_2004(self: "RectangularBeam", st: ENShearCheckState) -> float:
+    st.theta = 0
     if isinstance(self.concrete, Concrete_EN_1992_2004):
-        # Total shear capacity without rebar
-        C_rdc = 0.18 / self.concrete.gamma_c
-        v_min = 0.035 * self._k_value ** (3 / 2) * math.sqrt(self.concrete.f_ck.to("MPa").magnitude)
-        k_1 = 0.15
-        V_Rd_c_min = ((v_min + k_1 * self._sigma_cp.to("MPa").magnitude) * self.width * self._d_shear * MPa).to("kN")
-        rho_l = self._rho_l_bot if self._M_Ed >= 0 * kNm else self._rho_l_top
-        V_Rd_c = (
-            (
-                C_rdc * self._k_value * (100 * rho_l * self.concrete.f_ck.to("MPa").magnitude) ** (1 / 3) * MPa
-                + k_1 * self._sigma_cp.to("MPa")
-            )
-            * self.width
-            * self._d_shear
-        ).to("kN")
+        # Total shear capacity without rebar: Eq. (6.2.a), floored by Eq. (6.2.b).
+        sec = section_floats(self)
+        rho_l = st.rho_l_bot if self._M_Ed >= 0 * kNm else st.rho_l_top
+        V_Rd_c_min = shear_eq.min_shear_resistance_without_reinforcement(
+            sec.f_c, st.k_value, st.sigma_cp, sec.width, sec.d_shear
+        )
+        V_Rd_c = shear_eq.shear_resistance_without_reinforcement(
+            sec.f_c,
+            self.concrete.gamma_c,
+            st.k_value,
+            rho_l,
+            st.sigma_cp,
+            sec.width,
+            sec.d_shear,
+        )
     return max(V_Rd_c_min, V_Rd_c)
 
 
-def _calculate_max_shear_strength_EN_1992_2004(self: "RectangularBeam") -> None:
+def _calculate_max_shear_strength_EN_1992_2004(self: "RectangularBeam", st: ENShearCheckState) -> None:
     """
     Calculate the maximum shear strength (V_Rd_max) and the corresponding strut angle (θ).
     """
     if isinstance(self.concrete, Concrete_EN_1992_2004):
-        alpha_cw = 1  # Non-prestressed members or members subject to tensile stress due to axial force
-        v_1 = 0.6 * (1 - self.concrete.f_ck.to("MPa").magnitude / 250)  # Strength reduction factor for concrete struts
-        self._z = 0.9 * self._d_shear  # Lever arm
+        alpha_cw = 1.0  # Non-prestressed members or members subject to tensile stress due to axial force
+        sec = section_floats(self)
+        nu_1 = shear_eq.strut_strength_reduction_factor(sec.f_c)
+        b_w = sec.width
+        f_cd = st.f_cd_shear
+        z = shear_eq.lever_arm(sec.d_shear)
+        st.z = z  # Lever arm
 
         # The θ angle is limited between 21.8° ≤ θ ≤ 45° (1 ≤ cot(θ) ≤ 2.5)
         # Check the minimum strut angle θ = 21.8° (cot(θ) = 2.5)
         theta_min: float = math.radians(21.8)
         cot_theta_min: float = 1 / math.tan(theta_min)
-        V_Rd_max_min_angle = (
-            alpha_cw * self.width * self._z * v_1 * self._f_cd_shear / (cot_theta_min + math.tan(theta_min))
-        ).to("kN")
+        V_Rd_max_min_angle = shear_eq.max_shear_resistance(alpha_cw, b_w, z, nu_1, f_cd, theta_min)
 
-        if self._V_Ed_1 <= V_Rd_max_min_angle:
+        if st.V_Ed_1 <= V_Rd_max_min_angle:
             # If within the minimum angle
-            self._theta = theta_min
-            self._cot_theta = cot_theta_min
-            self._V_Rd_max = V_Rd_max_min_angle
-            self._max_shear_ok = True
+            st.theta = theta_min
+            st.cot_theta = cot_theta_min
+            st.V_Rd_max = V_Rd_max_min_angle
+            st.max_shear_ok = True
         else:
             # Check the maximum strut angle θ = 45° (cot(θ) = 1.0)
             theta_max: float = math.radians(45)
-            cot_theta_max = 1 / math.tan(theta_max)
-            V_Rd_max_max_angle: Quantity = (
-                alpha_cw * self.width * self._z * v_1 * self._f_cd_shear / (cot_theta_max + math.tan(theta_max))
-            ).to("kN")
+            V_Rd_max_max_angle = shear_eq.max_shear_resistance(alpha_cw, b_w, z, nu_1, f_cd, theta_max)
 
-            if self._V_Ed_1 > V_Rd_max_max_angle:
-                self._theta = theta_max
-                self._cot_theta = 1 / math.tan(self._theta)
-                self._V_Rd_max = V_Rd_max_max_angle
-                self._max_shear_ok = False
+            if st.V_Ed_1 > V_Rd_max_max_angle:
+                st.theta = theta_max
+                st.cot_theta = 1 / math.tan(st.theta)
+                st.V_Rd_max = V_Rd_max_max_angle
+                st.max_shear_ok = False
             else:
-                self._max_shear_ok = True
+                st.max_shear_ok = True
                 # Determine the angle θ of the strut based on the shear force
-                self._theta = 0.5 * math.asin((self._V_Ed_1 / V_Rd_max_max_angle))
-                self._cot_theta = 1 / math.tan(self._theta)
-                self._V_Rd_max = (
-                    alpha_cw * self.width * self._z * v_1 * self._f_cd_shear / (self._cot_theta + math.tan(self._theta))
-                ).to("kN")
+                st.theta = shear_eq.strut_angle(st.V_Ed_1, V_Rd_max_max_angle)
+                st.cot_theta = 1 / math.tan(st.theta)
+                st.V_Rd_max = shear_eq.max_shear_resistance(alpha_cw, b_w, z, nu_1, f_cd, st.theta)
 
 
-def _calculate_required_shear_reinforcement_EN_1992_2004(
-    self: "RectangularBeam",
-) -> None:
+def _calculate_required_shear_reinforcement_EN_1992_2004(self: "RectangularBeam", st: ENShearCheckState) -> None:
     """
     Calculate the required shear reinforcement area (A_v_req).
     """
+    sec = section_floats(self)
+    z = st.z
+    f_ywd = st.f_ywd
     # Calculate the required shear reinforcement area
-    self._A_v_req = max(
-        (self._V_Ed_2 / (self._z * self._f_ywd * self._cot_theta)),  # Required area based on shear force
-        self._A_v_min,  # Minimum required area
+    st.A_v_req = max(
+        # Required area based on shear force, as an area per unit length
+        shear_eq.required_shear_reinforcement(st.V_Ed_2, z, f_ywd, st.cot_theta),
+        st.A_v_min,  # Minimum required area
     )
-    self._V_Rd_s = self._A_v * self._z * self._f_ywd * self._cot_theta
-    self._V_s_req = self._V_Rd_s
+    st.V_Rd_s = shear_eq.shear_reinforcement_resistance(sec.A_v, z, f_ywd, st.cot_theta)
+    st.V_s_req = st.V_Rd_s
     # Maximum shear capacity is the same as the steel capacity
-    self._V_Rd = self._V_Rd_s
+    st.V_Rd = st.V_Rd_s
 
 
-def _check_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> DataFrame:
-    if isinstance(self.concrete, Concrete_EN_1992_2004):
-        if self._stirrup_n == 0:
-            # Set current stirrup diameter to zero
-            self._stirrup_d_b = 0 * mm
-            self._update_effective_heights()
-            # Initialize all the code related variables
-            _initialize_variables_EN_1992_2004(self)
-            _initialize_shear_variables_EN_1992_2004(self, force)
-            # Calculate V_Rd_c
-            self._V_Rd_c = _shear_without_rebar_EN_1992_2004(self)
-            # According to EN1992-1-1 §6.2.1(4) minimum shear reinforcement should nevertheless be provided
-            # according to EN1992-1-1 §9.2.2. The minimum shear reinforcement may be omitted in members where
-            # transverse redistribution of loads is possible (such as slabs) and members of minor importance
-            # which do not contribute significantly to the overall resistance and stability of the structure.
-            self._A_v_req = self._A_v_min
-            # Maximum shear capacity is the same as the concrete capacity
-            self._V_Rd = self._V_Rd_c
-            self._V_Rd_max = self._V_Rd
-            self._max_shear_ok = self._V_Ed_1 <= self._V_Rd_max
+def _check_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> ENShearCheckState:
+    """Run the EN shear check for one combination and return what it found.
 
-        else:
-            # Initialize all the code related variables
-            _initialize_variables_EN_1992_2004(self)
-            _initialize_shear_variables_EN_1992_2004(self, force)
-            # Shear reinforcement calculations
-            d_bs = self._stirrup_d_b
-            s_l = self._stirrup_s_l
-            n_legs = self._stirrup_n * 2
-            A_db = (d_bs**2) * math.pi / 4  # Area of one stirrup leg
-            A_vs = n_legs * A_db  # Total area of stirrups
-            self._A_v = A_vs / s_l  # Stirrup area per unit length
+    Nothing is written to the section; see the ACI counterpart for the split
+    between this and the reporting path.
+    """
+    st = new_en_shear_state(self)
+    concrete = cast("Concrete_EN_1992_2004", self.concrete)
 
-            # Calculate maximum shear strength
-            _calculate_max_shear_strength_EN_1992_2004(self)
+    # The material values the shear check needs. _f_cd belongs to flexure as
+    # well, so it is carried rather than written.
+    f_ck = section_floats(self).f_c
+    st.f_ywd = self._f_ywk.to(MPa).magnitude / concrete._gamma_s
+    alpha_cc_shear = 1  # Take this as 1.00 for shear design and not 0.85, as in Eurocode Applied.
+    st.f_cd_shear = alpha_cc_shear * f_ck / concrete.gamma_c
+    st.f_cd = concrete._alpha_cc * f_ck / concrete.gamma_c
 
-            # Calculate required shear reinforcement area
-            _calculate_required_shear_reinforcement_EN_1992_2004(self)
+    _initialize_shear_variables_EN_1992_2004(self, st, force)
 
-            # Rebar spacing checks
-            section_rebar = Rebar(self)
-            n_legs_actual = self._stirrup_n * 2  # Ensure legs are even
-            self._stirrup_s_l = self._stirrup_s_l
-            self._stirrup_s_w = (self.width - 2 * self.c_c - self._stirrup_d_b) / (n_legs_actual - 1)
-            (
-                self._stirrup_s_max_l,
-                self._stirrup_s_max_w,
-            ) = section_rebar.calculate_max_spacing_EN_1992_2004(self._alpha)
+    if self._stirrup_n == 0:
+        # The assumed stirrup diameter stays: see the note in the ACI check.
+        st.V_Rd_c = _shear_without_rebar_EN_1992_2004(self, st)
+        # According to EN1992-1-1 §6.2.1(4) minimum shear reinforcement should nevertheless be provided
+        # according to EN1992-1-1 §9.2.2. The minimum shear reinforcement may be omitted in members where
+        # transverse redistribution of loads is possible (such as slabs) and members of minor importance
+        # which do not contribute significantly to the overall resistance and stability of the structure.
+        st.A_v_req = st.A_v_min
+        # Maximum shear capacity is the same as the concrete capacity
+        st.V_Rd = st.V_Rd_c
+        st.V_Rd_max = st.V_Rd
+        st.max_shear_ok = st.V_Ed_1 <= st.V_Rd_max
+    else:
+        # The provided stirrup area per unit length is what the section already
+        # carries; the setter computed it from the same geometry.
+        _calculate_max_shear_strength_EN_1992_2004(self, st)
+        _calculate_required_shear_reinforcement_EN_1992_2004(self, st)
 
-        self._DCRv = abs((self._V_Ed_2.to("kN").magnitude / self._V_Rd.to("kN").magnitude))
-        # Design results
-        results = {
-            "Label": self.label,  # Beam label
-            "Comb.": force.label,
-            "Av,min": round(self._A_v_min.to("cm ** 2 / m").magnitude, 2),  # Minimum shear reinforcement area
-            "Av,req": round(self._A_v_req.to("cm ** 2 / m").magnitude, 2),  # Required shear reinforcing area
-            "Av": round(self._A_v.to("cm ** 2 / m").magnitude, 2),  # Provided stirrup reinforcement per unit length
-            "NEd": self._N_Ed.to("kN").magnitude,
-            "VEd,1": self._V_Ed_1.to("kN").magnitude,  # Max Vu for the design at the support
-            "VEd,2": self._V_Ed_2.to("kN").magnitude,  # Max Vu for the design at d from the support
-            "VRd,c": round(self._V_Rd_c.to("kN").magnitude, 2),  # Concrete contribution to shear capacity
-            "VRd,s": round(self._V_Rd_s.to("kN").magnitude, 2),  # Reinforcement contribution to shear capacity
-            "VRd": round(self._V_Rd.to("kN").magnitude, 2),  # Total shear capacity
-            "VRd,max": round(self._V_Rd_max.to("kN").magnitude, 2),  # Maximum shear capacity
-            "VEd,1≤VRd,max": self._max_shear_ok,  # Check if applied shear is within max shear capacity
-            "VEd,2≤VRd": self._V_Ed_2.to("kN").magnitude
-            <= self._V_Rd.to("kN").magnitude,  # Check if applied shear is within total capacity
-            "DCR": round(self._DCRv, 3),
-        }
-        _initialize_dicts_EN_1992_2004_shear(self)
-        return pd.DataFrame([results], index=[0])
+        # Rebar spacing checks
+        sec = section_floats(self)
+        n_legs_actual = sec.stirrup_n * 2  # Ensure legs are even
+        st.stirrup_s_w = (sec.width - 2 * sec.c_c - sec.stirrup_d_b) / (n_legs_actual - 1)
+        (
+            st.stirrup_s_max_l,
+            st.stirrup_s_max_w,
+        ) = max_stirrup_spacing_EN_1992_2004(self, self._alpha)
+
+    st.DCR = abs(st.V_Ed_2 / st.V_Rd)
+    return st
 
 
 def _design_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> None:
+    """Size the shear reinforcement. Designing is meant to change the section,
+    so this runs the same helpers over a state and then applies it."""
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         # Initialize all the code related variables
         _initialize_variables_EN_1992_2004(self)
-        # Split bottom and top moments
-        _split_top_bot_moment(self, force)
-        _initialize_shear_variables_EN_1992_2004(self, force)
+        # Split bottom and top moments. Designing changes the section, so the
+        # moment split is applied rather than kept local.
+        flexure_st = new_en_flexure_state(self)
+        _split_top_bot_moment(self, flexure_st, force)
+        self._M_Ed, self._M_Ed_bot, self._M_Ed_top = (
+            to_display(flexure_st.M_Ed, "moment", False),
+            to_display(flexure_st.M_Ed_bot, "moment", False),
+            to_display(flexure_st.M_Ed_top, "moment", False),
+        )
+        st = new_en_shear_state(self)
+        st.f_ywd = self._f_ywd.to(MPa).magnitude
+        st.f_cd_shear = self._f_cd_shear.to(MPa).magnitude
+        st.f_cd = self._f_cd.to(MPa).magnitude
+        _initialize_shear_variables_EN_1992_2004(self, st, force)
         # Calculate maximum shear strength
-        _calculate_max_shear_strength_EN_1992_2004(self)
+        _calculate_max_shear_strength_EN_1992_2004(self, st)
         # Calculate required shear reinforcement area
-        _calculate_required_shear_reinforcement_EN_1992_2004(self)
+        _calculate_required_shear_reinforcement_EN_1992_2004(self, st)
+        apply_en_shear_state(self, st)
 
         return None
 
@@ -256,12 +263,12 @@ def _min_max_flexural_reinforcement_ratio_EN_1992_2004(
     """
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         # Calculate the minimum tensile reinforcement ratio
-        rho_min = max(
-            0.26 * self.concrete.f_ctm.to("MPa").magnitude / self.steel_bar.f_y.to("MPa").magnitude,
-            0.0013,
+        rho_min = flexure_eq.min_reinforcement_ratio(
+            self.concrete.f_ctm.to(MPa).magnitude,
+            self.steel_bar.f_y.to(MPa).magnitude,
         )
         # Set the maximum tensile reinforcement ratio
-        rho_max = 0.04
+        rho_max = flexure_eq.max_reinforcement_ratio()
 
         # # For positive moments (tension in the bottom), set minimum reinforcement accordingly.
         # if force._M_y > 0 * kNm:
@@ -278,7 +285,7 @@ def _min_max_flexural_reinforcement_ratio_EN_1992_2004(
     return rho_min, rho_max
 
 
-def _compression_zone_limits_EN_1992_2004(self: "RectangularBeam", d: Quantity) -> Tuple[Quantity, Quantity]:
+def _compression_zone_limits_EN_1992_2004(self: "RectangularBeam", d: float) -> Tuple[float, float]:
     """Compression zone at the ductility limit, as (neutral axis, block depth).
 
     Both limits EN 1992-1-1 imposes are written on the NEUTRAL AXIS ratio
@@ -295,80 +302,83 @@ def _compression_zone_limits_EN_1992_2004(self: "RectangularBeam", d: Quantity) 
     """
     concrete_en = cast("Concrete_EN_1992_2004", self.concrete)
     lambda_ = concrete_en._lambda_factor()
-    if concrete_en._f_ck <= 50 * MPa:
-        xi_lim_redistribution = (concrete_en._delta - concrete_en._k_1) / concrete_en._k_2
-    else:
-        xi_lim_redistribution = (concrete_en._delta - concrete_en._k_3) / concrete_en._k_4
-    xi_lim = min(xi_lim_redistribution, 0.45)  # both are x_u/d
+    xi_lim = flexure_eq.neutral_axis_depth_limit_ratio(  # x_u/d
+        section_floats(self).f_c,
+        concrete_en._delta,
+        concrete_en._k_1,
+        concrete_en._k_2,
+        concrete_en._k_3,
+        concrete_en._k_4,
+    )
     x_u_lim = xi_lim * d
     return x_u_lim, lambda_ * x_u_lim
 
 
 def _calculate_flexural_reinforcement_EN_1992_2004(
-    self: "RectangularBeam", M_Ed: Quantity, d: Quantity, d_prima: float
-) -> tuple[Quantity, Quantity, Quantity, Quantity]:
+    self: "RectangularBeam", M_Ed: float, d: float, d_prima: float
+) -> tuple[float, float, float, float]:
     """
     Calculate the required top and bottom reinforcement areas for bending.
     """
     rho_min, rho_max = _min_max_flexural_reinforcement_ratio_EN_1992_2004(self)
-    A_s_min = rho_min * d * self.width
-    A_s_max = rho_max * d * self.width  # noqa: F841
+    # ADR-0005 boundary: convert once, compute in floats (N, mm, MPa, N·mm),
+    # re-apply units on the way out.
+    sec = section_floats(self)
+    b = sec.width
+    d_mm = d
+    A_s_min = rho_min * d_mm * b
+    A_s_max = rho_max * d_mm * b
 
     # Constants and material properties
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         eta = self.concrete._eta_factor()  # Factor for concrete strength (EN 1992-1-1)
+        # Derived from the concrete rather than read off the beam: it is a
+        # material property, so a check has no reason to have stored it first.
+        f_cd = self.concrete._alpha_cc * sec.f_c / self.concrete.gamma_c
         # Define f_yd
-        f_yd = self.steel_bar.f_y / self.concrete._gamma_s
+        f_yd = sec.f_y / self.concrete._gamma_s
 
         # Compression zone at the ductility limit (EC2 5.5(4) and the 0.45 cap)
-        concrete_en = cast("Concrete_EN_1992_2004", self.concrete)
         x_u_lim, x_eff_lim = _compression_zone_limits_EN_1992_2004(self, d)
         # Limit moment for compressive reinforcement
-
-        M_lim = eta * self._f_cd * self.width * x_eff_lim * (d - 0.5 * x_eff_lim)
+        M = M_Ed
+        M_lim = flexure_eq.limit_moment(eta, f_cd, b, x_eff_lim, d_mm)
 
         # Check if compressive reinforcement is required
-        if M_Ed <= M_lim:
-            # No compressive reinforcement required
-            # Relative design bending moment
-            K_value = (M_Ed / (self.width * d**2 * eta * self._f_cd)).to("dimensionless").magnitude
-
-            # Depth of the equivalent rectangular block. Inverting
+        if M <= M_lim:
+            # No compressive reinforcement required. Inverting
             # M = eta*f_cd*b*x_eff*(d - 0.5*x_eff) already yields lambda*x, so
             # lambda must NOT be applied again to the lever arm below.
-            x_eff = d * (1 - math.sqrt(1 - 2 * K_value))
+            x_eff = flexure_eq.compression_block_depth_for_moment(M, b, d_mm, eta, f_cd)
 
-            # Area of required tensile reinforcement
-            z = d - 0.5 * x_eff
-            A_s1 = M_Ed / (z * f_yd)
-            # Ensure the area meets the minimum requirement
-            A_s1 = max(A_s1, A_s_min)
+            # Area of required tensile reinforcement, at least the minimum
+            A_s1 = max(
+                flexure_eq.reinforcement_for_moment(M, flexure_eq.lever_arm(d_mm, x_eff), f_yd),
+                A_s_min,
+            )
             # No compressive reinforcement required
-            A_s2 = 0 * cm**2
+            A_s2 = 0.0
 
         else:
             # Compressive reinforcement is required
             self._doubly_reinforced = True
+            d_prime = d_prima
             # Limit tensile reinforcement area
-            z = d - 0.5 * x_eff_lim
-            A_s1_lim = (M_lim / (z * f_yd)).to("cm^2")
+            A_s1_lim = flexure_eq.reinforcement_for_moment(M_lim, flexure_eq.lever_arm(d_mm, x_eff_lim), f_yd)
 
-            # Neutral axis at the plastic limit (EC2 §5.5)
-            x_u = x_u_lim
+            # Compressive reinforcement stress, from the strain at the neutral
+            # axis at the plastic limit (EC2 §5.5)
+            f_sd = flexure_eq.compression_steel_stress(
+                x_u_lim,
+                d_prime,
+                self.concrete._epsilon_cu2,
+                sec.E_s,
+                f_yd,
+            )
 
-            # Compressive reinforcement strain'
-            epsilon_s2 = (x_u - d_prima) / x_u * concrete_en._epsilon_cu2
-
-            # Compressive reinforcement stress'
-            f_sd = min(epsilon_s2 * self.steel_bar._E_s, f_yd)
-
-            # Extra moment to take with top reinforcement
-            delta_M = M_Ed - M_lim
-
-            # Lever arm of internal forces for compressive reinforcement
-            z_2 = d - d_prima
-            # Required compressive reinforcement area
-            A_s2 = (delta_M / ((z_2) * f_sd)).to("cm^2")
+            # Extra moment to take with top reinforcement, on the lever arm
+            # (d - d') of the compression steel couple
+            A_s2 = flexure_eq.reinforcement_for_moment(M - M_lim, d_mm - d_prime, f_sd)
 
             # Required tensile reinforcement area
             A_s1 = max(A_s1_lim + A_s2, A_s_min)
@@ -378,11 +388,11 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
 
 def _simple_determine_nominal_moment_EN_1992_2004(
     self: "RectangularBeam",
-    A_s: Quantity,
-    d: Quantity,
-    A_s_prime: Quantity,
-    d_prime: Quantity,
-) -> Quantity:
+    A_s: float,
+    d: float,
+    A_s_prime: float,
+    d_prime: float,
+) -> float:
     """
     Design bending resistance M_Rd of a rectangular section.
 
@@ -405,37 +415,35 @@ def _simple_determine_nominal_moment_EN_1992_2004(
     """
     # Constants and material properties
     if isinstance(self.concrete, Concrete_EN_1992_2004):
-        f_yd = self.steel_bar._f_y / self.concrete._gamma_s
-        f_cd = self.concrete._alpha_cc * self.concrete.f_ck / self.concrete.gamma_c
+        sec = section_floats(self)
+        f_yd = sec.f_y / self.concrete._gamma_s
+        f_cd = self.concrete._alpha_cc * sec.f_c / self.concrete.gamma_c
         eta = self.concrete._eta_factor()  # Factor for concrete strength
-        b = self.width
+        b = sec.width
+        d_mm = d
+        A_s_mm2 = A_s
 
         # Depth of the equivalent rectangular block that balances the whole
         # tension steel, assuming the section is singly reinforced.
-        x_eff = A_s * f_yd / (eta * f_cd * b)
+        x_eff = flexure_eq.compression_block_depth_for_steel(A_s_mm2, f_yd, eta, f_cd, b)
 
         # Ductility limit -- same criterion as the reinforcement sizing routine.
         _, x_eff_lim = _compression_zone_limits_EN_1992_2004(self, d)
 
         if x_eff <= x_eff_lim:
             # Singly reinforced: A_s_prime is not required for equilibrium.
-            M_Rd = A_s * f_yd * (d - 0.5 * x_eff)
+            M_Rd = flexure_eq.moment_resistance_singly_reinforced(A_s_mm2, f_yd, d_mm, x_eff)
         else:
             # Doubly reinforced: the concrete contribution saturates at the
             # ductility limit and the excess tension steel is balanced by the
-            # compression reinforcement, with lever arm (d - d'). At
-            # x_eff = x_eff_lim this returns exactly the M_lim used when sizing
-            # the reinforcement, so M_Rd is continuous across the branch.
-            A_s_lim = eta * f_cd * b * x_eff_lim / f_yd
-            M_lim = A_s_lim * f_yd * (d - 0.5 * x_eff_lim)
-            # The couple can only develop up to the steel actually available on
-            # the compression face.
-            A_s_couple = min(A_s - A_s_lim, A_s_prime)
-            M_Rd = M_lim + A_s_couple * f_yd * (d - d_prime)
+            # compression reinforcement, with lever arm (d - d').
+            M_Rd = flexure_eq.moment_resistance_doubly_reinforced(
+                A_s_mm2, A_s_prime, f_yd, eta, f_cd, b, d_mm, d_prime, x_eff_lim
+            )
     return M_Rd
 
 
-def _determine_nominal_moment_EN_1992_2004(self: "RectangularBeam", force: Forces) -> None:
+def _determine_nominal_moment_EN_1992_2004(self: "RectangularBeam", st: ENFlexureCheckState, force: Forces) -> None:
     """
     Determines the nominal moment for a given section with both top and bottom reinforcement,
     calculating the nominal moment for both positive and negative moment scenarios.
@@ -453,37 +461,38 @@ def _determine_nominal_moment_EN_1992_2004(self: "RectangularBeam", force: Force
     [rho_min, rho_max] = _min_max_flexural_reinforcement_ratio_EN_1992_2004(self)
 
     # For positive moments (tension in the bottom), set minimum reinforcement accordingly.
+    sec = section_floats(self)
     if force._M_y > 0 * kNm:
-        rho_min_top = 0 * dimensionless
+        rho_min_top = 0.0
         rho_min_bot = rho_min
     else:
         rho_min_top = rho_min
-        rho_min_bot = 0 * dimensionless
+        rho_min_bot = 0.0
 
     # Calculate minimum and maximum bottom reinforcement areas
-    self._A_s_min_bot = rho_min_bot * self._d_bot * self.width
-    self._A_s_max_bot = rho_max * self._d_bot * self.width
+    st.A_s_min_bot = rho_min_bot * sec.d_bot * sec.width
+    st.A_s_max_bot = rho_max * sec.d_bot * sec.width
     # Determine the nominal moment for positive moments
-    self._M_Rd_bot = _simple_determine_nominal_moment_EN_1992_2004(
-        self, self._A_s_bot, self._d_bot, self._A_s_top, self._c_mec_top
+    st.M_Rd_bot = _simple_determine_nominal_moment_EN_1992_2004(
+        self, sec.A_s_bot, sec.d_bot, sec.A_s_top, sec.c_mec_top
     )
     # Determine capacity for negative moment (tension at the top)
-    self._A_s_min_top = rho_min_top * self._d_top * self.width
-    self._A_s_max_top = rho_max * self._d_top * self.width
-    self._M_Rd_top = _simple_determine_nominal_moment_EN_1992_2004(
-        self, self._A_s_top, self._d_top, self._A_s_bot, self._c_mec_bot
+    st.A_s_min_top = rho_min_top * sec.d_top * sec.width
+    st.A_s_max_top = rho_max * sec.d_top * sec.width
+    st.M_Rd_top = _simple_determine_nominal_moment_EN_1992_2004(
+        self, sec.A_s_top, sec.d_top, sec.A_s_bot, sec.c_mec_bot
     )
     return None
 
 
-def _split_top_bot_moment(self: "RectangularBeam", force: Forces) -> None:
-    self._M_Ed = force._M_y
-    if self._M_Ed > 0 * kNm:
-        self._M_Ed_bot = self._M_Ed
-        self._M_Ed_top = 0 * kNm
+def _split_top_bot_moment(self: "RectangularBeam", st: ENFlexureCheckState, force: Forces) -> None:
+    st.M_Ed = force._M_y.to(_Nmm).magnitude
+    if st.M_Ed > 0:
+        st.M_Ed_bot = st.M_Ed
+        st.M_Ed_top = 0.0
     else:
-        self._M_Ed_bot = 0 * kNm
-        self._M_Ed_top = self._M_Ed
+        st.M_Ed_bot = 0.0
+        st.M_Ed_top = st.M_Ed
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -503,7 +512,13 @@ def _flexure_capacity_EN_1992_2004(self: "RectangularBeam", face: str, M_demand:
     """
     M_abs = abs(M_demand)
     probe_force = Forces(M_y=(M_abs if face == "bot" else -M_abs))
-    _determine_nominal_moment_EN_1992_2004(self, probe_force)
+    st = new_en_flexure_state(self)
+    _determine_nominal_moment_EN_1992_2004(self, st, probe_force)
+    # The design wants the capacity on the beam too; a check never comes here.
+    self._M_Rd_bot = to_display(st.M_Rd_bot, "moment", False)
+    self._M_Rd_top = to_display(st.M_Rd_top, "moment", False)
+    self._A_s_min_bot = to_display(st.A_s_min_bot, "area", False)
+    self._A_s_max_bot = to_display(st.A_s_max_bot, "area", False)
     return self._M_Rd_bot if face == "bot" else self._M_Rd_top
 
 
@@ -511,7 +526,16 @@ def _required_areas_EN_1992_2004(
     self: "RectangularBeam", face: str, M: Quantity, d: Quantity, d_prime: Quantity
 ) -> _FaceDemand:
     """Steel required by EN 1992-2004 on `face` for the moment `M`."""
-    A_s_min, A_s_max, A_s1, A_s2 = _calculate_flexural_reinforcement_EN_1992_2004(self, M, d, d_prime)
+    A_s_min, A_s_max, A_s1, A_s2 = _calculate_flexural_reinforcement_EN_1992_2004(
+        self, M.to(_Nmm).magnitude, d.to(mm).magnitude, d_prime.to(mm).magnitude
+    )
+    # The design path speaks pint on both sides; only the calculation is floats.
+    A_s_min, A_s_max, A_s1, A_s2 = (
+        to_display(A_s_min, "area", False),
+        to_display(A_s_max, "area", False),
+        to_display(A_s1, "area", False),
+        to_display(A_s2, "area", False),
+    )
     if face == "bot":
         self._A_s_min_bot, self._A_s_max_bot = A_s_min, A_s_max
     else:
@@ -536,492 +560,62 @@ def _design_flexure_EN_1992_2004(self: "RectangularBeam", max_M_y_bot: Quantity,
     _run_flexure_design(self, max_M_y_bot, max_M_y_top, _required, _capacity)
 
 
-def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> pd.DataFrame:
-    """ """
-    # Initialize the design variables requirements using the provided force.
-    _initialize_variables_EN_1992_2004(self)
+def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> ENFlexureCheckState:
+    """Check the flexural capacity per EN 1992-1-1 and return what it found.
+
+    Nothing is written to the section; only the reporting path copies the
+    result back. See the ACI counterpart for the same split.
+    """
+    st = new_en_flexure_state(self)
+    concrete = cast("Concrete_EN_1992_2004", self.concrete)
+
+    # The material values this check needs, carried rather than written.
+    sec = section_floats(self)
+    st.f_ywd = self._f_ywk.to(MPa).magnitude / concrete._gamma_s
+    st.f_cd_shear = sec.f_c / concrete.gamma_c
+    st.f_cd = concrete._alpha_cc * sec.f_c / concrete.gamma_c
 
     # Split bottom and top moments
-    _split_top_bot_moment(self, force)
+    _split_top_bot_moment(self, st, force)
 
     # Calculate the nominal moments for both top and bottom reinforcement.
-
-    _determine_nominal_moment_EN_1992_2004(self, force)
-    if self._M_Ed >= 0:
+    _determine_nominal_moment_EN_1992_2004(self, st, force)
+    if st.M_Ed >= 0:
         # For positive moments, calculate the reinforcement requirements for the bottom tension side.
         (
-            self._A_s_min_bot,
-            self._A_s_max_bot,
-            self._A_s_req_bot,
-            self._A_s_req_top,
-        ) = _calculate_flexural_reinforcement_EN_1992_2004(self, self._M_Ed_bot, self._d_bot, self._c_mec_top)
-        self._c_d_top = 0
+            st.A_s_min_bot,
+            st.A_s_max_bot,
+            st.A_s_req_bot,
+            st.A_s_req_top,
+        ) = _calculate_flexural_reinforcement_EN_1992_2004(self, st.M_Ed_bot, sec.d_bot, sec.c_mec_top)
+        st.c_d_top = 0
         # Calculate the design capacity ratio for the bottom side.
-        self._DCRb_bot = round(
-            self._M_Ed_bot.to("kN*m").magnitude / self._M_Rd_bot.to("kN*m").magnitude,
-            3,
-        )
-        self._DCRb_top = 0
+        st.DCR_bot = round(st.M_Ed_bot / st.M_Rd_bot, 3)
+        st.DCR_top = 0
     else:
         # For negative moments, calculate the reinforcement requirements for the top tension side.
         (
-            self._A_s_min_top,
-            self._A_s_max_top,
-            self._A_s_req_top,
-            self._A_s_req_bot,
-        ) = _calculate_flexural_reinforcement_EN_1992_2004(
-            self, abs(self._M_Ed_top / kNm) * kNm, self._d_top, self._c_mec_bot
-        )
-        self._c_d_bot = 0
+            st.A_s_min_top,
+            st.A_s_max_top,
+            st.A_s_req_top,
+            st.A_s_req_bot,
+        ) = _calculate_flexural_reinforcement_EN_1992_2004(self, abs(st.M_Ed_top), sec.d_top, sec.c_mec_bot)
+        st.c_d_bot = 0
         # Calculate the design capacity ratio for the top side.
-        self._DCRb_top = round(
-            -self._M_Ed_top.to("kN*m").magnitude / self._M_Rd_top.to("kN*m").magnitude,
-            3,
-        )
-        self._DCRb_bot = 0
+        st.DCR_top = round(-st.M_Ed_top / st.M_Rd_top, 3)
+        st.DCR_bot = 0
 
     # Determine the maximum detailing cover dimensions for top and bottom.
-    self._d_b_max_top = max(self._d_b1_t, self._d_b2_t, self._d_b3_t, self._d_b4_t)
-    self._d_b_max_bot = max(self._d_b1_b, self._d_b2_b, self._d_b3_b, self._d_b4_b)
+    st.d_b_max_top = max(self._d_b1_t, self._d_b2_t, self._d_b3_t, self._d_b4_t).to(mm).magnitude
+    st.d_b_max_bot = max(self._d_b1_b, self._d_b2_b, self._d_b3_b, self._d_b4_b).to(mm).magnitude
 
     # Calculate the longitudinal reinforcement ratios for both sides.
-    self._rho_l_bot = self._A_s_bot / (self._d_bot * self.width)
-    self._rho_l_top = self._A_s_bot / (self._d_top * self.width)
+    st.rho_l_bot = sec.A_s_bot / (sec.d_bot * sec.width)
+    st.rho_l_top = sec.A_s_bot / (sec.d_top * sec.width)
 
-    # Compile the design results into a dictionary.
-    results = _compile_results_EN_1992_2004_flexure_metric(self, force)
-
-    # Initialize any additional dictionaries required for ACI 318-19 flexural checks.
-    _initialize_dicts_EN_1992_2004_flexure(self)
-
-    # Return the results as a Pandas DataFrame.
-    return pd.DataFrame([results], index=[0])
-
-
-def _compile_results_EN_1992_2004_flexure_metric(self: "RectangularBeam", force: Forces) -> Dict[str, Any]:
-    # Create dictionaries for bottom and top rows
-    if self._M_Ed >= 0:
-        result = {
-            "Label": self.label,
-            "Comb.": force.label,
-            "Position": "Bottom",
-            "As,min": round(self._A_s_min_bot.to("cm ** 2").magnitude, 2),
-            "As,req top": round(self._A_s_req_top.to("cm ** 2").magnitude, 2),
-            "As,req bot": round(self._A_s_req_bot.to("cm ** 2").magnitude, 2),
-            "As": round(self._A_s_bot.to("cm ** 2").magnitude, 2),
-            # 'c/d': self._c_d_bot,
-            "MEd": round(self._M_Ed_bot.to("kN*m").magnitude, 2),
-            "MRd": round(self._M_Rd_bot.to("kN*m").magnitude, 2),
-            "MEd≤MRd": self._M_Ed_bot <= self._M_Rd_bot,
-            "DCR": round(self._DCRb_bot, 3),
-        }
-    else:
-        result = {
-            "Label": self.label,
-            "Comb.": force.label,
-            "Position": "Top",
-            "As,min": round(self._A_s_min_top.to("cm ** 2").magnitude, 2),
-            "As,req top": round(self._A_s_req_top.to("cm ** 2").magnitude, 2),
-            "As,req bot": round(self._A_s_req_bot.to("cm ** 2").magnitude, 2),
-            "As": round(self._A_s_top.to("cm ** 2").magnitude, 2),
-            # 'c/d': self._c_d_top,
-            "MEd": round(self._M_Ed_top.to("kN*m").magnitude, 2),
-            "MRd": round(self._M_Rd_top.to("kN*m").magnitude, 2),
-            "MEd≤MRd": self._M_Ed_top <= self._M_Rd_top,
-            "DCR": round(self._DCRb_top, 3),
-        }
-    return result
+    return st
 
 
 ##########################################################
 # RESULTS
 ##########################################################
-
-
-def _initialize_dicts_EN_1992_2004_shear(self: "RectangularBeam") -> None:
-    if isinstance(self.concrete, Concrete_EN_1992_2004):
-        """Initialize the dictionaries used in check and design methods."""
-        self._materials_shear = {
-            "Materials": [
-                "Section Label",
-                "Concrete strength",
-                "Steel reinforcement yield strength",
-                "Safety factor for concrete",
-                "Safety factor for steel",
-                "Coefficient for long term effects and loading effects",
-            ],
-            "Variable": ["", "fck", "fywk", "γc", "γs", "αcc"],
-            "Value": [
-                self.label,
-                round(self.concrete.f_ck.to("MPa").magnitude, 2),
-                round(self.steel_bar.f_y.to("MPa").magnitude, 2),
-                self.concrete.gamma_c,
-                self.concrete._gamma_s,
-                self.concrete.alpha_cc,
-            ],
-            "Unit": ["", "MPa", "MPa", "", "", ""],
-        }
-        self._geometry_shear = {
-            "Geometry": [
-                "Section height",
-                "Section width",
-                "Clear cover",
-                "Longitudinal tension rebar",
-            ],
-            "Variable": ["h", "b", "cc", "As"],
-            "Value": [
-                self.height.to("cm").magnitude,
-                self.width.to("cm").magnitude,
-                self.c_c.to("cm").magnitude,
-                round(self._A_s_tension.to("cm**2").magnitude, 2),
-            ],
-            "Unit": ["cm", "cm", "cm", "cm²"],
-        }
-        self._forces_shear = {
-            "Design forces": [
-                "Axial, positive for compression",
-                "Shear",
-            ],
-            "Variable": ["NEd", "VEd,2"],
-            "Value": [
-                round(self._N_Ed.to("kN").magnitude, 2),
-                round(self._V_Ed_2.to("kN").magnitude, 2),
-            ],
-            "Unit": ["kN", "kN"],
-        }
-        # Min max lists
-        if self._V_Rd_s == 0 * kN:
-            self._stirrup_d_b = 0 * mm if self.concrete.unit_system == "metric" else 0 * inch
-        # Min max lists
-        min_values = [
-            None,
-            None,
-            self._A_v_min,
-        ]  # Use None for items without a minimum constraint
-        max_values = [
-            self._stirrup_s_max_l,
-            self._stirrup_s_max_w,
-            None,
-        ]  # Use None for items without a maximum constraint
-        current_values = [
-            self._stirrup_s_l,
-            self._stirrup_s_w,
-            self._A_v,
-        ]  # Current values to check
-
-        # Generate check marks based on the range conditions
-        checks = [
-            "✅" if (min_val is None or curr >= min_val) and (max_val is None or curr <= max_val) else "❌"
-            for curr, min_val, max_val in zip(current_values, min_values, max_values)
-        ]
-        self._all_shear_checks_passed = all(check == "✅" for check in checks)
-        self._data_min_max_shear = {
-            "Check": [
-                "Stirrup spacing along length",
-                "Stirrup spacing along width",
-                "Minimum shear reinforcement",
-            ],
-            "Unit": ["cm", "cm", "cm²/m"],
-            "Value": [
-                round(self._stirrup_s_l.to("cm").magnitude, 2),
-                round(self._stirrup_s_w.to("cm").magnitude, 2),
-                round(self._A_v.to("cm**2/m").magnitude, 2),
-            ],
-            "Min.": ["", "", round(self._A_v_min.to("cm**2/m").magnitude, 2)],
-            "Max.": [
-                round(self._stirrup_s_max_l.to("cm").magnitude, 2),
-                round(self._stirrup_s_max_w.to("cm").magnitude, 2),
-                "",
-            ],
-            "Ok?": checks,
-        }
-        self._shear_reinforcement = {
-            "Shear reinforcement strength": [
-                "Number of stirrups",
-                "Stirrup diameter",
-                "Stirrup spacing",
-                "Effective height",
-                "Minimum shear reinforcing",
-                "Required shear reinforcing",
-                "Defined shear reinforcing",
-                "Shear rebar strength",
-            ],
-            "Variable": ["ns", "db", "s", "d", "Asw,min", "Asw,req", "Asw", "VRd,s"],
-            "Value": [
-                self._stirrup_n,
-                self._stirrup_d_b.to("mm").magnitude,
-                self._stirrup_s_l.to("cm").magnitude,
-                round(self._d_shear.to("cm").magnitude, 2),
-                round(self._A_v_min.to("cm**2/m").magnitude, 2),
-                round(self._A_v_req.to("cm**2/m").magnitude, 2),
-                round(self._A_v.to("cm**2/m").magnitude, 2),
-                round(self._V_Rd_s.to("kN").magnitude, 2),
-            ],
-            "Unit": ["", "mm", "cm", "cm", "cm²/m", "cm²/m", "cm²/m", "kN"],
-        }
-        check_max = "✅" if self._max_shear_ok else "❌"
-        check_DCR = "✅" if self._DCRv < 1 else "❌"
-        rho_l = self._rho_l_bot if self._M_Ed >= 0 * kNm else self._rho_l_top
-        self._shear_concrete = {
-            "Shear strength": [
-                "Longitudinal reinforcement ratio",
-                "k value",
-                "Axial stress",
-                "Concrete strut angle",
-                "Concrete strength",
-                "Maximum shear strength",
-                "Total shear strength",
-                "Max shear check",
-                "Demand Capacity Ratio",
-            ],
-            "Variable": ["ρl", "k", "σcd", "Θ", "VRd,c", "VRd,max", "VRd", "", "DCR"],
-            "Value": [
-                round(rho_l.magnitude, 4),
-                round(self._k_value, 2),
-                round(self._sigma_cp.to("MPa").magnitude, 2),
-                round(math.degrees(self._theta), 1),
-                round(self._V_Rd_c.to("kN").magnitude, 2),
-                round(self._V_Rd_max.to("kN").magnitude, 2),
-                round(self._V_Rd.to("kN").magnitude, 2),
-                check_max,
-                round(self._DCRv, 3),
-            ],
-            "Unit": ["", "", "MPa", "deg", "kN", "kN", "kN", "", check_DCR],
-        }
-
-
-def _initialize_dicts_EN_1992_2004_flexure(self: "RectangularBeam") -> None:
-    if isinstance(self.concrete, Concrete_EN_1992_2004):
-        # Update longitudinal rebar attributes
-        self._update_longitudinal_rebar_attributes()
-        """Initialize the dictionaries used in check and design methods."""
-        self._materials_flexure = {
-            "Materials": [
-                "Section Label",
-                "Concrete strength",
-                "Steel reinforcement yield strength",
-            ],
-            "Variable": ["", "fck", "fyk"],
-            "Value": [
-                self.label,
-                round(self.concrete.f_ck.to("MPa").magnitude, 2),
-                round(self.steel_bar.f_y.to("MPa").magnitude, 2),
-            ],
-            "Unit": ["", "MPa", "MPa"],
-        }
-        self._geometry_flexure = {
-            "Geometry": [
-                "Section height",
-                "Section width",
-                "Clear cover",
-                "Mechanical top cover",
-                "Mechanical bottom cover",
-            ],
-            "Variable": ["h", "b", "cc", "cm,top", "cm,bot"],
-            "Value": [
-                self.height.to("cm").magnitude,
-                self.width.to("cm").magnitude,
-                self.c_c.to("cm").magnitude,
-                round(self._c_mec_top.to("cm").magnitude, 2),
-                round(self._c_mec_bot.to("cm").magnitude, 2),
-            ],
-            "Unit": ["cm", "cm", "cm", "cm", "cm"],
-        }
-        self._forces_flexure = {
-            "Design forces": [
-                "Top max moment",
-                "Bottom max moment",
-            ],
-            "Variable": ["MEd,top", "MEd,bot"],
-            "Value": [
-                round(self._M_Ed_top.to("kN*m").magnitude, 2),
-                round(self._M_Ed_bot.to("kN*m").magnitude, 2),
-            ],
-            "Unit": ["kNm", "kNm"],
-        }
-        # Min max lists
-        min_spacing_top: Quantity = max(
-            self.settings.clear_spacing,
-            self.settings.vibrator_size,
-            self._d_b_max_top,
-        )
-        min_spacing_bot: Quantity = max(self.settings.clear_spacing, self._d_b_max_bot)
-        min_values = [
-            self._A_s_min_top,
-            min_spacing_top,
-            self._A_s_min_bot,
-            min_spacing_bot,
-        ]  # Use None for items without a minimum constraint
-        max_values = [
-            self._A_s_max_top,
-            None,
-            self._A_s_max_bot,
-            None,
-        ]  # Use None for items without a maximum constraint
-        current_values = [
-            self._A_s_top,
-            self._available_s_top,
-            self._A_s_bot,
-            self._available_s_bot,
-        ]  # Current values to check
-
-        # Generate check marks based on the range conditions
-        checks = []
-        for i, (curr, min_val, max_val) in enumerate(zip(current_values, min_values, max_values)):
-            # --- EXCEPTION FOR DOUBLY REINFORCED SECTIONS ---
-            # If doubly reinforced, ignore maximum limits for top (i=0) and bottom (i=2)
-            if self._doubly_reinforced and i in (0, 2):
-                # If it passes min, we give the special tag
-                if min_val is None or curr >= min_val:
-                    checks.append("✅ D.R.")
-                    continue
-                # If it fails min, let the normal logic handle it (fall through)
-            # -------------------------------------------------
-
-            passed = (min_val is None or curr >= min_val) and (max_val is None or curr <= max_val)
-            if passed:
-                checks.append("✅")
-            else:
-                checks.append("❌")
-        self._all_flexure_checks_passed = not any(check in ("❌") for check in checks)
-        self._data_min_max_flexure = {
-            "Check": [
-                "Min/Max As rebar top",
-                "Minimum spacing top",
-                "Min/Max As rebar bottom",
-                "Minimum spacing bottom",
-            ],
-            "Unit": ["cm²", "mm", "cm²", "mm"],
-            "Value": [
-                round(self._A_s_top.to("cm**2").magnitude, 2),
-                round(self._available_s_top.to("mm").magnitude, 2),
-                round(self._A_s_bot.to("cm**2").magnitude, 2),
-                round(self._available_s_bot.to("mm").magnitude, 2),
-            ],
-            "Min.": [
-                round(self._A_s_min_top.to("cm**2").magnitude, 2),
-                round(min_spacing_top.to("mm").magnitude, 2),
-                round(self._A_s_min_bot.to("cm**2").magnitude, 2),
-                round(min_spacing_bot.to("mm").magnitude, 2),
-            ],
-            "Max.": [
-                round(self._A_s_max_top.to("cm**2").magnitude, 2),
-                "",
-                round(self._A_s_max_bot.to("cm**2").magnitude, 2),
-                "",
-            ],
-            "Ok?": checks,
-        }
-        check_DCR_top = "✅" if self._DCRb_top < 1 else "❌"
-        check_DCR_bot = "✅" if self._DCRb_bot < 1 else "❌"
-        self._flexure_capacity_top = {
-            "Top reinforcement check": [
-                "First layer bars",
-                "Second layer bars",
-                "Effective height",
-                "Depth of equivalent strength block ratio",
-                "Minimum rebar reinforcing",
-                "Required rebar reinforcing top",
-                "Required rebar reinforcing bottom",
-                "Defined rebar reinforcing top",
-                "Longitudinal reinforcement ratio",
-                "Total flexural strength",
-                "Demand Capacity Ratio",
-            ],
-            "Variable": [
-                "n1+n2",
-                "n3+n4",
-                "d",
-                "c/d",
-                "As,min",
-                "As,req top",
-                "As,req bot",
-                "As",
-                "ρl",
-                "MRd",
-                "DCR",
-            ],
-            "Value": [
-                self._format_longitudinal_rebar_string(self._n1_t, self._d_b1_t, self._n2_t, self._d_b2_t),
-                self._format_longitudinal_rebar_string(self._n3_t, self._d_b3_t, self._n4_t, self._d_b4_t),
-                round(self._d_top.to("cm").magnitude, 2),
-                self._c_d_top,
-                round(self._A_s_min_top.to("cm**2").magnitude, 2),
-                round(self._A_s_req_top.to("cm**2").magnitude, 2),
-                round(self._A_s_req_bot.to("cm**2").magnitude, 2),
-                round(self._A_s_top.to("cm**2").magnitude, 2),
-                round(self._rho_l_top.magnitude, 5),
-                round(self._M_Rd_top.to("kN*m").magnitude, 2),
-                round(self._DCRb_top, 2),
-            ],
-            "Unit": [
-                "",
-                "",
-                "cm",
-                "",
-                "cm²",
-                "cm²",
-                "cm²",
-                "cm²",
-                "",
-                "kNm",
-                check_DCR_top,
-            ],
-        }
-        self._flexure_capacity_bot = {
-            "Bottom reinforcement check": [
-                "First layer bars",
-                "Second layer bars",
-                "Effective height",
-                "Depth of equivalent strength block ratio",
-                "Minimum rebar reinforcing",
-                "Required rebar reinforcing top",
-                "Required rebar reinforcing bottom",
-                "Defined rebar reinforcing bottom",
-                "Longitudinal reinforcement ratio",
-                "Total flexural strength",
-                "Demand Capacity Ratio",
-            ],
-            "Variable": [
-                "n1+n2",
-                "n3+n4",
-                "d",
-                "c/d",
-                "As,min",
-                "As,req top",
-                "As,req bot",
-                "As",
-                "ρl",
-                "MRd",
-                "DCR",
-            ],
-            "Value": [
-                self._format_longitudinal_rebar_string(self._n1_b, self._d_b1_b, self._n2_b, self._d_b2_b),
-                self._format_longitudinal_rebar_string(self._n3_b, self._d_b3_b, self._n4_b, self._d_b4_b),
-                round(self._d_bot.to("cm").magnitude, 2),
-                self._c_d_bot,
-                round(self._A_s_min_bot.to("cm**2").magnitude, 2),
-                round(self._A_s_req_top.to("cm**2").magnitude, 2),
-                round(self._A_s_req_bot.to("cm**2").magnitude, 2),
-                round(self._A_s_bot.to("cm**2").magnitude, 2),
-                round(self._rho_l_bot.magnitude, 5),
-                round(self._M_Rd_bot.to("kN*m").magnitude, 2),
-                round(self._DCRb_bot, 2),
-            ],
-            "Unit": [
-                "",
-                "",
-                "cm",
-                "",
-                "cm²",
-                "cm²",
-                "cm²",
-                "cm²",
-                "",
-                "kNm",
-                check_DCR_bot,
-            ],
-        }
-        self._flexure_all_checks = (
-            self._all_flexure_checks_passed and (check_DCR_bot == "✅") and (check_DCR_top == "✅")
-        )

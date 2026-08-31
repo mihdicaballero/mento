@@ -88,21 +88,40 @@ mento/
 
 ```
 tests/
+├── conftest.py           Shared fixtures + Agg matplotlib backend for the whole suite
 ├── test_beam.py
+├── test_beam_summary.py
+├── test_design_results.py
 ├── test_slab.py
 ├── test_material.py
 ├── test_rebar.py
 ├── test_section.py
 ├── test_rectangular.py
+├── test_punching.py
+├── test_shear_wall.py
+├── test_shear_wall_summary.py
 ├── test_forces.py
 ├── test_node.py
 ├── test_units.py
 ├── test_settings.py
 ├── test_results.py
-├── test_summary.py
-├── test_init.py
-└── modules_testing.py    Manual/exploratory testing helpers (not collected by pytest)
+├── test_i18n.py
+└── test_init.py
+
+scripts/
+└── modules_testing.py    Manual/exploratory script; not part of the test suite
 ```
+
+`pyproject.toml` is the only pytest config — there is no `tests/pytest.ini`. Adding
+one back changes the rootdir and silently disables the coverage `addopts`.
+
+**Fixtures:** `conftest.py` holds the fixtures that several modules define
+identically (`concrete_c25`, `steel_b500s`, `steel`) and sets the `Agg` backend
+once, so no test module needs the `matplotlib.use("Agg")` incantation. Fixtures
+tied to a specific validated example stay in the module that asserts against
+them. Note that `beam_example_imperial` exists in both `test_beam.py` and
+`test_rebar.py` with **different** geometry and settings — they are per-module on
+purpose; do not hoist them.
 
 ---
 

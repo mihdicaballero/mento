@@ -5,13 +5,19 @@ import math
 import pytest
 from pandas import DataFrame
 
-from mento import Concrete_ACI_318_19, Forces, Node, RectangularBeam, SteelBar
+from mento import Concrete_ACI_318_19, Concrete_EN_1992_2004, Forces, Node, RectangularBeam, SteelBar
 from mento import MPa, cm, kN, kNm, m, mm
 from mento.design_results import (
     DesignNotRunError,
+    FlexureCheck,
     FlexureDesign,
+    FlexureFaceCheck,
     RebarLayer,
+    SectionReinforcement,
+    ShearCheck,
     ShearDesign,
+    envelope_flexure_face,
+    envelope_shear,
 )
 
 pytestmark = pytest.mark.filterwarnings("ignore::UserWarning")
@@ -46,6 +52,91 @@ def designed_beam(beam: RectangularBeam) -> RectangularBeam:
 def test_rebar_layer_area_matches_the_circle_formula() -> None:
     layer = RebarLayer(n=3, d_b=16 * mm)
     assert layer.A_s.to("cm**2").magnitude == pytest.approx(3 * math.pi * (1.6**2) / 4)
+
+
+# ============================================================================
+# SectionReinforcement — what the section carries, readable without a check
+# ============================================================================
+
+
+def test_reinforcement_is_readable_before_any_check(beam: RectangularBeam) -> None:
+    """The whole point of the view: no check has run, and it still answers.
+
+    flexure_design and shear_design raise here; reinforcement must not, because
+    it describes the section rather than a result.
+    """
+    with pytest.raises(DesignNotRunError):
+        _ = beam.flexure_design
+    with pytest.raises(DesignNotRunError):
+        _ = beam.shear_design
+
+    assert isinstance(beam.reinforcement, SectionReinforcement)
+
+
+def test_reinforcement_reflects_the_longitudinal_setter(beam: RectangularBeam) -> None:
+    beam.set_longitudinal_rebar_bot(n1=4, d_b1=16 * mm)
+
+    bottom = beam.reinforcement.bottom
+    assert bottom.layers[0].n == 4
+    assert bottom.layers[0].d_b.to("mm").magnitude == pytest.approx(16)
+    assert bottom.n_bars == 4
+    # 4 bars of 16 mm: 4*pi*1.6^2/4 = 8.04 cm²
+    assert bottom.A_s.to("cm**2").magnitude == pytest.approx(4 * math.pi * (1.6**2) / 4)
+
+
+def test_reinforcement_reflects_the_transverse_setter(beam: RectangularBeam) -> None:
+    beam.set_transverse_rebar(n_stirrups=2, d_b=10 * mm, s_l=15 * cm)
+
+    stirrups = beam.reinforcement.transverse
+    assert stirrups.n_stirrups == 2
+    assert stirrups.n_legs == 4
+    assert stirrups.d_b.to("mm").magnitude == pytest.approx(10)
+    assert stirrups.s_l.to("cm").magnitude == pytest.approx(15)
+    assert stirrups.A_v.to("cm**2/m").magnitude > 0
+
+
+def test_reinforcement_lists_no_layers_for_a_bare_face(beam: RectangularBeam) -> None:
+    beam.set_longitudinal_rebar_top(n1=0, d_b1=0 * mm)
+    assert beam.reinforcement.top.layers == ()
+    assert beam.reinforcement.top.n_bars == 0
+    assert str(beam.reinforcement.top) == "no reinforcement"
+
+
+def test_reinforcement_is_a_value_not_a_live_view(beam: RectangularBeam) -> None:
+    """It is a snapshot: changing the section afterwards must not change it."""
+    before = beam.reinforcement.transverse
+    beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=20 * cm)
+    assert beam.reinforcement.transverse != before
+
+
+def test_reinforcement_matches_the_design_after_a_design_runs(
+    designed_beam: RectangularBeam,
+) -> None:
+    """The two views agree on what the section carries; they differ only in that
+    the design also reports what the check demanded."""
+    rebar = designed_beam.reinforcement
+    flexure = designed_beam.flexure_design
+    shear = designed_beam.shear_design
+
+    assert rebar.bottom.layers == flexure.bottom.layers
+    assert rebar.bottom.A_s == flexure.bottom.A_s
+    assert rebar.top.layers == flexure.top.layers
+    assert rebar.transverse.n_stirrups == shear.n_stirrups
+    assert rebar.transverse.s_l == shear.s_l
+    assert rebar.transverse.A_v == shear.A_v
+
+
+def test_reinforcement_str_describes_both_faces_and_stirrups(beam: RectangularBeam) -> None:
+    beam.set_longitudinal_rebar_bot(n1=3, d_b1=20 * mm)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=20 * cm)
+    text = str(beam.reinforcement)
+    assert "bottom: 3Ø20" in text
+    assert "stirrups: 1eØ8" in text
+
+
+def test_reinforcement_str_says_so_when_there_are_no_stirrups(beam: RectangularBeam) -> None:
+    beam.set_transverse_rebar(n_stirrups=0, d_b=0 * mm, s_l=0 * cm)
+    assert str(beam.reinforcement.transverse) == "no stirrups"
 
 
 def test_rebar_layer_str_is_the_engineering_shorthand() -> None:
@@ -224,22 +315,132 @@ def test_shear_reports_the_combination_that_governs(
 def test_envelope_skips_quantities_the_design_code_does_not_set() -> None:
     """A design code that leaves a quantity unset must not break the envelope.
 
-    Both codes shipped today set all of them, so this is built directly rather than
-    through a check.
+    Both codes shipped today set all of them, so the results are built directly
+    rather than through a check. An absent quantity stays absent — enveloping
+    must not turn it into a zero that then competes in the max.
     """
-    beam = object.__new__(RectangularBeam)
-    beam._flexure_envelope = {}
-    beam._shear_envelope = {}
-    beam._A_s_req_bot = 4 * cm**2  # _A_s_min_bot and _A_s_max_bot deliberately absent
-    beam._DCRb_bot = 0.5
-    beam._A_v_req = 3 * cm**2 / m
-    beam._DCRv = 0.4
+    checks = [
+        FlexureCheck(
+            label="C1",
+            bottom=FlexureFaceCheck(A_s_req=4 * cm**2, A_s_min=None, A_s_max=None, DCR=0.5),
+            top=FlexureFaceCheck(A_s_req=None, A_s_min=None, A_s_max=None, DCR=0.0),
+        )
+    ]
 
-    beam._update_flexure_envelope("bot")
-    beam._update_shear_envelope()
+    bottom = envelope_flexure_face(checks, "bottom")
+    assert bottom.A_s_req == 4 * cm**2
+    assert bottom.A_s_min is None
+    assert bottom.A_s_max is None
+    assert bottom.DCR == 0.5
 
-    assert beam._flexure_envelope["bot"] == {"A_s_req": 4 * cm**2, "DCR": 0.5}
-    assert beam._shear_envelope == {"A_v_req": 3 * cm**2 / m, "DCR": 0.4}
+    shear = envelope_shear([ShearCheck(label="C1", A_v_req=3 * cm**2 / m, A_v_min=None, DCR=0.4)])
+    assert shear.A_v_req == 3 * cm**2 / m
+    assert shear.A_v_min is None
+    assert shear.DCR == 0.4
+
+
+def test_envelope_takes_the_worst_of_each_quantity_independently() -> None:
+    """The combination that governs A_s_req need not be the one that governs DCR,
+    so each quantity is enveloped on its own."""
+    checks = [
+        FlexureCheck(
+            label="C1",
+            bottom=FlexureFaceCheck(A_s_req=9 * cm**2, A_s_min=2 * cm**2, A_s_max=30 * cm**2, DCR=0.4),
+            top=FlexureFaceCheck(A_s_req=0 * cm**2, A_s_min=0 * cm**2, A_s_max=0 * cm**2, DCR=0.0),
+        ),
+        FlexureCheck(
+            label="C2",
+            bottom=FlexureFaceCheck(A_s_req=3 * cm**2, A_s_min=5 * cm**2, A_s_max=20 * cm**2, DCR=0.9),
+            top=FlexureFaceCheck(A_s_req=0 * cm**2, A_s_min=0 * cm**2, A_s_max=0 * cm**2, DCR=0.0),
+        ),
+    ]
+
+    bottom = envelope_flexure_face(checks, "bottom")
+    assert bottom.A_s_req == 9 * cm**2  # from C1
+    assert bottom.A_s_min == 5 * cm**2  # from C2
+    assert bottom.DCR == 0.9  # from C2
+
+
+def test_envelope_of_nothing_is_empty() -> None:
+    """No combinations checked: no demand, and nothing to divide by."""
+    empty = envelope_flexure_face([], "bottom")
+    assert empty.A_s_req is None
+    assert empty.DCR == 0.0
+    assert envelope_shear([]).DCR == 0.0
+
+
+@pytest.mark.parametrize(
+    "concrete, steel",
+    [
+        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), SteelBar(name="ADN 420", f_y=420 * MPa)),
+        (Concrete_EN_1992_2004(name="C25", f_c=25 * MPa), SteelBar(name="B500S", f_y=500 * MPa)),
+    ],
+    ids=["ACI", "EN"],
+)
+def test_values_only_checks_give_the_same_numbers_as_the_reporting_ones(concrete, steel) -> None:
+    """The fast path must not be a different calculation, only a shorter one.
+
+    Both design codes, because each has its own check function and its own
+    report half to skip.
+    """
+    forces = _two_combinations()
+
+    def build() -> RectangularBeam:
+        b = RectangularBeam(label="101", concrete=concrete, steel_bar=steel, width=20 * cm, height=60 * cm, c_c=25 * mm)
+        b.set_longitudinal_rebar_bot(n1=3, d_b1=20 * mm)
+        b.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=20 * cm)
+        return b
+
+    reporting = build()
+    reporting.check_shear(forces)
+    reporting.check_flexure(forces)
+
+    values = build()
+    shear = values.shear_check_results(forces)
+    flexure = values.flexure_check_results(forces)
+
+    assert [c.DCR for c in shear] == [c.DCR for c in reporting.shear_checks]
+    assert [c.A_v_req for c in shear] == [c.A_v_req for c in reporting.shear_checks]
+    assert [c.bottom.DCR for c in flexure] == [c.bottom.DCR for c in reporting.flexure_checks]
+    assert [c.top.DCR for c in flexure] == [c.top.DCR for c in reporting.flexure_checks]
+
+
+def test_values_only_checks_still_produce_readable_designs() -> None:
+    """They mark the section as checked, so the design results are available."""
+    beam = RectangularBeam(
+        label="101",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=20 * cm,
+        height=60 * cm,
+        c_c=25 * mm,
+    )
+    beam.set_longitudinal_rebar_bot(n1=3, d_b1=20 * mm)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=20 * cm)
+
+    results = beam.shear_check_results(_two_combinations())
+    assert beam.shear_design.DCR == pytest.approx(max(c.DCR for c in results))
+
+    flexure = beam.flexure_check_results(_two_combinations())
+    assert beam.flexure_design.bottom.DCR == pytest.approx(max(c.bottom.DCR for c in flexure))
+
+
+def test_checks_expose_one_result_per_combination(
+    beam_two_combinations: RectangularBeam,
+) -> None:
+    """The per-combination results are public: a caller enveloping them itself
+    (mako does) does not have to reach into the beam."""
+    beam = beam_two_combinations
+    forces = _two_combinations()
+
+    beam.check_flexure(forces)
+    beam.check_shear(forces)
+
+    assert [c.label for c in beam.flexure_checks] == [f.label for f in forces]
+    assert [c.label for c in beam.shear_checks] == [f.label for f in forces]
+    # And the design results agree with enveloping them by hand.
+    assert beam.shear_design.DCR == pytest.approx(max(c.DCR for c in beam.shear_checks))
+    assert beam.flexure_design.bottom.DCR == pytest.approx(max(c.bottom.DCR for c in beam.flexure_checks))
 
 
 def test_envelope_resets_between_checks(beam_two_combinations: RectangularBeam) -> None:

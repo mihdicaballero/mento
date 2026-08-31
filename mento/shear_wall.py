@@ -1,30 +1,32 @@
 from __future__ import annotations
 
 import math
-from typing import Dict, Optional
+from typing import TYPE_CHECKING, Dict, Optional
 
-import matplotlib.pyplot as plt
+if TYPE_CHECKING:
+    from matplotlib.figure import Figure
+
 import pandas as pd
-from IPython.display import Markdown, display
-from matplotlib.patches import Rectangle
 from pandas import DataFrame
 from pint import Quantity
 
-from mento._version import __version__ as MENTO_VERSION
 from mento.beam import RectangularBeam
 from mento.forces import Forces
 from mento.material import Concrete, SteelBar
-from mento.i18n import get_language, translate
-from mento.results import CUSTOM_COLORS, DocumentBuilder, Formatter, TablePrinter
 from mento.settings import BeamSettings
 from mento.units import cm, dimensionless, kN, mm
 
-from mento.codes.ACI_318_19_wall import _check_shear_ACI_318_19_wall
+from mento.codes.registry import design_code
+from mento.plots.walls import plot_wall_elevation
+from mento.reports import walls as wall_reports
 
 
 class ShearWall(RectangularBeam):
     """
-    Reinforced concrete structural wall — ACI 318-19 Section 11 shear check/design.
+    Reinforced concrete structural wall — shear check and design.
+
+    The design code is whatever the concrete declares; only codes whose
+    registry entry supplies the wall hooks can check one.
 
     Geometry:
         thickness — wall thickness  (t)         [maps to parent's ``width``]
@@ -126,7 +128,7 @@ class ShearWall(RectangularBeam):
         self._s_v: Quantity = 0 * mm
         self._rho_l: Quantity = 0 * dimensionless
 
-        # Wall shear result quantities (ACI 318-19)
+        # Wall shear result quantities
         self._Acv: Quantity = 0 * cm**2
         self._alpha_c: float = 0.0
         self._hw_lw: float = 0.0
@@ -202,12 +204,12 @@ class ShearWall(RectangularBeam):
         self._limiting_case_shear_details = None
 
         for force in forces:
-            if self.concrete.design_code == "ACI 318-19" or self.concrete.design_code == "CIRSOC 201-25":
-                result = _check_shear_ACI_318_19_wall(self, force)
-            else:
-                raise NotImplementedError(
-                    f"Shear wall check not implemented for design code: {self.concrete.design_code}"
-                )
+            code = design_code(self.concrete)
+            state = code.requires("check_shear_wall")(self, force)
+            # The report tables read the wall, so the state is applied here
+            # and not on a values-only path.
+            code.requires("apply_wall_shear_state")(self, state)
+            result = wall_reports.build_wall_shear_report(self, force)
 
             self._shear_results_list.append(result)
             self._shear_results_detailed_list[force.id] = {
@@ -242,15 +244,7 @@ class ShearWall(RectangularBeam):
         if not forces:
             raise ValueError("design_shear requires at least one Forces object.")
 
-        code = self.concrete.design_code
-        if code == "ACI 318-19" or code == "CIRSOC 201-25":
-            # CIRSOC 201-25 reuses the ACI wall design; the code-specific bar
-            # catalogue is selected inside _design_shear_ACI_318_19_wall.
-            from mento.codes.ACI_318_19_wall import _design_shear_ACI_318_19_wall
-
-            _design_shear_ACI_318_19_wall(self, forces)
-        else:
-            raise NotImplementedError(f"Shear wall design not implemented for design code: {code}")
+        design_code(self.concrete).requires("design_shear_wall")(self, forces)
 
         # Re-run the check so the returned DataFrame / detail dicts reflect the mesh.
         return self.check_shear(forces)
@@ -307,73 +301,34 @@ class ShearWall(RectangularBeam):
     def flexure_results_detailed(self, force: Optional[Forces] = None) -> None:
         raise NotImplementedError("Flexure results are not implemented for ShearWall (Phase 0).")
 
-    def flexure_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
-        raise NotImplementedError("Flexure results are not implemented for ShearWall (Phase 0).")
+    # ------------------------------------------------------------------
+    # Presentation — every one of these delegates, as on RectangularBeam
+    # ------------------------------------------------------------------
 
-    # ------------------------------------------------------------------
-    # Jupyter / Markdown summary properties
-    # ------------------------------------------------------------------
+    def flexure_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
+        return wall_reports.wall_flexure_results_detailed_doc(self, force)
 
     @property
     def data(self) -> None:
-        """Wall basic info as Markdown (length, thickness, story height, materials)."""
-        level_str = f"Level {self.level}, " if self.level else ""
-        markdown_content = (
-            f"{level_str}Shear Wall {self.label}, "
-            f"$l_w$={self.length.to('cm')}, "
-            f"$t$={self.thickness.to('cm')}, "
-            f"$h_w$={self.height.to('cm')}, "
-            f"$c_c$={self.c_c.to('cm')}, "
-            f"Concrete {self.concrete.name}, Rebar {self.steel_bar.name}."
-        )
-        self._md_data = markdown_content
-        display(Markdown(markdown_content))
-        return None
+        """Show the wall's basic data as Markdown."""
+        return wall_reports.wall_data(self)
 
     @property
     def shear_results(self) -> None:  # type: ignore[override]
-        if not self._shear_wall_checked:
-            self._md_shear_results = "Shear results are not available."
-            return None
+        """Show a summary of the shear results as Markdown."""
+        return wall_reports.wall_shear_results(self)
 
-        details = self._limiting_case_shear_details or {}
-        capacity = details.get("shear_capacity", {})
-        min_max = details.get("min_max", {})
-        forces_dict = details.get("forces", {})
-        if not capacity:
-            self._md_shear_results = "No shear to check."
-            display(Markdown(self._md_shear_results))
-            return None
+    def shear_results_detailed(self, force: Optional[Forces] = None) -> None:  # type: ignore[override]
+        """Print the detailed shear tables."""
+        return wall_reports.wall_shear_results_detailed(self, force)
 
-        formatter = Formatter()
-        dcr = capacity["Value"][-1]
-        phi_Vn = capacity["Value"][2]
-        Vu = forces_dict["Value"][0]
-        rho_t = min_max["Value"][0]
-        rho_l = min_max["Value"][1]
-        checks_pass = details.get("checks_pass", False)
-        warning = "⚠️ Some checks failed, see detailed results." if not checks_pass else ""
+    def shear_results_detailed_doc(self, force: Optional[Forces] = None) -> None:  # type: ignore[override]
+        """Write the detailed shear results to a Word document."""
+        return wall_reports.wall_shear_results_detailed_doc(self, force)
 
-        rebar_h = (
-            f"Ø{self._d_b_h.to('mm').magnitude:.0f}/{self._s_h.to('cm').magnitude:.0f} cm E.F."
-            if self._s_h.magnitude > 0
-            else "not assigned"
-        )
-        rebar_v = (
-            f"Ø{self._d_b_v.to('mm').magnitude:.0f}/{self._s_v.to('cm').magnitude:.0f} cm E.F."
-            if self._s_v.magnitude > 0
-            else "not assigned"
-        )
-
-        markdown_content = (
-            f"Horizontal rebar: {rebar_h}, $\\rho_t$={rho_t}, "
-            f"Minimum vertical rebar: {rebar_v}, $\\rho_l$={rho_l}, "
-            f"$V_u$={Vu} kN, $\\phi V_n$={phi_Vn} kN → "
-            f"{formatter.DCR(dcr)} {warning}"
-        )
-        self._md_shear_results = markdown_content
-        display(Markdown(markdown_content))
-        return None
+    def plot(self, show: bool = False) -> "Figure":  # type: ignore[override]
+        """Draw the wall elevation with its reinforcement."""
+        return plot_wall_elevation(self, show=show)
 
     @property
     def results(self) -> None:  # type: ignore[override]
@@ -387,171 +342,6 @@ class ShearWall(RectangularBeam):
     # Detailed results
     # ------------------------------------------------------------------
 
-    def shear_results_detailed(self, force: Optional[Forces] = None) -> None:  # type: ignore[override]
-        if not self._shear_wall_checked:
-            self._md_shear_results = "Shear results are not available."
-            return None
-        if force:
-            if force.id not in self._shear_results_detailed_list:
-                raise ValueError(f"No results found for Forces object with ID {force.id}.")
-            result_data = self._shear_results_detailed_list[force.id]
-        else:
-            result_data = self._limiting_case_shear_details
-
-        language = get_language()
-        print(translate("===== SHEAR WALL DETAILED RESULTS =====", language))
-        TablePrinter("MATERIALS", language).print_table_data(self._materials_shear_wall, headers="keys")
-        TablePrinter("GEOMETRY", language).print_table_data(self._geometry_shear_wall, headers="keys")
-        TablePrinter("FORCES", language).print_table_data(result_data["forces"], headers="keys")
-        TablePrinter("MAX AND MIN LIMIT CHECKS", language).print_table_data(result_data["min_max"], headers="keys")
-        TablePrinter("SHEAR STRENGTH", language).print_table_data(result_data["shear_capacity"], headers="keys")
-
-    def shear_results_detailed_doc(self, force: Optional[Forces] = None) -> None:  # type: ignore[override]
-        if not self._shear_wall_checked:
-            self._md_shear_results = "Shear results are not available."
-            return None
-        if force:
-            if force.id not in self._shear_results_detailed_list:
-                raise ValueError(f"No results found for Forces object with ID {force.id}.")
-            result_data = self._shear_results_detailed_list[force.id]
-        else:
-            result_data = self._limiting_case_shear_details
-
-        df_materials = pd.DataFrame(self._materials_shear_wall)
-        df_geometry = pd.DataFrame(self._geometry_shear_wall)
-        df_forces = pd.DataFrame(result_data["forces"])
-        df_min_max = pd.DataFrame(result_data["min_max"])
-        df_capacity = pd.DataFrame(result_data["shear_capacity"])
-
-        doc_builder = DocumentBuilder(title="Concrete shear wall check", language=get_language())
-        doc_builder.add_heading("Shear Wall {label} shear check", level=1, label=self.label)
-        doc_builder.add_text(
-            "Made with mento {version}. Design code: {design_code}",
-            version=MENTO_VERSION,
-            design_code=self.concrete.design_code,
-        )
-        doc_builder.add_heading("Materials", level=2)
-        doc_builder.add_table_data(df_materials)
-        doc_builder.add_table_data(df_geometry)
-        doc_builder.add_table_data(df_forces)
-        doc_builder.add_heading("Limit checks", level=2)
-        doc_builder.add_table_min_max(df_min_max)
-        doc_builder.add_heading("Design checks", level=2)
-        doc_builder.add_table_dcr(df_capacity)
-        doc_builder.save(f"Shear Wall {self.label} shear check {self.concrete.design_code}.docx")
-
     # ------------------------------------------------------------------
     # Plot — wall plan view: length lw (horizontal) × thickness t
     # ------------------------------------------------------------------
-
-    def plot(self, show: bool = False) -> plt.Figure:  # type: ignore[override]
-        """Plan view of the wall (length × thickness) with dimensions and rebar callouts."""
-        lw_cm: float = self.length.to("cm").magnitude
-        t_cm: float = self.thickness.to("cm").magnitude
-
-        fig, self._ax = plt.subplots(figsize=(10, max(3, t_cm / lw_cm * 8 + 1.5)))
-
-        # Wall outline (plan view: length horizontal, thickness vertical)
-        wall = Rectangle(
-            (0, 0),
-            lw_cm,
-            t_cm,
-            linewidth=1.3,
-            edgecolor=CUSTOM_COLORS["dark_gray"],
-            facecolor=CUSTOM_COLORS["light_gray"],
-        )
-        self._ax.add_patch(wall)
-
-        # Decoupled horizontal/vertical padding so thin walls aren't squashed.
-        h_pad = lw_cm * 0.08
-        v_pad = max(t_cm * 1.2, lw_cm * 0.04)
-
-        dim_color = CUSTOM_COLORS["dark_blue"]
-        text_color = CUSTOM_COLORS["dark_gray"]
-
-        # ---- Length dimension (below the wall) — engineering style ----
-        dim_y = -v_pad * 0.6
-        tick_v = v_pad * 0.18
-        self._ax.annotate(
-            "",
-            xy=(0, dim_y),
-            xytext=(lw_cm, dim_y),
-            arrowprops={
-                "arrowstyle": "<->",
-                "lw": 1,
-                "color": dim_color,
-                "shrinkA": 0,
-                "shrinkB": 0,
-            },
-        )
-        # Extension ticks at both endpoints
-        self._ax.plot([0, 0], [dim_y - tick_v, dim_y + tick_v], color=dim_color, lw=1)
-        self._ax.plot([lw_cm, lw_cm], [dim_y - tick_v, dim_y + tick_v], color=dim_color, lw=1)
-        self._ax.text(
-            lw_cm / 2,
-            dim_y - tick_v * 1.6,
-            "{:.0f~P}".format(self.length.to("cm")),
-            ha="center",
-            va="top",
-            color=text_color,
-        )
-
-        # ---- Thickness dimension (right of the wall) — engineering style ----
-        x_dim = lw_cm + h_pad * 0.6
-        tick_h = h_pad * 0.07
-        self._ax.annotate(
-            "",
-            xy=(x_dim, 0),
-            xytext=(x_dim, t_cm),
-            arrowprops={
-                "arrowstyle": "<->",
-                "lw": 1,
-                "color": dim_color,
-                "shrinkA": 0,
-                "shrinkB": 0,
-            },
-        )
-        # Extension ticks at both endpoints
-        self._ax.plot([x_dim - tick_h, x_dim + tick_h], [0, 0], color=dim_color, lw=1)
-        self._ax.plot([x_dim - tick_h, x_dim + tick_h], [t_cm, t_cm], color=dim_color, lw=1)
-        self._ax.text(
-            x_dim + tick_h * 4,
-            t_cm / 2,
-            "{:.0f~P}".format(self.thickness.to("cm")),
-            ha="left",
-            va="center",
-            color=text_color,
-        )
-
-        # ---- Rebar callout above the wall (same font as dimensions) ----
-        def _fmt_rebar(d_b: Quantity, s: Quantity) -> str:
-            if s.magnitude <= 0:
-                return "not assigned"
-            return f"Ø{d_b.to('mm').magnitude:.0f}/{s.to('cm').magnitude:.0f} cm E.F."
-
-        rebar_text = (
-            f"Horizontal rebar: {_fmt_rebar(self._d_b_h, self._s_h)}\n"
-            f"Minimum vertical rebar: {_fmt_rebar(self._d_b_v, self._s_v)}"
-        )
-        self._ax.text(
-            lw_cm / 2,
-            t_cm + v_pad * 0.35,
-            rebar_text,
-            ha="center",
-            va="bottom",
-            color=text_color,
-        )
-
-        # Compact limits — no large empty band above or below.
-        self._ax.set_xlim(-h_pad * 0.5, lw_cm + h_pad * 2.0)
-        self._ax.set_ylim(dim_y - tick_v * 5, t_cm + v_pad * 1.8)
-        self._ax.axis("off")
-        self._ax.set_title(f"Shear Wall {self.label} — plan view")
-
-        self._fig = fig
-        if show:
-            plt.show()
-        # Prevent Jupyter's inline backend from auto-displaying the figure twice
-        # (once when plt.subplots creates it, and again as the cell's return value).
-        plt.close(fig)
-        return fig

@@ -11,8 +11,7 @@ from mento.forces import Forces
 from mento.shear_wall import ShearWall
 from mento import mm, cm, kN, m, kNm, MPa, inch, ft
 from mento.node import Node
-from mento.results import DocumentBuilder
-from mento._version import __version__ as MENTO_VERSION
+from mento.reports.summaries import wall_summary_doc
 
 
 class ShearWallSummary:
@@ -309,53 +308,8 @@ class ShearWallSummary:
     # ------------------------------------------------------------------
 
     def results_detailed_doc(self, index: int = 1) -> None:
-        if index < 1 or index > len(self.nodes):
-            raise IndexError(f"Index {index} out of range. Valid: 1 to {len(self.nodes)}")
+        """Export detailed results for one wall, plus summary tables for all, to Word.
 
-        node = self.nodes[index - 1]
-        wall: ShearWall = node.section  # type: ignore
-
-        node.check_shear()
-
-        doc_builder = DocumentBuilder(title="Shear Wall Summary Analysis", font_size=8)
-        doc_builder.add_heading("Shear Wall Summary Analysis", level=1)
-        doc_builder.add_text(f"Made with mento {MENTO_VERSION}. Design code: {self.concrete.design_code}")
-
-        # --- DETAILED RESULTS FOR SELECTED WALL ---
-        doc_builder.add_heading(f"Wall {wall.level} - {wall.label} shear check", level=2)
-
-        result_data: Dict[str, Any] = wall._limiting_case_shear_details  # type: ignore[assignment]
-        df_materials = pd.DataFrame(wall._materials_shear_wall)
-        df_geometry = pd.DataFrame(wall._geometry_shear_wall)
-        df_forces = pd.DataFrame(result_data["forces"])
-        df_min_max = pd.DataFrame(result_data["min_max"])
-        df_capacity = pd.DataFrame(result_data["shear_capacity"])
-
-        doc_builder.add_heading("Materials", level=3)
-        doc_builder.add_table_data(df_materials)
-        doc_builder.add_table_data(df_geometry)
-        doc_builder.add_table_data(df_forces)
-        doc_builder.add_heading("Limit checks", level=3)
-        doc_builder.add_table_min_max(df_min_max)
-        doc_builder.add_heading("Design checks", level=3)
-        doc_builder.add_table_dcr(df_capacity)
-
-        # --- SUMMARY TABLES FOR ALL WALLS ---
-        doc_builder.add_heading("Summary - All Walls", level=2)
-
-        doc_builder.add_heading("Wall Data", level=3)
-        wall_data_out = self.wall_list.fillna("")
-        doc_builder.add_table_data(wall_data_out)
-
-        doc_builder.add_heading("Shear Results", level=3)
-        df_shear_all = self.shear_results()
-        cols_to_drop = [c for c in ["Vu≤ØVn,max", "Vu≤ØVn"] if c in df_shear_all.columns]
-        df_shear_all = df_shear_all.drop(columns=cols_to_drop)
-        doc_builder.add_table_data(df_shear_all)
-
-        doc_builder.add_heading("Design Check Summary", level=3)
-        df_check = self.check()
-        doc_builder.add_table_data(df_check)
-
-        doc_builder.save(f"Shear_Wall_Summary_{self.concrete.design_code}.docx")
-        print(f"✅ Results exported to Shear_Wall_Summary_{self.concrete.design_code}.docx")
+        The assembly lives in :mod:`mento.reports.summaries`.
+        """
+        wall_summary_doc(self, index)

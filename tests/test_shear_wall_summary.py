@@ -25,11 +25,6 @@ def concrete():
 
 
 @pytest.fixture
-def steel():
-    return SteelBar(name="ADN 420", f_y=420 * MPa)
-
-
-@pytest.fixture
 def sample_df():
     """DataFrame with 4 walls: (Level 1, M1), (Level 2, M1), (Level 1, M2), (Level 2, M2)."""
     data = {

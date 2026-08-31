@@ -4,13 +4,54 @@ import math
 import pandas as pd
 import numpy as np
 
-from mento.units import psi, mm, cm, inch, MPa
-from mento.material import Concrete_ACI_318_19
+from mento.codes.aci_318_19.equations import shear as aci_shear_eq
+from mento.codes.en_1992_2004.equations import shear as en_shear_eq
+from mento.codes.registry import design_code
+from mento.precompute import CANONICAL, DISPLAY, section_floats
+from mento.units import mm, cm, inch
 
 if TYPE_CHECKING:
     from mento.beam import RectangularBeam
     from pint import Quantity
     from pandas import DataFrame
+
+# `cm**2` raises a pint Unit to a power, which is far from free. The rebar search
+# builds one area Quantity per candidate it keeps, so the unit is built once here
+# instead of on every call.
+_CM2 = cm**2
+
+
+def max_stirrup_spacing_ACI_318_19(beam: RectangularBeam, V_s_req: float, A_cv: float) -> Tuple[float, float]:
+    """Stirrup spacing limits of ACI 318-19 Table 9.7.6.2.2, for a beam.
+
+    Floats in the beam's own unit system, in and out: the shear check runs
+    entirely in floats, so a pint signature here would put the boundary back in
+    the middle of it. :meth:`Rebar.calculate_max_spacing_ACI_318_19` wraps this
+    for the design path, which still speaks pint.
+
+    A module-level function rather than a ``Rebar`` method because it needs
+    nothing from the bar catalogue: building a whole ``Rebar`` for it cost more
+    than the check it serves.
+    """
+    sec = section_floats(beam)
+    return aci_shear_eq.max_stirrup_spacing(
+        V_s_req,
+        sec.f_c,
+        beam.concrete.lambda_factor,
+        A_cv,
+        sec.d_shear,
+        is_imperial=sec.is_imperial,
+    )
+
+
+def max_stirrup_spacing_EN_1992_2004(beam: RectangularBeam, alpha: float) -> Tuple[float, float]:
+    """Stirrup spacing limits of EN 1992-1-1 §9.2.2(6) and (8), for a beam.
+
+    Floats in mm, in and out, for the same reason as the ACI counterpart.
+    :meth:`Rebar.calculate_max_spacing_EN_1992_2004` wraps it for the design
+    path, which still speaks pint.
+    """
+    return en_shear_eq.max_stirrup_spacing(section_floats(beam).d_shear, alpha)
 
 
 class RebarDesignInfeasibleError(Exception):
@@ -103,29 +144,18 @@ class Rebar:
             (s_max_l, s_max_w): The maximum spacing across the length and width of the beam.
         """
 
-        f_c = self.beam.concrete.f_c
-        if isinstance(self.beam.concrete, Concrete_ACI_318_19):
-            lambda_factor = self.beam.concrete.lambda_factor
-
-        # Determine maximum spacing based on V_s_req condition
-        # Maximum spacing for lower shear demand
-        if self.beam.concrete.unit_system == "metric":
-            if V_s_req <= 0.083 * lambda_factor * math.sqrt(f_c / MPa) * MPa * A_cv:
-                s_max_l = min(self.beam._d_shear / 2, 60 * cm)
-                s_max_w = min(self.beam._d_shear, 60 * cm)
-            else:
-                # Maximum spacing for higher shear demand
-                s_max_l = min(self.beam._d_shear / 4, 30 * cm)
-                s_max_w = min(self.beam._d_shear / 2, 30 * cm)
-        else:
-            if V_s_req <= 4 * lambda_factor * math.sqrt(f_c / psi) * psi * A_cv:
-                s_max_l = min(self.beam._d_shear / 2, 24 * inch)
-                s_max_w = min(self.beam._d_shear, 24 * inch)
-            else:
-                s_max_l = min(self.beam._d_shear / 4, 12 * inch)
-                s_max_w = min(self.beam._d_shear / 2, 12 * inch)
-
-        return s_max_l, s_max_w
+        sec = section_floats(self.beam)
+        canonical = CANONICAL[sec.is_imperial]
+        display = DISPLAY[sec.is_imperial]
+        s_max_l, s_max_w = max_stirrup_spacing_ACI_318_19(
+            self.beam,
+            V_s_req.to(canonical["force"]).magnitude,
+            A_cv.to(canonical["area"]).magnitude,
+        )
+        return (
+            (s_max_l * canonical["length"]).to(display["length"]),
+            (s_max_w * canonical["length"]).to(display["length"]),
+        )
 
     def calculate_max_spacing_EN_1992_2004(self, alpha: float) -> Tuple[Quantity, Quantity]:
         """
@@ -141,11 +171,8 @@ class Rebar:
         tuple
             (s_max_l, s_max_w): The maximum spacing along the length and width of the beam.
         """
-        # Maximum of 40 cm for stirrup spacing
-        s_max_l = min(0.75 * self.beam._d_shear * (1 + 1 / math.tan(alpha)), 40 * cm)
-        s_max_w = min(0.75 * self.beam._d_shear, 60 * cm)
-
-        return s_max_l, s_max_w
+        s_max_l, s_max_w = max_stirrup_spacing_EN_1992_2004(self.beam, alpha)
+        return (s_max_l * mm).to(cm), (s_max_w * mm).to(cm)
 
     def transverse_rebar_ACI_318_19(self, V_s_req: Quantity) -> Any:
         if self.beam.concrete.unit_system == "metric":
@@ -219,12 +246,8 @@ class Rebar:
         valid_combinations = []
 
         # Get code specific limitations
-        if self.beam.concrete.design_code == "ACI 318-19":
-            valid_diameters, s_max_l, s_max_w = self.transverse_rebar_ACI_318_19(V_s_req)
-        elif self.beam.concrete.design_code == "CIRSOC 201-25":
-            valid_diameters, s_max_l, s_max_w = self.transverse_rebar_CIRSOC_201_25(V_s_req)
-        elif self.beam.concrete.design_code == "EN 1992-2004":
-            valid_diameters, s_max_l, s_max_w = self.transverse_rebar_EN_1992_2004(alpha)
+        code = design_code(self.beam.concrete)
+        valid_diameters, s_max_l, s_max_w = code.transverse_rebar(self, V_s_req, alpha)
 
         # Iterate through available diameters
         for d_b in valid_diameters:
@@ -363,7 +386,7 @@ class Rebar:
         # Variables to track the combinations
         valid_combinations = []
         best_fallback_combination = None  # To store the best fallback design
-        max_fallback_area = 0 * cm**2  # To track the maximum area in fallback cases
+        max_fallback_cm2 = 0.0  # To track the maximum area in fallback cases
         # Create a list of rebar diameters that are equal to or greater than the minimum diameter
         if self.beam.concrete.unit_system == "metric":
             self.min_long_rebar = 10 * mm
@@ -379,105 +402,92 @@ class Rebar:
             and d <= self.beam.settings.max_longitudinal_diameter
         ]
 
-        for d_b1 in valid_rebar_diameters:  # Without taking Ø6 as a possible solution
-            for d_b2 in [d for d in valid_rebar_diameters if d <= d_b1]:
-                # Quick upper-bound check for this diameter pair
-                area1 = self.rebar_areas[d_b1]  # cm²
-                area2 = self.rebar_areas[d_b2]
+        # --- Float view of the search space ------------------------------------
+        # The loops below evaluate tens of thousands of candidate layouts. Running
+        # that arithmetic on pint Quantities was the dominant cost of the whole
+        # flexure design, so units are stripped once here and re-applied only to
+        # the handful of combinations actually kept (ADR-0005). Areas are in cm²
+        # and diameters in mm throughout this block.
+        areas_cm2 = [self.rebar_areas[d].to("cm**2").magnitude for d in valid_rebar_diameters]
+        diams_mm = [d.to("mm").magnitude for d in valid_rebar_diameters]
+        A_s_req_cm2 = A_s_req.to("cm**2").magnitude
+        eff_width_mm = effective_width.to("mm").magnitude
+        max_diam_diff_mm = self.beam.settings.max_diameter_diff.to("mm").magnitude
+        max_bars = self.beam.settings.max_bars_per_layer
 
-                max_bars = self.beam.settings.max_bars_per_layer
+        # n1 is fixed at 2, and A_s_req > 0 is guaranteed by the early exit above,
+        # so both area limits are loop-invariant and are computed once.
+        n1 = 2
+        skip_limit_cm2 = 10 * A_s_req_cm2
+        if A_s_max is not None:
+            skip_limit_cm2 = min(skip_limit_cm2, A_s_max.to("cm**2").magnitude)
+        max_limit_cm2 = max(skip_limit_cm2, n1 * self.rebar_areas[self.min_long_rebar].to("cm**2").magnitude)
 
-                # Max for layer 1 (n1 fixed, n2 up to max_bars)
+        # valid_rebar_diameters is ascending, so "every diameter <= d_bN" is a
+        # prefix of it and the nested loops can walk indices instead of
+        # re-filtering the list with a pint comparison on each pass.
+        for i1 in range(len(valid_rebar_diameters)):
+            area1, d1_mm = areas_cm2[i1], diams_mm[i1]
+            for i2 in range(i1 + 1):
+                area2, d2_mm = areas_cm2[i2], diams_mm[i2]
+
+                # Quick upper-bound check for this diameter pair.
+                # Max for layer 1 (n1 fixed, n2 up to max_bars); layer 2 can at
+                # best mirror it, for both beam and slab mode.
                 A_layer1_max = 2 * area1 + max_bars * area2  # n1=2 fixed
-
-                if self.mode == "slab":
-                    # Slab: mirror layer 2 => max total As = 2 * layer1
-                    A_total_max = 2 * A_layer1_max
-                else:
-                    # Beam: rough upper bound (could be improved)
-                    A_total_max = 2 * A_layer1_max
-                # Max limit for As (same logic as later)
-                max_limit = 10 * A_s_req
-                if A_s_max is not None:
-                    max_limit = min(max_limit, A_s_max)
+                A_total_max = 2 * A_layer1_max
 
                 # If even the maximum possible As with these diameters
                 # is less than required, skip all n2/n3/n4 loops.
-                if A_total_max < min(A_s_req, max_limit):
+                if A_total_max < min(A_s_req_cm2, skip_limit_cm2):
                     continue
 
-                for d_b3 in [d for d in valid_rebar_diameters if d <= d_b2]:
-                    for d_b4 in [d for d in valid_rebar_diameters if d <= d_b3]:
-                        # Condition 5: |d_b1 - d_b2| and |d_b3 - d_b4| must not exceed max_diameter_diff
-                        # Apply diameter difference condition across all combinations
-                        # Ensure that no two bars exceed `max_diameter_diff`
-                        diameters = [d_b1, d_b2, d_b3, d_b4]
-                        diameters = [d for d in diameters if d is not None]  # Filter out None values for unused bars
+                for i3 in range(i2 + 1):
+                    area3 = areas_cm2[i3]
+                    for i4 in range(i3 + 1):
+                        area4, d4_mm = areas_cm2[i4], diams_mm[i4]
 
-                        # Apply the diameter difference check across all bars
-                        if not self._check_diameter_differences(diameters):
-                            continue  # Skip this combination if any diameter pair exceeds max_diameter_diff`
+                        # Condition 5: no two bar diameters may differ by more
+                        # than max_diameter_diff. The four are in descending
+                        # order here, so the widest pair is (d_b1, d_b4).
+                        if d1_mm - d4_mm > max_diam_diff_mm:
+                            continue
 
-                        n1 = 0 if self.A_s_req == 0 * cm**2 else 2  # This is a fixed value for every beam
+                        d_b1 = valid_rebar_diameters[i1]
+                        d_b2 = valid_rebar_diameters[i2]
+                        d_b3 = valid_rebar_diameters[i3]
+                        d_b4 = valid_rebar_diameters[i4]
 
                         # Iterate over possible numbers of bars in each group
-                        for n2 in range(0, self.beam.settings.max_bars_per_layer + 1):  # n2 can be 0 or more
-                            if n1 + n2 > self.beam.settings.max_bars_per_layer:
+                        for n2 in range(0, max_bars + 1):  # n2 can be 0 or more
+                            if n1 + n2 > max_bars:
                                 continue  # Skip if the total bars in layer 1 exceed the limit
 
-                            if not self._check_spacing(n1, n2, d_b1, d_b2, effective_width):
+                            clear_mm = self._layer_clear_spacing_mm(n1, n2, d1_mm, d2_mm, eff_width_mm)
+                            if clear_mm is None:
                                 continue
+                            self._clear_spacing = clear_mm * mm
 
                             # Calculate area for layer 1
-                            A_s_layer_1 = n1 * self.rebar_areas[d_b1] + (
-                                n2 * self.rebar_areas[d_b2] if n2 > 0 else 0 * cm**2
-                            )
+                            A_s_layer_1 = n1 * area1 + (n2 * area2 if n2 > 0 else 0.0)
 
-                            max_limit = 10 * A_s_req
-                            if A_s_max is not None:
-                                max_limit = min(max_limit, A_s_max)
-                            max_limit = max(max_limit, n1 * self.rebar_areas[self.min_long_rebar])
-
-                            if A_s_layer_1 > max_limit:
+                            if A_s_layer_1 > max_limit_cm2:
                                 break  # further n2 will only increase area
 
                             # Check if total area from layer 1 is enough for required A_s
                             # And also less than the maximum limit
-                            if A_s_layer_1 >= A_s_req and A_s_layer_1 <= max_limit:
-                                total_as = A_s_layer_1  # Only consider layer 1
-                                total_bars = n1 + n2  # Total bars only in layer 1
+                            if A_s_layer_1 >= A_s_req_cm2 and A_s_layer_1 <= max_limit_cm2:
+                                # Only consider layer 1 — no bars in layer 2
                                 valid_combinations.append(
-                                    {
-                                        "n_1": n1,
-                                        "d_b1": d_b1,
-                                        "n_2": n2,
-                                        "d_b2": d_b2 if n2 > 0 else None,  # Display as None if n2 is 0
-                                        "n_3": 0,  # No bars in layer 2
-                                        "d_b3": None,
-                                        "n_4": 0,  # No bars in layer 2
-                                        "d_b4": None,
-                                        "total_as": total_as.to("cm**2"),
-                                        "total_bars": total_bars,
-                                        "clear_spacing": self._clear_spacing.to("mm"),
-                                    }
+                                    self._long_combo(n1, d_b1, n2, d_b2, 0, None, 0, None, A_s_layer_1, clear_mm)
                                 )
                             else:
                                 # Track the combination with the maximum possible area (fallback)
-                                if A_s_layer_1 > max_fallback_area and A_s_layer_1 <= max_limit:
-                                    max_fallback_area = A_s_layer_1
-                                    best_fallback_combination = {
-                                        "n_1": n1,
-                                        "d_b1": d_b1,
-                                        "n_2": n2,
-                                        "d_b2": d_b2 if n2 > 0 else None,
-                                        "n_3": 0,
-                                        "d_b3": None,
-                                        "n_4": 0,
-                                        "d_b4": None,
-                                        "total_as": A_s_layer_1.to("cm**2"),
-                                        "total_bars": n1 + n2,
-                                        "clear_spacing": self._clear_spacing.to("mm"),
-                                    }
+                                if A_s_layer_1 > max_fallback_cm2 and A_s_layer_1 <= max_limit_cm2:
+                                    max_fallback_cm2 = A_s_layer_1
+                                    best_fallback_combination = self._long_combo(
+                                        n1, d_b1, n2, d_b2, 0, None, 0, None, A_s_layer_1, clear_mm
+                                    )
 
                             # =============================================================
                             # --- Layer 2 combinations (beam vs slab logic) ---
@@ -498,46 +508,21 @@ class Rebar:
                                         n3, n4 = n1, n2
 
                                     # --- Compute total reinforcement in layer 2 ------------
-                                    A_s_layer_2 = n3 * self.rebar_areas[d_b3] + (
-                                        n4 * self.rebar_areas[d_b4] if n4 > 0 else 0 * cm**2
-                                    )
+                                    A_s_layer_2 = n3 * area3 + (n4 * area4 if n4 > 0 else 0.0)
 
                                     # --- Compute total reinforcement and evaluate -----------
                                     total_as = A_s_layer_1 + A_s_layer_2
-                                    if total_as >= A_s_req and total_as <= max_limit:
-                                        total_bars = n1 + n2 + n3 + n4
+                                    if total_as >= A_s_req_cm2 and total_as <= max_limit_cm2:
                                         valid_combinations.append(
-                                            {
-                                                "n_1": n1,
-                                                "d_b1": d_b1,
-                                                "n_2": n2,
-                                                "d_b2": d_b2 if n2 > 0 else None,
-                                                "n_3": n3,
-                                                "d_b3": d_b3 if n3 > 0 else None,
-                                                "n_4": n4,
-                                                "d_b4": d_b4 if n4 > 0 else None,
-                                                "total_as": total_as.to("cm**2"),
-                                                "total_bars": total_bars,
-                                                "clear_spacing": self._clear_spacing.to("mm"),
-                                            }
+                                            self._long_combo(n1, d_b1, n2, d_b2, n3, d_b3, n4, d_b4, total_as, clear_mm)
                                         )
                                     else:
                                         # Track fallback combination with maximum As
-                                        if total_as > max_fallback_area and total_as <= max_limit:
-                                            max_fallback_area = total_as
-                                            best_fallback_combination = {
-                                                "n_1": n1,
-                                                "d_b1": d_b1,
-                                                "n_2": n2,
-                                                "d_b2": d_b2 if n2 > 0 else None,
-                                                "n_3": n3,
-                                                "d_b3": d_b3 if n3 > 0 else None,
-                                                "n_4": n4,
-                                                "d_b4": d_b4 if n4 > 0 else None,
-                                                "total_as": total_as.to("cm**2"),
-                                                "total_bars": n1 + n2 + n3 + n4,
-                                                "clear_spacing": self._clear_spacing.to("mm"),
-                                            }
+                                        if total_as > max_fallback_cm2 and total_as <= max_limit_cm2:
+                                            max_fallback_cm2 = total_as
+                                            best_fallback_combination = self._long_combo(
+                                                n1, d_b1, n2, d_b2, n3, d_b3, n4, d_b4, total_as, clear_mm
+                                            )
 
                             else:
                                 # ---------------------------------------------------------
@@ -550,44 +535,21 @@ class Rebar:
                                             continue
                                         if n3 == 0 and n4 > 0:
                                             continue
-                                        A_s_layer_2 = n3 * self.rebar_areas[d_b3] + (
-                                            n4 * self.rebar_areas[d_b4] if n4 > 0 else 0 * cm**2
-                                        )
+                                        A_s_layer_2 = n3 * area3 + (n4 * area4 if n4 > 0 else 0.0)
 
                                         total_as = A_s_layer_1 + A_s_layer_2
-                                        if total_as >= A_s_req and total_as <= max_limit:
-                                            total_bars = n1 + n2 + n3 + n4
+                                        if total_as >= A_s_req_cm2 and total_as <= max_limit_cm2:
                                             valid_combinations.append(
-                                                {
-                                                    "n_1": n1,
-                                                    "d_b1": d_b1,
-                                                    "n_2": n2,
-                                                    "d_b2": d_b2 if n2 > 0 else None,
-                                                    "n_3": n3,
-                                                    "d_b3": d_b3 if n3 > 0 else None,
-                                                    "n_4": n4,
-                                                    "d_b4": d_b4 if n4 > 0 else None,
-                                                    "total_as": total_as.to("cm**2"),
-                                                    "total_bars": total_bars,
-                                                    "clear_spacing": self._clear_spacing.to("mm"),
-                                                }
+                                                self._long_combo(
+                                                    n1, d_b1, n2, d_b2, n3, d_b3, n4, d_b4, total_as, clear_mm
+                                                )
                                             )
                                         else:
-                                            if total_as > max_fallback_area and total_as <= max_limit:
-                                                max_fallback_area = total_as
-                                                best_fallback_combination = {
-                                                    "n_1": n1,
-                                                    "d_b1": d_b1,
-                                                    "n_2": n2,
-                                                    "d_b2": d_b2 if n2 > 0 else None,
-                                                    "n_3": n3,
-                                                    "d_b3": d_b3 if n3 > 0 else None,
-                                                    "n_4": n4,
-                                                    "d_b4": d_b4 if n4 > 0 else None,
-                                                    "total_as": total_as.to("cm**2"),
-                                                    "total_bars": n1 + n2 + n3 + n4,
-                                                    "clear_spacing": self._clear_spacing.to("mm"),
-                                                }
+                                            if total_as > max_fallback_cm2 and total_as <= max_limit_cm2:
+                                                max_fallback_cm2 = total_as
+                                                best_fallback_combination = self._long_combo(
+                                                    n1, d_b1, n2, d_b2, n3, d_b3, n4, d_b4, total_as, clear_mm
+                                                )
 
         # Convert valid combinations to DataFrame
         df = pd.DataFrame(valid_combinations)
@@ -623,62 +585,72 @@ class Rebar:
         # come from EN 1992-2004.
         self.longitudinal_rebar_ACI_318_19(A_s_req, A_s_max, mech_cover)
 
-    def _check_spacing(
+    def _layer_clear_spacing_mm(
         self,
         n1: int,
         n2: int,
-        d_b1: Quantity,
-        d_b2: Quantity,
-        effective_width: Quantity,
-    ) -> bool:
+        d1_mm: float,
+        d2_mm: float,
+        eff_width_mm: float,
+    ) -> float | None:
         """
-        Checks the clear spacing between rebars in a layer.
+        Clear spacing between the bars of one layer, in mm.
+
+        Everything is a plain float: this runs inside the innermost loop of the
+        longitudinal rebar search, where pint arithmetic dominated the cost.
 
         Parameters:
             n1 (int): Number of bars in the first group of the layer.
             n2 (int): Number of bars in the second group of the layer.
-            d_b1 (Quantity): Diameter of bars in the first group of the layer.
-            d_b2 (Quantity): Diameter of bars in the second group of the layer.
-            effective_width (Quantity): The effective width available for bar placement.
+            d1_mm (float): Diameter of the first group of bars, in mm.
+            d2_mm (float): Diameter of the second group of bars, in mm.
+            eff_width_mm (float): Width available for bar placement, in mm.
 
         Returns:
-            bool: True if the clear spacing satisfies the design limits, False otherwise.
+            float | None: The clear spacing in mm, or None when it falls below
+            the design limits (clear spacing, vibrator size, largest diameter).
         """
+        clear_mm = (eff_width_mm - (n1 * d1_mm + n2 * d2_mm)) / (n1 + n2 - 1)
 
-        # Convert everything once to mm (floats)
-        eff_mm = effective_width.to("mm").magnitude
-        d1_mm = d_b1.to("mm").magnitude
-        d2_mm = d_b2.to("mm").magnitude
+        # Determine the maximum clear spacing limit; the first two terms are
+        # precomputed in __init__.
+        max_clear_spacing_mm = max(self._clear_limit_mm, self._vibrator_mm, d1_mm, d2_mm)
 
-        total_bars = n1 + n2
+        return clear_mm if clear_mm >= max_clear_spacing_mm else None
 
-        total_bar_width_mm = n1 * d1_mm + n2 * d2_mm
-        clear_mm = (eff_mm - total_bar_width_mm) / (total_bars - 1)
-
-        # Store as Quantity for reporting
-        self._clear_spacing = clear_mm * mm
-
-        # Determine the maximum clear spacing limit
-        # Max required clear spacing in mm (precomputed)
-        max_clear_spacing_mm = max(
-            self._clear_limit_mm,
-            self._vibrator_mm,
-            max(d1_mm, d2_mm),
-        )
-
-        # Check if the clear spacing is within limits
-        return clear_mm >= max_clear_spacing_mm
-
-    def _check_diameter_differences(self, diameters: list) -> bool:
+    def _long_combo(
+        self,
+        n1: int,
+        d_b1: Quantity,
+        n2: int,
+        d_b2: Quantity | None,
+        n3: int,
+        d_b3: Quantity | None,
+        n4: int,
+        d_b4: Quantity | None,
+        total_as_cm2: float,
+        clear_mm: float,
+    ) -> Dict[str, Any]:
         """
-        Checks that all diameter differences between bars in the list
-        do not exceed max_diameter_diff.
+        Builds one row of the longitudinal rebar combination table.
+
+        This is where the search loop's floats become Quantities again: it runs
+        once per candidate kept, not once per candidate evaluated. A group's
+        diameter is reported as None when the group holds no bars.
         """
-        for i, d1 in enumerate(diameters):
-            for d2 in diameters[i + 1 :]:
-                if abs(d1 - d2) > self.beam.settings.max_diameter_diff:
-                    return False
-        return True
+        return {
+            "n_1": n1,
+            "d_b1": d_b1,
+            "n_2": n2,
+            "d_b2": d_b2 if n2 > 0 else None,
+            "n_3": n3,
+            "d_b3": d_b3 if n3 > 0 else None,
+            "n_4": n4,
+            "d_b4": d_b4 if n4 > 0 else None,
+            "total_as": total_as_cm2 * _CM2,
+            "total_bars": n1 + n2 + n3 + n4,
+            "clear_spacing": clear_mm * mm,
+        }
 
     def _calculate_penalties_long_rebar(
         self,
@@ -715,96 +687,83 @@ class Rebar:
         min_bars = df["total_bars"].min()
         min_as = df["total_as"].min()
 
-        # Diameter difference penalty function
-        def diameter_difference_penalty(row: pd.Series) -> float:
-            """
-            Calculate the penalty for variation in bar diameters.
-
-            Args:
-                row (pd.Series): A row of the DataFrame.
-
-            Returns:
-                float: The standard deviation of the diameters (penalty).
-            """
-            diameters = []
-            if row["n_1"] > 0:
-                diameters.extend([row["d_b1"].magnitude] * row["n_1"])
-            if row["n_2"] > 0:
-                diameters.extend([row["d_b2"].magnitude] * row["n_2"])
-            if row["n_3"] > 0:
-                diameters.extend([row["d_b3"].magnitude] * row["n_3"])
-            if row["n_4"] > 0:
-                diameters.extend([row["d_b4"].magnitude] * row["n_4"])
-            return np.std(diameters) if diameters else 0.0
-
-        # Layer penalty function
-        def layer_penalty(row: pd.Series) -> int:
-            """
-            Calculate the penalty for using additional layers of reinforcement.
-
-            Args:
-                row (pd.Series): A row of the DataFrame.
-
-            Returns:
-                int: 1 if additional layers are used, 0 otherwise.
-            """
-            # Check if any bars are in n_3, n_4, or future layers
-            if row["n_3"] > 0 or row["n_4"] > 0:
-                return 1  # Penalize if additional layers are used
-            return 0  # No penalty if only the first layer is used
-
-        # Calculate penalties and add them as columns
-        df["area_penalty"] = df.apply(lambda row: alpha * row["total_as"] / min_as, axis=1)
-        # Prefer moderate bar counts, where very high or very low will be penalized
-        df["bars_penalty"] = beta * ((df["total_bars"] - min_bars) / min_bars) ** 2
-        df["diameter_penalty"] = gamma * df.apply(diameter_difference_penalty, axis=1)
-        df["layer_penalty"] = delta * df.apply(layer_penalty, axis=1)
-
-        # Diameter size penalty, for very large or very small
-        min_d = df[["d_b1", "d_b2", "d_b3", "d_b4"]].stack().dropna().apply(lambda x: x.magnitude).min()
-        df["diameter_size_penalty"] = epsilon * (
-            df.apply(
-                lambda r: (
-                    max(
-                        [
-                            d.magnitude
-                            for d, n in zip(
-                                [r["d_b1"], r["d_b2"], r["d_b3"], r["d_b4"]],
-                                [r["n_1"], r["n_2"], r["n_3"], r["n_4"]],
-                            )
-                            if n > 0 and d is not None
-                        ]
-                    )
-                    / min_d
-                    - 1
-                ),
-                axis=1,
+        # These penalties were computed with df.apply(axis=1), which builds a
+        # Series for every row; on the few hundred candidates a design produces
+        # that machinery, not the arithmetic, was the cost. The columns are
+        # pulled out as plain lists once and scored in a single pass.
+        groups = list(
+            zip(
+                df["n_1"].tolist(),
+                df["d_b1"].tolist(),
+                df["n_2"].tolist(),
+                df["d_b2"].tolist(),
+                df["n_3"].tolist(),
+                df["d_b3"].tolist(),
+                df["n_4"].tolist(),
+                df["d_b4"].tolist(),
             )
         )
+
+        diameter_penalties = []
+        layer_penalties = []
+        max_d_per_row = []
+        min_d = None
+        for n_1, d_1, n_2, d_2, n_3, d_3, n_4, d_4 in groups:
+            # One entry per bar, so the spread below is weighted by bar count.
+            diameters = []
+            if n_1 > 0:
+                diameters.extend([d_1.magnitude] * n_1)
+            if n_2 > 0:
+                diameters.extend([d_2.magnitude] * n_2)
+            if n_3 > 0:
+                diameters.extend([d_3.magnitude] * n_3)
+            if n_4 > 0:
+                diameters.extend([d_4.magnitude] * n_4)
+
+            # Penalty for variation in bar diameters
+            diameter_penalties.append(np.std(diameters) if diameters else 0.0)
+            # Penalty for using a second layer of reinforcement
+            layer_penalties.append(1 if (n_3 > 0 or n_4 > 0) else 0)
+
+            # Every row reaching this point has n_1 == 2, so `diameters` is
+            # never empty (the A_s_req == 0 case returns before scoring).
+            max_d_per_row.append(max(diameters))
+            row_min = min(diameters)
+            min_d = row_min if min_d is None else min(min_d, row_min)
+
+        # Calculate penalties and add them as columns
+        min_as_mag = min_as.magnitude
+        df["area_penalty"] = [alpha * q.magnitude / min_as_mag for q in df["total_as"]]
+        # Prefer moderate bar counts, where very high or very low will be penalized
+        df["bars_penalty"] = beta * ((df["total_bars"] - min_bars) / min_bars) ** 2
+        df["diameter_penalty"] = [gamma * p for p in diameter_penalties]
+        df["layer_penalty"] = [delta * p for p in layer_penalties]
+
+        # Diameter size penalty, for very large or very small
+        df["diameter_size_penalty"] = [epsilon * (d / min_d - 1) for d in max_d_per_row]
+
         # Slab penalty for large spacing
         if getattr(self, "mode", "beam") == "slab":
             max_spacing_allowed = 300  # mm
-            df["spacing_penalty"] = df["clear_spacing"].apply(
-                lambda s: (
-                    0
+            df["spacing_penalty"] = [
+                (
+                    0.0
                     if s.magnitude <= max_spacing_allowed
                     else (s.magnitude - max_spacing_allowed) / max_spacing_allowed
                 )
-            )
+                for s in df["clear_spacing"]
+            ]
         else:
             df["spacing_penalty"] = 0
 
         # Calculate the final functional
-        df["functional"] = df.apply(
-            lambda row: (
-                row["area_penalty"]
-                + row["bars_penalty"]
-                + row["diameter_penalty"]
-                + row["layer_penalty"]
-                + row["diameter_size_penalty"]
-                + row["spacing_penalty"]
-            ),
-            axis=1,
+        df["functional"] = (
+            df["area_penalty"]
+            + df["bars_penalty"]
+            + df["diameter_penalty"]
+            + df["layer_penalty"]
+            + df["diameter_size_penalty"]
+            + df["spacing_penalty"]
         )
 
         return df
@@ -825,7 +784,4 @@ class Rebar:
             mech_cover: Optional mechanical cover to the bar centroid, used as
                 the starting geometry for the layer layout.
         """
-        if self.beam.concrete.design_code == "ACI 318-19" or self.beam.concrete.design_code == "CIRSOC 201-25":
-            return self.longitudinal_rebar_ACI_318_19(A_s_req, A_s_max, mech_cover)
-        elif self.beam.concrete.design_code == "EN 1992-2004":
-            return self.longitudinal_rebar_EN_1992_2004(A_s_req, A_s_max, mech_cover)
+        return design_code(self.beam.concrete).longitudinal_rebar(self, A_s_req, A_s_max, mech_cover)

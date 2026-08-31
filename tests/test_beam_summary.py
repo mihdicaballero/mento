@@ -9,13 +9,23 @@ import pytest
 import pandas as pd
 import copy
 import warnings
+from typing import Any, Optional
+
+from docx.oxml.ns import qn
+from docx.shared import Cm, Emu
 from pathlib import Path
 
 from mento import MPa, mm, cm, kN, kNm, m
 from mento.beam_summary import BeamSummary
+from mento.reports.summaries import (
+    BEAM_DATA_COLUMNS,
+    FLEXURE_SUMMARY_WIDTHS,
+    SHEAR_SUMMARY_WIDTHS,
+    SUMMARY_FONT_SIZE,
+)
 from mento.material import Concrete_ACI_318_19, SteelBar, Concrete_EN_1992_2004
 from mento.node import Node
-from mento.results import DocumentBuilder
+from mento.results import DocumentBuilder, FAIL_MARK, PASS_MARK, VERDICT_COLUMN
 
 # Suppress the specific ACI warning for all tests
 pytestmark = pytest.mark.filterwarnings("ignore::UserWarning")
@@ -249,7 +259,7 @@ def test_convert_to_nodes_with_stirrups(beam_summary: BeamSummary) -> None:
     # Check that stirrups were set
     for node in nodes_with_stirrups:
         beam = node.section
-        assert beam._stirrup_n != 0
+        assert beam.reinforcement.transverse.n_stirrups != 0
 
 
 def test_convert_to_nodes_without_stirrups(beam_summary: BeamSummary) -> None:
@@ -257,7 +267,7 @@ def test_convert_to_nodes_without_stirrups(beam_summary: BeamSummary) -> None:
     # V101 has no stirrups
     node_without_stirrups = beam_summary.nodes[0]
     beam = node_without_stirrups.section
-    assert beam._stirrup_n == 0
+    assert beam.reinforcement.transverse.n_stirrups == 0
 
 
 def test_convert_to_nodes_positive_moment(beam_summary: BeamSummary) -> None:
@@ -266,8 +276,8 @@ def test_convert_to_nodes_positive_moment(beam_summary: BeamSummary) -> None:
     for i in [2, 3]:
         node = beam_summary.nodes[i]
         beam = node.section
-        # Should have bottom rebar set (n1_b != 0)
-        assert beam._n1_b != 0
+        # Should have bottom rebar set on the first layer
+        assert beam.reinforcement.bottom.layers[0].n != 0
 
 
 def test_convert_to_nodes_negative_moment(beam_summary: BeamSummary) -> None:
@@ -275,8 +285,8 @@ def test_convert_to_nodes_negative_moment(beam_summary: BeamSummary) -> None:
     # V102 has negative moment
     node = beam_summary.nodes[1]
     beam = node.section
-    # Should have top rebar set (n1_t != 0)
-    assert beam._n1_t != 0
+    # Should have top rebar set on the first layer
+    assert beam.reinforcement.top.layers[0].n != 0
 
 
 def test_convert_to_nodes_zero_moment(beam_summary: BeamSummary) -> None:
@@ -285,7 +295,7 @@ def test_convert_to_nodes_zero_moment(beam_summary: BeamSummary) -> None:
     node = beam_summary.nodes[0]
     beam = node.section
     # Should have bottom rebar set
-    assert beam._n1_b != 0
+    assert beam.reinforcement.bottom.layers[0].n != 0
 
 
 # ============================================================================
@@ -678,10 +688,9 @@ def test_beam_summary_all_rebar_layers(
 
     beam = summary.nodes[0].section
     # Should have 4 layers of bottom rebar (positive moment)
-    assert beam._n1_b == 2
-    assert beam._n2_b == 2
-    assert beam._n3_b == 2
-    assert beam._n4_b == 2
+    bottom = beam.reinforcement.bottom
+    assert len(bottom.layers) == 4
+    assert [layer.n for layer in bottom.layers] == [2, 2, 2, 2]
 
 
 def test_beam_summary_with_different_units(
@@ -1070,3 +1079,474 @@ def test_deprecated_summary_module_still_exports_beam_summary():
     assert legacy.BeamSummary is BeamSummary
     assert any(issubclass(w.category, DeprecationWarning) for w in caught)
     assert any("beam_summary" in str(w.message) for w in caught)
+
+
+# ---------------------------------------------------------------------------
+# The Word "Design Check Summary" table
+# ---------------------------------------------------------------------------
+
+
+def _built_document(summary: BeamSummary, monkeypatch: pytest.MonkeyPatch) -> Any:
+    """Build the Word summary and hand back the document instead of saving it."""
+    captured: list = []
+    monkeypatch.setattr(DocumentBuilder, "save", lambda self, *_: captured.append(self.doc))
+    summary.results_detailed_doc(index=1)
+    return captured[0]
+
+
+def _rows(table: Any) -> list:
+    return [[cell.text for cell in row.cells] for row in table.rows]
+
+
+def _cell_fill(cell: Any) -> Optional[str]:
+    """The shading colour of a table cell, or None if it has none."""
+    tc_pr = cell._element.find(qn("w:tcPr"))
+    if tc_pr is None:
+        return None
+    shd = tc_pr.find(qn("w:shd"))
+    return None if shd is None else shd.get(qn("w:fill"))
+
+
+def test_check_summary_table_carries_only_the_reporting_columns(
+    beam_summary: BeamSummary, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The closing table answers "did every beam pass, and on what".
+
+    The required-area and capacity columns are left out on purpose: the flexure
+    and shear tables above already report them in full, and repeating them here
+    pushed the table off the page.
+    """
+    table = _built_document(beam_summary, monkeypatch).tables[-1]
+
+    assert _rows(table)[0] == [
+        "Beam",
+        "b",
+        "h",
+        "As,top",
+        "As,bot",
+        "Av",
+        "Mu",
+        "Vu",
+        "Nu",
+        "DCRb,top",
+        "DCRb,bot",
+        "DCRv",
+        VERDICT_COLUMN,
+    ]
+    # The units row survives the column selection.
+    assert _rows(table)[1][:3] == ["", "cm", "cm"]
+    assert _rows(table)[1][6:9] == ["kNm", "kN", "kN"]
+
+
+def test_check_summary_table_uses_the_design_code_names_for_the_demands(
+    sample_steel: SteelBar, sample_input_dataframe: pd.DataFrame, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """EN reports M_Ed / V_Ed / N_Ed where ACI reports Mu / Vu / Nu."""
+    summary = BeamSummary(
+        concrete=Concrete_EN_1992_2004(name="C25/30", f_c=25 * MPa),
+        steel_bar=sample_steel,
+        beam_list=sample_input_dataframe,
+    )
+    header = _rows(_built_document(summary, monkeypatch).tables[-1])[0]
+
+    assert header[6:9] == ["MEd", "VEd", "NEd"]
+
+
+def test_the_verdict_column_is_shaded_green_when_it_passes(
+    beam_summary: BeamSummary, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A reader scans the summary for red rather than reading every tick."""
+    table = _built_document(beam_summary, monkeypatch).tables[-1]
+    status_idx = len(table.columns) - 1
+
+    verdicts = [(row.cells[0].text, row.cells[status_idx]) for row in table.rows]
+    header_label, header_cell = verdicts[0]
+    units_label, units_cell = verdicts[1]
+
+    # Neither the header nor the units row carries a verdict, so neither is shaded.
+    assert header_cell.text == VERDICT_COLUMN
+    assert _cell_fill(header_cell) is None
+    assert units_cell.text == ""
+    assert _cell_fill(units_cell) is None
+
+    beams = verdicts[2:]
+    assert beams, "the fixture produced no beam rows"
+    for label, cell in beams:
+        expected = "C6EFCE" if cell.text == PASS_MARK else "FFC7CE"
+        assert _cell_fill(cell) == expected, f"{label} verdict {cell.text!r} was not shaded"
+
+
+def test_a_beam_that_fails_is_shaded_red(
+    sample_concrete: Concrete_ACI_318_19, sample_steel: SteelBar, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The colouring has to distinguish, not just decorate."""
+    # The second beam is deliberately far too small for its demand.
+    beam_list = pd.DataFrame(
+        {
+            "Label": ["", "passes", "fails"],
+            "Comb.": ["", "ELU 1", "ELU 2"],
+            "b": ["cm", 25, 20],
+            "h": ["cm", 50, 30],
+            "cc": ["mm", 25, 25],
+            "Nx": ["kN", 0, 0],
+            "Vz": ["kN", 40, 250],
+            "My": ["kNm", 40, 200],
+            "ns": ["", 1, 1],
+            "dbs": ["mm", 8, 6],
+            "sl": ["cm", 20, 25],
+            "n1": ["", 3, 2],
+            "db1": ["mm", 16, 8],
+            "n2": ["", 0, 0],
+            "db2": ["mm", 0, 0],
+            "n3": ["", 0, 0],
+            "db3": ["mm", 0, 0],
+            "n4": ["", 0, 0],
+            "db4": ["mm", 0, 0],
+        }
+    )
+    summary = BeamSummary(concrete=sample_concrete, steel_bar=sample_steel, beam_list=beam_list)
+    summary.check()
+    table = _built_document(summary, monkeypatch).tables[-1]
+    status_idx = len(table.columns) - 1
+
+    by_label = {row.cells[0].text: row.cells[status_idx] for row in table.rows}
+    assert by_label["passes"].text == PASS_MARK
+    assert _cell_fill(by_label["passes"]) == "C6EFCE"
+    assert by_label["fails"].text == FAIL_MARK
+    assert _cell_fill(by_label["fails"]) == "FFC7CE"
+
+
+def test_the_all_beam_tables_are_set_a_point_smaller(
+    beam_summary: BeamSummary, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Flexure, shear and the closing check table are much wider than the text."""
+    doc = _built_document(beam_summary, monkeypatch)
+
+    for table in doc.tables[-3:]:
+        sizes = {
+            run.font.size.pt
+            for row in table.rows
+            for cell in row.cells
+            for paragraph in cell.paragraphs
+            for run in paragraph.runs
+            if run.font.size is not None
+        }
+        assert sizes == {float(SUMMARY_FONT_SIZE)}, f"expected {SUMMARY_FONT_SIZE} pt throughout, found {sizes}"
+
+
+def _table_width_cm(table: Any) -> float:
+    return sum(Emu(cell.width).cm for cell in table.rows[0].cells if cell.width is not None)
+
+
+def _usable_width_cm(doc: Any) -> float:
+    section = doc.sections[0]
+    return Emu(section.page_width - section.left_margin - section.right_margin).cm
+
+
+def test_no_table_in_the_report_runs_past_the_page(beam_summary: BeamSummary, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Widths are authoritative now, so one that overruns would clip."""
+    doc = _built_document(beam_summary, monkeypatch)
+    usable = _usable_width_cm(doc)
+
+    for i, table in enumerate(doc.tables):
+        assert _table_width_cm(table) <= usable + 0.01, f"table {i} is wider than the text column"
+
+
+def test_the_per_beam_tables_do_not_span_the_line(beam_summary: BeamSummary, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A table describing one beam is sized to its text, not to the page.
+
+    Only the all-beams summaries at the end are meant to span the line; the
+    detail tables above them read as a list, and stretching a four-column list
+    across the full width leaves the value adrift from its label.
+    """
+    doc = _built_document(beam_summary, monkeypatch)
+    usable = _usable_width_cm(doc)
+
+    # Everything before the "Summary - All Beams" tables describes one beam.
+    detail_tables = doc.tables[:-4]
+    assert detail_tables, "the report produced no detail tables"
+    for i, table in enumerate(detail_tables):
+        assert _table_width_cm(table) < usable - 1.0, f"detail table {i} spans the line"
+
+
+def test_table_widths_are_honoured_rather_than_stored(
+    beam_summary: BeamSummary, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Word ignores cell widths unless autofit is off and the layout is fixed.
+
+    Without both, every table is stretched to the text width and the widths
+    each caller chose are stored in the file but never used.
+    """
+    for table in _built_document(beam_summary, monkeypatch).tables:
+        assert table.autofit is False
+        layout = table._tbl.find(qn("w:tblPr")).find(qn("w:tblLayout"))
+        assert layout is not None and layout.get(qn("w:type")) == "fixed"
+
+
+def test_limit_check_verdicts_are_shaded_like_the_summary(
+    beam_summary: BeamSummary, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A limit check is a pass/fail statement too, so it gets the same colours."""
+    doc = _built_document(beam_summary, monkeypatch)
+
+    limit_tables = [t for t in doc.tables if t.rows[0].cells[0].text == "Check"]
+    assert limit_tables, "the report produced no limit-check tables"
+
+    verdicts = []
+    for table in limit_tables:
+        idx = len(table.columns) - 1
+        assert _cell_fill(table.rows[0].cells[idx]) is None  # the header is not a verdict
+        for row in table.rows[1:]:
+            cell = row.cells[idx]
+            expected = "C6EFCE" if cell.text == PASS_MARK else "FFC7CE"
+            assert _cell_fill(cell) == expected, f"{row.cells[0].text!r} was not shaded"
+            verdicts.append(cell.text)
+
+    assert verdicts, "the limit-check tables carried no verdicts"
+
+
+def test_a_failed_limit_check_is_shaded_red(
+    sample_concrete: Concrete_ACI_318_19, sample_steel: SteelBar, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The colouring has to distinguish, not just decorate.
+
+    A 6 mm stirrup is below the 10 mm ACI 318-19 detailing minimum, so the
+    "Minimum rebar diameter" limit fails while the rest of the table passes.
+    """
+    beam_list = pd.DataFrame(
+        {
+            "Label": ["", "thin-stirrup"],
+            "Comb.": ["", "ELU 1"],
+            "b": ["cm", 25],
+            "h": ["cm", 50],
+            "cc": ["mm", 25],
+            "Nx": ["kN", 0],
+            "Vz": ["kN", 72],
+            "My": ["kNm", 90],
+            "ns": ["", 1],
+            "dbs": ["mm", 6],
+            "sl": ["cm", 20],
+            "n1": ["", 3],
+            "db1": ["mm", 16],
+            "n2": ["", 0],
+            "db2": ["mm", 0],
+            "n3": ["", 0],
+            "db3": ["mm", 0],
+            "n4": ["", 0],
+            "db4": ["mm", 0],
+        }
+    )
+    summary = BeamSummary(concrete=sample_concrete, steel_bar=sample_steel, beam_list=beam_list)
+    summary.check()
+    doc = _built_document(summary, monkeypatch)
+
+    limit_tables = [t for t in doc.tables if t.rows[0].cells[0].text == "Check"]
+    by_check = {
+        row.cells[0].text: row.cells[len(table.columns) - 1] for table in limit_tables for row in table.rows[1:]
+    }
+
+    failed = by_check["Minimum rebar diameter"]
+    assert failed.text == FAIL_MARK
+    assert _cell_fill(failed) == "FFC7CE"
+    # And a passing check in the same table is still green.
+    passed = by_check["Stirrup spacing along length"]
+    assert passed.text == PASS_MARK
+    assert _cell_fill(passed) == "C6EFCE"
+
+
+def test_the_shear_summary_drops_the_capacity_ticks(beam_summary: BeamSummary, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The DCR column beside them already says whether the section is enough.
+
+    They are dropped from the Word summary only: ``check_shear`` still reports
+    both, which is where a caller reads them programmatically.
+    """
+    doc = _built_document(beam_summary, monkeypatch)
+    header = [cell.text for cell in doc.tables[-2].rows[0].cells]
+
+    assert "Av,min" in header, f"expected the shear summary, got {header}"
+    assert "Vu≤ØVn" not in header
+    assert "Vu≤ØVmax" not in header
+    # The capacities themselves stay, so the margin is still readable.
+    assert {"ØVn", "ØVmax", "DCR"} <= set(header)
+
+    shown = beam_summary.shear_results(capacity_check=False)
+    assert {"Vu≤ØVn", "Vu≤ØVmax"} <= set(shown.columns)
+
+
+def test_no_table_in_the_report_relies_on_padded_widths(
+    beam_summary: BeamSummary, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every table lists one width per column.
+
+    A short list still renders -- the last width is repeated -- so dropping a
+    column from a table leaves no visible trace until someone looks at the
+    page. The builder warns; this asserts the report never triggers it.
+    """
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        _built_document(beam_summary, monkeypatch)
+
+    padded = [str(w.message) for w in caught if "widths were given" in str(w.message)]
+    assert not padded, padded
+
+
+def test_beam_data_lists_the_section_and_its_bars_only(
+    beam_summary: BeamSummary, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The demands each beam was checked for belong to the tables below it.
+
+    They are reported there per combination, which is where a demand means
+    something; repeating the input row here only widened the table.
+    """
+    doc = _built_document(beam_summary, monkeypatch)
+    # Beam Data is the first of the four all-beams tables.
+    table = doc.tables[-4]
+    header = [cell.text for cell in table.rows[0].cells]
+
+    assert header == list(BEAM_DATA_COLUMNS)
+    for dropped in ("Comb.", "Nx", "Vz", "My"):
+        assert dropped not in header
+
+    widths = [round(Emu(cell.width).cm, 2) for cell in table.rows[0].cells]
+    assert widths == [round(Cm(w).cm, 2) for w in [2, 1, 1, 1] + [0.9] * 11]
+    assert _table_width_cm(table) <= _usable_width_cm(doc) + 0.05
+
+
+def test_forces_are_reported_to_one_decimal_and_dcrs_to_two(
+    beam_summary: BeamSummary, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Display precision, chosen for the column width a report has to fit."""
+    doc = _built_document(beam_summary, monkeypatch)
+    table = doc.tables[-1]
+    header = [cell.text for cell in table.rows[0].cells]
+    units = [cell.text for cell in table.rows[1].cells]
+
+    for row in table.rows[2:]:
+        for name, unit, cell in zip(header, units, row.cells):
+            text = cell.text
+            if "." not in text:
+                continue
+            decimals = len(text.split(".")[1])
+            if name.startswith("DCR"):
+                assert decimals <= 2, f"{name}={text} carries more than two decimals"
+            elif unit in ("kN", "kNm"):
+                assert decimals <= 1, f"{name}={text} carries more than one decimal"
+
+
+def test_the_frames_themselves_keep_their_precision(beam_summary: BeamSummary) -> None:
+    """Rounding is for the page, not for the numbers.
+
+    The result frames are also the programmatic API, and the validation suite
+    compares them against Calcpad and ETABS references at more decimals than a
+    report shows -- so the rounding has to stay in the document builder.
+    """
+    shown = beam_summary.check()
+    dcr_values = [value for value in shown["DCRb,bot"][1:] if isinstance(value, float)]
+
+    assert dcr_values, "the summary reported no bottom DCR"
+    # Three decimals is what check() has always produced; the report shows two.
+    assert any(round(value, 2) != value for value in dcr_values), (
+        "check() lost precision -- the rounding leaked out of the report layer"
+    )
+
+
+def test_a_section_that_only_just_passes_is_not_reported_as_failing(
+    sample_concrete: Concrete_ACI_318_19, sample_steel: SteelBar
+) -> None:
+    """The verdict reads the DCR, not the rounded DCR the table prints.
+
+    This beam's shear DCR is 0.997 -- it passes, and it shows as 1.00 at the
+    two decimals the report has room for. Comparing the printed value against
+    1 would call it a failure.
+    """
+    beam_list = pd.DataFrame(
+        {
+            "Label": ["", "just-passes"],
+            "Comb.": ["", "ELU 1"],
+            "b": ["cm", 25],
+            "h": ["cm", 50],
+            "cc": ["mm", 25],
+            "Nx": ["kN", 0],
+            "Vz": ["kN", 145.392],
+            "My": ["kNm", 10],
+            "ns": ["", 1],
+            "dbs": ["mm", 8],
+            "sl": ["cm", 20],
+            "n1": ["", 3],
+            "db1": ["mm", 16],
+            "n2": ["", 0],
+            "db2": ["mm", 0],
+            "n3": ["", 0],
+            "db3": ["mm", 0],
+            "n4": ["", 0],
+            "db4": ["mm", 0],
+        }
+    )
+    summary = BeamSummary(concrete=sample_concrete, steel_bar=sample_steel, beam_list=beam_list)
+    results = summary.check()
+
+    beam = summary.nodes[0].section
+    assert 0.995 <= beam._DCRv < 1.0, f"the fixture stopped being a knife-edge case: {beam._DCRv}"
+    assert round(beam._DCRv, 2) == 1.0, "rounding no longer hides the margin, so this proves nothing"
+    assert results[VERDICT_COLUMN][1] == PASS_MARK
+
+
+@pytest.mark.parametrize(
+    "concrete, tick, demand, capacity",
+    [
+        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), "Mu≤ØMn", "Mu", "ØMn"),
+        (Concrete_EN_1992_2004(name="C25/30", f_c=25 * MPa), "MEd≤MRd", "MEd", "MRd"),
+    ],
+    ids=["ACI", "EN"],
+)
+def test_the_flexure_summary_drops_the_codes_own_capacity_tick(
+    concrete: Concrete_ACI_318_19,
+    tick: str,
+    demand: str,
+    capacity: str,
+    sample_steel: SteelBar,
+    sample_input_dataframe: pd.DataFrame,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Same reasoning as the shear ticks, and the same declaration.
+
+    A code lists what its summaries leave out once; the flexure and shear
+    tables both read that list, so dropping a column does not mean finding
+    every table that carries it.
+    """
+    summary = BeamSummary(concrete=concrete, steel_bar=sample_steel, beam_list=sample_input_dataframe)
+    header = [cell.text for cell in _built_document(summary, monkeypatch).tables[-3].rows[0].cells]
+
+    assert capacity in header, f"expected the flexure summary, got {header}"
+    assert tick not in header
+    # The demand and the capacity stay, so the margin is still readable.
+    assert {demand, capacity, "DCR"} <= set(header)
+
+    shown = summary.flexure_results(capacity_check=False)
+    assert tick in shown.columns
+
+
+def test_both_codes_report_summaries_of_the_same_shape(
+    sample_steel: SteelBar, sample_input_dataframe: pd.DataFrame, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """What lets one hand-set width list serve both codes.
+
+    The widths are typed against the rendered document, not computed, so they
+    only hold while the two codes drop the same number of columns. If one ever
+    stops doing that, this says so here rather than in the next report someone
+    opens.
+    """
+    shapes = {}
+    for concrete in (
+        Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        Concrete_EN_1992_2004(name="C25/30", f_c=25 * MPa),
+    ):
+        summary = BeamSummary(concrete=concrete, steel_bar=sample_steel, beam_list=sample_input_dataframe)
+        doc = _built_document(summary, monkeypatch)
+        shapes[concrete.design_code] = (
+            len(doc.tables[-3].columns),
+            len(doc.tables[-2].columns),
+        )
+
+    assert len(set(shapes.values())) == 1, shapes
+    assert shapes["ACI 318-19"] == (len(FLEXURE_SUMMARY_WIDTHS), len(SHEAR_SUMMARY_WIDTHS))

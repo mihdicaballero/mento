@@ -34,6 +34,18 @@ class Concrete(Material):
                 f"Unsupported unit system for f_c ({self.f_c.units}). Please use MPa, Pa, kPa, psi, or ksi."
             )
 
+    @property
+    def is_imperial(self) -> bool:
+        """True when the material was given in US customary units.
+
+        ``unit_system`` only ever holds ``"metric"`` or ``"imperial"`` —
+        ``__post_init__`` rejects anything else — so this is the whole story.
+        It exists so callers that must pick between the two coefficient sets a
+        design code publishes read a positive flag instead of re-deriving one
+        with ``unit_system != "metric"`` at each site.
+        """
+        return self.unit_system == "imperial"
+
     def get_properties(self) -> Dict[str, Any]:
         # Return properties in the appropriate unit system
         properties = {"f_c": self.f_c, "density": self.density}
@@ -231,6 +243,9 @@ class Concrete_EN_1992_2004(Concrete):
         # The f_c passed to Concrete is the f_ck for Eurocode
         self._delta = 0.85
         self._f_ck = self.f_c
+        # Converted once: lambda and eta are asked for it several times per
+        # check, and f_ck does not change after construction.
+        self._f_ck_MPa: float = self._f_ck.to(MPa).magnitude
         self._f_cm = self._f_ck + 8 * MPa
         self._E_cm = 22000 * (self._f_cm.to("MPa").magnitude / 10) ** 0.3 * MPa
         self._f_ctm = 0.3 * (self._f_ck.to("MPa").magnitude) ** (2 / 3) * MPa
@@ -275,7 +290,7 @@ class Concrete_EN_1992_2004(Concrete):
         """
         Calculate the effective compression zone depth factor (λ) as per EN 1992-1-1.
         """
-        f_ck_mpa = self._f_ck.to("MPa").magnitude  # Ensure comparison in MPa
+        f_ck_mpa = self._f_ck_MPa
         if f_ck_mpa <= 50:
             return 0.8
         else:
@@ -285,7 +300,7 @@ class Concrete_EN_1992_2004(Concrete):
         """
         Calculate the effective compressive strength factor (η) as per EN 1992-1-1.
         """
-        f_ck_mpa = self._f_ck.to("MPa").magnitude  # Ensure comparison in MPa
+        f_ck_mpa = self._f_ck_MPa
         if f_ck_mpa <= 50:
             return 1.0
         else:
