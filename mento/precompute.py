@@ -78,6 +78,7 @@ class SectionFloats:
     A_v: float
     stirrup_d_b: float
     stirrup_n: int
+    stirrup_s_w: float
     f_c: float
     f_y: float
     E_s: float
@@ -129,6 +130,9 @@ def refresh_section_floats(section: "RectangularBeam") -> SectionFloats:
         A_v=section._A_v.to(length).magnitude,
         stirrup_d_b=section._stirrup_d_b.to(length).magnitude,
         stirrup_n=section._stirrup_n,
+        # Asked of the section rather than derived here: a beam and a slab space
+        # their legs across the width by different rules.
+        stirrup_s_w=section._leg_spacing_across_width().to(length).magnitude,
         f_c=section.concrete.f_c.to(stress).magnitude,
         f_y=section.steel_bar.f_y.to(stress).magnitude,
         E_s=section.steel_bar._E_s.to(stress).magnitude,

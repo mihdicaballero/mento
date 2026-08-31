@@ -395,6 +395,36 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         # Recalculate effective depths using the new stirrup diameter.
         self._update_effective_heights()
 
+    def _leg_spacing_across_width(self) -> Quantity:
+        """Distance between adjacent stirrup legs, measured across the section.
+
+        A beam's legs are the sides of its stirrup cage, so their spacing is not
+        detailed directly: it falls out of how many legs are spread between the
+        centres of the outermost pair. A slab's is a detailing decision of its
+        own, which is why the two sections answer this differently and the shear
+        checks ask the section instead of assuming the cage.
+
+        Zero when the section carries no stirrups, so that a section without
+        shear reinforcement reports no spacing rather than a negative one.
+        """
+        n_legs = self._stirrup_n * 2
+        if n_legs < 2:
+            return 0 * self._len_unit()
+        return max(
+            (self.width - 2 * self.c_c - self._stirrup_d_b) / (n_legs - 1),
+            0 * self._len_unit(),
+        )
+
+    def _apply_transverse_design(self, design: Any) -> None:
+        """Store the row the transverse rebar search chose.
+
+        A hook rather than a call inlined in :meth:`design_shear`, because a
+        section is detailed the way it is reinforced: a beam by a stirrup count
+        and a spacing, a slab by a spacing in each direction. Only the section
+        knows which of the two the row means.
+        """
+        self.set_transverse_rebar(design["n_stir"], design["d_b"], design["s_l"])
+
     def _len_unit(self) -> Quantity:
         # Base length unit for this section
         return 1 * mm if getattr(self.concrete, "unit_system", "metric") == "metric" else 1 * inch
@@ -851,11 +881,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         self._stirrup_s_w = self._best_rebar_design["s_w"]
         self._stirrup_s_max_l = self._best_rebar_design["s_max_l"]
         self._stirrup_s_max_w = self._best_rebar_design["s_max_w"]
-        self.set_transverse_rebar(
-            self._best_rebar_design["n_stir"],
-            self._best_rebar_design["d_b"],
-            self._best_rebar_design["s_l"],
-        )
+        self._apply_transverse_design(self._best_rebar_design)
 
         # Update longitudinal rebar attributes
         self._update_longitudinal_rebar_attributes()

@@ -179,8 +179,7 @@ def _calculate_total_shear_strength_aci(self: "RectangularBeam", st: ShearCheckS
 
 def _calculate_rebar_spacing_aci(self: "RectangularBeam", st: ShearCheckState) -> None:
     sec = section_floats(self)
-    n_legs_actual = sec.stirrup_n * 2  # Ensure legs are even
-    st.stirrup_s_w = max((sec.width - 2 * sec.c_c - sec.stirrup_d_b) / (n_legs_actual - 1), 0.0)
+    st.stirrup_s_w = sec.stirrup_s_w
     (
         st.stirrup_s_max_l,
         st.stirrup_s_max_w,

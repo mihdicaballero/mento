@@ -1,8 +1,10 @@
+import math
+
 import pytest
 from mento.rebar import Rebar, RebarDesignInfeasibleError
 from mento.beam import RectangularBeam
 from mento.material import Concrete_ACI_318_19, SteelBar, Concrete_EN_1992_2004
-from mento.units import psi, kip, mm, inch, ksi, cm, MPa, kN
+from mento.units import psi, kip, m, mm, inch, ksi, cm, MPa, kN
 from mento.forces import Forces
 from mento.node import Node
 from mento.settings import BeamSettings
@@ -825,6 +827,93 @@ def test_longitudinal_rebar_design_raises_infeasible_when_no_combo_fits() -> Non
     beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=100 * cm**2)
     with pytest.raises(RebarDesignInfeasibleError):
         _ = beam_rebar.longitudinal_rebar_design
+
+
+def test_transverse_rebar_design_raises_infeasible_when_no_combo_fits() -> None:
+    """The transverse counterpart of the test above.
+
+    ``iloc[0]`` on an empty search raised a bare ``IndexError`` from inside
+    pandas, several frames below anything a caller could act on. The search can
+    come back empty -- no bar the code allows, at any spacing inside its limits,
+    reaches A_v_req -- and that is a statement about the section, so it should
+    read as one.
+    """
+    slab = OneWaySlab(
+        label="infeasible-shear",
+        concrete=Concrete_ACI_318_19(name="C25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=20 * cm,
+        c_c=25 * mm,
+    )
+    slab_rebar = Rebar(slab)
+    slab_rebar._trans_combos_df = pd.DataFrame()
+    with pytest.raises(RebarDesignInfeasibleError):
+        _ = slab_rebar.transverse_rebar_design
+
+
+def test_transverse_rebar_searches_a_slab_by_spacing_not_by_leg_count() -> None:
+    """Slab mode reaches the slab search, and the slab search is grid-shaped.
+
+    The beam search derives the transverse spacing from an even number of legs
+    spread between the outermost bar centres, so on a metre-wide strip it lands
+    on a fraction of a centimetre -- 13.43 cm for eight legs -- and starts from
+    far more steel than the shear asks for. The slab search chooses both
+    spacings on the whole-centimetre grid the strip is actually detailed on.
+    """
+    slab = OneWaySlab(
+        label="slab-search",
+        concrete=Concrete_ACI_318_19(name="C25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=20 * cm,
+        c_c=25 * mm,
+    )
+    slab.set_slab_longitudinal_rebar_bot(d_b1=12 * mm, s_b1=20 * cm)
+    slab_rebar = Rebar(slab)
+    assert slab_rebar.mode == "slab"
+
+    combos = slab_rebar.transverse_rebar(A_v_req=8 * cm**2 / m, V_s_req=30 * kN, alpha=math.radians(90))
+
+    assert not combos.empty
+    for _, row in combos.iterrows():
+        assert row["s_l"].to("cm").magnitude == int(row["s_l"].to("cm").magnitude)
+        assert row["s_w"].to("cm").magnitude == int(row["s_w"].to("cm").magnitude)
+        assert row["s_l"] <= row["s_max_l"]
+        assert row["s_w"] <= row["s_max_w"]
+        assert row["A_v"] >= 8 * cm**2 / m
+    # Least steel first, so the row the design reads is the cheapest one.
+    assert combos.iloc[0]["A_v"] == min(combos["A_v"])
+
+
+def test_slab_transverse_search_drops_a_diameter_it_cannot_place() -> None:
+    """A bar too thin for the demand is dropped, not squeezed below the floor.
+
+    Driven directly, with an A_v_req far past anything a 20 cm slab would ever
+    see, because that is the only way to reach the branch: the spacing limits
+    are so much tighter than A_v_req in real slabs that the limits are what
+    bind. The smallest bar ACI allows runs out of grid first -- every spacing
+    that would cover A_v_req is below the floor -- so the search moves on to the
+    next diameter instead of returning a spacing nobody can build.
+    """
+    slab = OneWaySlab(
+        label="slab-extreme-shear",
+        concrete=Concrete_ACI_318_19(name="C25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=20 * cm,
+        c_c=25 * mm,
+    )
+    slab.set_slab_longitudinal_rebar_bot(d_b1=12 * mm, s_b1=20 * cm)
+
+    combos = Rebar(slab).transverse_rebar(A_v_req=400 * cm**2 / m, V_s_req=30 * kN, alpha=math.radians(90))
+
+    assert not combos.empty
+    assert 10 * mm not in list(combos["d_b"])  # no grid point at the thinnest bar
+    for _, row in combos.iterrows():
+        assert row["A_v"] >= 400 * cm**2 / m
+        assert row["s_l"] >= 1 * cm
+        assert row["s_w"] >= 1 * cm
 
 
 if __name__ == "__main__":

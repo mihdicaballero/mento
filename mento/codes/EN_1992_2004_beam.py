@@ -215,9 +215,7 @@ def _check_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> ENShear
         _calculate_required_shear_reinforcement_EN_1992_2004(self, st)
 
         # Rebar spacing checks
-        sec = section_floats(self)
-        n_legs_actual = sec.stirrup_n * 2  # Ensure legs are even
-        st.stirrup_s_w = (sec.width - 2 * sec.c_c - sec.stirrup_d_b) / (n_legs_actual - 1)
+        st.stirrup_s_w = section_floats(self).stirrup_s_w
         (
             st.stirrup_s_max_l,
             st.stirrup_s_max_w,

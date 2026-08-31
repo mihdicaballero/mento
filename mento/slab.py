@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 from dataclasses import dataclass
 import math
 import numpy as np
@@ -74,19 +74,51 @@ class OneWaySlab(RectangularBeam):
     ) -> None:
         """Sets the transverse rebar in the slab section.
 
-        A zero spacing means no stirrups, which clears the transverse reinforcement.
+        A zero diameter or a zero spacing in either direction means no stirrups,
+        which clears the transverse reinforcement.
         """
         self._stirrup_s_l = s_long
-        if s_long == 0 * cm or s_trans == 0 * cm:
+        if d_b == 0 * mm or s_long == 0 * cm or s_trans == 0 * cm:
             # No stirrups: same state as a section without transverse rebar
             self._A_v = 0 * mm**2 / m
+            self._stirrup_n = 0
+            self._stirrup_d_b = 0 * mm
+            self._stirrup_s_w = 0 * mm
         else:
             n_legs_per_unit_width = self.width / s_trans
             A_db = (d_b**2) * math.pi / 4  # Area of one stirrup leg per unit width
             self._A_v = A_db * n_legs_per_unit_width / s_long  # Legs area per unit length
+            self._stirrup_d_b = d_b
+            self._stirrup_s_w = s_trans
+            # Both shear checks read _stirrup_n to decide whether the section
+            # carries shear reinforcement at all, and the drawings read it as a
+            # number of stirrups. Leaving it at zero was why a slab given
+            # transverse rebar was still checked as if it had none. A strip has
+            # no closed stirrup to count -- the legs at s_trans need not divide
+            # into it a whole number of times -- so this is the equivalent
+            # number of rows; _A_v above is what the capacity is computed from.
+            self._stirrup_n = max(1, round(n_legs_per_unit_width.to("dimensionless").magnitude / 2))
 
         # Update effective heights
         self._update_effective_heights()
+
+    def _leg_spacing_across_width(self) -> Quantity:
+        """The transverse spacing the strip was detailed with.
+
+        A beam derives this from the geometry of its stirrup cage. A slab does
+        not have one: the legs sit on a grid, and how far apart they are across
+        the strip is chosen, not implied. Deriving it the beam's way put the
+        legs of a designed slab at a spacing it had never been given.
+        """
+        return self._stirrup_s_w
+
+    def _apply_transverse_design(self, design: Any) -> None:
+        """A slab is detailed by a spacing in each direction, not by a stirrup count."""
+        self.set_slab_transverse_rebar(
+            d_b=design["d_b"],
+            s_long=design["s_l"],
+            s_trans=design["s_w"],
+        )
 
     def set_slab_longitudinal_rebar_bot(
         self,

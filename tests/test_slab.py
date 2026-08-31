@@ -371,3 +371,185 @@ def test_slab_shear_design_places_stirrups_once_the_demand_exceeds_the_concrete(
     assert transverse.n_stirrups > 0
     assert transverse.A_v >= slab.shear_design.A_v_req
     assert slab.shear_design.DCR <= 1
+
+
+# ---------------------------------------------------------------------------
+# Shear design, where the demand passes what the concrete alone carries
+# ---------------------------------------------------------------------------
+
+
+def _slab_needing_stirrups(concrete_cls) -> OneWaySlab:
+    """A 100 x 20 cm strip, which is too shallow for 100 kN of shear on its own."""
+    return OneWaySlab(
+        label="Slab shear",
+        concrete=concrete_cls(name="C25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="B500S", f_y=420 * MPa),
+        width=100 * cm,
+        height=20 * cm,
+        c_c=25 * mm,
+    )
+
+
+@pytest.mark.parametrize(
+    ("concrete_cls", "d_b", "s_l", "s_w", "A_v"),
+    [
+        pytest.param(Concrete_ACI_318_19, 10 * mm, 7 * cm, 15 * cm, 74.80, id="ACI-318-19"),
+        pytest.param(Concrete_EN_1992_2004, 6 * mm, 12 * cm, 12 * cm, 19.63, id="EN-1992-2004"),
+    ],
+)
+def test_shear_design_of_a_slab_that_needs_stirrups(concrete_cls, d_b, s_l, s_w, A_v) -> None:
+    """A strip carrying more shear than its concrete does gets a buildable grid of legs.
+
+    The forces are the same in both codes; what differs is the detailing rules,
+    so the expected bar and spacings are per code.
+
+    The number this pins is the one the beam-shaped search got wrong. That
+    search spreads an even number of legs between the outermost bar centres,
+    which on a metre-wide strip starts at eight legs and never comes back down:
+    it returned 78.54 cm2/m under ACI and 23.56 cm2/m under EN, and its ACI
+    answer sat at 8 cm along the span against a 7.95 cm limit. Neither figure
+    is anywhere near A_v_req, and neither can be -- see the second half of the
+    test, which is the part worth reading.
+    """
+    # The premise: with no shear reinforcement the strip does not pass.
+    bare = _slab_needing_stirrups(concrete_cls)
+    bare.set_slab_longitudinal_rebar_bot(d_b1=12 * mm, s_b1=20 * cm)
+    forces = Forces(label="C1", M_y=30 * kNm, V_z=100 * kN)
+    Node(section=bare, forces=forces).check_shear()
+    assert bare.shear_design.DCR > 1
+
+    slab = _slab_needing_stirrups(concrete_cls)
+    Node(section=slab, forces=Forces(label="C1", M_y=30 * kNm, V_z=100 * kN)).design()
+
+    shear = slab.shear_design
+    assert shear.d_b == d_b
+    assert shear.s_l == s_l
+    # The transverse spacing has no equivalent on the public shear result yet.
+    assert slab._stirrup_s_w == s_w
+    assert shear.A_v.to("cm**2/m").magnitude == pytest.approx(A_v, rel=1e-3)
+
+    # The design is inside the limits it will be checked against. It was not
+    # before: the limits are written on d, and d moves by the whole diameter of
+    # a stirrup a slab did not have until the design assigned one.
+    assert slab._stirrup_s_l <= slab._stirrup_s_max_l
+    assert slab._stirrup_s_w <= slab._stirrup_s_max_w
+
+    # And it covers the demand, with room to spare that no search can remove:
+    # s_max_l is d/2 on a 20 cm slab, so the least steel the detailing rules
+    # allow is already several times what the shear asks for.
+    assert shear.A_v >= shear.A_v_req
+    assert shear.DCR <= 1
+
+
+def test_designed_slab_is_reinforced_in_both_directions() -> None:
+    """The design speaks the slab's own parameterisation, not the beam's.
+
+    ``design_shear`` used to hand the row to ``set_transverse_rebar``, which
+    reads it as a number of closed stirrups. A slab has none: it is detailed by
+    a bar diameter and a spacing each way, which is what
+    ``set_slab_transverse_rebar`` takes.
+    """
+    slab = _slab_needing_stirrups(Concrete_ACI_318_19)
+    Node(section=slab, forces=Forces(label="C1", M_y=30 * kNm, V_z=100 * kN)).design()
+
+    A_db = math.pi * slab._stirrup_d_b**2 / 4
+    n_legs = slab.width / slab._stirrup_s_w
+    assert slab._A_v.to("cm**2/m").magnitude == pytest.approx(
+        (A_db * n_legs / slab._stirrup_s_l).to("cm**2/m").magnitude, rel=1e-9
+    )
+
+
+def test_shear_design_of_an_imperial_slab_strip() -> None:
+    """The imperial branch of the slab search, on its own whole-inch grid."""
+    slab = OneWaySlab(
+        label="Slab shear imperial",
+        concrete=Concrete_ACI_318_19(name="C4", f_c=4 * ksi),
+        steel_bar=SteelBar(name="G60", f_y=60 * ksi),
+        width=12 * inch,
+        height=10 * inch,
+        c_c=0.75 * inch,
+    )
+    bare = OneWaySlab(
+        label="Slab shear imperial",
+        concrete=Concrete_ACI_318_19(name="C4", f_c=4 * ksi),
+        steel_bar=SteelBar(name="G60", f_y=60 * ksi),
+        width=12 * inch,
+        height=10 * inch,
+        c_c=0.75 * inch,
+    )
+    bare.set_slab_longitudinal_rebar_bot(d_b1=0.5 * inch, s_b1=8 * inch)
+    Node(section=bare, forces=Forces(label="C1", V_z=12 * kip)).check_shear()
+    assert bare.shear_design.DCR > 1
+
+    Node(section=slab, forces=Forces(label="C1", M_y=10 * kNm, V_z=12 * kip)).design()
+
+    shear = slab.shear_design
+    assert shear.d_b == 0.375 * inch
+    assert shear.s_l == 4 * inch
+    assert slab._stirrup_s_w == 8 * inch
+    assert slab._stirrup_s_l <= slab._stirrup_s_max_l
+    assert slab._stirrup_s_w <= slab._stirrup_s_max_w
+    assert shear.A_v >= shear.A_v_req
+    assert shear.DCR <= 1
+
+
+def test_transverse_rebar_set_on_a_slab_is_credited_by_the_shear_check() -> None:
+    """Both codes read ``_stirrup_n`` to decide whether a section carries stirrups.
+
+    ``set_slab_transverse_rebar`` left it at zero, so a slab given a full grid
+    of legs was checked as a section with none: it reported phi*V_s = 0 and a
+    zero stirrup diameter, and the report's minimum-diameter row had nothing to
+    compare against.
+    """
+    slab = _slab_needing_stirrups(Concrete_ACI_318_19)
+    slab.set_slab_longitudinal_rebar_bot(d_b1=12 * mm, s_b1=20 * cm)
+    slab.set_slab_transverse_rebar(d_b=10 * mm, s_long=7 * cm, s_trans=15 * cm)
+
+    transverse = slab.reinforcement.transverse
+    assert transverse.d_b == 10 * mm
+    assert transverse.n_stirrups > 0
+
+    Node(section=slab, forces=Forces(label="C1", M_y=30 * kNm, V_z=100 * kN)).check_shear()
+    assert slab._phi_V_s > 0 * kN
+
+
+def test_clearing_slab_transverse_rebar_leaves_no_stirrup_behind() -> None:
+    """The zero state has to clear the diameter and the count as well as A_v."""
+    slab = _slab_needing_stirrups(Concrete_ACI_318_19)
+    slab.set_slab_transverse_rebar(d_b=10 * mm, s_long=7 * cm, s_trans=15 * cm)
+
+    slab.set_slab_transverse_rebar()
+
+    transverse = slab.reinforcement.transverse
+    assert transverse.n_stirrups == 0
+    assert transverse.d_b.magnitude == 0
+    assert transverse.A_v.to("cm**2/m").magnitude == 0
+    assert slab._stirrup_s_w.magnitude == 0
+
+
+def test_slab_shear_design_is_the_least_steel_the_spacing_limits_allow() -> None:
+    """No bar, at any spacing the code allows, covers A_v_req with less steel.
+
+    Written against the whole grid rather than against a number, because the
+    point of the slab branch is that it finds the optimum, not that it happens
+    to return 74.8 cm2/m. The grid starts at 1 cm, below the floor the search
+    stops at: a tighter spacing only ever adds steel, so including it makes the
+    claim stronger rather than unfair.
+    """
+    slab = _slab_needing_stirrups(Concrete_ACI_318_19)
+    Node(section=slab, forces=Forces(label="C1", M_y=30 * kNm, V_z=100 * kN)).design()
+
+    A_v_req = slab.shear_design.A_v_req
+    chosen = slab.shear_design.A_v.to("cm**2/m").magnitude
+
+    for _, row in slab.shear_design_results.iterrows():
+        A_db = math.pi * row["d_b"] ** 2 / 4
+        s_l_max = int(row["s_max_l"].to("cm").magnitude)
+        s_w_max = int(min(row["s_max_w"], slab.width).to("cm").magnitude)
+        for s_l in range(1, s_l_max + 1):
+            for s_w in range(1, s_w_max + 1):
+                A_v = A_db * (slab.width / (s_w * cm)) / (s_l * cm)
+                if A_v >= A_v_req:
+                    assert A_v.to("cm**2/m").magnitude >= chosen * (1 - 1e-9), (
+                        f"Ø{row['d_b']} at {s_l} cm x {s_w} cm covers A_v_req with less steel"
+                    )
