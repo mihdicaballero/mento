@@ -3,13 +3,72 @@
 All notable changes to mento are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
-project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). While the
-version number is below 1.0, the public API may still change between minor releases.
+project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). From 1.0.0
+the public API is stable: breaking changes need a major release. Before 1.0.0 it could
+change between minor releases, which is what ADR-0003 documented at the time.
 
 Releases before 0.5.0 were not tracked in a changelog; the entries below were reconstructed
 from the release history and are summaries rather than complete lists.
 
 ## [Unreleased]
+
+## [1.0.0] - 2026-08-31
+
+The API is stable from this release on (ADR-0003): breaking changes need a major version
+from here. What made 1.0 worth declaring is the architecture work below — checks that
+return values instead of writing them to the section, so a caller can run one over many
+sections and trust the answer.
+
+### Added
+
+- **`section.reinforcement`** — what a section carries right now, as a frozen
+  `SectionReinforcement(bottom, top, transverse)`. It never raises, so a layout that was
+  just set with `set_longitudinal_rebar_bot` can be read back without a check having run.
+  The design-result objects were previously the only way to ask, and they are gated behind
+  `DesignNotRunError`.
+- **`beam.shear_check_results(forces)` and `beam.flexure_check_results(forces)`** — one
+  frozen result per load combination, and no report built at all. Three to five times
+  faster than the reporting path, and the numbers are identical; a test asserts that for
+  both design codes.
+- **`beam.shear_checks` and `beam.flexure_checks`** — every combination checked so far, so
+  a caller that wants to envelope them differently no longer has to reach into the element.
+
+### Changed
+
+- **A check no longer writes to the section.** `shear_check_results` and
+  `flexure_check_results` leave the element untouched — measured across both design codes,
+  both checks and with and without stirrups: zero attributes changed, zero created. The
+  reporting entry points still copy their results back, because the report tables read
+  them off the element; that compatibility layer is deprecated and goes in a later release.
+- **The shear check keeps the assumed stirrup diameter, as the flexure check already did.**
+  On a section with no stirrups configured, `check_shear` used to drop the diameter the
+  settings assume and recompute the effective depths on the section, so a `check_flexure`
+  run afterwards reported a different DCR purely because of call order — 0.593 against
+  0.582 on the same beam. Both checks now read the same effective depth. If you check a
+  section that has no transverse reinforcement, say so with
+  `set_transverse_rebar(n_stirrups=0, d_b=0, s_l=0)` and the depths follow.
+- **`BeamSummary.check()` names its verdict column `Ok?`**, not `Status`.
+- Adding a design code no longer means editing an element. A code declares itself in
+  `mento/codes/<code>/code.py` and is found by walking that directory; nothing under
+  `beam.py`, `shear_wall.py`, `rebar.py` or the summaries names a code any more.
+- The Word reports read better on the page: tables are sized to their content rather than
+  stretched across the line, forces show one decimal and DCRs two, the pass/fail cells are
+  shaded green or red, and the summaries drop the capacity ticks that repeat what the DCR
+  column beside them already says.
+
+### Performance
+
+- **A check is roughly ten times faster.** Shear and flexure on one section went from
+  2.35 ms to 0.23 ms, so 20,000 sections take 4.6 s instead of 47 s. The equations run on
+  plain floats and a section publishes its geometry and materials converted once
+  (ADR-0005); pint stays at the boundary, where the inputs and the results are.
+- Flexural design is four times faster: 306 ms to 72 ms, from the reinforcement search no
+  longer building a `Quantity` per candidate.
+
+### Fixed
+
+- The report tables no longer write to the section they describe.
+
 
 ### Removed
 
@@ -222,7 +281,8 @@ First public release on PyPI: rectangular concrete beam check and design for fle
 shear under ACI 318-19 and CIRSOC 201-25, unit aware calculations, results as pandas
 DataFrames, and Word calculation reports.
 
-[Unreleased]: https://github.com/mihdicaballero/mento/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/mihdicaballero/mento/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/mihdicaballero/mento/compare/v0.5.2...v1.0.0
 [0.5.2]: https://github.com/mihdicaballero/mento/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/mihdicaballero/mento/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/mihdicaballero/mento/compare/v0.4.1...v0.5.0
