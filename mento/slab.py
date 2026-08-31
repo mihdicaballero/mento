@@ -1,10 +1,11 @@
 from __future__ import annotations
-from typing import Any, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING, cast
 from dataclasses import dataclass
 import math
 import numpy as np
 
 from mento.beam import RectangularBeam
+from mento.codes.registry import design_code
 from mento.units import m, mm, cm, inch
 
 if TYPE_CHECKING:
@@ -136,6 +137,17 @@ class OneWaySlab(RectangularBeam):
         """A bar diameter of zero, in the length unit of this slab."""
         return 0 * mm if self.concrete.unit_system == "metric" else 0 * inch
 
+    def _max_bar_spacing(self) -> Quantity | None:
+        """The largest spacing the design code allows between the flexural bars.
+
+        ACI 318-19 7.7.2.3 and EN 1992-1-1 9.3.1.1(3) both cap it as a multiple
+        of the thickness, which is what keeps a slab from being detailed as a
+        handful of widely spaced bars that happen to add up to the area. A code
+        that states no such limit returns ``None``.
+        """
+        limit = design_code(self.concrete).max_bar_spacing_slab
+        return None if limit is None else cast("Quantity", limit(self))
+
     def _spacing_for_bars(self, n: int) -> Quantity:
         """The spacing that puts ``n`` bars across the strip, as it would be drawn.
 
@@ -144,7 +156,9 @@ class OneWaySlab(RectangularBeam):
         is what usually keeps the layout the search chose -- the count comes
         back as ``ceil(width / s)``, so a slightly wider spacing still asks for
         the same ``n`` bars, while a narrower one would silently add one -- but
-        it is checked rather than assumed, because it does not always hold.
+        it is checked rather than assumed, because it does not always hold. The
+        result is then capped at what the code allows between the bars of a
+        slab, which only ever asks for more of them.
         """
         if n <= 0:
             return 0 * cm
@@ -159,6 +173,13 @@ class OneWaySlab(RectangularBeam):
             # with less steel than it needs. (The floor is only ever zero at a
             # spacing below one centimetre, where the bars would already overlap.)
             spacing = max(math.floor(exact), 1) * unit
+        limit = self._max_bar_spacing()
+        if limit is not None:
+            # The area the search asked for is not the only thing the layout has
+            # to satisfy: bars far enough apart leave the slab between them
+            # unreinforced whatever they add up to. Capping the spacing only
+            # ever adds bars, so the area is still covered.
+            spacing = min(spacing, math.floor(limit.to(unit).magnitude) * unit)
         return spacing
 
     def _layer_from_design(self, design: Any, first: int, second: int) -> tuple[Quantity, Quantity]:

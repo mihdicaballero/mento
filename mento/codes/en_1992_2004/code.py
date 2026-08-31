@@ -13,7 +13,7 @@ from mento.codes.EN_1992_2004_beam import (
 )
 from mento.codes.registry import DesignCode, register
 from mento.material import Concrete_EN_1992_2004
-from mento.units import cm, kN, kNm, MPa
+from mento.units import cm, kN, kNm, mm, MPa
 
 if TYPE_CHECKING:
     from mento.beam import RectangularBeam
@@ -144,6 +144,18 @@ def _longitudinal_rebar(rebar: "Rebar", A_s_req: Any, A_s_max: Any, mech_cover: 
     return rebar.longitudinal_rebar_EN_1992_2004(A_s_req, A_s_max, mech_cover)
 
 
+def _max_bar_spacing_slab(section: "RectangularBeam") -> Any:
+    """EN 1992-1-1 9.3.1.1(3): 3h, and no more than 400 mm.
+
+    The general provision for the principal reinforcement of a slab. The tighter
+    one it states for areas of concentrated load or of maximum moment (2h, and
+    no more than 250 mm) is not applied here: a section is checked against a set
+    of forces, with no position along the span for mento to tell that it is in
+    one of those areas.
+    """
+    return min(3 * section.height, 400 * mm)
+
+
 EN_1992_2004 = register(
     DesignCode(
         title="EN 1992-2004",
@@ -166,5 +178,6 @@ EN_1992_2004 = register(
         capacity_columns=_capacity_columns,
         shear_symbols=_SHEAR_SYMBOLS,
         summary_drop_columns=_SUMMARY_DROP_COLUMNS,
+        max_bar_spacing_slab=_max_bar_spacing_slab,
     )
 )

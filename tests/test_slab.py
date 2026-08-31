@@ -3,6 +3,7 @@ import math
 import pytest
 from pint import Quantity
 
+from mento.beam import RectangularBeam
 from mento.node import Node
 from mento.slab import OneWaySlab, _bars_at_spacing
 from mento.material import Concrete_ACI_318_19, SteelBar, Concrete_EN_1992_2004
@@ -692,6 +693,97 @@ def test_a_hogging_slab_is_designed_on_its_top_face_by_a_spacing() -> None:
     assert top.layers[0].s is not None
     assert _bars_at_spacing(slab._s_b1_t, slab.width) == top.layers[0].n
     assert top.A_s >= slab.flexure_design.top.A_s_req
+
+
+@pytest.mark.parametrize(
+    ("concrete", "height", "expected_cm"),
+    [
+        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), 12 * cm, 36),  # 3h governs
+        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), 25 * cm, 45),  # 450 mm governs
+        (Concrete_EN_1992_2004(name="C25", f_c=25 * MPa), 12 * cm, 36),  # 3h governs
+        (Concrete_EN_1992_2004(name="C25", f_c=25 * MPa), 25 * cm, 40),  # 400 mm governs
+    ],
+    ids=["ACI_3h", "ACI_450mm", "EN_3h", "EN_400mm"],
+)
+def test_the_code_caps_how_far_apart_the_bars_of_a_slab_may_sit(
+    concrete: Concrete_ACI_318_19 | Concrete_EN_1992_2004, height: Quantity, expected_cm: float
+) -> None:
+    """ACI 318-19 7.7.2.3 is 3h or 450 mm; EN 1992-1-1 9.3.1.1(3) is 3h or 400 mm."""
+    slab = OneWaySlab(
+        label="Slab s_max",
+        concrete=concrete,
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=height,
+        c_c=20 * mm,
+    )
+
+    assert slab._max_bar_spacing().to("cm").magnitude == pytest.approx(expected_cm)
+
+
+def test_a_design_is_never_spaced_beyond_the_code_maximum() -> None:
+    """Area alone is not a layout.
+
+    A light strip needs so little steel that the search covers it with the two
+    bars it starts from, which on a metre of slab is a bar every half metre:
+    the area is there and most of the slab is not reinforced. The spacing is
+    capped at what the code allows, which only ever adds bars.
+    """
+    slab = OneWaySlab(
+        label="Slab lightly loaded",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=12 * cm,
+        c_c=20 * mm,
+    )
+    Node(section=slab, forces=Forces(label="C1", M_y=2 * kNm)).design()
+
+    s_max = slab._max_bar_spacing()
+    assert s_max.to("cm").magnitude == 36  # 3h on a 12 cm slab
+    assert slab._s_b1_b <= s_max
+    assert slab.reinforcement.bottom.layers[0].n == _bars_at_spacing(s_max, slab.width)
+    assert slab.reinforcement.bottom.A_s >= slab.flexure_design.bottom.A_s_req
+
+
+def test_a_slab_spaced_beyond_the_code_maximum_fails_the_check() -> None:
+    """The bars add up to the area and the slab between them is still bare."""
+    slab = OneWaySlab(
+        label="Slab too spread out",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=25 * cm,
+        c_c=25 * mm,
+    )
+    slab.set_slab_longitudinal_rebar_bot(d_b1=20 * mm, s_b1=60 * cm)
+
+    Node(section=slab, forces=Forces(label="C1", M_y=20 * kNm)).check_flexure()
+
+    rows = slab._data_min_max_flexure
+    assert rows["Check"][3] == "Bar spacing bottom"
+    assert rows["Value"][3] == pytest.approx(600)
+    assert rows["Max."][3] == pytest.approx(450)
+    assert rows["Ok?"][3] == "❌"
+    assert slab._all_flexure_checks_passed is False
+
+
+def test_a_beam_still_reports_the_clear_distance_between_its_bars() -> None:
+    """The max-spacing row is the slab's; a beam has no such limit to report."""
+    beam = RectangularBeam(
+        label="B1",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=20 * cm,
+        height=50 * cm,
+        c_c=25 * mm,
+    )
+    Node(section=beam, forces=Forces(label="C1", M_y=100 * kNm)).design()
+
+    rows = beam._data_min_max_flexure
+    assert rows["Check"][3] == "Minimum spacing bottom"
+    assert rows["Value"][3] == pytest.approx(beam._available_s_bot.to("mm").magnitude, rel=1e-9)
+    assert rows["Max."][3] == ""
 
 
 def test_the_flexure_report_of_a_slab_names_the_spacing() -> None:

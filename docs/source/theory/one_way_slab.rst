@@ -56,6 +56,47 @@ from there the section behaves exactly as a beam:
 
 Positions 1 and 3 correspond to the first and second layer respectively.
 
+A design is written back as a spacing
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The bar selection is the beam's, and it answers with groups of bars per layer. A
+design applied to a slab is translated back into the parameterisation above: the bars
+of a layer are spread over the design width, and the spacing is rounded to the whole
+centimetre (inch, in imperial) so that it is one that can be detailed. The rounding is
+checked against the count it produces, so it never leaves the strip with fewer bars —
+and so less steel — than the search selected.
+
+Maximum bar spacing
+^^^^^^^^^^^^^^^^^^^
+
+Area alone is not a layout: bars far enough apart leave the slab between them
+unreinforced whatever they add up to. Both codes cap the centre-to-centre spacing of
+the flexural reinforcement, and the design applies the cap, which only ever adds bars:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 35 40
+
+   * - Code
+     - Limit
+     - Clause
+   * - ACI 318-19
+     - :math:`\min(3h,\ 450\ \text{mm})` — 18 in. in imperial
+     - §7.7.2.3
+   * - EN 1992-1-1
+     - :math:`\min(3h,\ 400\ \text{mm})`
+     - §9.3.1.1(3), principal reinforcement
+
+The check reports it as well: the row that gives a beam the clear distance between its
+bars gives a slab the spacing it is detailed at, with this maximum beside the minimum.
+
+.. note::
+
+   EN §9.3.1.1(3) tightens the limit to :math:`\min(2h,\ 250\ \text{mm})` in areas
+   with concentrated loads or of maximum moment. That provision is **not** applied: a
+   section is checked against a set of forces, with no position along the span from
+   which mento could tell that it is in one of those areas.
+
 Detailing settings
 ^^^^^^^^^^^^^^^^^^
 
@@ -141,6 +182,14 @@ Validation
    * - Spacing to bar count
      - ``test_longitudinal_rebar_spacing_updates_counts``
      - Internal consistency
+   * - Design written back as a spacing
+     - ``test_a_designed_slab_is_detailed_by_a_spacing_not_by_a_bar_count``,
+       ``test_a_spacing_is_never_rounded_into_fewer_bars_than_the_design_chose``
+     - Internal consistency
+   * - Maximum bar spacing
+     - ``test_the_code_caps_how_far_apart_the_bars_of_a_slab_may_sit``,
+       ``test_a_design_is_never_spaced_beyond_the_code_maximum``
+     - ACI 318-19 §7.7.2.3, EN 1992-1-1 §9.3.1.1(3)
    * - Slab mode defaults
      - ``test_slab_initialization_sets_slab_mode_and_defaults``
      - Detailing settings above

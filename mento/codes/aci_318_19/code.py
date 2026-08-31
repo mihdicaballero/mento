@@ -93,6 +93,16 @@ def _min_stirrup_diameter(concrete: Any) -> Any:
     return 10 * mm if concrete.unit_system == "metric" else 3 / 8 * inch
 
 
+def _max_bar_spacing_slab(section: "RectangularBeam") -> Any:
+    """ACI 318-19 7.7.2.3: the lesser of 3h and 450 mm (18 in.).
+
+    The limit is on the flexural reinforcement of a one-way slab, so it is the
+    spacing of the layer nearest the face that has to meet it.
+    """
+    limit = 450 * mm if section.concrete.unit_system == "metric" else 18 * inch
+    return min(3 * section.height, limit)
+
+
 def _min_stirrup_diameter_cirsoc(concrete: Any) -> Any:
     """CIRSOC's catalogue starts one size below ACI's."""
     return 6 * mm
@@ -188,6 +198,7 @@ _COMMON = dict(
     capacity_columns=_capacity_columns,
     shear_symbols=_SHEAR_SYMBOLS,
     summary_drop_columns=_SUMMARY_DROP_COLUMNS,
+    max_bar_spacing_slab=_max_bar_spacing_slab,
 )
 
 ACI_318_19 = register(

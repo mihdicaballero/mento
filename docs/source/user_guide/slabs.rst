@@ -123,7 +123,11 @@ per face. Read it through ``reinforcement`` (what the slab carries, at any time)
     bottom.A_s.to("cm**2")      # 6.79 cm² placed
 
 The spacing is rounded to the whole centimetre (inch, in imperial), so it is one that can
-be detailed, and never to fewer bars than the design called for. See
+be detailed, and never to fewer bars than the design called for. It is also capped at the
+maximum the design code allows between the bars of a slab — ``min(3h, 450 mm)`` under
+ACI 318-19 §7.7.2.3, ``min(3h, 400 mm)`` under EN 1992-1-1 §9.3.1.1(3) — so a lightly
+loaded strip is not detailed as a few widely spaced bars that merely add up to the area.
+A check reports that limit too, next to the spacing, in the flexure results table. See
 :ref:`user_guide/design_results` for the rest of that view.
 
 6. Jupyter Notebook Results
