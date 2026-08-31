@@ -536,10 +536,7 @@ class RectangularBeam(RectangularSection):
             self._bot_rebar_centroid = 0 * mm
         else:
             self._bot_rebar_centroid = (
-                area_1_b * y1_b
-                + area_2_b * y2_b
-                + area_3_b * y3_b
-                + area_4_b * y4_b
+                area_1_b * y1_b + area_2_b * y2_b + area_3_b * y3_b + area_4_b * y4_b
             ) / total_area_b
         # TOP BARS CENTROID
         # Calculate the vertical positions of the bar layers
@@ -560,10 +557,7 @@ class RectangularBeam(RectangularSection):
             self._top_rebar_centroid = 0 * mm
         else:
             self._top_rebar_centroid = (
-                area_1_t * y1_t
-                + area_2_t * y2_t
-                + area_3_t * y3_t
-                + area_4_t * y4_t
+                area_1_t * y1_t + area_2_t * y2_t + area_3_t * y3_t + area_4_t * y4_t
             ) / total_area_t
 
     def _update_longitudinal_rebar_attributes(self) -> None:

@@ -3571,6 +3571,7 @@ def test_clearing_top_rebar_resets_centroid(
     assert beam._A_s_top.to("mm**2").magnitude == pytest.approx(0)
     assert beam._top_rebar_centroid.to("mm").magnitude == pytest.approx(0)
 
+
 def test_longitudinal_rebar_area_ignores_none_diameters() -> None:
     """Diameters forced to None (not through the setters) count as zero area."""
     beam = build_metric_beam()
