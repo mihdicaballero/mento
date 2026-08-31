@@ -3542,6 +3542,35 @@ def test_clear_top_longitudinal_imperial(beam_example_imperial: RectangularBeam)
     assert beam_example_imperial.reinforcement.top.n_bars == 0
 
 
+def test_clearing_bottom_rebar_resets_centroid(
+    beam_example_EN_1992_2004_01: RectangularBeam,
+) -> None:
+    """Clearing the bottom reinforcement must also clear its centroid."""
+    beam = beam_example_EN_1992_2004_01
+
+    beam.set_longitudinal_rebar_bot(n1=4, d_b1=20 * mm)
+    assert beam._bot_rebar_centroid.to("mm").magnitude > 0
+
+    beam.set_longitudinal_rebar_bot(n1=0, d_b1=0 * mm)
+
+    assert beam._A_s_bot.to("mm**2").magnitude == pytest.approx(0)
+    assert beam._bot_rebar_centroid.to("mm").magnitude == pytest.approx(0)
+
+
+def test_clearing_top_rebar_resets_centroid(
+    beam_example_EN_1992_2004_01: RectangularBeam,
+) -> None:
+    """Clearing the top reinforcement must also clear its centroid."""
+    beam = beam_example_EN_1992_2004_01
+
+    beam.set_longitudinal_rebar_top(n1=4, d_b1=20 * mm)
+    assert beam._top_rebar_centroid.to("mm").magnitude > 0
+
+    beam.set_longitudinal_rebar_top(n1=0, d_b1=0 * mm)
+
+    assert beam._A_s_top.to("mm**2").magnitude == pytest.approx(0)
+    assert beam._top_rebar_centroid.to("mm").magnitude == pytest.approx(0)
+
 def test_longitudinal_rebar_area_ignores_none_diameters() -> None:
     """Diameters forced to None (not through the setters) count as zero area."""
     beam = build_metric_beam()

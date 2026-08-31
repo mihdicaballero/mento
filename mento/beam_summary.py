@@ -71,7 +71,7 @@ class BeamSummary:
         # print("Processed Data: Ok")
 
     def validate_units(self, units_row: List) -> None:
-        valid_units = {"m", "mm", "cm", "inch", "ft", "kN", "kNm", ""}
+        valid_units = {"m", "mm", "cm", "in", "inch", "ft", "kN", "kNm", "MPa", ""}
         for unit_str in units_row:
             if unit_str and unit_str not in valid_units:
                 raise ValueError(f"Invalid unit '{unit_str}' detected. Allowed units: {valid_units}")
@@ -84,6 +84,7 @@ class BeamSummary:
             "cm": cm,
             "m": m,
             "in": inch,
+            "inch": inch,
             "ft": ft,
             "kN": kN,
             "kNm": kNm,

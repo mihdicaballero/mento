@@ -149,7 +149,7 @@ class Forces:
         """
         if by not in ["N_x", "V_z", "M_y", "M_x"]:
             raise ValueError("Comparison attribute must be one of 'N_x', 'V_z', 'M_y', or 'M_x'")
-        return getattr(self, by).magnitude > getattr(other, by).magnitude
+        return getattr(self, by) > getattr(other, by)
 
     def __str__(self) -> str:
         base = f"Force ID: {self.id}, Label: {self.label}, N_x: {self.N_x}, V_z: {self.V_z}, M_y: {self.M_y}"
