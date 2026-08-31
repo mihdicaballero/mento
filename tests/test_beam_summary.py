@@ -15,7 +15,7 @@ from docx.oxml.ns import qn
 from docx.shared import Cm, Emu
 from pathlib import Path
 
-from mento import MPa, mm, cm, kN, kNm, m
+from mento import MPa, mm, cm, kN, kNm, m, inch
 from mento.beam_summary import BeamSummary
 from mento.reports.summaries import (
     BEAM_DATA_COLUMNS,
@@ -174,7 +174,7 @@ def test_beam_summary_with_en_1992_concrete(
 
 def test_validate_units_valid(beam_summary: BeamSummary) -> None:
     """Test validation with all valid units."""
-    valid_units = ["m", "mm", "cm", "inch", "ft", "kN", "kNm", ""]
+    valid_units = ["m", "mm", "cm", "in", "inch", "ft", "kN", "kNm", "MPa", ""]
     # Should not raise any exception
     beam_summary.validate_units(valid_units)
 
@@ -203,6 +203,8 @@ def test_get_unit_variable_valid_units(beam_summary: BeamSummary) -> None:
     assert beam_summary.get_unit_variable("mm") == mm
     assert beam_summary.get_unit_variable("cm") == cm
     assert beam_summary.get_unit_variable("m") == m
+    assert beam_summary.get_unit_variable("in") == inch
+    assert beam_summary.get_unit_variable("inch") == inch
     assert beam_summary.get_unit_variable("kN") == kN
     assert beam_summary.get_unit_variable("kNm") == kNm
     assert beam_summary.get_unit_variable("MPa") == MPa

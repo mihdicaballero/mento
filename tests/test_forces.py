@@ -217,11 +217,13 @@ def test_compare_to_M_y(custom_metric_forces: Forces) -> None:
     assert custom_metric_forces.compare_to(other_forces_larger, by="M_y") is False
 
 
-def test_compare_to_different_units(custom_metric_forces: Forces) -> None:
-    """Test compare_to with Forces objects having different internal units."""
-    # custom_metric_forces.V_z is 50 kN
-    other_forces_imperial = Forces(V_z=10 * kip)  # 10 kip = 44.48 kN
-    assert custom_metric_forces.compare_to(other_forces_imperial, by="V_z") is True  # 50 kN > 44.48 kN
+def test_compare_to_different_unit_systems() -> None:
+    """Comparison must account for different force units."""
+    metric_force = Forces(V_z=20 * kN, unit_system="metric")
+    imperial_force = Forces(V_z=5 * kip, unit_system="imperial")
+
+    assert metric_force.compare_to(imperial_force, by="V_z") is False
+    assert imperial_force.compare_to(metric_force, by="V_z") is True
 
 
 def test_compare_to_invalid_attribute(custom_metric_forces: Forces) -> None:
