@@ -1,6 +1,7 @@
 import math
 
 import pytest
+from pint import Quantity
 
 from mento.node import Node
 from mento.slab import OneWaySlab
@@ -302,3 +303,71 @@ def test_flexure_check_with_no_bottom_reinforcement_floors_phi_Mn() -> None:
     assert slab.flexure_design.bottom.DCR == 0
     assert results.iloc[1]["Position"] == "Bottom"
     assert results.iloc[1]["As"] == 0
+
+
+##########################################################
+# SHEAR DESIGN: A SLAB MAY BE BUILT WITHOUT STIRRUPS
+##########################################################
+
+
+def _designed_slab(concrete: Concrete_ACI_318_19 | Concrete_EN_1992_2004, V_z: Quantity) -> OneWaySlab:
+    """A 100x20 slab strip designed for one combination, bending plus shear."""
+    slab = OneWaySlab(
+        label="Slab shear",
+        concrete=concrete,
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=20 * cm,
+        c_c=20 * mm,
+    )
+    Node(section=slab, forces=Forces(label="C1", M_y=30 * kNm, V_z=V_z)).design()
+    return slab
+
+
+@pytest.mark.parametrize(
+    "concrete",
+    [
+        Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        Concrete_EN_1992_2004(name="C25", f_c=25 * MPa),
+    ],
+    ids=["ACI_318_19", "EN_1992_2004"],
+)
+def test_slab_shear_design_places_no_stirrups_when_concrete_carries_the_shear(
+    concrete: Concrete_ACI_318_19 | Concrete_EN_1992_2004,
+) -> None:
+    """ACI 318-19 7.6.3.1 and EN 1992-1-1 6.2.1(4) both let a slab go without.
+
+    Designing for a moment and no shear used to hand the slab a full stirrup
+    cage anyway, because the beam minimum was applied to it: A_v_min came out
+    positive, the stirrup designer was always run, and the result was a
+    reinforcement the demand never asked for and the code does not require.
+    """
+    slab = _designed_slab(concrete, V_z=0 * kN)
+
+    transverse = slab.reinforcement.transverse
+    assert transverse.n_stirrups == 0
+    assert transverse.A_v.to("cm**2/m").magnitude == 0
+    assert slab.shear_design.A_v_req.to("cm**2/m").magnitude == 0
+    assert slab.shear_design.A_v_min.to("cm**2/m").magnitude == 0
+    # The concrete alone still resists, so the section checks out.
+    assert slab.shear_design.DCR == 0
+
+
+@pytest.mark.parametrize(
+    "concrete",
+    [
+        Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        Concrete_EN_1992_2004(name="C25", f_c=25 * MPa),
+    ],
+    ids=["ACI_318_19", "EN_1992_2004"],
+)
+def test_slab_shear_design_places_stirrups_once_the_demand_exceeds_the_concrete(
+    concrete: Concrete_ACI_318_19 | Concrete_EN_1992_2004,
+) -> None:
+    """Waiving the minimum is not waiving the design: above V_c stirrups appear."""
+    slab = _designed_slab(concrete, V_z=200 * kN)
+
+    transverse = slab.reinforcement.transverse
+    assert transverse.n_stirrups > 0
+    assert transverse.A_v >= slab.shear_design.A_v_req
+    assert slab.shear_design.DCR <= 1

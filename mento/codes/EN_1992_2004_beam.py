@@ -64,11 +64,17 @@ def _initialize_shear_variables_EN_1992_2004(self: "RectangularBeam", st: ENShea
 
         # Minimum shear reinforcement calculation. Eq. (9.5N) gives the ratio;
         # §9.2.2(5) defines it as A_sw/(s*b_w*sin(alpha)), hence the geometry here.
-        rho_min = shear_eq.min_shear_reinforcement_ratio(
-            sec.f_c,
-            self._f_ywk.to(MPa).magnitude,
-        )
-        st.A_v_min = rho_min * sec.width * math.sin(self._alpha)
+        # §6.2.1(4) waives that minimum in members where the load can redistribute
+        # transversally -- slabs are the example the clause names -- so there it is
+        # zero and V_Rd,c alone decides whether stirrups are needed at all.
+        if self._stirrups_optional:
+            st.A_v_min = 0.0
+        else:
+            rho_min = shear_eq.min_shear_reinforcement_ratio(
+                sec.f_c,
+                self._f_ywk.to(MPa).magnitude,
+            )
+            st.A_v_min = rho_min * sec.width * math.sin(self._alpha)
 
         # Consider bottom or top tension reinforcement
         st.A_s_tension = sec.A_s_bot if force._M_y >= 0 * kNm else sec.A_s_top
@@ -241,6 +247,21 @@ def _design_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> None:
         st.f_cd_shear = self._f_cd_shear.to(MPa).magnitude
         st.f_cd = self._f_cd.to(MPa).magnitude
         _initialize_shear_variables_EN_1992_2004(self, st, force)
+
+        if self._stirrups_optional:
+            # §6.2.2(1): a member that needs no minimum stirrups needs none at all
+            # while V_Ed stays within V_Rd,c. Sizing from the truss model regardless
+            # would hand a slab a cage for a shear its concrete already carries.
+            st.V_Rd_c = _shear_without_rebar_EN_1992_2004(self, st)
+            if st.V_Ed_2 <= st.V_Rd_c:
+                st.A_v_req = 0.0
+                st.V_s_req = 0.0
+                st.V_Rd = st.V_Rd_c
+                st.V_Rd_max = st.V_Rd
+                st.max_shear_ok = st.V_Ed_1 <= st.V_Rd_max
+                apply_en_shear_state(self, st)
+                return None
+
         # Calculate maximum shear strength
         _calculate_max_shear_strength_EN_1992_2004(self, st)
         # Calculate required shear reinforcement area

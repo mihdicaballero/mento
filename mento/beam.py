@@ -36,8 +36,91 @@ from mento.design_results import (
 )
 
 
+class _DesignCodeAttributes:
+    """Attributes the design codes write onto a section, declared for type checkers.
+
+    Kept off ``RectangularBeam`` itself: that class is a dataclass, so an
+    annotation in its body -- even one guarded by ``TYPE_CHECKING`` -- counts as a
+    field to a type checker, and every private name below showed up in the editor
+    as a required constructor argument. A plain base class contributes no fields,
+    so the synthesized signature stays the handful the caller actually passes.
+    """
+
+    # ------------------------------------------------------------------
+    # The ADR-0001 compatibility layer: declared, never assigned here.
+    #
+    # A check no longer writes its results to the section. These exist because
+    # the report tables still read them off the element, and each design code
+    # zeroes its own set through ``DesignCode.initialize_attributes``, so a
+    # table asked for before any check has run finds a number instead of an
+    # AttributeError.
+    #
+    # Declared under TYPE_CHECKING so the type checker knows they exist and
+    # what they hold, without adding anything at runtime.
+    #
+    # They leave with the compatibility layer. A new design code should not add
+    # to this list -- its report tables should read the check state instead.
+    # ------------------------------------------------------------------
+    if TYPE_CHECKING:
+        # ACI 318-19 and CIRSOC 201-25
+        _phi_V_n: Quantity
+        _phi_V_s: Quantity
+        _phi_V_c: Quantity
+        _phi_V_max: Quantity
+        _V_u: Quantity
+        _M_u: Quantity
+        _M_u_bot: Quantity
+        _M_u_top: Quantity
+        _N_u: Quantity
+        _A_cv: Quantity
+        _k_c_min: Quantity
+        _sigma_Nu: Quantity
+        V_c: Quantity
+        _rho_w: Quantity
+        f_yt: Quantity
+        _phi_M_n_bot: Quantity
+        _phi_M_n_top: Quantity
+        _d_b_max_bot: Quantity
+        _d_b_max_top: Quantity
+        _lambda_s: float
+        _max_shear_ok: bool
+        _A_s_bool_bot: bool
+        _A_s_bool_top: bool
+        # EN 1992-2004
+        _V_Ed_1: Quantity
+        _V_Ed_2: Quantity
+        _N_Ed: Quantity
+        _M_Ed: Quantity
+        _M_Ed_bot: Quantity
+        _M_Ed_top: Quantity
+        _M_Rd_bot: Quantity
+        _M_Rd_top: Quantity
+        _sigma_cd: Quantity
+        _sigma_cp: Quantity
+        _V_Rd_c: Quantity
+        _V_Rd_s: Quantity
+        _V_Rd_max: Quantity
+        _V_Rd: Quantity
+        _f_ywk: Quantity
+        _f_ywd: Quantity
+        _f_cd: Quantity
+        _f_cd_shear: Quantity
+        _A_p: Quantity
+        _z: Quantity
+        _k_value: float
+        _theta: float
+        _cot_theta: float
+        # Both
+        _A_s_min_bot: Quantity
+        _A_s_min_top: Quantity
+        _A_s_max_bot: Quantity
+        _A_s_max_top: Quantity
+        flexure_design_results_bot: Any
+        flexure_design_results_top: Any
+
+
 @dataclass
-class RectangularBeam(RectangularSection):
+class RectangularBeam(RectangularSection, _DesignCodeAttributes):
     """
     Represents a reinforced concrete rectangular beam section with methods for design, checking,
     and visualization of longitudinal and transverse reinforcement according to various design codes.
@@ -177,79 +260,6 @@ class RectangularBeam(RectangularSection):
         self._flexure_capacity_bot: Dict = {}
         self._flexure_capacity_top: Dict = {}
         self._flexure_all_checks: bool = False
-
-    # ------------------------------------------------------------------
-    # The ADR-0001 compatibility layer: declared, never assigned here.
-    #
-    # A check no longer writes its results to the section. These exist because
-    # the report tables still read them off the element, and each design code
-    # zeroes its own set through ``DesignCode.initialize_attributes``, so a
-    # table asked for before any check has run finds a number instead of an
-    # AttributeError.
-    #
-    # Declared under TYPE_CHECKING for two reasons: the type checker needs to
-    # know they exist and what they hold, and ``RectangularBeam`` is a
-    # dataclass, so a plain annotation here would become a constructor field.
-    #
-    # They leave with the compatibility layer. A new design code should not add
-    # to this list -- its report tables should read the check state instead.
-    # ------------------------------------------------------------------
-    if TYPE_CHECKING:
-        # ACI 318-19 and CIRSOC 201-25
-        _phi_V_n: Quantity
-        _phi_V_s: Quantity
-        _phi_V_c: Quantity
-        _phi_V_max: Quantity
-        _V_u: Quantity
-        _M_u: Quantity
-        _M_u_bot: Quantity
-        _M_u_top: Quantity
-        _N_u: Quantity
-        _A_cv: Quantity
-        _k_c_min: Quantity
-        _sigma_Nu: Quantity
-        V_c: Quantity
-        _rho_w: Quantity
-        f_yt: Quantity
-        _phi_M_n_bot: Quantity
-        _phi_M_n_top: Quantity
-        _d_b_max_bot: Quantity
-        _d_b_max_top: Quantity
-        _lambda_s: float
-        _max_shear_ok: bool
-        _A_s_bool_bot: bool
-        _A_s_bool_top: bool
-        # EN 1992-2004
-        _V_Ed_1: Quantity
-        _V_Ed_2: Quantity
-        _N_Ed: Quantity
-        _M_Ed: Quantity
-        _M_Ed_bot: Quantity
-        _M_Ed_top: Quantity
-        _M_Rd_bot: Quantity
-        _M_Rd_top: Quantity
-        _sigma_cd: Quantity
-        _sigma_cp: Quantity
-        _V_Rd_c: Quantity
-        _V_Rd_s: Quantity
-        _V_Rd_max: Quantity
-        _V_Rd: Quantity
-        _f_ywk: Quantity
-        _f_ywd: Quantity
-        _f_cd: Quantity
-        _f_cd_shear: Quantity
-        _A_p: Quantity
-        _z: Quantity
-        _k_value: float
-        _theta: float
-        _cot_theta: float
-        # Both
-        _A_s_min_bot: Quantity
-        _A_s_min_top: Quantity
-        _A_s_max_bot: Quantity
-        _A_s_max_top: Quantity
-        flexure_design_results_bot: Any
-        flexure_design_results_top: Any
 
     def _initialize_code_attributes(self) -> None:
         design_code(self.concrete).initialize_attributes(self)
@@ -767,10 +777,55 @@ class RectangularBeam(RectangularSection):
     # CHECK & DESIGN SHEAR
     ##########################################################
 
+    def _clear_transverse_rebar_design(self) -> None:
+        """Record a shear design that places no stirrups.
+
+        Mirrors what the stirrup designer leaves behind for a real cage, so the
+        report tables and ``BeamSummary`` read the same keys either way -- they
+        just read zeros.
+        """
+        length_unit = "cm" if self.concrete.unit_system == "metric" else "inch"
+        area_unit = "cm**2/m" if self.concrete.unit_system == "metric" else "inch**2/ft"
+        empty = {
+            "n_stir": 0,
+            "d_b": (0 * mm).to(length_unit),
+            "s_l": (0 * mm).to(length_unit),
+            "s_w": (0 * mm).to(length_unit),
+            "A_v": (0 * cm**2 / m).to(area_unit),
+            "s_max_l": (0 * mm).to(length_unit),
+            "s_max_w": (0 * mm).to(length_unit),
+        }
+        self.shear_design_results = pd.DataFrame([empty])
+        self._best_rebar_design = self.shear_design_results.iloc[0]
+        self._stirrup_s_w = empty["s_w"]
+        self._stirrup_s_max_l = empty["s_max_l"]
+        self._stirrup_s_max_w = empty["s_max_w"]
+        self.set_transverse_rebar(0, 0 * mm, 0 * cm)
+
+    @property
+    def _stirrups_optional(self) -> bool:
+        """Whether this element may be built with no transverse reinforcement at all.
+
+        A beam never may. Stirrups run the whole length of a beam whatever the
+        shear diagram says, so designing one always places at least the minimum
+        area -- ACI 318-19 Table 9.6.3.4, EN 1992-1-1 Eq. (9.5N) -- even where
+        the concrete alone would carry Vu. ACI 9.6.3.1 waives that minimum below
+        a threshold and the check reports the waiver, but the design does not
+        follow it down.
+
+        A one-way slab is the exception both codes name: ACI 318-19 7.6.3.1 only
+        calls for shear reinforcement where Vu exceeds phi*Vc, and EN 1992-1-1
+        6.2.1(4) drops the minimum in members where the load can redistribute
+        transversally. So a slab the concrete alone carries is designed with no
+        stirrups at all, rather than given a cage it does not need.
+        """
+        return self.mode == "slab"
+
     # Factory method to select the shear design method
     def design_shear(self, forces: list[Forces]) -> DataFrame:
         # Track the maximum A_v_req to identify the limiting case
         max_A_v_req = 0 * cm**2 / m
+        max_V_s_req = 0 * kN
 
         # Step 1: Identify the worst-case force
         for force in forces:
@@ -782,6 +837,13 @@ class RectangularBeam(RectangularSection):
                 max_V_s_req = self._V_s_req
 
         # Step 2: Perform rebar design for the worst-case force
+        if self._stirrups_optional and max_A_v_req <= 0 * cm**2 / m:
+            # No combination asks for shear reinforcement and the code does not
+            # impose a minimum here, so the section is built without stirrups.
+            self._clear_transverse_rebar_design()
+            self._update_longitudinal_rebar_attributes()
+            return self.check_shear(forces)
+
         section_rebar = Rebar(self)
         self.shear_design_results = section_rebar.transverse_rebar(max_A_v_req, max_V_s_req, self._alpha)
         self._best_rebar_design = section_rebar.transverse_rebar_design
