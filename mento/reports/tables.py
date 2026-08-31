@@ -22,7 +22,7 @@ from pint import Quantity
 from mento.units import inch, kN, kNm, mm
 
 from mento.codes.registry import design_code
-from mento.design_results import GRID, transverse_layout
+from mento.design_results import GRID, format_longitudinal_rebar, transverse_layout
 
 if TYPE_CHECKING:
     from mento.beam import RectangularBeam
@@ -63,6 +63,43 @@ def _transverse_rebar_rows(
         [self._stirrup_n, diameter, s_l],
         ["", "mm", "cm"],
     )
+
+
+def _longitudinal_rebar_rows(self: "RectangularBeam", face: str) -> tuple[list[str], list[str], list[Any]]:
+    """The two rows that identify the longitudinal reinforcement of one face.
+
+    A beam is a number of bars per layer, so the bars are counted: ``n1+n2``. A
+    slab is one bar repeated at a spacing, and the count that falls out of a
+    strip is not what it is drawn with, so each of its layers reads as a
+    diameter and a spacing instead. ``face`` is ``"b"`` or ``"t"``, and there
+    are two rows either way, so every column of the table stays the same length.
+    """
+    labels = ["First layer bars", "Second layer bars"]
+    variables = []
+    values = []
+    # Only a section detailed by a spacing carries these; a beam has no such
+    # attribute and its layers keep being reported as a number of bars. The
+    # notation is chosen once for the face, so an empty second layer is still
+    # written the way the rest of the face is.
+    detailed_by_spacing = getattr(self, f"_s_b1_{face}", None) is not None
+    for first, second in ((1, 2), (3, 4)):
+        n = getattr(self, f"_n{first}_{face}")
+        d_b = getattr(self, f"_d_b{first}_{face}")
+        if not detailed_by_spacing:
+            variables.append(f"n{first}+n{second}")
+            values.append(
+                self._format_longitudinal_rebar_string(
+                    n, d_b, getattr(self, f"_n{second}_{face}"), getattr(self, f"_d_b{second}_{face}")
+                )
+            )
+            continue
+        spacing = getattr(self, f"_s_b{first}_{face}")
+        variables.append(f"Ø{first}/s{first}")
+        if n == 0 or d_b.magnitude == 0 or spacing.magnitude == 0:
+            values.append("-")
+        else:
+            values.append(format_longitudinal_rebar(n, f"{d_b:.4g~P}", f"{spacing:.4g~P}"))
+    return labels, variables, values
 
 
 def _settings(beam: RectangularBeam) -> BeamSettings:
@@ -512,10 +549,10 @@ def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
     }
     check_DCR_top = "✅" if self._DCRb_top < 1 else "❌"
     check_DCR_bot = "✅" if self._DCRb_bot < 1 else "❌"
+    long_rebar_top = _longitudinal_rebar_rows(self, "t")
     self._flexure_capacity_top = {
         "Top reinforcement check": [
-            "First layer bars",
-            "Second layer bars",
+            *long_rebar_top[0],
             "Effective height",
             "Depth of equivalent strength block ratio",
             "Minimum rebar reinforcing",
@@ -527,8 +564,7 @@ def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
             "Demand Capacity Ratio",
         ],
         "Variable": [
-            "n1+n2",
-            "n3+n4",
+            *long_rebar_top[1],
             "d",
             "c/d",
             "As,min",
@@ -540,8 +576,7 @@ def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
             "DCR",
         ],
         "Value": [
-            self._format_longitudinal_rebar_string(self._n1_t, self._d_b1_t, self._n2_t, self._d_b2_t),
-            self._format_longitudinal_rebar_string(self._n3_t, self._d_b3_t, self._n4_t, self._d_b4_t),
+            *long_rebar_top[2],
             round(self._d_top.to("cm").magnitude, 2),
             round(self._c_d_top, 4),
             round(self._A_s_min_top.to("cm**2").magnitude, 2),
@@ -566,10 +601,10 @@ def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
             check_DCR_top,
         ],
     }
+    long_rebar_bot = _longitudinal_rebar_rows(self, "b")
     self._flexure_capacity_bot = {
         "Bottom reinforcement check": [
-            "First layer bars",
-            "Second layer bars",
+            *long_rebar_bot[0],
             "Effective height",
             "Depth of equivalent strength block ratio",
             "Minimum rebar reinforcing",
@@ -581,8 +616,7 @@ def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
             "Demand Capacity Ratio",
         ],
         "Variable": [
-            "n1+n2",
-            "n3+n4",
+            *long_rebar_bot[1],
             "d",
             "c/d",
             "As,min",
@@ -594,8 +628,7 @@ def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
             "DCR",
         ],
         "Value": [
-            self._format_longitudinal_rebar_string(self._n1_b, self._d_b1_b, self._n2_b, self._d_b2_b),
-            self._format_longitudinal_rebar_string(self._n3_b, self._d_b3_b, self._n4_b, self._d_b4_b),
+            *long_rebar_bot[2],
             round(self._d_bot.to("cm").magnitude, 2),
             round(self._c_d_bot, 4),
             round(self._A_s_min_bot.to("cm**2").magnitude, 2),
@@ -934,10 +967,10 @@ def _initialize_dicts_EN_1992_2004_flexure(self: "RectangularBeam") -> None:
     }
     check_DCR_top = "✅" if self._DCRb_top < 1 else "❌"
     check_DCR_bot = "✅" if self._DCRb_bot < 1 else "❌"
+    long_rebar_top = _longitudinal_rebar_rows(self, "t")
     self._flexure_capacity_top = {
         "Top reinforcement check": [
-            "First layer bars",
-            "Second layer bars",
+            *long_rebar_top[0],
             "Effective height",
             "Depth of equivalent strength block ratio",
             "Minimum rebar reinforcing",
@@ -949,8 +982,7 @@ def _initialize_dicts_EN_1992_2004_flexure(self: "RectangularBeam") -> None:
             "Demand Capacity Ratio",
         ],
         "Variable": [
-            "n1+n2",
-            "n3+n4",
+            *long_rebar_top[1],
             "d",
             "c/d",
             "As,min",
@@ -962,8 +994,7 @@ def _initialize_dicts_EN_1992_2004_flexure(self: "RectangularBeam") -> None:
             "DCR",
         ],
         "Value": [
-            self._format_longitudinal_rebar_string(self._n1_t, self._d_b1_t, self._n2_t, self._d_b2_t),
-            self._format_longitudinal_rebar_string(self._n3_t, self._d_b3_t, self._n4_t, self._d_b4_t),
+            *long_rebar_top[2],
             round(self._d_top.to("cm").magnitude, 2),
             self._c_d_top,
             round(self._A_s_min_top.to("cm**2").magnitude, 2),
@@ -988,10 +1019,10 @@ def _initialize_dicts_EN_1992_2004_flexure(self: "RectangularBeam") -> None:
             check_DCR_top,
         ],
     }
+    long_rebar_bot = _longitudinal_rebar_rows(self, "b")
     self._flexure_capacity_bot = {
         "Bottom reinforcement check": [
-            "First layer bars",
-            "Second layer bars",
+            *long_rebar_bot[0],
             "Effective height",
             "Depth of equivalent strength block ratio",
             "Minimum rebar reinforcing",
@@ -1003,8 +1034,7 @@ def _initialize_dicts_EN_1992_2004_flexure(self: "RectangularBeam") -> None:
             "Demand Capacity Ratio",
         ],
         "Variable": [
-            "n1+n2",
-            "n3+n4",
+            *long_rebar_bot[1],
             "d",
             "c/d",
             "As,min",
@@ -1016,8 +1046,7 @@ def _initialize_dicts_EN_1992_2004_flexure(self: "RectangularBeam") -> None:
             "DCR",
         ],
         "Value": [
-            self._format_longitudinal_rebar_string(self._n1_b, self._d_b1_b, self._n2_b, self._d_b2_b),
-            self._format_longitudinal_rebar_string(self._n3_b, self._d_b3_b, self._n4_b, self._d_b4_b),
+            *long_rebar_bot[2],
             round(self._d_bot.to("cm").magnitude, 2),
             self._c_d_bot,
             round(self._A_s_min_bot.to("cm**2").magnitude, 2),

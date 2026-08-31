@@ -53,6 +53,21 @@ Each face carries its layers, in order, and only the layers that hold bars:
 A face with no reinforcement has an empty ``layers`` tuple, which is what
 ``str(flexure.top)`` reports as ``'no reinforcement'``.
 
+A slab is detailed by a spacing rather than by a bar count, so each of its layers also
+carries the spacing it was designed with, and reads as one bar repeated across the strip.
+The bars are still there to be counted when what you need is the steel actually placed:
+
+.. code-block:: python
+
+    layer = slab.flexure_design.bottom.layers[0]
+
+    layer.d_b                            # 12 mm
+    layer.s.to("cm")                     # 17 cm, None on a beam
+    layer.n                              # 6, the bars that spacing puts on the strip
+    str(layer)                           # 'Ø12 mm/17 cm'
+
+    slab.flexure_design.bottom.n_bars    # 6, every layer of the face
+
 Shear
 -----
 

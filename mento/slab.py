@@ -11,6 +11,18 @@ if TYPE_CHECKING:
     from pint import Quantity
 
 
+def _bars_at_spacing(spacing: Quantity, width: Quantity) -> int:
+    """How many bars a strip of ``width`` carries at a centre-to-centre ``spacing``.
+
+    The one place the count-from-spacing rule lives, so that a spacing chosen
+    for a given number of bars can be checked against the count it produces.
+    """
+    if spacing == 0 * mm:
+        return 0  # Default to 0 bars if spacing is zero
+    # Round up to ensure full bars (e.g., 3.2 bars → 4 bars)
+    return int(np.ceil((width.to("cm").magnitude / spacing.to("cm").magnitude)))  # Returns dimensionless count
+
+
 @dataclass
 class OneWaySlab(RectangularBeam):
     """
@@ -120,6 +132,87 @@ class OneWaySlab(RectangularBeam):
             s_trans=design["s_w"],
         )
 
+    def _zero_diameter(self) -> Quantity:
+        """A bar diameter of zero, in the length unit of this slab."""
+        return 0 * mm if self.concrete.unit_system == "metric" else 0 * inch
+
+    def _spacing_for_bars(self, n: int) -> Quantity:
+        """The spacing that puts ``n`` bars across the strip, as it would be drawn.
+
+        The exact answer is ``width / n``, which is rarely a number anyone
+        details to, so it is rounded to the whole centimetre (inch). Rounding up
+        is what usually keeps the layout the search chose -- the count comes
+        back as ``ceil(width / s)``, so a slightly wider spacing still asks for
+        the same ``n`` bars, while a narrower one would silently add one -- but
+        it is checked rather than assumed, because it does not always hold.
+        """
+        if n <= 0:
+            return 0 * cm
+        unit = cm if self.concrete.unit_system == "metric" else inch
+        exact = (self.width / n).to(unit).magnitude
+        spacing = math.ceil(exact) * unit
+        if _bars_at_spacing(spacing, self.width) < n:
+            # Rounding up costs a bar once the bars are close enough that a whole
+            # centimetre spans more than one of them -- from about eleven bars in
+            # a metre. Round down there instead: that can only ask for more bars
+            # than the design chose, never fewer, so the strip is never detailed
+            # with less steel than it needs. (The floor is only ever zero at a
+            # spacing below one centimetre, where the bars would already overlap.)
+            spacing = max(math.floor(exact), 1) * unit
+        return spacing
+
+    def _layer_from_design(self, design: Any, first: int, second: int) -> tuple[Quantity, Quantity]:
+        """The diameter and spacing of the layer a design gives as two bar groups."""
+        n_first = int(design.get(f"n_{first}", 0) or 0)
+        n_second = int(design.get(f"n_{second}", 0) or 0)
+        # A slab is searched with max_diameter_diff = 0, so a layer only ever
+        # comes back with one diameter: whichever group carries the bars.
+        d_b = design.get(f"d_b{first}") if n_first > 0 else design.get(f"d_b{second}")
+        if d_b is None or d_b.magnitude == 0:
+            return self._zero_diameter(), 0 * cm
+        return d_b, self._spacing_for_bars(n_first + n_second)
+
+    def _apply_longitudinal_design(self, design: Any, face: str) -> None:
+        """Apply a design given in bar counts to a face, as a spacing per layer.
+
+        The rebar search is the beam's -- a slab is not worth a second one --
+        and it answers with groups of bars: ``n_1`` and ``n_2`` are the layer
+        nearest the face, ``n_3`` and ``n_4`` the one behind it. A slab is not
+        detailed that way; it is a diameter repeated at a spacing. So each
+        layer is spread over the strip here, and the spacings are what the slab
+        stores. Applying the design the beam's way left the bars split across
+        two groups that are really one layer, and left the spacings -- the only
+        thing a slab is drawn with -- empty.
+        """
+        d_b1, s_b1 = self._layer_from_design(design, 1, 2)
+        d_b3, s_b3 = self._layer_from_design(design, 3, 4)
+        setattr(self, f"_d_b1_{face}", d_b1)
+        setattr(self, f"_s_b1_{face}", s_b1)
+        setattr(self, f"_d_b3_{face}", d_b3)
+        setattr(self, f"_s_b3_{face}", s_b3)
+        self._calculate_longitudinal_rebars()
+        self._update_longitudinal_rebar_attributes()
+
+    def _apply_longitudinal_design_bot(self, design: Any) -> None:
+        """See :meth:`_apply_longitudinal_design`."""
+        self._apply_longitudinal_design(design, "b")
+
+    def _apply_longitudinal_design_top(self, design: Any) -> None:
+        """See :meth:`_apply_longitudinal_design`."""
+        self._apply_longitudinal_design(design, "t")
+
+    def _clear_top_longitudinal(self) -> None:
+        """Clear the top face, its spacings included.
+
+        A beam clears a face by zeroing the bar counts. On a slab those counts
+        are derived from the spacings, so a spacing left behind would put the
+        bars back the next time any layer is recalculated.
+        """
+        self._d_b1_t, self._s_b1_t = self._zero_diameter(), 0 * cm
+        self._d_b3_t, self._s_b3_t = self._zero_diameter(), 0 * cm
+        self._calculate_longitudinal_rebars()
+        self._update_longitudinal_rebar_attributes()
+
     def set_slab_longitudinal_rebar_bot(
         self,
         d_b1: Quantity = 0 * mm,
@@ -168,17 +261,10 @@ class OneWaySlab(RectangularBeam):
     def _calculate_longitudinal_rebars(self) -> None:
         """Calculate the total rebar area for a slab, given spacing and slab width."""
 
-        # Helper function: Calculate number of bars given spacing and slab width
-        def calculate_bars(spacing: Quantity, width: Quantity) -> int:
-            if spacing == 0 * mm:
-                return 0  # Default to 0 bars if spacing is zero
-            # Round up to ensure full bars (e.g., 3.2 bars → 4 bars)
-            return int(np.ceil((width.to("cm").magnitude / spacing.to("cm").magnitude)))  # Returns dimensionless count
-
         # --- BOTTOM REBAR ---
-        self._n1_b = calculate_bars(self._s_b1_b, self.width)
-        self._n3_b = calculate_bars(self._s_b3_b, self.width)
+        self._n1_b = _bars_at_spacing(self._s_b1_b, self.width)
+        self._n3_b = _bars_at_spacing(self._s_b3_b, self.width)
 
         # --- TOP REBAR ---
-        self._n1_t = calculate_bars(self._s_b1_t, self.width)
-        self._n3_t = calculate_bars(self._s_b3_t, self.width)
+        self._n1_t = _bars_at_spacing(self._s_b1_t, self.width)
+        self._n3_t = _bars_at_spacing(self._s_b3_t, self.width)

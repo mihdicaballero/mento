@@ -31,12 +31,35 @@ class DesignNotRunError(RuntimeError):
     """Raised when results are read before a check or design has been run."""
 
 
+def format_longitudinal_rebar(n: int, d_b: str, s: Optional[str] = None) -> str:
+    """Label one layer of longitudinal bars in the notation of its element.
+
+    A beam is detailed as a number of bars of a diameter, so the count leads:
+    ``4Ø16``. A slab is one bar repeated at a spacing across the strip, and the
+    count that falls out of it says nothing about how it is drawn, so the
+    spacing takes its place: ``Ø12/17cm`` -- the same notation its grid of
+    stirrups is written in.
+
+    Takes the numbers already formatted, so each caller keeps its own precision
+    and units while the shape of the label is decided in one place.
+    """
+    if s is None:
+        return f"{n}Ø{d_b}"
+    return f"Ø{d_b}/{s}"
+
+
 @dataclass(frozen=True)
 class RebarLayer:
-    """One layer of longitudinal bars: ``n`` bars of diameter ``d_b``."""
+    """One layer of longitudinal bars: ``n`` bars of diameter ``d_b``.
+
+    ``s`` is the centre-to-centre spacing the layer was detailed with, and is
+    ``None`` on a section that is detailed by a bar count instead -- a beam.
+    The area is the same either way; what changes is how the layer reads.
+    """
 
     n: int
     d_b: Quantity
+    s: Optional[Quantity] = None
 
     @property
     def A_s(self) -> Quantity:
@@ -44,7 +67,11 @@ class RebarLayer:
         return self.n * (self.d_b**2) * math.pi / 4
 
     def __str__(self) -> str:
-        return f"{self.n}Ø{self.d_b:.4g~P}"
+        return format_longitudinal_rebar(
+            self.n,
+            f"{self.d_b:.4g~P}",
+            None if self.s is None else f"{self.s:.4g~P}",
+        )
 
 
 @dataclass(frozen=True)
@@ -352,8 +379,13 @@ def _layers(beam: RectangularBeam, face: str) -> Tuple[RebarLayer, ...]:
     for index in (1, 2, 3, 4):
         n = getattr(beam, f"_n{index}_{face}", 0)
         d_b: Optional[Quantity] = getattr(beam, f"_d_b{index}_{face}", None)
+        # Only a section detailed by a spacing carries one; a beam has no such
+        # attribute and its layers keep reading as a number of bars.
+        s: Optional[Quantity] = getattr(beam, f"_s_b{index}_{face}", None)
+        if s is not None and s.magnitude == 0:
+            s = None
         if n and d_b is not None and d_b.magnitude > 0:
-            layers.append(RebarLayer(n=int(n), d_b=d_b))
+            layers.append(RebarLayer(n=int(n), d_b=d_b, s=s))
     return tuple(layers)
 
 

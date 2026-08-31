@@ -108,6 +108,24 @@ If no reinforcement is assigned, *Mento* can design flexure and shear automatica
     node.design_flexure()
     node.design_shear()
 
+The design is written back in the slab's own terms: a diameter and a spacing per layer,
+per face. Read it through ``reinforcement`` (what the slab carries, at any time) or
+``flexure_design`` (what a check demanded of it), rather than from the private attributes:
+
+.. code-block:: python
+
+    bottom = slab.reinforcement.bottom
+
+    str(bottom)                 # 'Ø12 mm/17 cm'
+    bottom.layers[0].d_b        # 12 mm
+    bottom.layers[0].s.to("cm") # 17 cm
+    bottom.n_bars               # 6 bars across the strip
+    bottom.A_s.to("cm**2")      # 6.79 cm² placed
+
+The spacing is rounded to the whole centimetre (inch, in imperial), so it is one that can
+be detailed, and never to fewer bars than the design called for. See
+:ref:`user_guide/design_results` for the rest of that view.
+
 6. Jupyter Notebook Results
 ***************************
 
