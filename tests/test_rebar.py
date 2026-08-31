@@ -918,3 +918,32 @@ def test_slab_transverse_search_drops_a_diameter_it_cannot_place() -> None:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+def test_slab_transverse_search_with_no_required_area_opens_the_spacing_fully() -> None:
+    """Asked for nothing, the search returns the widest grid the limits allow.
+
+    Not reachable through ``design_shear``: a slab that needs no shear
+    reinforcement is designed with none and never gets here. It is reachable by
+    driving ``Rebar`` directly, which is how the rest of this module tests the
+    search, and it is the case that decides what "no area required" means --
+    the spacing limits alone, rather than a division by a zero demand.
+    """
+    slab = OneWaySlab(
+        label="slab-no-demand",
+        concrete=Concrete_ACI_318_19(name="C25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=20 * cm,
+        c_c=25 * mm,
+    )
+    slab.set_slab_longitudinal_rebar_bot(d_b1=12 * mm, s_b1=20 * cm)
+
+    combos = Rebar(slab).transverse_rebar(A_v_req=0 * cm**2 / m, V_s_req=0 * kN, alpha=math.radians(90))
+
+    assert not combos.empty
+    for _, row in combos.iterrows():
+        # Nothing required, so each diameter is placed at the loosest grid its
+        # own limits permit -- and no looser.
+        assert row["s_l"] == row["s_max_l"].to("cm").magnitude // 1 * cm
+        assert row["s_w"] == min(row["s_max_w"], 100 * cm).to("cm").magnitude // 1 * cm
