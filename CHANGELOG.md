@@ -12,6 +12,21 @@ from the release history and are summaries rather than complete lists.
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING: `BeamSummary.check()` returns the columns the report prints, and only
+  those.** It carried the section, the reinforcement, the required areas, the demands,
+  the capacities and the three DCRs; the Word report then selected a shorter set on its
+  way to the page, so a notebook and the document disagreed about what the summary is.
+  Both now show `Beam, b, h, As,top, As,bot, Av`, the governing demands, the three DCRs
+  and `Ok?` — the same shape the shear-wall summary already had, ending on the DCRs and
+  the verdict. Gone from `check(capacity_check=False)`: `cc`, `As,req,top`, `As,req,bot`,
+  `Av,req`, `Av,real`, and the capacity columns (`ØMn,top`/`MRd,top`,
+  `ØMn,bot`/`MRd,bot`, `ØVn`/`VRd`). The required areas and the capacities are reported
+  per combination by `flexure_results()` and `shear_results()`, which is where they mean
+  something, and the capacities are still in `check(capacity_check=True)`.
+
+
 ## [1.0.0] - 2026-08-31
 
 The API is stable from this release on (ADR-0003): breaking changes need a major version

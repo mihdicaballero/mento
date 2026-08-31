@@ -20,6 +20,7 @@ from mento.beam_summary import BeamSummary
 from mento.reports.summaries import (
     BEAM_DATA_COLUMNS,
     FLEXURE_SUMMARY_WIDTHS,
+    CHECK_SUMMARY_WIDTHS,
     SHEAR_SUMMARY_WIDTHS,
     SUMMARY_FONT_SIZE,
 )
@@ -924,10 +925,14 @@ def test_check_with_en1992_concrete(
 
     result = summary.check(capacity_check=False)
 
-    # Check that EN 1992 specific columns exist
-    assert "MRd,top" in result.columns
-    assert "MRd,bot" in result.columns
-    assert "VRd" in result.columns
+    # The demands are the code-specific part of this table: EN names them
+    # M_Ed, V_Ed and N_Ed where ACI says Mu, Vu and Nu.
+    assert {"MEd", "VEd", "NEd"} <= set(result.columns)
+    # The resistances are not here. They are reported per combination by
+    # `flexure_results` and `shear_results`, which is where they mean
+    # something, and by the capacity check below.
+    assert not {"MRd,top", "MRd,bot", "VRd"} & set(result.columns)
+    assert {"MRd,top", "MRd,bot"} <= set(summary.check(capacity_check=True).columns)
 
     # Verify data types (should have numeric values)
     assert isinstance(result, pd.DataFrame)
@@ -1552,3 +1557,22 @@ def test_both_codes_report_summaries_of_the_same_shape(
 
     assert len(set(shapes.values())) == 1, shapes
     assert shapes["ACI 318-19"] == (len(FLEXURE_SUMMARY_WIDTHS), len(SHEAR_SUMMARY_WIDTHS))
+
+
+def test_the_report_prints_check_rather_than_a_subset_of_it(
+    beam_summary: BeamSummary, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The notebook and the Word report show the same summary.
+
+    The report used to select a shorter set of columns on its way to the page,
+    so `check()` in a notebook and the closing table of the document disagreed
+    about what the summary is. The document prints what `check()` returns.
+    """
+    shown = beam_summary.check()
+    table = _built_document(beam_summary, monkeypatch).tables[-1]
+    printed = [cell.text for cell in table.rows[0].cells]
+
+    assert printed == list(shown.columns)
+    # Ending on the three DCRs and the verdict, as the wall summary does.
+    assert printed[-4:] == ["DCRb,top", "DCRb,bot", "DCRv", VERDICT_COLUMN]
+    assert len(printed) == len(CHECK_SUMMARY_WIDTHS)
