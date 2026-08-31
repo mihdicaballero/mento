@@ -85,8 +85,8 @@ SHEAR_SUMMARY_WIDTHS = [
     Cm(1.2),
     Cm(1.2),
     Cm(1.2),
-    Cm(1.3),
-    Cm(1),
+    Cm(1.2),
+    Cm(1.4),
     Cm(1),
 ]
 
