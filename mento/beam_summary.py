@@ -261,63 +261,51 @@ class BeamSummary:
                 # Perform the shear check
                 shear_results = node.check_shear().iloc[1:].reset_index(drop=True)  # Skip the first row (units)
                 flexure_results = node.check_flexure().iloc[1:].reset_index(drop=True)  # Skip the first row (units)
-                # Common data that doesn't change between codes
-                common_data = {
-                    "Beam": beam.label,
-                    "b": int(beam.width.magnitude),
-                    "h": int(beam.height.magnitude),
-                    "cc": int(beam.c_c.magnitude),
-                    "As,top": rebar_f_top,
-                    "As,bot": rebar_f_bot,
-                    "Av": rebar_v,
-                    "As,req,top": round(beam._A_s_req_top.to("cm**2").magnitude, 1),
-                    "As,req,bot": round(beam._A_s_req_bot.to("cm**2").magnitude, 1),
-                    "Av,req": round(shear_results["Av,req"][0], 2),
-                    "Av,real": round(shear_results["Av"][0], 2),
-                    "DCRb,top": round(beam._DCRb_top, 3),
-                    "DCRb,bot": round(beam._DCRb_bot, 3),
-                    "DCRv": shear_results["DCR"][0],
-                }
-
-                common_units = {
-                    "Beam": "",
-                    "b": "cm",
-                    "h": "cm",
-                    "cc": "mm",
-                    "As,top": "",
-                    "As,bot": "",
-                    "Av": "",
-                    "As,req,top": "cm²/m",
-                    "As,req,bot": "cm²/m",
-                    "Av,req": "cm²/m",
-                    "Av,real": "cm²/m",
-                    "DCRb,top": "",
-                    "DCRb,bot": "",
-                    "DCRv": "",
-                }
-
-                # Code-specific data: the column names are the code's own.
+                # One row per beam, in the order the report prints it: what
+                # the section is, what it carries, what it was checked for,
+                # how close it came, and whether it passed. The required areas
+                # and the capacities are not repeated here -- `flexure_results`
+                # and `shear_results` report those per combination, which is
+                # where they mean something.
                 code = design_code(self.concrete)
                 cols = code.summary_columns
-                code_specific_data = {
-                    cols["moment_demand"]: round(flexure_results[cols["moment_demand"]][0], 1),
-                    cols["shear_demand"]: round(shear_results[cols["shear_demand_source"]][0], 1),
-                    cols["axial_demand"]: round(shear_results[cols["axial_demand"]][0], 1),
-                    **code.requires("capacity_columns")(beam),
-                    cols["shear_capacity"]: round(shear_results[cols["shear_capacity"]][0], 1),
-                }
-                code_specific_units = {
-                    cols["moment_demand"]: "kNm",
-                    cols["shear_demand"]: "kN",
-                    cols["axial_demand"]: "kN",
-                    cols["moment_capacity_top"]: "kNm",
-                    cols["moment_capacity_bot"]: "kNm",
-                    cols["shear_capacity"]: "kN",
-                }
-
-                # Assemble results_dict and units_row from the split dicts
-                results_dict = OrderedDict({**common_data, **code_specific_data})
-                units_row = pd.DataFrame([OrderedDict({**common_units, **code_specific_units, VERDICT_COLUMN: ""})])
+                results_dict = OrderedDict(
+                    {
+                        "Beam": beam.label,
+                        "b": int(beam.width.magnitude),
+                        "h": int(beam.height.magnitude),
+                        "As,top": rebar_f_top,
+                        "As,bot": rebar_f_bot,
+                        "Av": rebar_v,
+                        cols["moment_demand"]: round(flexure_results[cols["moment_demand"]][0], 1),
+                        cols["shear_demand"]: round(shear_results[cols["shear_demand_source"]][0], 1),
+                        cols["axial_demand"]: round(shear_results[cols["axial_demand"]][0], 1),
+                        "DCRb,top": round(beam._DCRb_top, 3),
+                        "DCRb,bot": round(beam._DCRb_bot, 3),
+                        "DCRv": shear_results["DCR"][0],
+                    }
+                )
+                units_row = pd.DataFrame(
+                    [
+                        OrderedDict(
+                            {
+                                "Beam": "",
+                                "b": "cm",
+                                "h": "cm",
+                                "As,top": "",
+                                "As,bot": "",
+                                "Av": "",
+                                cols["moment_demand"]: "kNm",
+                                cols["shear_demand"]: "kN",
+                                cols["axial_demand"]: "kN",
+                                "DCRb,top": "",
+                                "DCRb,bot": "",
+                                "DCRv": "",
+                                VERDICT_COLUMN: "",
+                            }
+                        )
+                    ]
+                )
 
                 # Determine status from the values themselves, not from the
                 # rounded ones the table shows: a DCR of 0.997 reads as 1.00 at

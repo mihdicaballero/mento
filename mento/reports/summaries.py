@@ -18,7 +18,7 @@ from docx.shared import Cm
 
 from mento._version import __version__ as MENTO_VERSION
 from mento.codes.registry import design_code
-from mento.results import DocumentBuilder, VERDICT_COLUMN
+from mento.results import DocumentBuilder
 
 if TYPE_CHECKING:
     from mento.beam import RectangularBeam
@@ -88,6 +88,24 @@ SHEAR_SUMMARY_WIDTHS = [
     Cm(1.2),
     Cm(1.4),
     Cm(1),
+]
+
+#: The closing table: the section, its bars, the governing demands, the three
+#: DCRs and the verdict.
+CHECK_SUMMARY_WIDTHS = [
+    Cm(2),
+    Cm(1),
+    Cm(1),
+    Cm(1.4),
+    Cm(1.4),
+    Cm(1.4),
+    Cm(1.2),
+    Cm(1.2),
+    Cm(1.2),
+    Cm(1.5),
+    Cm(1.5),
+    Cm(1.1),
+    Cm(1.0),
 ]
 
 
@@ -263,46 +281,13 @@ def beam_summary_doc(self: "BeamSummary", index: int = 1) -> None:
     )
 
     doc_builder.add_heading("Design Check Summary", level=3)
-    # The closing table answers one question -- did every beam pass, and on
-    # what. It carries the geometry, the reinforcement actually detailed, the
-    # governing demands and the three DCRs, and leaves out the required-area
-    # and capacity columns that the flexure and shear tables above already
-    # report in full. The demand columns are the active code's own names.
-    cols = design_code(self.concrete).summary_columns
-    df_check = self.check()[
-        [
-            "Beam",
-            "b",
-            "h",
-            "As,top",
-            "As,bot",
-            "Av",
-            cols["moment_demand"],
-            cols["shear_demand"],
-            cols["axial_demand"],
-            "DCRb,top",
-            "DCRb,bot",
-            "DCRv",
-            VERDICT_COLUMN,
-        ]
-    ]
+    # Printed as `check()` returns it. The table used to select a subset here,
+    # which meant the notebook and the report disagreed about what the summary
+    # is; `check()` carries the shorter set now and this prints it.
+    df_check = self.check()
     doc_builder.add_table_status(
         df_check,
-        column_widths=[
-            Cm(2),
-            Cm(1),
-            Cm(1),
-            Cm(1.9),
-            Cm(1.9),
-            Cm(1.4),
-            Cm(1.2),
-            Cm(1.2),
-            Cm(1.2),
-            Cm(1.5),
-            Cm(1.5),
-            Cm(1.1),
-            Cm(1.0),
-        ],
+        column_widths=CHECK_SUMMARY_WIDTHS,
         font_size=SUMMARY_FONT_SIZE,
     )
 
