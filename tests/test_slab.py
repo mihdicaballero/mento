@@ -553,3 +553,55 @@ def test_slab_shear_design_is_the_least_steel_the_spacing_limits_allow() -> None
                     assert A_v.to("cm**2/m").magnitude >= chosen * (1 - 1e-9), (
                         f"Ø{row['d_b']} at {s_l} cm x {s_w} cm covers A_v_req with less steel"
                     )
+
+
+##########################################################
+# HOW THE TRANSVERSE REINFORCEMENT IS LABELLED
+##########################################################
+
+
+def test_a_designed_slab_is_labelled_by_its_two_spacings() -> None:
+    """A slab strip has no cage, so the beam's stirrup count says nothing.
+
+    The design chooses a spacing each way and the label used to report only the
+    longitudinal one, prefixed by a stirrup count that does not exist -- a
+    100 cm strip came out as "7eO10 mm/3 cm" with the 7 cm across the width
+    nowhere to be seen. The diameter is written once: both directions are the
+    same bar.
+    """
+    slab = _designed_slab(Concrete_ACI_318_19(name="H25", f_c=25 * MPa), V_z=150 * kN)
+
+    transverse = slab.reinforcement.transverse
+    assert transverse.layout == "grid"
+    assert transverse.s_w.to("cm").magnitude > 0
+    label = str(transverse)
+    assert label.startswith("Ø")
+    assert "e Ø" not in label and "eØ" not in label
+    assert label.count("Ø") == 1
+    assert f"{transverse.s_l:.4g~P}" in label
+    assert f"{transverse.s_w:.4g~P}" in label
+    # The shear result carries the same notation as the section does.
+    assert str(slab.shear_design) == label
+
+
+def test_a_slab_without_stirrups_says_so() -> None:
+    slab = _designed_slab(Concrete_ACI_318_19(name="H25", f_c=25 * MPa), V_z=0 * kN)
+
+    assert str(slab.reinforcement.transverse) == "no stirrups"
+
+
+def test_the_shear_report_of_a_slab_names_both_spacings() -> None:
+    """The count row gives way to the spacing that actually detailed the strip."""
+    slab = _designed_slab(Concrete_ACI_318_19(name="H25", f_c=25 * MPa), V_z=150 * kN)
+
+    rows = slab._shear_reinforcement
+    assert rows["Variable"][:3] == ["db", "sl", "sw"]
+    assert rows["Shear reinforcement strength"][:3] == [
+        "Stirrup diameter",
+        "Stirrup spacing along length",
+        "Stirrup spacing along width",
+    ]
+    assert rows["Unit"][:3] == ["mm", "cm", "cm"]
+    assert rows["Value"][2] == pytest.approx(slab._stirrup_s_w.to("cm").magnitude, rel=1e-9)
+    # Every column of the table still has one entry per row.
+    assert len({len(column) for column in rows.values()}) == 1

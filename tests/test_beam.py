@@ -750,6 +750,24 @@ def test_shear_design_always_gives_a_beam_stirrups(code: str) -> None:
     assert beam.shear_design.A_v.to("cm**2/m").magnitude > 0
 
 
+def test_a_designed_beam_is_labelled_by_its_stirrup_count() -> None:
+    """The beam notation is unchanged by the slab one: count, diameter, spacing."""
+    beam = RectangularBeam(
+        label="B1",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=20 * cm,
+        height=50 * cm,
+        c_c=25 * mm,
+    )
+    Node(section=beam, forces=Forces(label="ELU_01", M_y=30 * kNm, V_z=150 * kN)).design()
+
+    transverse = beam.reinforcement.transverse
+    assert transverse.layout == "stirrups"
+    assert str(transverse) == f"{transverse.n_stirrups}eØ{transverse.d_b:.4g~P}/{transverse.s_l:.4g~P}"
+    assert beam._shear_reinforcement["Variable"][:3] == ["ns", "db", "s"]
+
+
 def _A_v_min_table_9_6_3_4(width_cm: float, f_c: float = 25.0, f_yt: float = 420.0) -> float:
     """ACI 318-19 Table 9.6.3.4, as an area per unit length in cm2/m."""
     b_w = width_cm * 10  # mm

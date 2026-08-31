@@ -22,12 +22,47 @@ from pint import Quantity
 from mento.units import inch, kN, kNm, mm
 
 from mento.codes.registry import design_code
+from mento.design_results import GRID, transverse_layout
 
 if TYPE_CHECKING:
     from mento.beam import RectangularBeam
     from mento.material import Concrete_ACI_318_19, Concrete_EN_1992_2004
     from mento.forces import Forces
     from mento.settings import BeamSettings
+
+
+def _transverse_rebar_rows(
+    self: "RectangularBeam",
+    d_b_shown: Quantity,
+    round_to: int | None = 3,
+) -> tuple[list[str], list[str], list[Any], list[str]]:
+    """The three rows that identify the transverse reinforcement of a section.
+
+    A beam is a stirrup count, a diameter and a spacing along the length. A slab
+    strip has no cage to count, so the count gives way to the spacing across the
+    width, which is what actually detailed it and had no row of its own. Three
+    rows either way, so every column of the table stays the same length.
+    """
+
+    def shown(value: Quantity, unit: str) -> Any:
+        magnitude = value.to(unit).magnitude
+        return magnitude if round_to is None else round(magnitude, round_to)
+
+    diameter = shown(d_b_shown, "mm")
+    s_l = shown(self._stirrup_s_l, "cm")
+    if transverse_layout(self) == GRID:
+        return (
+            ["Stirrup diameter", "Stirrup spacing along length", "Stirrup spacing along width"],
+            ["db", "sl", "sw"],
+            [diameter, s_l, shown(self._leg_spacing_across_width(), "cm")],
+            ["mm", "cm", "cm"],
+        )
+    return (
+        ["Number of stirrups", "Stirrup diameter", "Stirrup spacing"],
+        ["ns", "db", "s"],
+        [self._stirrup_n, diameter, s_l],
+        ["", "mm", "cm"],
+    )
 
 
 def _settings(beam: RectangularBeam) -> BeamSettings:
@@ -275,29 +310,29 @@ def _initialize_dicts_ACI_318_19_shear(self: "RectangularBeam") -> None:
         ],
         "Ok?": checks,
     }
+    # A slab strip has no cage to count: the same bar sits on a grid, so the row
+    # that names a stirrup count gives way to the second spacing that actually
+    # detailed it. Same three rows either way, so the columns stay aligned.
+    rebar_rows, rebar_vars, rebar_values, rebar_units = _transverse_rebar_rows(self, d_b_shown)
     self._shear_reinforcement = {
         "Shear reinforcement strength": [
-            "Number of stirrups",
-            "Stirrup diameter",
-            "Stirrup spacing",
+            *rebar_rows,
             "Effective height",
             "Minimum shear reinforcing",
             "Required shear reinforcing",
             "Defined shear reinforcing",
             "Shear rebar strength",
         ],
-        "Variable": ["ns", "db", "s", "d", "Av,min", "Av,req", "Av", "ØVs"],
+        "Variable": [*rebar_vars, "d", "Av,min", "Av,req", "Av", "ØVs"],
         "Value": [
-            self._stirrup_n,
-            round(d_b_shown.to("mm").magnitude, 3),
-            round(self._stirrup_s_l.to("cm").magnitude, 3),
+            *rebar_values,
             round(self._d_shear.to("cm").magnitude, 2),
             round(self._A_v_min.to("cm**2/m").magnitude, 2),
             round(self._A_v_req.to("cm**2/m").magnitude, 2),
             round(self._A_v.to("cm**2/m").magnitude, 2),
             round(self._phi_V_s.to("kN").magnitude, 2),
         ],
-        "Unit": ["", "mm", "cm", "cm", "cm²/m", "cm²/m", "cm²/m", "kN"],
+        "Unit": [*rebar_units, "cm", "cm²/m", "cm²/m", "cm²/m", "kN"],
     }
     check_max = "✅" if self._max_shear_ok else "❌"
     check_FU = "✅" if self._DCRv < 1 else "❌"
@@ -724,29 +759,26 @@ def _initialize_dicts_EN_1992_2004_shear(self: "RectangularBeam") -> None:
         ],
         "Ok?": checks,
     }
+    rebar_rows, rebar_vars, rebar_values, rebar_units = _transverse_rebar_rows(self, d_b_shown, round_to=None)
     self._shear_reinforcement = {
         "Shear reinforcement strength": [
-            "Number of stirrups",
-            "Stirrup diameter",
-            "Stirrup spacing",
+            *rebar_rows,
             "Effective height",
             "Minimum shear reinforcing",
             "Required shear reinforcing",
             "Defined shear reinforcing",
             "Shear rebar strength",
         ],
-        "Variable": ["ns", "db", "s", "d", "Asw,min", "Asw,req", "Asw", "VRd,s"],
+        "Variable": [*rebar_vars, "d", "Asw,min", "Asw,req", "Asw", "VRd,s"],
         "Value": [
-            self._stirrup_n,
-            d_b_shown.to("mm").magnitude,
-            self._stirrup_s_l.to("cm").magnitude,
+            *rebar_values,
             round(self._d_shear.to("cm").magnitude, 2),
             round(self._A_v_min.to("cm**2/m").magnitude, 2),
             round(self._A_v_req.to("cm**2/m").magnitude, 2),
             round(self._A_v.to("cm**2/m").magnitude, 2),
             round(self._V_Rd_s.to("kN").magnitude, 2),
         ],
-        "Unit": ["", "mm", "cm", "cm", "cm²/m", "cm²/m", "cm²/m", "kN"],
+        "Unit": [*rebar_units, "cm", "cm²/m", "cm²/m", "cm²/m", "kN"],
     }
     check_max = "✅" if self._max_shear_ok else "❌"
     check_DCR = "✅" if self._DCRv < 1 else "❌"
