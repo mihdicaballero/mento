@@ -120,6 +120,12 @@ class Rebar:
 
     @property
     def transverse_rebar_design(self) -> DataFrame:
+        if self._trans_combos_df.empty:
+            raise RebarDesignInfeasibleError(
+                "No valid transverse rebar combination found — no bar the code "
+                "allows, at any spacing within its limits, provides the required "
+                "A_v. The section is too shallow for the shear it carries."
+            )
         return self._trans_combos_df.iloc[0]
 
     ##########################################################
@@ -232,15 +238,31 @@ class Rebar:
         return n_legs + (n_legs % 2)
 
     def transverse_rebar(self, A_v_req: Quantity, V_s_req: Quantity, alpha: float) -> DataFrame:
-        """
-        Computes the required transverse reinforcement based on ACI 318-19.
+        """Select the transverse reinforcement that covers ``A_v_req``.
+
+        A beam and a slab strip are reinforced differently, so they are searched
+        differently. A beam carries closed stirrups, so the free variables are
+        the bar diameter, the number of legs across the width and the spacing
+        along the length. A slab strip carries a grid of legs, and both spacings
+        are free -- the parameterisation
+        :meth:`~mento.slab.OneWaySlab.set_slab_transverse_rebar` already takes.
 
         Args:
-            A_v_req: Required area for transverse reinforcement.
+            A_v_req: Required area of transverse reinforcement per unit length.
+            V_s_req: Shear the reinforcement must carry, which sets the spacing
+                limits.
+            alpha: Inclination of the shear reinforcement, for EN.
 
         Returns:
-            A dictionary containing the transverse rebar design.
+            Every valid combination, best first; ``transverse_rebar_design``
+            reads the first row.
         """
+        if self.mode == "slab":
+            return self._transverse_rebar_slab(A_v_req, V_s_req, alpha)
+        return self._transverse_rebar_beam(A_v_req, V_s_req, alpha)
+
+    def _transverse_rebar_beam(self, A_v_req: Quantity, V_s_req: Quantity, alpha: float) -> DataFrame:
+        """Closed stirrups: (d_b, n_legs, s_l), the legs spread across the width."""
 
         # Prepare the list for valid combinations
         valid_combinations = []
@@ -331,6 +353,121 @@ class Rebar:
         # Sort by 'A_v' first, then by 'n_stir' to prioritize fewer bars
         df_combinations.sort_values(by=["n_stir", "A_v"], inplace=True)
         df_combinations.reset_index(drop=True, inplace=True)
+        self._trans_combos_df = df_combinations
+        return df_combinations
+
+    def _slab_spacing_limits(self, d_b: Quantity, V_s_req: Quantity, alpha: float) -> Tuple[Quantity, Quantity]:
+        """The code's spacing limits for a section carrying stirrups of diameter ``d_b``.
+
+        Both limits are written on the effective depth, and the effective depth
+        moves with the stirrup diameter. A beam starts from the diameter its
+        settings assume, so the shift is small; a slab starts from no stirrup at
+        all, so assigning a 10 mm bar takes a whole centimetre off ``d`` and with
+        it off ``s_max_l``. Evaluating the limits against the diameter actually
+        being tried is what keeps the chosen spacing inside the limit the
+        finished section is later checked against.
+        """
+        d_b_before = self.beam._stirrup_d_b
+        try:
+            self.beam._stirrup_d_b = d_b
+            self.beam._update_effective_heights()
+            _, s_max_l, s_max_w = design_code(self.beam.concrete).transverse_rebar(self, V_s_req, alpha)
+        finally:
+            self.beam._stirrup_d_b = d_b_before
+            self.beam._update_effective_heights()
+        return s_max_l, s_max_w
+
+    def _transverse_rebar_slab(self, A_v_req: Quantity, V_s_req: Quantity, alpha: float) -> DataFrame:
+        """A grid of legs: (d_b, s_l, s_w), with both spacings free.
+
+        A slab strip is a metre cut out of a wider member, so its legs are not
+        the two faces of a stirrup cage the way a beam's are: the transverse
+        spacing is a free variable and the strip catches whatever number of legs
+        that spacing gives -- 6.7 of them at 15 cm across a metre. The beam
+        search cannot say that. It spreads an even number of legs between the
+        outermost bar centres, so a wide strip starts from far more legs than
+        the shear asks for and never comes back down.
+
+        With ``A_v = A_db * (width / s_w) / s_l``, the least steel that still
+        covers ``A_v_req`` is the largest product ``s_l * s_w`` that both limits
+        allow, so that is what the loop below maximises, on the whole-unit grid
+        the two spacings are detailed on.
+
+        The spacing limits usually bind long before ``A_v_req`` does: a shallow
+        slab has ``s_max_l = d/2``, which can put the provided ``A_v`` well above
+        what the shear demands however the search is written. That is the
+        detailing rule speaking, not slack left in the search.
+        """
+        metric = self.beam.concrete.unit_system == "metric"
+        unit = cm if metric else inch
+        # The floors the beam search stops at: closer than this no bar can be
+        # placed, let alone vibrated around.
+        s_min = 5 if metric else 2
+        area_unit = "cm**2/m" if metric else "inch**2/ft"
+        width = self.beam.width
+
+        valid_diameters = design_code(self.beam.concrete).transverse_rebar(self, V_s_req, alpha)[0]
+
+        valid_combinations = []
+        for d_b in valid_diameters:
+            s_max_l, s_max_w = self._slab_spacing_limits(d_b, V_s_req, alpha)
+            # Whole units, so the spacing is one a drawing can carry. The strip
+            # caps the transverse spacing as well: a leg spacing wider than the
+            # strip would put less than one leg in it.
+            s_l_max = int(math.floor(s_max_l.to(unit).magnitude))
+            s_w_max = int(math.floor(min(s_max_w, width).to(unit).magnitude))
+            # High shear halves both limits, and half of a shallow slab's d is
+            # already tighter than the floor. The limit wins when the two
+            # disagree, exactly as the beam search ends up doing: its floor only
+            # adds legs, it never stops the spacing going below it. One whole
+            # unit is the hard floor, so that a limit rounding down to nothing
+            # leaves an empty search rather than a division by zero.
+            s_l_lo = max(1, min(s_min, s_l_max))
+            s_w_lo = max(1, min(s_min, s_w_max))
+
+            A_db = self.rebar_areas[d_b]
+            # A_v >= A_v_req  <=>  s_l * s_w <= A_db * width / A_v_req.
+            if A_v_req > 0 * A_v_req.units:
+                product_max = (A_db * width / A_v_req).to(unit**2).magnitude
+            else:
+                product_max = math.inf
+
+            best: Tuple[int, int] | None = None
+            for s_l in range(s_l_max, s_l_lo - 1, -1):
+                s_w = s_w_max if math.isinf(product_max) else min(s_w_max, int(product_max // s_l))
+                if s_w < s_w_lo:
+                    continue
+                # Descending s_l with a strict comparison keeps the widest
+                # longitudinal spacing among the products that tie.
+                if best is None or s_l * s_w > best[0] * best[1]:
+                    best = (s_l, s_w)
+            if best is None:
+                continue
+
+            s_l_q, s_w_q = best[0] * unit, best[1] * unit
+            n_legs = (width / s_w_q).to("dimensionless").magnitude
+            valid_combinations.append(
+                {
+                    # A slab has no closed stirrup to count. This is the
+                    # equivalent number of rows across the width, which is what
+                    # the section stores the reinforcement as; A_v is computed
+                    # from the spacing itself and is the value that governs.
+                    "n_stir": max(1, round(n_legs / 2)),
+                    "d_b": d_b,
+                    "s_l": s_l_q,
+                    "s_w": s_w_q,
+                    "A_v": (A_db * n_legs / s_l_q).to(area_unit),
+                    "s_max_l": s_max_l.to(unit),
+                    "s_max_w": s_max_w.to(unit),
+                }
+            )
+
+        df_combinations = pd.DataFrame(valid_combinations)
+        if not df_combinations.empty:
+            # Least steel first. Unlike a beam, a slab gains nothing from a
+            # heavier bar: the spacing limits already fix how close the legs go.
+            df_combinations.sort_values(by=["A_v", "s_l"], ascending=[True, False], inplace=True)
+            df_combinations.reset_index(drop=True, inplace=True)
         self._trans_combos_df = df_combinations
         return df_combinations
 

@@ -357,3 +357,60 @@ def test_a_code_registered_without_report_tables_says_so() -> None:
             beam.check_shear([Forces(label="C1", V_z=80 * kN)])
     finally:
         _REGISTRY.pop(invented.title, None)
+
+
+##########################################################
+# DATACLASS BODIES: WHAT THE EDITOR SHOWS THE CALLER
+##########################################################
+
+PACKAGE_MODULES = sorted(MENTO_ROOT.rglob("*.py"))
+
+
+def _is_dataclass_decorated(node: ast.ClassDef) -> bool:
+    for decorator in node.decorator_list:
+        target = decorator.func if isinstance(decorator, ast.Call) else decorator
+        name = target.attr if isinstance(target, ast.Attribute) else getattr(target, "id", None)
+        if name == "dataclass":
+            return True
+    return False
+
+
+def _conditionally_annotated_names(body: list[ast.stmt]) -> list[str]:
+    """Names annotated inside an ``if`` / ``try`` in a class body, not at its top level."""
+    found: list[str] = []
+    for node in body:
+        nested: list[ast.stmt] = []
+        if isinstance(node, ast.If):
+            nested = [*node.body, *node.orelse]
+        elif isinstance(node, ast.Try):
+            nested = [*node.body, *node.orelse, *node.finalbody]
+        for inner in ast.walk(ast.Module(body=nested, type_ignores=[])):
+            if isinstance(inner, ast.AnnAssign) and isinstance(inner.target, ast.Name):
+                found.append(inner.target.id)
+    return found
+
+
+def test_package_modules_are_discovered() -> None:
+    """Guards the test below: an empty glob would make it vacuously pass."""
+    assert len(PACKAGE_MODULES) > 20, f"only {len(PACKAGE_MODULES)} modules found under {MENTO_ROOT}"
+
+
+@pytest.mark.parametrize("path", PACKAGE_MODULES, ids=lambda p: p.name)
+def test_dataclass_bodies_declare_no_conditional_annotations(path: Path) -> None:
+    """Every annotation in a dataclass body is a constructor argument to the editor.
+
+    A type checker reads ``if TYPE_CHECKING:`` as taken, so a name declared
+    under it counts as a field even though ``dataclasses`` never sees it at
+    runtime. That is how the fifty-odd compatibility-layer attributes on
+    ``RectangularBeam`` became required keyword arguments in IntelliSense while
+    the runtime signature stayed clean -- a defect no test that imports the
+    class can catch. Declarations that are not fields belong on a plain base
+    class such as ``_DesignCodeAttributes``, which contributes none.
+    """
+    for node in ast.walk(_parse(path)):
+        if isinstance(node, ast.ClassDef) and _is_dataclass_decorated(node):
+            offenders = _conditionally_annotated_names(node.body)
+            assert not offenders, (
+                f"{path.name}: {node.name} is a dataclass, so {offenders} read as "
+                f"constructor fields to a type checker. Move them to a plain base class."
+            )

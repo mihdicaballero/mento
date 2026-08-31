@@ -190,14 +190,47 @@ class FaceReinforcement:
         return " + ".join(str(layer) for layer in self.layers)
 
 
+#: How a section carries its transverse reinforcement. A beam carries closed
+#: stirrups; a slab strip carries a grid of legs, with no cage to count.
+STIRRUPS = "stirrups"
+GRID = "grid"
+
+
+def format_transverse_rebar(layout: str, n_stirrups: int, d_b: str, s_l: str, s_w: str) -> str:
+    """Label the transverse reinforcement in the notation of its element.
+
+    A beam is a number of closed stirrups of one diameter at one spacing along
+    the length, so the count leads: ``2eØ10/15cm``. A slab strip has no cage --
+    the same bar sits on a grid -- so what identifies it is the diameter once
+    and a spacing each way, longitudinal first: ``Ø10/15cm×20cm``. The diameter
+    is not repeated: both directions are the same bar.
+
+    Takes the numbers already formatted, so each caller keeps its own precision
+    and units while the shape of the label is decided in one place.
+    """
+    if n_stirrups == 0:
+        return "no stirrups"
+    if layout == GRID:
+        return f"Ø{d_b}/{s_l}×{s_w}"
+    return f"{n_stirrups}eØ{d_b}/{s_l}"
+
+
 @dataclass(frozen=True)
 class TransverseReinforcement:
-    """The stirrups a section carries, as configured."""
+    """The transverse reinforcement a section carries, as configured.
+
+    ``s_l`` is the spacing along the length and ``s_w`` the spacing across the
+    width. On a beam the second is not detailed but implied -- it is where the
+    legs of the cage fall -- while on a slab strip both are chosen, which is
+    what ``layout`` distinguishes.
+    """
 
     n_stirrups: int
     d_b: Quantity
     s_l: Quantity
     A_v: Quantity
+    s_w: Quantity
+    layout: str = STIRRUPS
 
     @property
     def n_legs(self) -> int:
@@ -205,9 +238,13 @@ class TransverseReinforcement:
         return self.n_stirrups * 2
 
     def __str__(self) -> str:
-        if self.n_stirrups == 0:
-            return "no stirrups"
-        return f"{self.n_stirrups}eØ{self.d_b:.4g~P}/{self.s_l:.4g~P}"
+        return format_transverse_rebar(
+            self.layout,
+            self.n_stirrups,
+            f"{self.d_b:.4g~P}",
+            f"{self.s_l:.4g~P}",
+            f"{self.s_w:.4g~P}",
+        )
 
 
 @dataclass(frozen=True)
@@ -286,6 +323,8 @@ class ShearDesign:
     A_v_req: Quantity
     A_v_min: Quantity
     DCR: float
+    s_w: Quantity
+    layout: str = STIRRUPS
 
     @property
     def n_legs(self) -> int:
@@ -293,9 +332,18 @@ class ShearDesign:
         return self.n_stirrups * 2
 
     def __str__(self) -> str:
-        if self.n_stirrups == 0:
-            return "no stirrups"
-        return f"{self.n_stirrups}eØ{self.d_b:.4g~P}/{self.s_l:.4g~P}"
+        return format_transverse_rebar(
+            self.layout,
+            self.n_stirrups,
+            f"{self.d_b:.4g~P}",
+            f"{self.s_l:.4g~P}",
+            f"{self.s_w:.4g~P}",
+        )
+
+
+def transverse_layout(beam: RectangularBeam) -> str:
+    """Which notation the section's transverse reinforcement is written in."""
+    return GRID if getattr(beam, "mode", "beam") == "slab" else STIRRUPS
 
 
 def _layers(beam: RectangularBeam, face: str) -> Tuple[RebarLayer, ...]:
@@ -348,6 +396,8 @@ def build_reinforcement(beam: RectangularBeam) -> SectionReinforcement:
             d_b=beam._stirrup_d_b,
             s_l=beam._stirrup_s_l,
             A_v=beam._A_v,
+            s_w=beam._leg_spacing_across_width(),
+            layout=transverse_layout(beam),
         ),
     )
 
@@ -389,4 +439,6 @@ def build_shear_design(beam: RectangularBeam) -> ShearDesign:
         A_v_req=zero if worst.A_v_req is None else worst.A_v_req,
         A_v_min=zero if worst.A_v_min is None else worst.A_v_min,
         DCR=worst.DCR,
+        s_w=beam._leg_spacing_across_width(),
+        layout=transverse_layout(beam),
     )

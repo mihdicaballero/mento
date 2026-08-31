@@ -115,6 +115,13 @@ def _calculate_A_v_min_ACI(self: "RectangularBeam", st: ShearCheckState, f_c: fl
     # 'Minimum reinforcement should be placed if the factored shear Vu
     # is greater than half the shear capacity of the concrete,
     # reduced by 0.5phi*Vc. It is assumed that minimum reinforcement is required.
+    if self._stirrups_optional:
+        # 7.6.3.1: a one-way slab carries no minimum shear reinforcement, so the
+        # 9.6.3.1 floor above does not apply. A_v_req then falls out of
+        # _calculate_V_s_req as max(Vu - phi*Vc, 0), which is the threshold the
+        # slab clause actually sets.
+        st.A_v_min = 0.0
+        return
     sec = section_floats(self)
     st.A_v_min = shear_eq.min_shear_reinforcement_ratio(
         f_c, _calculate_f_yt_aci(self), sec.width, is_imperial=sec.is_imperial
@@ -172,8 +179,7 @@ def _calculate_total_shear_strength_aci(self: "RectangularBeam", st: ShearCheckS
 
 def _calculate_rebar_spacing_aci(self: "RectangularBeam", st: ShearCheckState) -> None:
     sec = section_floats(self)
-    n_legs_actual = sec.stirrup_n * 2  # Ensure legs are even
-    st.stirrup_s_w = max((sec.width - 2 * sec.c_c - sec.stirrup_d_b) / (n_legs_actual - 1), 0.0)
+    st.stirrup_s_w = sec.stirrup_s_w
     (
         st.stirrup_s_max_l,
         st.stirrup_s_max_w,
@@ -269,6 +275,15 @@ def _design_shear_ACI_318_19(self: "RectangularBeam", force: Forces) -> None:
     _check_minimum_reinforcement_requirement_aci(self, st)
     # Calculate required shear reinforcement
     _calculate_V_s_req(self, st)
+    # 9.6.3.1 waives A_v,min below its threshold and the check reports that
+    # faithfully, but designing does not follow the waiver down: a beam is built
+    # with stirrups over its whole length, so the cage asked of the designer
+    # never drops below Table 9.6.3.4. Without this floor a lightly loaded beam
+    # came back under the minimum -- 1eO6/28cm = 2.02 cm2/m on a 30x60 against
+    # the 2.50 cm2/m the table asks for. _calculate_A_v_min_ACI returns zero for
+    # a section that may go without stirrups at all, so a slab is unaffected.
+    _calculate_A_v_min_ACI(self, st, sec.f_c)
+    st.A_v_req = max(st.A_v_req, st.A_v_min)
     apply_shear_state(self, st)
     # Update spacing of longitudinal reinforcement calculation
     self._update_longitudinal_rebar_attributes()

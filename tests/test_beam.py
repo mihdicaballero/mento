@@ -718,6 +718,99 @@ def test_shear_design_spacing_along_width_wide_beam() -> None:
     assert float(results.iloc[1]["DCR"]) <= 1.0
 
 
+@pytest.mark.parametrize(
+    "code",
+    ["ACI 318-19", "EN 1992-2004", "CIRSOC 201-25"],
+)
+def test_shear_design_always_gives_a_beam_stirrups(code: str) -> None:
+    """A beam keeps its minimum cage even with no shear on it.
+
+    The counterpart of the slab rule: ACI 318-19 9.6.3.1 and EN 1992-1-1 9.2.2
+    only waive the minimum for members that can redistribute the load
+    transversally, which a beam cannot. Only ``OneWaySlab`` opts out, so this
+    guards the slab fix from being generalised to every section.
+    """
+    concretes = {
+        "ACI 318-19": Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        "EN 1992-2004": Concrete_EN_1992_2004(name="C25", f_c=25 * MPa),
+        "CIRSOC 201-25": Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa),
+    }
+    beam = RectangularBeam(
+        label="B1",
+        concrete=concretes[code],
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=20 * cm,
+        height=50 * cm,
+        c_c=25 * mm,
+    )
+    Node(section=beam, forces=Forces(label="ELU_01", M_y=30 * kNm, V_z=0 * kN)).design_shear()
+
+    assert beam._stirrups_optional is False
+    assert beam.shear_design.n_stirrups > 0
+    assert beam.shear_design.A_v.to("cm**2/m").magnitude > 0
+
+
+def test_a_designed_beam_is_labelled_by_its_stirrup_count() -> None:
+    """The beam notation is unchanged by the slab one: count, diameter, spacing."""
+    beam = RectangularBeam(
+        label="B1",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=20 * cm,
+        height=50 * cm,
+        c_c=25 * mm,
+    )
+    Node(section=beam, forces=Forces(label="ELU_01", M_y=30 * kNm, V_z=150 * kN)).design()
+
+    transverse = beam.reinforcement.transverse
+    assert transverse.layout == "stirrups"
+    assert str(transverse) == f"{transverse.n_stirrups}eØ{transverse.d_b:.4g~P}/{transverse.s_l:.4g~P}"
+    assert beam._shear_reinforcement["Variable"][:3] == ["ns", "db", "s"]
+
+
+def _A_v_min_table_9_6_3_4(width_cm: float, f_c: float = 25.0, f_yt: float = 420.0) -> float:
+    """ACI 318-19 Table 9.6.3.4, as an area per unit length in cm2/m."""
+    b_w = width_cm * 10  # mm
+    return max(0.062 * math.sqrt(f_c) * b_w / f_yt, 0.35 * b_w / f_yt) * 10
+
+
+@pytest.mark.parametrize("width_cm, height_cm", [(20, 40), (20, 50), (30, 60), (40, 70), (50, 80)])
+@pytest.mark.parametrize("V_z_kN", [0, 10, 25])
+@pytest.mark.parametrize("code", ["ACI 318-19", "EN 1992-2004", "CIRSOC 201-25"])
+def test_shear_design_never_puts_a_beam_below_the_minimum_area(
+    code: str, V_z_kN: int, width_cm: int, height_cm: int
+) -> None:
+    """A lightly loaded beam still gets the minimum cage, not merely some cage.
+
+    ACI 318-19 9.6.3.1 waives A_v,min where Vu falls under its threshold, and the
+    design used to hand that zero straight to the stirrup designer -- which then
+    sized off the spacing limits alone. With the 6 mm bars CIRSOC 201-25 allows,
+    a 30x60 came back with 1eO6/28cm = 2.02 cm2/m against the 2.50 cm2/m of
+    Table 9.6.3.4. A beam carries stirrups over its whole length, so the minimum
+    holds whatever the shear diagram says.
+    """
+    concretes = {
+        "ACI 318-19": Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        "EN 1992-2004": Concrete_EN_1992_2004(name="C25", f_c=25 * MPa),
+        "CIRSOC 201-25": Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa),
+    }
+    beam = RectangularBeam(
+        label="B1",
+        concrete=concretes[code],
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=width_cm * cm,
+        height=height_cm * cm,
+        c_c=25 * mm,
+    )
+    Node(section=beam, forces=Forces(label="ELU_01", M_y=30 * kNm, V_z=V_z_kN * kN)).design()
+
+    A_v = beam.shear_design.A_v.to("cm**2/m").magnitude
+    A_v_min = _A_v_min_table_9_6_3_4(width_cm)
+    assert A_v >= A_v_min - 1e-9, (
+        f"{code}, {width_cm}x{height_cm} cm, V_z {V_z_kN} kN: designed {A_v:.2f} cm2/m, minimum {A_v_min:.2f} cm2/m"
+    )
+
+
 @pytest.mark.parametrize("width_cm", [20, 30, 40, 50, 60, 80, 100, 120])
 @pytest.mark.parametrize("V_z_kN", [100, 250, 450])
 @pytest.mark.parametrize("code", ["ACI 318-19", "EN 1992-2004", "CIRSOC 201-25"])
