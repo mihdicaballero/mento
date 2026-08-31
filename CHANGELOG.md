@@ -12,20 +12,27 @@ from the release history and are summaries rather than complete lists.
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-08-31
+
 ### Changed
 
-- **BREAKING: `BeamSummary.check()` returns the columns the report prints, and only
-  those.** It carried the section, the reinforcement, the required areas, the demands,
-  the capacities and the three DCRs; the Word report then selected a shorter set on its
-  way to the page, so a notebook and the document disagreed about what the summary is.
-  Both now show `Beam, b, h, As,top, As,bot, Av`, the governing demands, the three DCRs
-  and `Ok?` — the same shape the shear-wall summary already had, ending on the DCRs and
-  the verdict. Gone from `check(capacity_check=False)`: `cc`, `As,req,top`, `As,req,bot`,
-  `Av,req`, `Av,real`, and the capacity columns (`ØMn,top`/`MRd,top`,
-  `ØMn,bot`/`MRd,bot`, `ØVn`/`VRd`). The required areas and the capacities are reported
-  per combination by `flexure_results()` and `shear_results()`, which is where they mean
-  something, and the capacities are still in `check(capacity_check=True)`.
+- **`BeamSummary.check()` returns the columns the report prints, and only those.** It
+  carried the section, the reinforcement, the required areas, the demands, the capacities
+  and the three DCRs, and the Word report then selected a shorter set on its way to the
+  page — so a notebook and the document disagreed about what the summary is. Both now
+  show `Beam`, `b`, `h`, `As,top`, `As,bot`, `Av`, the governing demands, the three DCRs
+  and `Ok?`: the shape the shear-wall summary already had, ending on the DCRs and the
+  verdict.
 
+  Gone from `check(capacity_check=False)`: `cc`, `As,req,top`, `As,req,bot`, `Av,req`,
+  `Av,real`, and the capacity columns (`ØMn,top`/`MRd,top`, `ØMn,bot`/`MRd,bot`,
+  `ØVn`/`VRd`). None of it is lost — `flexure_results()` and `shear_results()` report the
+  required areas and the capacities per combination, which is where they mean something,
+  and `check(capacity_check=True)` still returns the capacities.
+
+  This removes columns from a public DataFrame, which under the policy above would call
+  for a major release. It ships as a patch deliberately: 1.0.0 was a day old and the
+  change is narrow. Recorded here rather than passed over quietly.
 
 ## [1.0.0] - 2026-08-31
 
@@ -296,7 +303,8 @@ First public release on PyPI: rectangular concrete beam check and design for fle
 shear under ACI 318-19 and CIRSOC 201-25, unit aware calculations, results as pandas
 DataFrames, and Word calculation reports.
 
-[Unreleased]: https://github.com/mihdicaballero/mento/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/mihdicaballero/mento/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/mihdicaballero/mento/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/mihdicaballero/mento/compare/v0.5.2...v1.0.0
 [0.5.2]: https://github.com/mihdicaballero/mento/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/mihdicaballero/mento/compare/v0.5.0...v0.5.1
