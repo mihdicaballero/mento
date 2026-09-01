@@ -417,6 +417,7 @@ def test_the_warning_names_the_footing_and_the_code() -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.parametrize("face", ["bot", "top"], ids=["bottom", "top"])
 @pytest.mark.parametrize(
     "concrete, steel",
     [
@@ -425,13 +426,62 @@ def test_the_warning_names_the_footing_and_the_code() -> None:
     ],
     ids=["aci", "en"],
 )
-def test_an_unreinforced_face_reports_a_failing_dcr(concrete, steel) -> None:  # type: ignore[no-untyped-def]
+def test_an_unreinforced_face_reports_a_failing_dcr(concrete, steel, face) -> None:  # type: ignore[no-untyped-def]
     """Both codes answer a moment on a bare face with a DCR far above 1.
 
-    EN used to divide by zero here. It is what a footing too thin to be
-    reinforced within its spacing range now reports, so it has to be a number.
+    EN used to divide by zero here, on either face. It is what a footing too
+    thin to be reinforced within its spacing range now reports, so it has to be
+    a number -- and a slab reinforced on one face only is checked for the
+    combination that puts the other one in tension, so both branches are real.
     """
     section = _strip(OneWaySlab, concrete, steel, "L1")
-    combo = [Forces(label="C1", M_y=50 * kNm)]
+    # A positive moment puts the bottom in tension, a negative one the top.
+    combo = [Forces(label="C1", M_y=(50 if face == "bot" else -50) * kNm)]
 
-    assert section.flexure_check_results(combo)[0].bottom.DCR > 1
+    result = section.flexure_check_results(combo)[0]
+    assert getattr(result, "bottom" if face == "bot" else "top").DCR > 1
+
+
+# ---------------------------------------------------------------------------
+# A design code that states none of these rules
+# ---------------------------------------------------------------------------
+
+
+def test_a_code_without_the_footing_rules_imposes_none() -> None:
+    """A rule a code does not have is not a rule an element can fail.
+
+    ``min_bar_spacing_slab`` and ``min_thickness_on_soil`` are optional hooks:
+    both registered codes fill them in, so this registers one that does not and
+    drives a footing through it. Nothing is capped and nothing is warned about
+    -- silence, rather than an error about a limit that was never stated.
+    """
+    import dataclasses
+
+    from mento.codes.registry import _REGISTRY, DesignCode, design_code, register
+
+    reference = design_code(Concrete_ACI_318_19(name="H25", f_c=25 * MPa))
+    invented = DesignCode(
+        **{
+            **{f.name: getattr(reference, f.name) for f in dataclasses.fields(reference)},
+            "title": "NBR 6118-2023",
+            "year": 2023,
+            "min_bar_spacing_slab": None,
+            "min_thickness_on_soil": None,
+        }
+    )
+    register(invented)
+    try:
+        concrete = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
+        concrete.design_code = invented.title
+        steel = SteelBar(name="ADN 420", f_y=420 * MPa)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            # Thin enough that either registered code would have warned.
+            footing = _strip(Footing, concrete, steel, "Z1", height=15 * cm)
+
+        assert footing._min_bar_spacing() is None
+        # And the bar count is left at the slab default, since nothing bounds it.
+        assert footing.settings.max_bars_per_layer >= 200
+    finally:
+        _REGISTRY.pop(invented.title, None)
