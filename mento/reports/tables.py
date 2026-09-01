@@ -113,8 +113,10 @@ def _bar_spacing_row(
     bars may be -- ACI 318-19 7.7.2.3, EN 1992-1-1 9.3.1.1(3) -- since bars far
     enough apart leave the slab between them unreinforced whatever they add up
     to. So the row carries the centre-to-centre spacing of the layer nearest the
-    face, and a maximum along with the minimum. A face with no bars on it has
-    nothing to check either way. ``face`` is ``"b"`` or ``"t"``.
+    face, and a maximum along with the minimum -- and on a footing, whose bars
+    are kept 100 mm apart at the closest, a minimum the code raises above the
+    one the settings ask for. A face with no bars on it has nothing to check
+    either way. ``face`` is ``"b"`` or ``"t"``.
     """
     side = "top" if face == "t" else "bottom"
     # Only a section detailed by a spacing carries one; a beam has no such
@@ -125,14 +127,20 @@ def _bar_spacing_row(
         return f"Minimum spacing {side}", clear, min_clear, None
     if getattr(self, f"_n1_{face}") == 0 or spacing.magnitude == 0:
         return f"Bar spacing {side}", spacing, None, None
-    limit_of = getattr(self, "_max_bar_spacing", None)
+    max_of = getattr(self, "_max_bar_spacing", None)
+    min_of = getattr(self, "_min_bar_spacing", None)
     # The value is centre to centre, so the minimum clear distance is read as
-    # one bar further apart than the beam reads it.
+    # one bar further apart than the beam reads it. A code that asks for a
+    # spacing of its own -- a footing does -- raises that floor.
+    minimum: Quantity = min_clear + getattr(self, f"_d_b1_{face}")
+    from_code = None if min_of is None else min_of()
+    if from_code is not None:
+        minimum = max(minimum, from_code)
     return (
         f"Bar spacing {side}",
         spacing,
-        min_clear + getattr(self, f"_d_b1_{face}"),
-        None if limit_of is None else limit_of(),
+        minimum,
+        None if max_of is None else max_of(),
     )
 
 

@@ -7,6 +7,8 @@ motivated the class: the design returns the largest applicable minimum already
 applied, so a consumer never has to correct the engine's answer.
 """
 
+import warnings
+
 import pytest
 
 from mento.codes.aci_318_19.equations import flexure as aci_flexure
@@ -273,3 +275,163 @@ def test_a_footing_still_carries_its_moment(steel_b500s: SteelBar) -> None:
 
     assert footing._A_s_bot > footing._A_s_min_bot
     assert footing.flexure_check_results(combo)[0].bottom.DCR <= 1.0
+
+
+# ---------------------------------------------------------------------------
+# Detailing: how far apart the bars sit
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "concrete, steel",
+    [
+        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), SteelBar(name="ADN 420", f_y=420 * MPa)),
+        (Concrete_EN_1992_2004(name="C25", f_c=25 * MPa), SteelBar(name="B500S", f_y=500 * MPa)),
+    ],
+    ids=["aci", "en"],
+)
+def test_footing_bars_are_capped_at_300_mm(concrete, steel) -> None:  # type: ignore[no-untyped-def]
+    """3h stops binding on a section this thick, so the footing cap is what holds."""
+    footing = _strip(Footing, concrete, steel, "Z1")
+
+    assert footing._max_bar_spacing().to("mm").magnitude == pytest.approx(300.0)
+
+
+@pytest.mark.parametrize(
+    "concrete, steel",
+    [
+        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), SteelBar(name="ADN 420", f_y=420 * MPa)),
+        (Concrete_EN_1992_2004(name="C25", f_c=25 * MPa), SteelBar(name="B500S", f_y=500 * MPa)),
+    ],
+    ids=["aci", "en"],
+)
+def test_footing_bars_are_floored_at_100_mm(concrete, steel) -> None:  # type: ignore[no-untyped-def]
+    assert _strip(Footing, concrete, steel, "Z1")._min_bar_spacing().to("mm").magnitude == pytest.approx(100.0)
+
+
+def test_a_slab_keeps_the_wider_slab_limits(steel_b500s: SteelBar) -> None:
+    """The tighter pair is a footing's, not every slab's."""
+    slab = _strip(OneWaySlab, Concrete_EN_1992_2004(name="C25", f_c=25 * MPa), steel_b500s, "L1")
+
+    assert slab._max_bar_spacing().to("mm").magnitude == pytest.approx(400.0)
+    assert slab._min_bar_spacing() is None
+
+
+@pytest.mark.parametrize("M_y", [50, 150, 300, 450, 600, 750, 900, 1100])
+def test_a_designed_footing_stays_inside_the_spacing_range(steel_b500s: SteelBar, M_y: int) -> None:
+    """Across the range a metre strip can carry, the design answers with a
+    bigger bar rather than with bars closer than 100 mm."""
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    footing = _design(_strip(Footing, concrete, steel_b500s, "Z1"), M_y=M_y * kNm)
+
+    spacing = footing._s_b1_b.to("mm").magnitude
+    assert 100.0 <= spacing <= 300.0
+    assert footing.flexure_check_results([Forces(label="C1", M_y=M_y * kNm)])[0].bottom.DCR <= 1.0
+
+
+def test_the_floor_is_what_holds_the_footing_apart(steel_b500s: SteelBar) -> None:
+    """The same demand on a slab, which has no floor, is detailed tighter."""
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    footing = _design(_strip(Footing, concrete, steel_b500s, "Z1"), M_y=900 * kNm)
+    slab = _design(_strip(OneWaySlab, concrete, steel_b500s, "L1"), M_y=900 * kNm)
+
+    assert slab._s_b1_b.to("mm").magnitude < 100.0
+    assert footing._s_b1_b.to("mm").magnitude >= 100.0
+
+
+def test_the_spacing_row_of_a_footing_reports_both_bounds(steel_b500s: SteelBar) -> None:
+    """The check table carries the range, so a footing detailed outside it fails."""
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    footing = _design(_strip(Footing, concrete, steel_b500s, "Z1"))
+
+    row = footing._data_min_max_flexure
+    index = row["Check"].index("Bar spacing bottom")
+    assert row["Min."][index] == pytest.approx(100.0)
+    assert row["Max."][index] == pytest.approx(300.0)
+
+
+# ---------------------------------------------------------------------------
+# Detailing: how thin the section may be
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "concrete, steel, height, limit",
+    [
+        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), SteelBar(name="ADN 420", f_y=420 * MPa), 18 * cm, "200"),
+        (Concrete_EN_1992_2004(name="C25", f_c=25 * MPa), SteelBar(name="B500S", f_y=500 * MPa), 22 * cm, "250"),
+    ],
+    ids=["aci", "en"],
+)
+def test_a_thin_footing_warns(concrete, steel, height, limit) -> None:  # type: ignore[no-untyped-def]
+    with pytest.warns(UserWarning, match=f"below the {limit} mm"):
+        _strip(Footing, concrete, steel, "Z1", height=height)
+
+
+@pytest.mark.parametrize(
+    "concrete, steel",
+    [
+        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), SteelBar(name="ADN 420", f_y=420 * MPa)),
+        (Concrete_EN_1992_2004(name="C25", f_c=25 * MPa), SteelBar(name="B500S", f_y=500 * MPa)),
+    ],
+    ids=["aci", "en"],
+)
+def test_a_footing_of_the_usual_depth_does_not_warn(concrete, steel) -> None:  # type: ignore[no-untyped-def]
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        _strip(Footing, concrete, steel, "Z1")
+
+
+def test_a_thin_slab_does_not_warn(steel_b500s: SteelBar) -> None:
+    """The thickness rule is a footing's; a suspended slab is as thin as it is."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        _strip(OneWaySlab, Concrete_EN_1992_2004(name="C25", f_c=25 * MPa), steel_b500s, "L1", height=15 * cm)
+
+
+def test_a_thin_footing_is_still_designed(steel_b500s: SteelBar) -> None:
+    """The warning is advice. The thickness is the engineer's to choose, and the
+    design that follows is still the right design for the section given."""
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    with pytest.warns(UserWarning):
+        footing = _strip(Footing, concrete, steel_b500s, "Z1", height=20 * cm)
+    _design(footing, M_y=20 * kNm)
+
+    assert footing._A_s_bot >= footing._A_s_min_bot
+    assert footing._A_s_bot.magnitude > 0
+
+
+def test_the_warning_names_the_footing_and_the_code() -> None:
+    concrete = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
+    steel = SteelBar(name="ADN 420", f_y=420 * MPa)
+    with pytest.warns(UserWarning) as caught:
+        _strip(Footing, concrete, steel, "Z7", height=15 * cm)
+
+    message = str(caught[0].message)
+    assert "Z7" in message
+    assert "ACI 318-19" in message
+
+
+# ---------------------------------------------------------------------------
+# A section with nothing on the tension face
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "concrete, steel",
+    [
+        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), SteelBar(name="ADN 420", f_y=420 * MPa)),
+        (Concrete_EN_1992_2004(name="C25", f_c=25 * MPa), SteelBar(name="B500S", f_y=500 * MPa)),
+    ],
+    ids=["aci", "en"],
+)
+def test_an_unreinforced_face_reports_a_failing_dcr(concrete, steel) -> None:  # type: ignore[no-untyped-def]
+    """Both codes answer a moment on a bare face with a DCR far above 1.
+
+    EN used to divide by zero here. It is what a footing too thin to be
+    reinforced within its spacing range now reports, so it has to be a number.
+    """
+    section = _strip(OneWaySlab, concrete, steel, "L1")
+    combo = [Forces(label="C1", M_y=50 * kNm)]
+
+    assert section.flexure_check_results(combo)[0].bottom.DCR > 1

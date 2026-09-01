@@ -86,6 +86,14 @@ class DesignCode:
     #: no limit rather than as an error: a spacing rule a code does not have is
     #: not a rule an element can fail.
     max_bar_spacing_slab: Callable[..., Any] | None = None
+    #: Smallest centre-to-centre spacing this code asks for between the
+    #: flexural bars of a slab, over and above the clear distance the settings
+    #: already impose. ``None`` where the code states none.
+    min_bar_spacing_slab: Callable[..., Any] | None = None
+    #: Thinnest section this code allows for a member bearing on the ground.
+    #: Read as advice, not as a limit: a thinner footing is reported and still
+    #: designed, because the thickness is the engineer's to choose.
+    min_thickness_on_soil: Callable[..., Any] | None = None
 
     def requires(self, hook: str) -> Callable[..., Any]:
         """The hook, or a clear error naming the code that lacks it."""

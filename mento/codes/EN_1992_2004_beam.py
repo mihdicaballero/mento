@@ -33,6 +33,12 @@ if TYPE_CHECKING:
 _mm2 = mm**2
 _Nmm = N * mm
 
+#: Stands in for a resistance of exactly zero when the DCR is formed, so that a
+#: face with no reinforcement on it reports a ratio far above 1 -- which is what
+#: it is -- instead of dividing by zero. ACI keeps the same floor, at the same
+#: 0.01 kNm; a resistance that small is already indistinguishable from none.
+_MOMENT_FLOOR = 0.01e6  # N·mm; EN is metric only
+
 
 def _initialize_variables_EN_1992_2004(self: "RectangularBeam") -> None:
     """
@@ -657,6 +663,8 @@ def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> ENFle
         ) = _calculate_flexural_reinforcement_EN_1992_2004(self, st.M_Ed_bot, sec.d_bot, sec.c_mec_top)
         st.c_d_top = 0
         # Calculate the design capacity ratio for the bottom side.
+        if st.M_Rd_bot == 0:
+            st.M_Rd_bot = _MOMENT_FLOOR
         st.DCR_bot = round(st.M_Ed_bot / st.M_Rd_bot, 3)
         st.DCR_top = 0
     else:
@@ -669,6 +677,8 @@ def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> ENFle
         ) = _calculate_flexural_reinforcement_EN_1992_2004(self, abs(st.M_Ed_top), sec.d_top, sec.c_mec_bot)
         st.c_d_bot = 0
         # Calculate the design capacity ratio for the top side.
+        if st.M_Rd_top == 0:
+            st.M_Rd_top = _MOMENT_FLOOR
         st.DCR_top = round(-st.M_Ed_top / st.M_Rd_top, 3)
         st.DCR_bot = 0
 

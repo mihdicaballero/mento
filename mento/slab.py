@@ -2,6 +2,8 @@ from __future__ import annotations
 from typing import Any, ClassVar, TYPE_CHECKING, cast
 from dataclasses import dataclass
 import math
+import warnings
+
 import numpy as np
 
 from mento.beam import RectangularBeam
@@ -42,6 +44,13 @@ class OneWaySlab(RectangularBeam):
 
         # Allow slabs to place as many bars as minimum spacing permits
         self.settings.max_bars_per_layer = max(self.settings.max_bars_per_layer, 200)
+        # ... and no more than the code's own minimum spacing permits, which is
+        # the only way that limit can be enforced: the rebar search chooses a
+        # bar count, and the spacing is what that count implies. Capping the
+        # count is capping the spacing from below.
+        minimum = self._min_bar_spacing()
+        if minimum is not None:
+            self.settings.max_bars_per_layer = max(1, int(self.width / minimum))
         # Force same diameter for all bars within a layer
         self.settings.max_diameter_diff = 0 * self.settings.max_diameter_diff
 
@@ -147,6 +156,17 @@ class OneWaySlab(RectangularBeam):
         """
         limit = design_code(self.concrete).max_bar_spacing_slab
         return None if limit is None else cast("Quantity", limit(self))
+
+    def _min_bar_spacing(self) -> Quantity | None:
+        """The smallest spacing the design code asks for between the flexural bars.
+
+        Distinct from the clear distance in :class:`~mento.settings.BeamSettings`,
+        which every section has and which is about fitting a bar and a vibrator
+        between two others. This is the code's own floor, and only a footing has
+        one; a slab spanning between supports returns ``None``.
+        """
+        limit = design_code(self.concrete).min_bar_spacing_slab
+        return None if limit is None else cast("Quantity | None", limit(self))
 
     def _spacing_for_bars(self, n: int) -> Quantity:
         """The spacing that puts ``n`` bars across the strip, as it would be drawn.
@@ -324,13 +344,42 @@ class Footing(OneWaySlab):
         )
         Node(section=footing, forces=[Forces(M_y=120 * kNm)]).design()
 
+    It is also detailed differently, which the same ``support`` tells the codes:
+    the bars are kept between 100 and 300 mm apart, and a footing thinner than
+    its code allows says so when it is built.
+
     Note:
-        The rest of the footing's rules are the engineer's: this class does not
-        check the minimum thickness (200 mm in ACI, 250 mm in common EN
-        practice) or the 100-300 mm bar spacing range, and it says nothing
-        about the soil below -- bearing pressure, punching and sliding are not
+        A `Footing` designs the section, not the foundation. It says nothing
+        about the soil below it -- bearing pressure, punching (see
+        :class:`~mento.punching.PunchingSlab`), sliding and overturning are not
         part of a section design.
     """
 
     #: What makes it a footing, and the only thing the design codes read.
     support: ClassVar[str] = "soil"
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self._warn_if_thinner_than_the_code_allows()
+
+    def _warn_if_thinner_than_the_code_allows(self) -> None:
+        """Say so when the section is thinner than a footing is built.
+
+        A warning and not an error: the thickness is the engineer's to choose,
+        and the design that follows is still the right design for the section
+        it was given. Raising would refuse to answer a question that has an
+        answer.
+        """
+        minimum = design_code(self.concrete).min_thickness_on_soil
+        if minimum is None:
+            return
+        limit = cast("Quantity", minimum(self.concrete))
+        if self.height < limit:
+            label = f" {self.label}" if self.label else ""
+            warnings.warn(
+                f"Footing{label} is {self.height:.4g~P} thick, below the "
+                f"{limit:.4g~P} {self.concrete.design_code} asks of a footing on soil. "
+                "It is designed as given.",
+                UserWarning,
+                stacklevel=3,
+            )

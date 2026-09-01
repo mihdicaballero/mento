@@ -88,6 +88,15 @@ _SHEAR_SYMBOLS = {
 }
 
 
+#: How far apart the bars of a member on the ground are detailed, whichever
+#: code it is designed to. The upper bound is what keeps the pressure from the
+#: soil spread across the reinforcement rather than arching between distant
+#: bars; the lower one is EN practice, applied to both codes because nothing
+#: about it is particular to EN.
+_MAX_BAR_SPACING_ON_SOIL = 300 * mm
+_MIN_BAR_SPACING_ON_SOIL = 100 * mm
+
+
 def _min_stirrup_diameter(concrete: Any) -> Any:
     """ACI's smallest stirrup: a #3 bar, or 10 mm in metric practice."""
     return 10 * mm if concrete.unit_system == "metric" else 3 / 8 * inch
@@ -98,9 +107,37 @@ def _max_bar_spacing_slab(section: "RectangularBeam") -> Any:
 
     The limit is on the flexural reinforcement of a one-way slab, so it is the
     spacing of the layer nearest the face that has to meet it.
+
+    A footing is detailed more tightly than 7.7.2.3 alone would ask: a slab on
+    the ground is thick, so 3h stops binding long before the bars are close
+    enough to spread the bearing pressure into them, and practice caps them at
+    300 mm.
     """
     limit = 450 * mm if section.concrete.unit_system == "metric" else 18 * inch
+    if section.support == "soil":
+        limit = min(limit, _MAX_BAR_SPACING_ON_SOIL)
     return min(3 * section.height, limit)
+
+
+def _min_bar_spacing_slab(section: "RectangularBeam") -> Any:
+    """The closest together the bars of a footing are detailed.
+
+    Not a strength limit -- the clear distance of 25.2.1 is, and the settings
+    already carry it -- but the spacing below which a footing is not detailed
+    in practice, because placing and vibrating over the soil stops being
+    worth it. A slab spanning between supports has no such floor.
+    """
+    return _MIN_BAR_SPACING_ON_SOIL if section.support == "soil" else None
+
+
+def _min_thickness_on_soil(concrete: Any) -> Any:
+    """ACI 318-19 13.3.1.2: a footing on soil is at least 200 mm (8 in.) thick.
+
+    The clause is written as an effective depth of 150 mm above the bottom
+    reinforcement, which with the cover and bars of a footing is the overall
+    200 mm quoted here.
+    """
+    return 200 * mm if concrete.unit_system == "metric" else 8 * inch
 
 
 def _min_stirrup_diameter_cirsoc(concrete: Any) -> Any:
@@ -199,6 +236,8 @@ _COMMON = dict(
     shear_symbols=_SHEAR_SYMBOLS,
     summary_drop_columns=_SUMMARY_DROP_COLUMNS,
     max_bar_spacing_slab=_max_bar_spacing_slab,
+    min_bar_spacing_slab=_min_bar_spacing_slab,
+    min_thickness_on_soil=_min_thickness_on_soil,
 )
 
 ACI_318_19 = register(
