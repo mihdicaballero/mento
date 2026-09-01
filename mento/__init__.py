@@ -57,6 +57,7 @@ __all__ = [
     "Node",
     "Forces",
     "OneWaySlab",
+    "Footing",
     "Concrete_ACI_318_19",
     "SteelBar",
     "Concrete_CIRSOC_201_25",
@@ -91,7 +92,7 @@ if TYPE_CHECKING:
         Concrete_EN_1992_2004,
         SteelBar,
     )
-    from mento.slab import OneWaySlab
+    from mento.slab import Footing, OneWaySlab
     from mento.settings import BeamSettings
     from mento.node import Node
     from mento.results import DocumentBuilder, Formatter, TablePrinter
@@ -108,6 +109,7 @@ def __getattr__(name: str) -> object:
     module_mapping = {
         "RectangularBeam": "beam",
         "OneWaySlab": "slab",
+        "Footing": "slab",
         "Node": "node",
         "BeamSettings": "settings",
         "Forces": "forces",

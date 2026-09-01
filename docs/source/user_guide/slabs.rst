@@ -147,3 +147,13 @@ See the `Node` section for more information on detailed results and Word report 
 
 See the `Node` section for how to display and save detailed per-load-case results using
 `shear_results_detailed()`, `flexure_results_detailed()`, and their `_doc()` variants.
+
+8. Footings
+***********
+
+A footing is a slab bearing directly on the ground, and mento models it as a
+`Footing` — a `OneWaySlab` whose minimum reinforcement, bar spacing and thickness
+follow the rules the codes write for a member on the ground. Everything on this page
+applies to it unchanged.
+
+See :doc:`footings`.

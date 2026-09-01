@@ -12,6 +12,7 @@ import math
 __all__ = [
     "max_reinforcement_ratio",
     "min_reinforcement_ratio",
+    "shrinkage_and_temperature_ratio",
     "neutral_axis_at_ductility_limit",
     "compression_steel_net_stress",
     "flexural_resistance_factor",
@@ -57,6 +58,29 @@ def min_reinforcement_ratio(f_c: float, f_y: float, *, is_imperial: bool = False
     if is_imperial:
         return max(3 * math.sqrt(f_c) / f_y, 200 / f_y)
     return max(0.25 * math.sqrt(f_c) / f_y, 1.4 / f_y)
+
+
+def shrinkage_and_temperature_ratio(f_y: float, *, is_imperial: bool = False) -> float:
+    """Shrinkage and temperature reinforcement ratio — ACI 318-19 Table 24.4.3.2.
+
+    The minimum that governs when the flexural minimum of §9.6.1.2 does not
+    apply. §9.6.1.1(b) exempts a member supported on the ground from that
+    clause, and §13.3.1.2 sends a footing here instead — which is why this
+    ratio is written on the GROSS section ``b*h``, not on the effective depth
+    the flexural minimum uses.
+
+    Args:
+        f_y: Specified steel yield strength (MPa, or psi).
+        is_imperial: Selects the reference yield strength the table is anchored
+            at: 60000 psi in US customary, 420 MPa in SI.
+
+    Returns:
+        A_s,min/(b*h), dimensionless. 0.0018 at the reference yield strength,
+        scaled inversely for a stronger steel, and never below the 0.0014 floor
+        the table imposes.
+    """
+    f_y_reference = 60000.0 if is_imperial else 420.0
+    return max(0.0018 * f_y_reference / f_y, 0.0014)
 
 
 def neutral_axis_at_ductility_limit(d: float, epsilon_y: float) -> float:

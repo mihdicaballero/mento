@@ -144,6 +144,12 @@ def _longitudinal_rebar(rebar: "Rebar", A_s_req: Any, A_s_max: Any, mech_cover: 
     return rebar.longitudinal_rebar_EN_1992_2004(A_s_req, A_s_max, mech_cover)
 
 
+#: How far apart the bars of a member on the ground are detailed. Both codes
+#: use the same pair; see the ACI module for why.
+_MAX_BAR_SPACING_ON_SOIL = 300 * mm
+_MIN_BAR_SPACING_ON_SOIL = 100 * mm
+
+
 def _max_bar_spacing_slab(section: "RectangularBeam") -> Any:
     """EN 1992-1-1 9.3.1.1(3): 3h, and no more than 400 mm.
 
@@ -152,8 +158,35 @@ def _max_bar_spacing_slab(section: "RectangularBeam") -> Any:
     no more than 250 mm) is not applied here: a section is checked against a set
     of forces, with no position along the span for mento to tell that it is in
     one of those areas.
+
+    A footing is detailed more tightly than 9.3.1.1(3) alone would ask: a slab
+    on the ground is thick, so 3h stops binding long before the bars are close
+    enough to spread the bearing pressure into them, and 9.8.2.1 practice caps
+    them at 300 mm.
     """
-    return min(3 * section.height, 400 * mm)
+    limit = min(400 * mm, _MAX_BAR_SPACING_ON_SOIL) if section.support == "soil" else 400 * mm
+    return min(3 * section.height, limit)
+
+
+def _min_bar_spacing_slab(section: "RectangularBeam") -> Any:
+    """The closest together the bars of a footing are detailed.
+
+    Not a strength limit -- the clear distance of 8.2 is, and the settings
+    already carry it -- but the spacing below which a footing is not detailed
+    in practice, because placing and vibrating over the soil stops being worth
+    it. A slab spanning between supports has no such floor.
+    """
+    return _MIN_BAR_SPACING_ON_SOIL if section.support == "soil" else None
+
+
+def _min_thickness_on_soil(concrete: Any) -> Any:
+    """The thinnest footing EN practice details.
+
+    EN 1992-1-1 states no overall minimum for a footing the way ACI 13.3.1.2
+    does; 250 mm is the thickness below which the anchorage of the bars and the
+    tolerance on a surface cast against the ground stop working out.
+    """
+    return 250 * mm
 
 
 EN_1992_2004 = register(
@@ -179,5 +212,7 @@ EN_1992_2004 = register(
         shear_symbols=_SHEAR_SYMBOLS,
         summary_drop_columns=_SUMMARY_DROP_COLUMNS,
         max_bar_spacing_slab=_max_bar_spacing_slab,
+        min_bar_spacing_slab=_min_bar_spacing_slab,
+        min_thickness_on_soil=_min_thickness_on_soil,
     )
 )

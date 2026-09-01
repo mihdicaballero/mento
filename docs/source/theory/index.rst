@@ -21,6 +21,7 @@ source that test is verified against.
    beam_aci_318_19
    beam_en_1992_2004
    one_way_slab
+   footing
    shear_wall_aci_318_19
 
 What is implemented
@@ -43,6 +44,12 @@ What is implemented
      - Flexure + shear
      - Same provisions as the beam, different detailing —
        :doc:`one_way_slab`
+   * - Footing
+     - Flexure + shear
+     - Flexure + shear
+     - Slab provisions with the minimum reinforcement and detailing of a
+       member on the ground — :doc:`footing`. Sectional only; no
+       geotechnical calculation
    * - Shear wall
      - In-plane shear
      - Not implemented
@@ -59,7 +66,8 @@ the :doc:`ACI page <beam_aci_318_19>` rather than duplicated.
 
 What is **not** implemented, for any code: torsion, crack width and deflection
 serviceability checks, fatigue, fire design, anchorage and development length,
-seismic detailing provisions, and prestressing.
+seismic detailing provisions, and prestressing. Nor is anything geotechnical —
+mento designs sections, and the soil a footing bears on is outside its scope.
 
 Conventions
 -----------

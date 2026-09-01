@@ -371,3 +371,20 @@ def _run_flexure_design(
         if capacity("top", M_demand_top) < M_demand_top and top_visited:
             chosen_top = _select_safe_design(self, list(top_visited.values()), M_demand_top, "top", capacity)
             self._apply_longitudinal_design_top(chosen_top)
+
+    # Both faces are settled. An element whose faces are detailed as one -- a
+    # footing mat -- gets the last word here, after the verification above and
+    # never before it, so that what it starts from is a layout already known to
+    # work. It may re-select the bars rather than only the spacing, so it is
+    # handed the means to verify its own choice.
+    def _layout_resists() -> bool:
+        """Does the layout currently on the section carry both moments?"""
+        if max_M_y_bot > 0 * kNm and capacity("bot", max_M_y_bot) < max_M_y_bot:
+            return False
+        if max_M_y_top < 0 * kNm:
+            M_demand = abs(max_M_y_top.to("kN*m"))
+            if capacity("top", M_demand) < M_demand:
+                return False
+        return True
+
+    self._finalize_longitudinal_design(A_req_bot, A_req_top, _layout_resists)

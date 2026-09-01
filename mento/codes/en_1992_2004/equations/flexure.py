@@ -16,6 +16,9 @@ import math
 
 __all__ = [
     "min_reinforcement_ratio",
+    "foundation_min_reinforcement_ratio",
+    "crack_control_coefficient_k",
+    "crack_control_min_reinforcement",
     "max_reinforcement_ratio",
     "neutral_axis_depth_limit_ratio",
     "limit_moment",
@@ -41,6 +44,78 @@ def min_reinforcement_ratio(f_ctm: float, f_yk: float) -> float:
         absolute floor of 0.0013 the clause also imposes.
     """
     return max(0.26 * f_ctm / f_yk, 0.0013)
+
+
+def foundation_min_reinforcement_ratio(f_yk: float) -> float:
+    """Geometric minimum for a foundation, per direction — EN 1992-1-1 §9.2.1.1, §9.8.1.
+
+    A footing or raft bears on the ground, so the brittle-failure mechanism the
+    non-fragility minimum of §9.2.1.1 guards against cannot develop: the soil
+    keeps carrying the element after the section cracks. §9.8.1 detailing
+    practice therefore takes the minimum at half of it in each of the two
+    directions, and writes it on the GROSS section ``b*h`` rather than on the
+    effective depth.
+
+    Args:
+        f_yk: Characteristic yield strength of the reinforcement (MPa).
+
+    Returns:
+        A_s,min/(b*h), dimensionless: 1.0 per mille at f_yk = 400 MPa and
+        0.9 per mille at f_yk = 500 MPa, the two grades the rule is tabulated
+        for, interpolated linearly between them and held flat outside.
+    """
+    ratio_400, ratio_500 = 0.0010, 0.0009
+    if f_yk <= 400.0:
+        return ratio_400
+    if f_yk >= 500.0:
+        return ratio_500
+    return ratio_400 + (f_yk - 400.0) * (ratio_500 - ratio_400) / (500.0 - 400.0)
+
+
+def crack_control_coefficient_k(h: float) -> float:
+    """Coefficient k of the crack-control minimum — EN 1992-1-1 §7.3.2(2).
+
+    Accounts for the non-uniform self-equilibrating stresses that relieve the
+    tension a thick section has to carry: the deeper the member, the more of
+    the restraint is taken by them and the less by the reinforcement.
+
+    Args:
+        h: Overall depth of the section (mm); for a flange or web the clause
+            takes the smaller of the width and the height instead.
+
+    Returns:
+        k, dimensionless: 1.0 for h <= 300 mm, 0.65 for h >= 800 mm, linear in
+        between and saturated at both ends.
+    """
+    if h <= 300.0:
+        return 1.0
+    if h >= 800.0:
+        return 0.65
+    return 1.0 + (h - 300.0) * (0.65 - 1.0) / (800.0 - 300.0)
+
+
+def crack_control_min_reinforcement(k_c: float, k: float, f_ct_eff: float, A_ct: float, sigma_s: float) -> float:
+    """Minimum reinforcement for crack control — EN 1992-1-1 §7.3.2(2), Eq. (7.1).
+
+    ``A_s,min * sigma_s = k_c * k * f_ct,eff * A_ct``: enough steel to carry,
+    without breaking, the tension the concrete releases at the instant it
+    cracks.
+
+    Args:
+        k_c: Stress distribution coefficient — 0.4 for a rectangular section in
+            pure bending, 1.0 in pure tension.
+        k: Coefficient from :func:`crack_control_coefficient_k`.
+        f_ct_eff: Tensile strength of the concrete at the moment cracking is
+            expected, taken as f_ctm (MPa).
+        A_ct: Area of concrete in the tension zone just before the first crack
+            forms (mm²).
+        sigma_s: Stress permitted in the reinforcement immediately after
+            cracking (MPa).
+
+    Returns:
+        A_s,min (mm²).
+    """
+    return k_c * k * f_ct_eff * A_ct / sigma_s
 
 
 def max_reinforcement_ratio() -> float:
