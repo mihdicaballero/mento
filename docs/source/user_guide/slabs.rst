@@ -151,54 +151,9 @@ See the `Node` section for how to display and save detailed per-load-case result
 8. Footings
 ***********
 
-A `Footing` is a `OneWaySlab` that bears directly on the ground. It takes the same
-arguments, carries the same reinforcement — diameter and spacing — and goes through
-the same checks. The one difference is the minimum longitudinal reinforcement.
+A footing is a slab bearing directly on the ground, and mento models it as a
+`Footing` — a `OneWaySlab` whose minimum reinforcement, bar spacing and thickness
+follow the rules the codes write for a member on the ground. Everything on this page
+applies to it unchanged.
 
-.. code-block:: python
-
-    from mento import Footing, Forces, Node, cm, kNm, m, mm
-
-    footing = Footing(label="Z1", concrete=concrete, steel_bar=steel_bar,
-                      width=1 * m, height=60 * cm, c_c=50 * mm)
-
-    Node(section=footing, forces=[Forces(label="ELU 1", M_y=120 * kNm)]).design()
-
-A member spanning between supports is given a minimum sized so that it cannot fail
-the instant it cracks. A member on the ground cannot fail that way — the soil goes on
-carrying it — so both codes exempt it and put a different rule in its place:
-
-- **ACI 318-19** (and **CIRSOC 201-25**): §9.6.1.1(b) grants the exemption and
-  §13.3.1.2 replaces the flexural minimum with the shrinkage and temperature
-  reinforcement of §24.4.3.2 — :math:`0.0018\,b\,h` at :math:`f_y = 420` MPa,
-  written on the gross section rather than on the effective depth.
-- **EN 1992-2004**: the larger of the halved geometric minimum of a foundation and
-  the crack-control minimum of §7.3.2(2), Eq. (7.1). The second usually governs a
-  thick footing.
-
-The design returns the largest applicable minimum already applied, so the reinforcement
-it reports needs no correction afterwards.
-
-A footing is also detailed differently, and the same `support` tells the codes so:
-
-- **Bar spacing** is kept between 100 and 300 mm. The upper bound replaces the 3h of
-  a suspended slab, which stops binding on a section this thick; the lower one is the
-  spacing below which a footing is not detailed in practice. A design answers a heavy
-  demand with a larger bar rather than with bars closer than 100 mm, and the flexure
-  check table reports the spacing against both bounds.
-- **Thickness** below what the code asks of a footing on soil — 200 mm in ACI 318-19
-  13.3.1.2, 250 mm in EN practice — raises a warning when the section is built. It is
-  advice, not a limit: the section is still designed as given, because the thickness is
-  the engineer's to choose.
-
-.. code-block:: python
-
-    Footing(label="Z2", concrete=concrete, steel_bar=steel_bar,
-            width=1 * m, height=18 * cm, c_c=50 * mm)
-    # UserWarning: Footing Z2 is 18 cm thick, below the 200 mm ACI 318-19 asks
-    # of a footing on soil. It is designed as given.
-
-.. note::
-
-   `Footing` designs the section, not the foundation. Bearing pressure, punching
-   (see `PunchingSlab`), sliding and overturning are outside its scope.
+See :doc:`footings`.

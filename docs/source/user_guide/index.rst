@@ -15,6 +15,7 @@ User Guide
    sections
    beams
    slabs
+   footings
    shear_wall
    node
    design_results

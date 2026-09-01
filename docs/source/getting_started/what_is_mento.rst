@@ -12,6 +12,9 @@ Mento can handle the design and analysis of:
 
 - **Rectangular concrete beams** for flexure and shear.
 - **One-way slabs** for flexure and shear.
+- **Footing sections** for flexure and shear, with the minimum reinforcement and
+  detailing rules a member bearing on the ground is designed to. Sectional design
+  only — mento does no geotechnical calculation.
 
 Some key features of Mento include:
 
