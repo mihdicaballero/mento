@@ -75,60 +75,30 @@ Reinforcement can also be assigned by hand with `set_slab_longitudinal_rebar_bot
 `set_slab_longitudinal_rebar_top()`, and read back afterwards, the same way as for a
 `OneWaySlab`. See :doc:`slabs` for the full reinforcement and results API.
 
-What the codes do differently
------------------------------
+What differs from a slab
+------------------------
 
-Minimum reinforcement
-*********************
+Three rules, and the design applies all of them for you:
 
-A member spanning between supports is given a minimum sized so that it cannot fail the
-instant it cracks. A member on the ground cannot fail that way — the soil goes on
-carrying it — so both codes exempt it and put a different rule in its place:
+- **Minimum reinforcement.** A member on the ground is exempt from the flexural
+  minimum written for a member spanning between supports, and each code puts a
+  different rule in its place. `Footing` returns the largest applicable minimum
+  **already applied**, so the reinforcement it reports needs no correction afterwards.
+- **Bar spacing.** Kept between 100 and 300 mm. A design answers a heavier demand with
+  a larger bar rather than with bars closer than 100 mm, and both bounds appear in the
+  flexure check table.
+- **Thickness.** A section thinner than the code asks of a footing on soil warns when
+  it is built:
 
-.. list-table::
-   :header-rows: 1
-   :widths: 22 78
+  .. code-block:: python
 
-   * - Code
-     - A\ :sub:`s,min`
-   * - ACI 318-19,
-       CIRSOC 201-25
-     - §9.6.1.1(b) grants the exemption and §13.3.1.2 replaces the flexural minimum
-       with the shrinkage and temperature reinforcement of Table 24.4.3.2:
-       :math:`0.0018\,b\,h` at :math:`f_y = 420` MPa, scaling as
-       :math:`0.0018 \cdot 420 / f_y` and never below :math:`0.0014`. Written on the
-       **gross** section, so the effective depth does not enter it.
-   * - EN 1992-2004
-     - The larger of the halved geometric minimum of a foundation
-       (:math:`0.0010\,b\,h` at :math:`f_{yk} = 400` MPa, :math:`0.0009\,b\,h` at
-       500 MPa) and the crack-control minimum of §7.3.2(2), Eq. (7.1),
-       :math:`k_c\,k\,f_{ct,eff}\,A_{ct} / \sigma_s`. The second usually governs a
-       thick footing.
+      Footing(label="Z2", concrete=concrete, steel_bar=steel,
+              width=1 * m, height=18 * cm, c_c=50 * mm)
+      # UserWarning: Footing Z2 is 18 cm thick, below the 200 mm ACI 318-19 asks
+      # of a footing on soil. It is designed as given.
 
-The design returns the largest applicable minimum **already applied**, so the
-reinforcement it reports needs no correction afterwards.
+  It is advice, not a limit. The section is still designed as given, because the
+  thickness is the engineer's to choose.
 
-Bar spacing
-***********
-
-Kept between **100 and 300 mm**. The 300 mm cap replaces the 3h of a suspended slab,
-which stops binding on a section this thick; the 100 mm floor is the spacing below which
-a footing is not detailed in practice. A design answers a heavier demand with a larger
-bar rather than with bars closer than 100 mm, and the flexure check table reports the
-spacing against both bounds.
-
-Thickness
-*********
-
-A section thinner than the code asks of a footing on soil — 200 mm in ACI 318-19
-§13.3.1.2, 250 mm in EN practice — warns when it is built:
-
-.. code-block:: python
-
-    Footing(label="Z2", concrete=concrete, steel_bar=steel,
-            width=1 * m, height=18 * cm, c_c=50 * mm)
-    # UserWarning: Footing Z2 is 18 cm thick, below the 200 mm ACI 318-19 asks
-    # of a footing on soil. It is designed as given.
-
-It is advice, not a limit. The section is still designed as given, because the thickness
-is the engineer's to choose.
+For the clauses these come from, the equations, and the readings mento takes where the
+codes leave room for judgement, see :doc:`../theory/footing`.
