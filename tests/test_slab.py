@@ -3,8 +3,9 @@ import math
 import pytest
 from pint import Quantity
 
+from mento.beam import RectangularBeam
 from mento.node import Node
-from mento.slab import OneWaySlab
+from mento.slab import OneWaySlab, _bars_at_spacing
 from mento.material import Concrete_ACI_318_19, SteelBar, Concrete_EN_1992_2004
 from mento.units import kip, inch, mm, cm, kN, MPa, kNm, ksi
 from mento.forces import Forces
@@ -553,6 +554,248 @@ def test_slab_shear_design_is_the_least_steel_the_spacing_limits_allow() -> None
                     assert A_v.to("cm**2/m").magnitude >= chosen * (1 - 1e-9), (
                         f"Ø{row['d_b']} at {s_l} cm x {s_w} cm covers A_v_req with less steel"
                     )
+
+
+##########################################################
+# HOW A DESIGN IS WRITTEN ONTO A SLAB
+##########################################################
+
+
+def test_a_designed_slab_is_detailed_by_a_spacing_not_by_a_bar_count() -> None:
+    """The search is the beam's; what it produces has to be read as a slab.
+
+    Its answer is groups of bars -- ``n_1`` and ``n_2`` are one and the same
+    layer -- and the beam applies it as such. A slab that went through it came
+    out split into "2Ø12 + 4Ø12", two layers that are really one, with the
+    spacing that actually details a slab left empty: there was no way to read
+    the result other than by counting bars.
+    """
+    slab = _designed_slab(Concrete_ACI_318_19(name="H25", f_c=25 * MPa), V_z=0 * kN)
+
+    bottom = slab.reinforcement.bottom
+    assert len(bottom.layers) == 1
+    layer = bottom.layers[0]
+    assert layer.s is not None and layer.s.to("cm").magnitude > 0
+    assert str(bottom) == f"Ø{layer.d_b:.4g~P}/{layer.s:.4g~P}"
+    # Positions 2 and 4 stay empty: a slab layer is one bar at one spacing.
+    assert slab._n2_b == 0 and slab._n4_b == 0
+    # The spacing is the state, and the count is what it produces.
+    assert _bars_at_spacing(slab._s_b1_b, slab.width) == layer.n
+
+
+def test_the_spacing_a_design_leaves_is_one_that_can_be_drawn() -> None:
+    """Rounded to the centimetre, and up, so the bars the search chose stay."""
+    slab = _designed_slab(Concrete_ACI_318_19(name="H25", f_c=25 * MPa), V_z=0 * kN)
+
+    spacing = slab._s_b1_b.to("cm").magnitude
+    assert spacing == pytest.approx(round(spacing))
+    n = slab.reinforcement.bottom.layers[0].n
+    # Rounding up cannot cost a bar: n bars at width/n rounded up still ask for n.
+    assert spacing >= slab.width.to("cm").magnitude / n
+    assert slab.reinforcement.bottom.A_s >= slab.flexure_design.bottom.A_s_req
+
+
+def test_a_spacing_is_never_rounded_into_fewer_bars_than_the_design_chose() -> None:
+    """Rounding up is the rule, but it does not always hold.
+
+    ``ceil(width / n)`` normally asks for the same ``n`` bars back. Once the
+    bars are close enough that a whole centimetre spans more than one of them
+    -- from about eleven in a metre -- rounding up drops one, so the spacing is
+    checked against the count it produces and rounded down instead.
+    """
+    slab = OneWaySlab(
+        label="Slab spacing",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=20 * cm,
+        c_c=20 * mm,
+    )
+
+    # 100/6 = 16.7 -> 17 cm, and 17 cm still asks for 6 bars.
+    assert slab._spacing_for_bars(6).to("cm").magnitude == 17
+    # 100/11 = 9.1 -> 10 cm would only ask for 10, so it rounds the other way.
+    assert slab._spacing_for_bars(11).to("cm").magnitude == 9
+    for n in range(1, 30):
+        assert _bars_at_spacing(slab._spacing_for_bars(n), slab.width) >= n
+    assert slab._spacing_for_bars(0).magnitude == 0
+
+
+def test_an_imperial_slab_is_designed_to_a_whole_inch_spacing() -> None:
+    slab = OneWaySlab(
+        label="Slab imperial flexure",
+        concrete=Concrete_ACI_318_19(name="C4", f_c=4 * ksi),
+        steel_bar=SteelBar(name="G60", f_y=60 * ksi),
+        width=36 * inch,
+        height=10 * inch,
+        c_c=0.75 * inch,
+    )
+    Node(section=slab, forces=Forces(label="C1", M_y=20 * kNm)).design()
+
+    spacing = slab._s_b1_b.to("inch").magnitude
+    assert spacing == pytest.approx(round(spacing))
+    assert _bars_at_spacing(slab._s_b1_b, slab.width) == slab._n1_b
+
+
+def test_designing_a_slab_that_needs_no_top_steel_clears_the_top_spacing() -> None:
+    """A cleared face has to lose its spacing, or the bars come back.
+
+    The beam clears a face by zeroing the bar counts. On a slab those counts are
+    derived from the spacing, so a spacing left behind would be turned back into
+    bars by the next recalculation -- the following design of the bottom face.
+    """
+    slab = OneWaySlab(
+        label="Slab top cleared",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=20 * cm,
+        c_c=20 * mm,
+    )
+    slab.set_slab_longitudinal_rebar_top(d_b1=12 * mm, s_b1=15 * cm)
+
+    # Sagging only: nothing is required on the top face.
+    Node(section=slab, forces=Forces(label="C1", M_y=30 * kNm)).design()
+
+    assert slab._s_b1_t.magnitude == 0
+    assert slab._n1_t == 0
+    assert slab.reinforcement.top.layers == ()
+    assert slab.reinforcement.top.A_s.magnitude == 0
+
+    # The same, through the path the design takes when the face has no layout
+    # at all to apply rather than an empty one.
+    slab.set_slab_longitudinal_rebar_top(d_b1=12 * mm, s_b1=15 * cm)
+    assert slab.reinforcement.top.n_bars > 0
+
+    slab._clear_top_longitudinal()
+
+    assert slab._s_b1_t.magnitude == 0
+    assert slab._s_b3_t.magnitude == 0
+    assert slab.reinforcement.top.layers == ()
+    # And the bars stay gone once another face is recalculated.
+    slab.set_slab_longitudinal_rebar_bot(d_b1=10 * mm, s_b1=20 * cm)
+    assert slab.reinforcement.top.layers == ()
+
+
+def test_a_hogging_slab_is_designed_on_its_top_face_by_a_spacing() -> None:
+    slab = OneWaySlab(
+        label="Slab hogging",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=20 * cm,
+        c_c=20 * mm,
+    )
+    Node(section=slab, forces=Forces(label="C1", M_y=-30 * kNm)).design()
+
+    top = slab.reinforcement.top
+    assert len(top.layers) == 1
+    assert top.layers[0].s is not None
+    assert _bars_at_spacing(slab._s_b1_t, slab.width) == top.layers[0].n
+    assert top.A_s >= slab.flexure_design.top.A_s_req
+
+
+@pytest.mark.parametrize(
+    ("concrete", "height", "expected_cm"),
+    [
+        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), 12 * cm, 36),  # 3h governs
+        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), 25 * cm, 45),  # 450 mm governs
+        (Concrete_EN_1992_2004(name="C25", f_c=25 * MPa), 12 * cm, 36),  # 3h governs
+        (Concrete_EN_1992_2004(name="C25", f_c=25 * MPa), 25 * cm, 40),  # 400 mm governs
+    ],
+    ids=["ACI_3h", "ACI_450mm", "EN_3h", "EN_400mm"],
+)
+def test_the_code_caps_how_far_apart_the_bars_of_a_slab_may_sit(
+    concrete: Concrete_ACI_318_19 | Concrete_EN_1992_2004, height: Quantity, expected_cm: float
+) -> None:
+    """ACI 318-19 7.7.2.3 is 3h or 450 mm; EN 1992-1-1 9.3.1.1(3) is 3h or 400 mm."""
+    slab = OneWaySlab(
+        label="Slab s_max",
+        concrete=concrete,
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=height,
+        c_c=20 * mm,
+    )
+
+    assert slab._max_bar_spacing().to("cm").magnitude == pytest.approx(expected_cm)
+
+
+def test_a_design_is_never_spaced_beyond_the_code_maximum() -> None:
+    """Area alone is not a layout.
+
+    A light strip needs so little steel that the search covers it with the two
+    bars it starts from, which on a metre of slab is a bar every half metre:
+    the area is there and most of the slab is not reinforced. The spacing is
+    capped at what the code allows, which only ever adds bars.
+    """
+    slab = OneWaySlab(
+        label="Slab lightly loaded",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=12 * cm,
+        c_c=20 * mm,
+    )
+    Node(section=slab, forces=Forces(label="C1", M_y=2 * kNm)).design()
+
+    s_max = slab._max_bar_spacing()
+    assert s_max.to("cm").magnitude == 36  # 3h on a 12 cm slab
+    assert slab._s_b1_b <= s_max
+    assert slab.reinforcement.bottom.layers[0].n == _bars_at_spacing(s_max, slab.width)
+    assert slab.reinforcement.bottom.A_s >= slab.flexure_design.bottom.A_s_req
+
+
+def test_a_slab_spaced_beyond_the_code_maximum_fails_the_check() -> None:
+    """The bars add up to the area and the slab between them is still bare."""
+    slab = OneWaySlab(
+        label="Slab too spread out",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=25 * cm,
+        c_c=25 * mm,
+    )
+    slab.set_slab_longitudinal_rebar_bot(d_b1=20 * mm, s_b1=60 * cm)
+
+    Node(section=slab, forces=Forces(label="C1", M_y=20 * kNm)).check_flexure()
+
+    rows = slab._data_min_max_flexure
+    assert rows["Check"][3] == "Bar spacing bottom"
+    assert rows["Value"][3] == pytest.approx(600)
+    assert rows["Max."][3] == pytest.approx(450)
+    assert rows["Ok?"][3] == "❌"
+    assert slab._all_flexure_checks_passed is False
+
+
+def test_a_beam_still_reports_the_clear_distance_between_its_bars() -> None:
+    """The max-spacing row is the slab's; a beam has no such limit to report."""
+    beam = RectangularBeam(
+        label="B1",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=20 * cm,
+        height=50 * cm,
+        c_c=25 * mm,
+    )
+    Node(section=beam, forces=Forces(label="C1", M_y=100 * kNm)).design()
+
+    rows = beam._data_min_max_flexure
+    assert rows["Check"][3] == "Minimum spacing bottom"
+    assert rows["Value"][3] == pytest.approx(beam._available_s_bot.to("mm").magnitude, rel=1e-9)
+    assert rows["Max."][3] == ""
+
+
+def test_the_flexure_report_of_a_slab_names_the_spacing() -> None:
+    """The count row gives way to the notation the strip is drawn in."""
+    slab = _designed_slab(Concrete_ACI_318_19(name="H25", f_c=25 * MPa), V_z=0 * kN)
+
+    rows = slab._flexure_capacity_bot
+    assert rows["Variable"][:2] == ["Ø1/s1", "Ø3/s3"]
+    assert rows["Value"][0] == str(slab.reinforcement.bottom.layers[0])
+    assert rows["Value"][1] == "-"
+    # Every column of the table still has one entry per row.
+    assert len({len(column) for column in rows.values()}) == 1
 
 
 ##########################################################

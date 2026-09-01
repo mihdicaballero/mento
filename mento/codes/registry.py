@@ -81,6 +81,11 @@ class DesignCode:
     #: Smallest stirrup bar this code's detailing rules allow. Only the codes
     #: whose report tables quote it need to supply one.
     min_stirrup_diameter: Callable[..., Any] | None = None
+    #: Largest centre-to-centre spacing this code allows between the flexural
+    #: bars of a slab. ``None`` for a code that states none, which is read as
+    #: no limit rather than as an error: a spacing rule a code does not have is
+    #: not a rule an element can fail.
+    max_bar_spacing_slab: Callable[..., Any] | None = None
 
     def requires(self, hook: str) -> Callable[..., Any]:
         """The hook, or a clear error naming the code that lacks it."""

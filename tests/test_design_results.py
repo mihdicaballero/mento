@@ -143,6 +143,15 @@ def test_rebar_layer_str_is_the_engineering_shorthand() -> None:
     assert str(RebarLayer(n=2, d_b=12 * mm)) == "2Ø12 mm"
 
 
+def test_a_layer_detailed_by_a_spacing_reads_as_one_bar_at_that_spacing() -> None:
+    """A slab layer carries a spacing; counting its bars is not how it is drawn."""
+    layer = RebarLayer(n=6, d_b=12 * mm, s=17 * cm)
+
+    assert str(layer) == "Ø12 mm/17 cm"
+    # The area is the bars either way.
+    assert layer.A_s.to("cm**2").magnitude == pytest.approx(6 * math.pi * (1.2**2) / 4)
+
+
 # ============================================================================
 # Reading results before running anything
 # ============================================================================

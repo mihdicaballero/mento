@@ -22,7 +22,7 @@ from pint import Quantity
 from mento.units import inch, kN, kNm, mm
 
 from mento.codes.registry import design_code
-from mento.design_results import GRID, transverse_layout
+from mento.design_results import GRID, format_longitudinal_rebar, transverse_layout
 
 if TYPE_CHECKING:
     from mento.beam import RectangularBeam
@@ -63,6 +63,82 @@ def _transverse_rebar_rows(
         [self._stirrup_n, diameter, s_l],
         ["", "mm", "cm"],
     )
+
+
+def _longitudinal_rebar_rows(self: "RectangularBeam", face: str) -> tuple[list[str], list[str], list[Any]]:
+    """The two rows that identify the longitudinal reinforcement of one face.
+
+    A beam is a number of bars per layer, so the bars are counted: ``n1+n2``. A
+    slab is one bar repeated at a spacing, and the count that falls out of a
+    strip is not what it is drawn with, so each of its layers reads as a
+    diameter and a spacing instead. ``face`` is ``"b"`` or ``"t"``, and there
+    are two rows either way, so every column of the table stays the same length.
+    """
+    labels = ["First layer bars", "Second layer bars"]
+    variables = []
+    values = []
+    # Only a section detailed by a spacing carries these; a beam has no such
+    # attribute and its layers keep being reported as a number of bars. The
+    # notation is chosen once for the face, so an empty second layer is still
+    # written the way the rest of the face is.
+    detailed_by_spacing = getattr(self, f"_s_b1_{face}", None) is not None
+    for first, second in ((1, 2), (3, 4)):
+        n = getattr(self, f"_n{first}_{face}")
+        d_b = getattr(self, f"_d_b{first}_{face}")
+        if not detailed_by_spacing:
+            variables.append(f"n{first}+n{second}")
+            values.append(
+                self._format_longitudinal_rebar_string(
+                    n, d_b, getattr(self, f"_n{second}_{face}"), getattr(self, f"_d_b{second}_{face}")
+                )
+            )
+            continue
+        spacing = getattr(self, f"_s_b{first}_{face}")
+        variables.append(f"Ø{first}/s{first}")
+        if n == 0 or d_b.magnitude == 0 or spacing.magnitude == 0:
+            values.append("-")
+        else:
+            values.append(format_longitudinal_rebar(n, f"{d_b:.4g~P}", f"{spacing:.4g~P}"))
+    return labels, variables, values
+
+
+def _bar_spacing_row(
+    self: "RectangularBeam", face: str, min_clear: Quantity
+) -> tuple[str, Quantity, Quantity | None, Quantity | None]:
+    """The label, the value and the limits of one face's bar-spacing row.
+
+    A beam is detailed to a clear distance between bars, and reports the
+    smallest one it has against the minimum its settings ask for. A slab is
+    detailed to a spacing, and what the codes limit there is how far apart the
+    bars may be -- ACI 318-19 7.7.2.3, EN 1992-1-1 9.3.1.1(3) -- since bars far
+    enough apart leave the slab between them unreinforced whatever they add up
+    to. So the row carries the centre-to-centre spacing of the layer nearest the
+    face, and a maximum along with the minimum. A face with no bars on it has
+    nothing to check either way. ``face`` is ``"b"`` or ``"t"``.
+    """
+    side = "top" if face == "t" else "bottom"
+    # Only a section detailed by a spacing carries one; a beam has no such
+    # attribute and keeps reporting the clear distance between its bars.
+    spacing = getattr(self, f"_s_b1_{face}", None)
+    if spacing is None:
+        clear: Quantity = getattr(self, f"_available_s_{'top' if face == 't' else 'bot'}")
+        return f"Minimum spacing {side}", clear, min_clear, None
+    if getattr(self, f"_n1_{face}") == 0 or spacing.magnitude == 0:
+        return f"Bar spacing {side}", spacing, None, None
+    limit_of = getattr(self, "_max_bar_spacing", None)
+    # The value is centre to centre, so the minimum clear distance is read as
+    # one bar further apart than the beam reads it.
+    return (
+        f"Bar spacing {side}",
+        spacing,
+        min_clear + getattr(self, f"_d_b1_{face}"),
+        None if limit_of is None else limit_of(),
+    )
+
+
+def _shown_mm(value: Quantity | None) -> Any:
+    """A limit in millimetres for the report tables, blank where there is none."""
+    return "" if value is None else round(value.to("mm").magnitude, 2)
 
 
 def _settings(beam: RectangularBeam) -> BeamSettings:
@@ -430,23 +506,25 @@ def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
     settings = _settings(self)
     min_spacing_top: Quantity = max(settings.clear_spacing, settings.vibrator_size, self._d_b_max_top)
     min_spacing_bot: Quantity = max(settings.clear_spacing, self._d_b_max_bot)
+    label_s_top, s_top, s_top_min, s_top_max = _bar_spacing_row(self, "t", min_spacing_top)
+    label_s_bot, s_bot, s_bot_min, s_bot_max = _bar_spacing_row(self, "b", min_spacing_bot)
     min_values = [
         self._A_s_min_top,
-        min_spacing_top,
+        s_top_min,
         self._A_s_min_bot,
-        min_spacing_bot,
+        s_bot_min,
     ]  # Use None for items without a minimum constraint
     max_values = [
         self._A_s_max_top,
-        None,
+        s_top_max,
         self._A_s_max_bot,
-        None,
+        s_bot_max,
     ]  # Use None for items without a maximum constraint
     current_values = [
         self._A_s_top,
-        self._available_s_top,
+        s_top,
         self._A_s_bot,
-        self._available_s_bot,
+        s_bot,
     ]  # Current values to check
 
     ARTICLE_STR = "9.6.1.3"
@@ -485,37 +563,37 @@ def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
     self._data_min_max_flexure = {
         "Check": [
             "Min/Max As rebar top",
-            "Minimum spacing top",
+            label_s_top,
             "Min/Max As rebar bottom",
-            "Minimum spacing bottom",
+            label_s_bot,
         ],
         "Unit": ["cm²", "mm", "cm²", "mm"],
         "Value": [
             round(self._A_s_top.to("cm**2").magnitude, 2),
-            round(self._available_s_top.to("mm").magnitude, 2),
+            _shown_mm(s_top),
             round(self._A_s_bot.to("cm**2").magnitude, 2),
-            round(self._available_s_bot.to("mm").magnitude, 2),
+            _shown_mm(s_bot),
         ],
         "Min.": [
             round(self._A_s_min_top.to("cm**2").magnitude, 2),
-            round(min_spacing_top.to("mm").magnitude, 2),
+            _shown_mm(s_top_min),
             round(self._A_s_min_bot.to("cm**2").magnitude, 2),
-            round(min_spacing_bot.to("mm").magnitude, 2),
+            _shown_mm(s_bot_min),
         ],
         "Max.": [
             round(self._A_s_max_top.to("cm**2").magnitude, 2),
-            "",
+            _shown_mm(s_top_max),
             round(self._A_s_max_bot.to("cm**2").magnitude, 2),
-            "",
+            _shown_mm(s_bot_max),
         ],
         "Ok?": checks,
     }
     check_DCR_top = "✅" if self._DCRb_top < 1 else "❌"
     check_DCR_bot = "✅" if self._DCRb_bot < 1 else "❌"
+    long_rebar_top = _longitudinal_rebar_rows(self, "t")
     self._flexure_capacity_top = {
         "Top reinforcement check": [
-            "First layer bars",
-            "Second layer bars",
+            *long_rebar_top[0],
             "Effective height",
             "Depth of equivalent strength block ratio",
             "Minimum rebar reinforcing",
@@ -527,8 +605,7 @@ def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
             "Demand Capacity Ratio",
         ],
         "Variable": [
-            "n1+n2",
-            "n3+n4",
+            *long_rebar_top[1],
             "d",
             "c/d",
             "As,min",
@@ -540,8 +617,7 @@ def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
             "DCR",
         ],
         "Value": [
-            self._format_longitudinal_rebar_string(self._n1_t, self._d_b1_t, self._n2_t, self._d_b2_t),
-            self._format_longitudinal_rebar_string(self._n3_t, self._d_b3_t, self._n4_t, self._d_b4_t),
+            *long_rebar_top[2],
             round(self._d_top.to("cm").magnitude, 2),
             round(self._c_d_top, 4),
             round(self._A_s_min_top.to("cm**2").magnitude, 2),
@@ -566,10 +642,10 @@ def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
             check_DCR_top,
         ],
     }
+    long_rebar_bot = _longitudinal_rebar_rows(self, "b")
     self._flexure_capacity_bot = {
         "Bottom reinforcement check": [
-            "First layer bars",
-            "Second layer bars",
+            *long_rebar_bot[0],
             "Effective height",
             "Depth of equivalent strength block ratio",
             "Minimum rebar reinforcing",
@@ -581,8 +657,7 @@ def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
             "Demand Capacity Ratio",
         ],
         "Variable": [
-            "n1+n2",
-            "n3+n4",
+            *long_rebar_bot[1],
             "d",
             "c/d",
             "As,min",
@@ -594,8 +669,7 @@ def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
             "DCR",
         ],
         "Value": [
-            self._format_longitudinal_rebar_string(self._n1_b, self._d_b1_b, self._n2_b, self._d_b2_b),
-            self._format_longitudinal_rebar_string(self._n3_b, self._d_b3_b, self._n4_b, self._d_b4_b),
+            *long_rebar_bot[2],
             round(self._d_bot.to("cm").magnitude, 2),
             round(self._c_d_bot, 4),
             round(self._A_s_min_bot.to("cm**2").magnitude, 2),
@@ -866,23 +940,25 @@ def _initialize_dicts_EN_1992_2004_flexure(self: "RectangularBeam") -> None:
     settings = _settings(self)
     min_spacing_top: Quantity = max(settings.clear_spacing, settings.vibrator_size, self._d_b_max_top)
     min_spacing_bot: Quantity = max(settings.clear_spacing, self._d_b_max_bot)
+    label_s_top, s_top, s_top_min, s_top_max = _bar_spacing_row(self, "t", min_spacing_top)
+    label_s_bot, s_bot, s_bot_min, s_bot_max = _bar_spacing_row(self, "b", min_spacing_bot)
     min_values = [
         self._A_s_min_top,
-        min_spacing_top,
+        s_top_min,
         self._A_s_min_bot,
-        min_spacing_bot,
+        s_bot_min,
     ]  # Use None for items without a minimum constraint
     max_values = [
         self._A_s_max_top,
-        None,
+        s_top_max,
         self._A_s_max_bot,
-        None,
+        s_bot_max,
     ]  # Use None for items without a maximum constraint
     current_values = [
         self._A_s_top,
-        self._available_s_top,
+        s_top,
         self._A_s_bot,
-        self._available_s_bot,
+        s_bot,
     ]  # Current values to check
 
     # Generate check marks based on the range conditions
@@ -907,37 +983,37 @@ def _initialize_dicts_EN_1992_2004_flexure(self: "RectangularBeam") -> None:
     self._data_min_max_flexure = {
         "Check": [
             "Min/Max As rebar top",
-            "Minimum spacing top",
+            label_s_top,
             "Min/Max As rebar bottom",
-            "Minimum spacing bottom",
+            label_s_bot,
         ],
         "Unit": ["cm²", "mm", "cm²", "mm"],
         "Value": [
             round(self._A_s_top.to("cm**2").magnitude, 2),
-            round(self._available_s_top.to("mm").magnitude, 2),
+            _shown_mm(s_top),
             round(self._A_s_bot.to("cm**2").magnitude, 2),
-            round(self._available_s_bot.to("mm").magnitude, 2),
+            _shown_mm(s_bot),
         ],
         "Min.": [
             round(self._A_s_min_top.to("cm**2").magnitude, 2),
-            round(min_spacing_top.to("mm").magnitude, 2),
+            _shown_mm(s_top_min),
             round(self._A_s_min_bot.to("cm**2").magnitude, 2),
-            round(min_spacing_bot.to("mm").magnitude, 2),
+            _shown_mm(s_bot_min),
         ],
         "Max.": [
             round(self._A_s_max_top.to("cm**2").magnitude, 2),
-            "",
+            _shown_mm(s_top_max),
             round(self._A_s_max_bot.to("cm**2").magnitude, 2),
-            "",
+            _shown_mm(s_bot_max),
         ],
         "Ok?": checks,
     }
     check_DCR_top = "✅" if self._DCRb_top < 1 else "❌"
     check_DCR_bot = "✅" if self._DCRb_bot < 1 else "❌"
+    long_rebar_top = _longitudinal_rebar_rows(self, "t")
     self._flexure_capacity_top = {
         "Top reinforcement check": [
-            "First layer bars",
-            "Second layer bars",
+            *long_rebar_top[0],
             "Effective height",
             "Depth of equivalent strength block ratio",
             "Minimum rebar reinforcing",
@@ -949,8 +1025,7 @@ def _initialize_dicts_EN_1992_2004_flexure(self: "RectangularBeam") -> None:
             "Demand Capacity Ratio",
         ],
         "Variable": [
-            "n1+n2",
-            "n3+n4",
+            *long_rebar_top[1],
             "d",
             "c/d",
             "As,min",
@@ -962,8 +1037,7 @@ def _initialize_dicts_EN_1992_2004_flexure(self: "RectangularBeam") -> None:
             "DCR",
         ],
         "Value": [
-            self._format_longitudinal_rebar_string(self._n1_t, self._d_b1_t, self._n2_t, self._d_b2_t),
-            self._format_longitudinal_rebar_string(self._n3_t, self._d_b3_t, self._n4_t, self._d_b4_t),
+            *long_rebar_top[2],
             round(self._d_top.to("cm").magnitude, 2),
             self._c_d_top,
             round(self._A_s_min_top.to("cm**2").magnitude, 2),
@@ -988,10 +1062,10 @@ def _initialize_dicts_EN_1992_2004_flexure(self: "RectangularBeam") -> None:
             check_DCR_top,
         ],
     }
+    long_rebar_bot = _longitudinal_rebar_rows(self, "b")
     self._flexure_capacity_bot = {
         "Bottom reinforcement check": [
-            "First layer bars",
-            "Second layer bars",
+            *long_rebar_bot[0],
             "Effective height",
             "Depth of equivalent strength block ratio",
             "Minimum rebar reinforcing",
@@ -1003,8 +1077,7 @@ def _initialize_dicts_EN_1992_2004_flexure(self: "RectangularBeam") -> None:
             "Demand Capacity Ratio",
         ],
         "Variable": [
-            "n1+n2",
-            "n3+n4",
+            *long_rebar_bot[1],
             "d",
             "c/d",
             "As,min",
@@ -1016,8 +1089,7 @@ def _initialize_dicts_EN_1992_2004_flexure(self: "RectangularBeam") -> None:
             "DCR",
         ],
         "Value": [
-            self._format_longitudinal_rebar_string(self._n1_b, self._d_b1_b, self._n2_b, self._d_b2_b),
-            self._format_longitudinal_rebar_string(self._n3_b, self._d_b3_b, self._n4_b, self._d_b4_b),
+            *long_rebar_bot[2],
             round(self._d_bot.to("cm").magnitude, 2),
             self._c_d_bot,
             round(self._A_s_min_bot.to("cm**2").magnitude, 2),
