@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Optional, Dict, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Optional, Dict, Tuple
 
 if TYPE_CHECKING:
     from matplotlib.figure import Figure
@@ -325,13 +325,26 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
             design.get("d_b4"),
         )
 
-    def _finalize_longitudinal_design(self) -> None:
+    def _finalize_longitudinal_design(
+        self,
+        A_req_bot: Quantity,
+        A_req_top: Quantity,
+        resists: Callable[[], bool],
+    ) -> None:
         """Last word on the layout, once both faces have been designed.
 
         Nothing to do for a beam: its two faces are detailed independently, so
         the layout the design arrived at is the layout it keeps. It exists for
         the elements whose faces are tied to each other -- a footing is placed
-        as one mat, and reconciles the two spacings here.
+        as one mat, and chooses the module and both bars here.
+
+        Args:
+            A_req_bot: Steel the bottom face has to carry, minimum included.
+            A_req_top: The same for the top.
+            resists: Whether the layout now on the section resists both design
+                moments. An element that re-selects bars has to ask, since a
+                thicker bar sits deeper and lowers the effective depth it was
+                chosen against.
         """
 
     def _clear_top_longitudinal(self) -> None:

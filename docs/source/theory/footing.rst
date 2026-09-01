@@ -188,38 +188,64 @@ A heavier demand is therefore answered with a larger bar rather than with bars c
 together. Both bounds are reported in the flexure check table, so a footing detailed
 outside the range fails the check rather than passing quietly.
 
-One spacing for the whole mat
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+One mat, chosen rather than reconciled
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 A footing is not built as two independently detailed faces. The bars go down as one
-mat: the bottom grid is placed, the top grid is placed over it on the same module, and
-the two are tied at the same spacing. A design that answers the bottom at 120 mm and
-the top at 250 mm is not a drawing anyone details, so once both faces are settled they
-are reconciled to one number:
+grid: the bottom is placed, the top is placed over it, and the two are tied. The module
+has to be one number, and on a drawing the top sits either at the bottom's spacing or at
+exactly twice it, so that one top bar lands on every second bottom bar.
+
+Reconciling the two spacings the per-face design arrived at — taking the smaller of them
+— is safe but expensive. The face governed by the minimum is detailed as many thin bars,
+which comes out closer than the few thick bars the loaded face needs, so the smaller of
+the two is often the *lightly loaded* face's spacing, and adopting it closes the loaded
+face up and buys steel nobody asked for. Measured over twenty typical footings, that
+costs about 20% more longitudinal steel than the two faces actually require.
+
+So the mat is chosen, not reconciled. Over the modules the code allows and the bars the
+catalogue holds, mento takes the lightest combination that covers both faces:
 
 .. math::
 
-   s_{mat} = \min\bigl(s_{bot},\ s_{top}\bigr)
+   \min_{s,\ d_{bot},\ d_{top}} \;
+   n(s)\,A_b(d_{bot}) + n(s_{top})\,A_b(d_{top})
 
-The **smaller** of the two, because it is the only direction that is safe: closing the
-wider face up adds bars to it, so every face still covers the area its own moment asked
-for.
+subject to
 
-Which face sets the module is not always the one carrying the moment. A face governed
-by the minimum is detailed as many thin bars, and that lands at a closer spacing than
-the few thick bars the governing face needs — under ACI, whose minimum is the larger of
-the two codes', the top face sets the module about half the time and closes the bottom
-up with it. Measured over a range of typical footings, the mat costs about **12% more
-longitudinal steel** than detailing the two faces independently would, and in the worst
-case seen, close to 50%. That is the price of a single grid, and it is the grid the
-drawing would have shown anyway.
+.. math::
 
-Only the spacing is reconciled; the diameters stay as the design chose them, so the two
-faces may differ there. Adding bars to a layer does not move its centroid, so the
-effective depths are unchanged and the capacity of the closed-up face can only rise —
-which is why the reconciliation runs **after** the design's final capacity
-verification. A face carrying no reinforcement is left with none: a footing reinforced
-on the bottom only has no second grid to match, and one is not invented for it.
+   s_{top} \in \{s,\ 2s\}, \qquad
+   s_{min} \le s \le s_{top} \le s_{max}, \qquad
+   n(s) = \left\lceil \frac{b}{s} \right\rceil
+
+with each face covering its own required area and each bar leaving the clear distance
+the settings ask for. The module is searched in whole centimetres (inches in imperial),
+so it is a number a detailer writes. Allowing a triple module as well was tried and
+changes nothing: ``s`` and ``2s`` already carry it.
+
+That lands within about **7% (EN) to 11% (ACI)** of what the two faces require, against
+the 20% of taking the smaller spacing — and within 1% (EN) to 4% (ACI) of what mento's
+own per-face design produces, which is not even buildable as a single mat.
+
+Every candidate is verified before it is kept, because the choice feeds back into
+itself: a thicker bar sits deeper, lowering the effective depth the required area was
+computed against. Candidates are tried lightest first and applied to the section, and
+the first that resists both design moments is the answer. If none within the budget
+verifies — a section too small for its demand — the design falls back to reconciling the
+two spacings it had already proved, which needs no verification because it only ever
+adds bars.
+
+A face carrying no reinforcement is left with none: a footing reinforced on the bottom
+only has no second grid to place, and one is not invented for it.
+
+Practical bar size
+^^^^^^^^^^^^^^^^^^
+
+The search does not reach below **Ø10** for a footing mat, whatever the catalogue holds
+under it. Practice rather than code: a mesh finer than that is not what goes down over
+the ground, and without the floor the optimisation reaches for the thinnest bar
+available to shave the lightly loaded face.
 
 Minimum thickness
 ^^^^^^^^^^^^^^^^^
@@ -356,17 +382,33 @@ Validation
    * - Both bounds reported in the check table
      - ``test_the_spacing_row_of_a_footing_reports_both_bounds``
      - Internal consistency
-   * - One spacing across both faces, the smaller of the two
+   * - One module across both faces, the top at ``s`` or ``2s``
      - ``test_a_designed_footing_is_one_mat``,
-       ``test_the_mat_takes_the_smaller_of_the_two_spacings``,
-       ``test_the_diameters_are_left_as_designed``,
-       ``test_matching_is_idempotent``
+       ``test_the_top_may_be_set_out_at_twice_the_bottom``,
+       ``test_each_face_keeps_its_own_diameter``
      - Detailing practice; the rule above
-   * - Matching never undoes the design
+   * - The chosen mat is lighter than reconciling the two spacings
+     - ``test_the_mat_is_lighter_than_reconciling_the_two_spacings``
+     - The measured comparison above
+   * - Ø10 floor on the mat
+     - ``test_no_mat_is_detailed_below_the_practical_bar``
+     - Detailing practice
+   * - The mat never undoes the design
      - ``test_matching_the_mat_never_undoes_the_design``,
        ``test_the_mat_keeps_each_face_within_the_spacing_range``,
        ``test_a_footing_reinforced_on_one_face_gets_no_second_grid``,
        ``test_a_slab_still_details_its_faces_independently``
+     - Internal consistency
+   * - A candidate that does not verify is passed over
+     - ``test_a_mat_that_does_not_verify_is_passed_over``,
+       ``test_a_section_that_cannot_carry_the_moment_falls_back``,
+       ``test_the_fallback_takes_the_smaller_of_the_two_spacings``,
+       ``test_the_fallback_leaves_a_single_grid_alone``,
+       ``test_reconciling_an_existing_mat_is_a_no_op``
+     - Internal consistency
+   * - The edges of the search
+     - ``test_a_section_needing_nothing_is_offered_no_mat``,
+       ``test_a_face_no_bar_can_cover_drops_that_module``
      - Internal consistency
    * - The bounds are a footing's, not every slab's
      - ``test_a_slab_keeps_the_wider_slab_limits``,

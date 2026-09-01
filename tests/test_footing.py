@@ -465,6 +465,7 @@ def test_a_code_without_the_footing_rules_imposes_none() -> None:
             **{f.name: getattr(reference, f.name) for f in dataclasses.fields(reference)},
             "title": "NBR 6118-2023",
             "year": 2023,
+            "max_bar_spacing_slab": None,
             "min_bar_spacing_slab": None,
             "min_thickness_on_soil": None,
         }
@@ -481,8 +482,12 @@ def test_a_code_without_the_footing_rules_imposes_none() -> None:
             footing = _strip(Footing, concrete, steel, "Z1", height=15 * cm)
 
         assert footing._min_bar_spacing() is None
+        assert footing._max_bar_spacing() is None
         # And the bar count is left at the slab default, since nothing bounds it.
         assert footing.settings.max_bars_per_layer >= 200
+        # With no bounds there is no space to search a mat in, so none is offered
+        # and the design keeps whatever the per-face search arrived at.
+        assert list(footing._mat_candidates(10 * cm**2, 5 * cm**2)) == []
     finally:
         _REGISTRY.pop(invented.title, None)
 
@@ -508,21 +513,24 @@ def _design_envelope(section, M_bot, M_top):  # type: ignore[no-untyped-def]
     ids=["aci", "en"],
 )
 def test_a_designed_footing_is_one_mat(concrete, steel) -> None:  # type: ignore[no-untyped-def]
-    """Both faces come out set out at the same spacing.
+    """Both faces come out on one module: the top at the bottom's spacing, or at
+    exactly twice it so one top bar lands on every second bottom bar.
 
     The bottom carries five times the top's moment here, so the two faces would
     otherwise be detailed at spacings nobody would draw on one mat.
     """
     footing, _ = _design_envelope(_strip(Footing, concrete, steel, "Z1"), 600 * kNm, 120 * kNm)
 
-    assert footing._s_b1_b.to("mm").magnitude == pytest.approx(footing._s_b1_t.to("mm").magnitude)
+    s_bot = footing._s_b1_b.to("mm").magnitude
+    s_top = footing._s_b1_t.to("mm").magnitude
+    assert s_top / s_bot in (1.0, 2.0)
 
 
-def test_the_mat_takes_the_smaller_of_the_two_spacings(steel_b500s: SteelBar) -> None:
-    """The face that governed keeps the spacing it needed; the other closes up
-    to it, which can only add bars.
+def test_the_fallback_takes_the_smaller_of_the_two_spacings(steel_b500s: SteelBar) -> None:
+    """What the design falls back to when no searched mat verifies.
 
-    Driven from a layout set by hand rather than from a design, so that the two
+    Closing the wider face up only ever adds bars, which is why it needs no
+    verification of its own. Driven from a layout set by hand, so that the two
     spacings going in are known and the rule can be read off the result.
     """
     concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
@@ -531,13 +539,25 @@ def test_the_mat_takes_the_smaller_of_the_two_spacings(steel_b500s: SteelBar) ->
     footing.set_slab_longitudinal_rebar_top(d_b1=12 * mm, s_b1=250 * mm)
     A_s_top_before = footing._A_s_top
 
-    footing._finalize_longitudinal_design()
+    footing._match_spacings_downward()
 
     assert footing._s_b1_b.to("mm").magnitude == pytest.approx(120.0)
     assert footing._s_b1_t.to("mm").magnitude == pytest.approx(120.0)
     # Closing the top up added bars, and left its bar alone.
     assert footing._A_s_top > A_s_top_before
     assert footing._d_b1_t.to("mm").magnitude == pytest.approx(12.0)
+
+
+def test_the_mat_is_lighter_than_reconciling_the_two_spacings(steel_b500s: SteelBar) -> None:
+    """Why the search exists: taking the smaller of the two spacings buys steel
+    the section never asked for, and choosing the module instead does not."""
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    searched, _ = _design_envelope(_strip(Footing, concrete, steel_b500s, "Z1"), 600 * kNm, 120 * kNm)
+
+    reconciled, _ = _design_envelope(_strip(Footing, concrete, steel_b500s, "Z2"), 600 * kNm, 120 * kNm)
+    reconciled._match_spacings_downward()
+
+    assert searched._A_s_bot + searched._A_s_top <= reconciled._A_s_bot + reconciled._A_s_top
 
 
 def test_matching_the_mat_never_undoes_the_design(steel_b500s: SteelBar) -> None:
@@ -562,13 +582,23 @@ def test_the_mat_keeps_each_face_within_the_spacing_range(steel_b500s: SteelBar)
         assert 100.0 <= spacing.to("mm").magnitude <= 300.0
 
 
-def test_the_diameters_are_left_as_designed(steel_b500s: SteelBar) -> None:
+def test_each_face_keeps_its_own_diameter(steel_b500s: SteelBar) -> None:
     """Only the module is shared. A face carrying a fifth of the moment is
     still allowed its own, thinner bar."""
     concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
     footing, _ = _design_envelope(_strip(Footing, concrete, steel_b500s, "Z1"), 600 * kNm, 120 * kNm)
 
-    assert footing._d_b1_t < footing._d_b1_b
+    assert footing._d_b1_t <= footing._d_b1_b
+
+
+def test_no_mat_is_detailed_below_the_practical_bar(steel_b500s: SteelBar) -> None:
+    """A footing mesh is not drawn with the thinnest bar in the catalogue, even
+    where the arithmetic would allow it on the lightly loaded face."""
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    footing, _ = _design_envelope(_strip(Footing, concrete, steel_b500s, "Z1"), 600 * kNm, 20 * kNm)
+
+    assert footing._d_b1_t.to("mm").magnitude >= 10.0
+    assert footing._d_b1_b.to("mm").magnitude >= 10.0
 
 
 def test_a_footing_reinforced_on_one_face_gets_no_second_grid(steel_b500s: SteelBar) -> None:
@@ -590,12 +620,113 @@ def test_a_slab_still_details_its_faces_independently(steel_b500s: SteelBar) -> 
     assert slab._s_b1_b != slab._s_b1_t
 
 
-def test_matching_is_idempotent(steel_b500s: SteelBar) -> None:
-    """Running it on a mat that is already one leaves it alone."""
+def test_reconciling_an_existing_mat_is_a_no_op(steel_b500s: SteelBar) -> None:
+    """The fallback run on a mat that is already one leaves it alone."""
     concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
-    footing, _ = _design_envelope(_strip(Footing, concrete, steel_b500s, "Z1"), 600 * kNm, 120 * kNm)
+    footing = _strip(Footing, concrete, steel_b500s, "Z1")
+    footing.set_slab_longitudinal_rebar_bot(d_b1=16 * mm, s_b1=150 * mm)
+    footing.set_slab_longitudinal_rebar_top(d_b1=12 * mm, s_b1=150 * mm)
     before = (footing._s_b1_b, footing._s_b1_t, footing._A_s_bot, footing._A_s_top)
 
-    footing._finalize_longitudinal_design()
+    footing._match_spacings_downward()
 
     assert (footing._s_b1_b, footing._s_b1_t, footing._A_s_bot, footing._A_s_top) == before
+
+
+def test_the_top_may_be_set_out_at_twice_the_bottom(steel_b500s: SteelBar) -> None:
+    """The modular option is real and gets used.
+
+    A top face carrying a tenth of the bottom's moment is drawn at double the
+    bottom's module -- one top bar on every second bottom bar -- rather than
+    matched to it and given steel it has no use for.
+    """
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    doubled = 0
+    for h, M_bot, M_top in [(50, 300, 30), (60, 400, 40), (40, 200, 20), (70, 600, 60)]:
+        footing, _ = _design_envelope(
+            _strip(Footing, concrete, steel_b500s, "Z1", height=h * cm), M_bot * kNm, M_top * kNm
+        )
+        ratio = footing._s_b1_t.to("mm").magnitude / footing._s_b1_b.to("mm").magnitude
+        assert ratio in (1.0, 2.0)
+        doubled += ratio == 2.0
+
+    assert doubled, "the double module was never taken, so the option is not doing anything"
+
+
+# ---------------------------------------------------------------------------
+# The edges of the mat search
+# ---------------------------------------------------------------------------
+
+
+def test_a_section_needing_nothing_is_offered_no_mat(steel_b500s: SteelBar) -> None:
+    """No steel required on either face is not a mat problem."""
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    footing = _strip(Footing, concrete, steel_b500s, "Z1")
+
+    assert list(footing._mat_candidates(0 * cm**2, 0 * cm**2)) == []
+
+
+def test_a_face_no_bar_can_cover_drops_that_module(steel_b500s: SteelBar) -> None:
+    """A top face wanting more steel than the widest module can carry does not
+    veto the search -- that module is simply not one of the candidates."""
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    footing = _strip(Footing, concrete, steel_b500s, "Z1")
+
+    # 60 cm² over the four bars a 300 mm module fits in the strip is beyond any
+    # bar in the catalogue, so the wide modules drop out and the close ones stay.
+    candidates = list(footing._mat_candidates(20 * cm**2, 60 * cm**2))
+    assert candidates
+    assert all(s_top <= 150 for (_, s_top), _ in candidates)
+
+
+def test_the_fallback_leaves_a_single_grid_alone(steel_b500s: SteelBar) -> None:
+    """Reconciling needs two grids; with one there is nothing to reconcile."""
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    footing = _strip(Footing, concrete, steel_b500s, "Z1")
+    footing.set_slab_longitudinal_rebar_bot(d_b1=16 * mm, s_b1=150 * mm)
+    before = (footing._s_b1_b, footing._d_b1_b, footing._A_s_bot)
+
+    footing._match_spacings_downward()
+
+    assert (footing._s_b1_b, footing._d_b1_b, footing._A_s_bot) == before
+
+
+def test_a_mat_that_does_not_verify_is_passed_over(steel_b500s: SteelBar) -> None:
+    """The search proposes, the capacity check disposes.
+
+    Driven with a verifier that refuses everything, so the design falls back to
+    reconciling the two spacings it had already proved -- which is the point of
+    keeping that rule around.
+    """
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    footing = _strip(Footing, concrete, steel_b500s, "Z1")
+    footing.set_slab_longitudinal_rebar_bot(d_b1=16 * mm, s_b1=120 * mm)
+    footing.set_slab_longitudinal_rebar_top(d_b1=12 * mm, s_b1=250 * mm)
+
+    footing._finalize_longitudinal_design(20 * cm**2, 5 * cm**2, lambda: False)
+
+    # Not a searched mat: the layout it started from, with the spacings matched.
+    assert footing._d_b1_b.to("mm").magnitude == pytest.approx(16.0)
+    assert footing._d_b1_t.to("mm").magnitude == pytest.approx(12.0)
+    assert footing._s_b1_b == footing._s_b1_t == 120 * mm
+
+
+@pytest.mark.parametrize(
+    "height, M_bot, M_top",
+    [(25 * cm, 200 * kNm, -20 * kNm), (30 * cm, 100 * kNm, -600 * kNm)],
+    ids=["bottom-short", "top-short"],
+)
+def test_a_section_that_cannot_carry_the_moment_falls_back(steel_b500s, height, M_bot, M_top) -> None:  # type: ignore[no-untyped-def]
+    """No mat verifies when the section is too small for the demand on a face.
+
+    Each candidate is applied and rejected in turn -- the first case runs the
+    bottom out of capacity, the second the top -- and the design still returns
+    a layout, leaving the check to report DCR > 1 rather than raising.
+    """
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    footing = _strip(Footing, concrete, steel_b500s, "Z1", height=height)
+    combo = [Forces(label="C1", M_y=M_bot), Forces(label="C2", M_y=M_top)]
+    Node(section=footing, forces=combo).design()
+
+    results = footing.flexure_check_results(combo)
+    assert max(max(r.bottom.DCR, r.top.DCR) for r in results) > 1

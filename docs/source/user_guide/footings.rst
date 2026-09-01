@@ -88,9 +88,13 @@ Three rules, and the design applies all of them for you:
   a larger bar rather than with bars closer than 100 mm, and both bounds appear in the
   flexure check table.
 - **One mat.** A footing is placed as a single grid, not as two independently detailed
-  faces, so a design ends with **bottom and top set out at the same spacing** — the
-  smaller of the two it arrived at. The diameters are left as designed, so the faces can
-  still differ there. A footing reinforced on one face only keeps its single grid.
+  faces, so a design ends on **one module**: the top either at the bottom's spacing or at
+  exactly twice it, so one top bar lands on every second bottom bar. Within that, mento
+  picks the module and both diameters that give the least steel covering what each face
+  needs — e.g. ``Ø20 c/15`` abajo con ``Ø20 c/30`` arriba. A footing reinforced on one
+  face only keeps its single grid.
+- **Ø10 minimum.** A footing mesh is not detailed with the thinnest bar in the
+  catalogue, so the search does not reach below Ø10 to shave the lightly loaded face.
 - **Thickness.** A section thinner than the code asks of a footing on soil warns when
   it is built:
 
