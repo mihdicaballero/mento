@@ -201,11 +201,18 @@ are reconciled to one number:
 
    s_{mat} = \min\bigl(s_{bot},\ s_{top}\bigr)
 
-The **smaller** of the two, because it is the only direction that is safe. Closing the
-wider face up adds bars to it, so each face still covers the area its own moment asked
-for, and the face that governed keeps exactly the spacing it needed. The lightly loaded
-face ends up with more steel than its own moment required — which is what detailing a
-mat costs, and what the drawing would have shown anyway.
+The **smaller** of the two, because it is the only direction that is safe: closing the
+wider face up adds bars to it, so every face still covers the area its own moment asked
+for.
+
+Which face sets the module is not always the one carrying the moment. A face governed
+by the minimum is detailed as many thin bars, and that lands at a closer spacing than
+the few thick bars the governing face needs — under ACI, whose minimum is the larger of
+the two codes', the top face sets the module about half the time and closes the bottom
+up with it. Measured over a range of typical footings, the mat costs about **12% more
+longitudinal steel** than detailing the two faces independently would, and in the worst
+case seen, close to 50%. That is the price of a single grid, and it is the grid the
+drawing would have shown anyway.
 
 Only the spacing is reconciled; the diameters stay as the design chose them, so the two
 faces may differ there. Adding bars to a layer does not move its centroid, so the

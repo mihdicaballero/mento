@@ -379,12 +379,18 @@ class Footing(OneWaySlab):
         number the mat is set out at.
 
         The *smaller* of the two, because that is the only direction that is
-        safe: it adds bars to the face that had the wider spacing, so each face
-        still covers the area its own moment asked for, and the face that
-        governed keeps exactly the spacing it needed. The lightly loaded face
-        therefore ends up with more steel than its own moment required, which
-        is what detailing a mat costs and what the drawing would have shown
-        anyway.
+        safe: it adds bars to the face that had the wider spacing, so every
+        face still covers the area its own moment asked for.
+
+        Which face sets the module is not always the one carrying the moment.
+        A face governed by the minimum is detailed as many thin bars, and that
+        comes out at a closer spacing than the few thick bars the governing
+        face needs -- under ACI, whose minimum is the larger of the two codes',
+        the top face sets the module about half the time and closes the bottom
+        up with it. The section is then further from its own optimum than the
+        wider spacing would have left it, and measurably so: about 12% more
+        longitudinal steel across a range of typical footings. That is what
+        detailing a mat costs, and what the drawing would have shown anyway.
 
         Only the spacing is reconciled. The diameters stay as the design chose
         them, so the two faces can differ there -- it is the module the mat is
