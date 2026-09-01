@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any, TYPE_CHECKING
+from typing import Any, ClassVar, TYPE_CHECKING
 from dataclasses import dataclass
 import math
 import numpy as np
@@ -182,3 +182,48 @@ class OneWaySlab(RectangularBeam):
         # --- TOP REBAR ---
         self._n1_t = calculate_bars(self._s_b1_t, self.width)
         self._n3_t = calculate_bars(self._s_b3_t, self.width)
+
+
+@dataclass
+class Footing(OneWaySlab):
+    """A spread footing or raft: a one-way slab bearing directly on the ground.
+
+    Everything about it is a :class:`OneWaySlab` -- the same flexure and shear
+    checks, the same reinforcement given as diameter and spacing -- with one
+    difference, and it is a difference the design codes make rather than this
+    class: the minimum longitudinal reinforcement.
+
+    A member spanning between supports is given a minimum sized to keep it from
+    failing the instant it cracks. A member on the ground cannot fail that way,
+    because the soil goes on carrying it, so both codes exempt it and put a
+    different rule in place:
+
+    * ACI 318-19 §9.6.1.1(b) grants the exemption and §13.3.1.2 replaces the
+      flexural minimum with the shrinkage and temperature reinforcement of
+      §24.4.3.2 -- 0.0018*b*h at f_y = 420 MPa, on the gross section. CIRSOC
+      201-25 shares the clause.
+    * EN 1992-1-1 takes the larger of the halved geometric minimum of a
+      foundation and the crack-control minimum of §7.3.2(2), which is usually
+      the one that governs a thick footing.
+
+    Both are returned already resolved to the largest applicable minimum, so a
+    caller designs a footing and takes the answer as it comes.
+
+    Example::
+
+        footing = Footing(
+            label="Z1", concrete=concrete, steel_bar=steel,
+            width=1 * m, height=60 * cm, c_c=50 * mm,
+        )
+        Node(section=footing, forces=[Forces(M_y=120 * kNm)]).design()
+
+    Note:
+        The rest of the footing's rules are the engineer's: this class does not
+        check the minimum thickness (200 mm in ACI, 250 mm in common EN
+        practice) or the 100-300 mm bar spacing range, and it says nothing
+        about the soil below -- bearing pressure, punching and sliding are not
+        part of a section design.
+    """
+
+    #: What makes it a footing, and the only thing the design codes read.
+    support: ClassVar[str] = "soil"

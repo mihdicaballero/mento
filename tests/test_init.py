@@ -225,6 +225,7 @@ def test_all_exports_in_all() -> None:
         "Node",
         "Forces",
         "OneWaySlab",
+        "Footing",
         "Concrete_ACI_318_19",
         "SteelBar",
         "Concrete_CIRSOC_201_25",

@@ -125,3 +125,40 @@ See the `Node` section for more information on detailed results and Word report 
 
 See the `Node` section for how to display and save detailed per-load-case results using
 `shear_results_detailed()`, `flexure_results_detailed()`, and their `_doc()` variants.
+
+8. Footings
+***********
+
+A `Footing` is a `OneWaySlab` that bears directly on the ground. It takes the same
+arguments, carries the same reinforcement — diameter and spacing — and goes through
+the same checks. The one difference is the minimum longitudinal reinforcement.
+
+.. code-block:: python
+
+    from mento import Footing, Forces, Node, cm, kNm, m, mm
+
+    footing = Footing(label="Z1", concrete=concrete, steel_bar=steel_bar,
+                      width=1 * m, height=60 * cm, c_c=50 * mm)
+
+    Node(section=footing, forces=[Forces(label="ELU 1", M_y=120 * kNm)]).design()
+
+A member spanning between supports is given a minimum sized so that it cannot fail
+the instant it cracks. A member on the ground cannot fail that way — the soil goes on
+carrying it — so both codes exempt it and put a different rule in its place:
+
+- **ACI 318-19** (and **CIRSOC 201-25**): §9.6.1.1(b) grants the exemption and
+  §13.3.1.2 replaces the flexural minimum with the shrinkage and temperature
+  reinforcement of §24.4.3.2 — :math:`0.0018\,b\,h` at :math:`f_y = 420` MPa,
+  written on the gross section rather than on the effective depth.
+- **EN 1992-2004**: the larger of the halved geometric minimum of a foundation and
+  the crack-control minimum of §7.3.2(2), Eq. (7.1). The second usually governs a
+  thick footing.
+
+The design returns the largest applicable minimum already applied, so the reinforcement
+it reports needs no correction afterwards.
+
+.. note::
+
+   `Footing` designs the section, not the foundation. Bearing pressure, punching
+   (see `PunchingSlab`), sliding and overturning are outside its scope, as are the
+   minimum thickness and the bar spacing range each code sets for footings.

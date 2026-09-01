@@ -444,6 +444,36 @@ def _minimum_flexural_reinforcement_ratio_ACI_318_19(self: "RectangularBeam", M_
     return flexure_eq.min_reinforcement_ratio(sec.f_c, sec.f_y, is_imperial=sec.is_imperial)
 
 
+def _minimum_flexural_reinforcement_area_ACI_318_19(self: "RectangularBeam", M_u: float, d: float) -> float:
+    """A_s,min on the tension face, for the way this element is supported.
+
+    Two different clauses, and which one applies is a property of the element,
+    not of the moment:
+
+    * A member spanning between supports gets the flexural minimum of §9.6.1.2,
+      ``rho_min * b * d``, sized so the cracked section can still carry the
+      moment that cracked it.
+    * A member supported on the ground is exempt from that clause by
+      §9.6.1.1(b) — it cannot fail suddenly on cracking, because the soil goes
+      on carrying it — and §13.3.1.2 replaces it with the shrinkage and
+      temperature reinforcement of §24.4.3.2. That one is written on the gross
+      section ``b * h``, so ``d`` does not enter it.
+
+    Args:
+        M_u: Factored moment on the face (N·mm, or lb·in). Only its being zero
+            matters: with no moment there is no flexural minimum to satisfy.
+        d: Effective depth of the tension reinforcement (mm, or in).
+
+    Returns:
+        A_s,min (mm², or in²).
+    """
+    sec = section_floats(self)
+    if self.support == "soil":
+        rho_st = flexure_eq.shrinkage_and_temperature_ratio(sec.f_y, is_imperial=sec.is_imperial)
+        return rho_st * sec.width * sec.height
+    return _minimum_flexural_reinforcement_ratio_ACI_318_19(self, M_u) * d * sec.width
+
+
 def _calculate_flexural_reinforcement_ACI_318_19(
     self: "RectangularBeam", M_u: float, d: float, d_prima: float
 ) -> tuple[float, float, float, float, float, bool, bool]:
@@ -479,8 +509,7 @@ def _calculate_flexural_reinforcement_ACI_318_19(
     f_y_mag = sec.f_y
 
     # Determine minimum and maximum reinforcement areas
-    rho_min = _minimum_flexural_reinforcement_ratio_ACI_318_19(self, M_u)  # Mechanical minimum reinforcement ratio
-    A_s_min = rho_min * d * b
+    A_s_min = _minimum_flexural_reinforcement_area_ACI_318_19(self, M_u, d)
     rho_max = _maximum_flexural_reinforcement_ratio_ACI_318_19(
         self,
     )
@@ -513,7 +542,18 @@ def _calculate_flexural_reinforcement_ACI_318_19(
     # 1.8‰ of the gross section (custom geometric minimum rule), same for beams and slabs
     A_s_geo_min = (1.8 / (1000)) * sec.width * sec.height
 
-    if M_u == 0:
+    if self.support == "soil":
+        # Case S:
+        # A_s_min above is already the shrinkage and temperature reinforcement
+        # of §24.4.3.2, on the gross section -- the only minimum a member on
+        # the ground has to meet. The 4/3 relief of §9.6.1.3 belongs to the
+        # clause it relieves, §9.6.1.2, which §9.6.1.1(b) has exempted this
+        # member from: there is no sudden cracking failure here for extra steel
+        # to buy off, so the minimum stands as written. With M_u = 0, A_s_calc
+        # is zero and this is the minimum itself, which is also what the
+        # section needs for detailing and for rho_w in the shear provisions.
+        A_s_final = max(A_s_calc, A_s_min)
+    elif M_u == 0:
         # Case 0:
         # No flexural demand (e.g. a shear-only load combination). ACI does not
         # require flexural minimum steel here, so rho_min -- and therefore
@@ -663,19 +703,17 @@ def _determine_nominal_moment_ACI_318_19(self: "RectangularBeam", st: FlexureChe
 
     sec = section_floats(self)
     # Calculate minimum and maximum reinforcement ratios
-    rho_min = _minimum_flexural_reinforcement_ratio_ACI_318_19(self, force._M_y.magnitude)
+    M_u = force._M_y.magnitude
     rho_max = _maximum_flexural_reinforcement_ratio_ACI_318_19(self)
 
-    # For positive moments (tension in the bottom), set minimum reinforcement accordingly.
-    if force._M_y > 0 * kNm:
-        rho_min_top = 0.0
-        rho_min_bot = rho_min
-    else:
-        rho_min_top = rho_min
-        rho_min_bot = 0.0
+    # For positive moments (tension in the bottom), set minimum reinforcement
+    # accordingly. The minimum is asked for as an area rather than a ratio: the
+    # clause that applies to a member on the ground is written on the gross
+    # section, so there is no single ratio both cases can be expressed in.
+    tension_at_bottom = force._M_y > 0 * kNm
 
     # Calculate minimum and maximum bottom reinforcement areas
-    st.A_s_min_bot = rho_min_bot * sec.d_bot * sec.width
+    st.A_s_min_bot = _minimum_flexural_reinforcement_area_ACI_318_19(self, M_u, sec.d_bot) if tension_at_bottom else 0.0
     st.A_s_max_bot = rho_max * sec.d_bot * sec.width
 
     # Determine the nominal moment for positive moments.
@@ -701,7 +739,7 @@ def _determine_nominal_moment_ACI_318_19(self: "RectangularBeam", st: FlexureChe
         )
 
     # Determine capacity for negative moment (tension at the top)
-    st.A_s_min_top = rho_min_top * sec.d_top * sec.width
+    st.A_s_min_top = 0.0 if tension_at_bottom else _minimum_flexural_reinforcement_area_ACI_318_19(self, M_u, sec.d_top)
     st.A_s_max_top = rho_max * sec.d_top * sec.width
 
     # Determine the nominal moment for negative moments (tension on top face).

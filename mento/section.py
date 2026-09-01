@@ -1,6 +1,6 @@
 import math
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, ClassVar, List, Optional
 
 from mento.material import Concrete, SteelBar
 from mento.forces import Forces
@@ -35,6 +35,18 @@ class Section:
         flexure_results_detailed_doc(force: Optional[Forces] = None): Provides detailed flexure results for documentation.
         results: Property to access beam results for Jupyter Notebook.
     """
+
+    #: How the element reaches the ground, in the terms the minimum
+    #: reinforcement clauses distinguish. ``"free"`` is anything spanning
+    #: between supports; ``"soil"`` is an element bearing directly on the
+    #: ground, which ACI 318-19 §9.6.1.1(b) exempts from the flexural minimum
+    #: written for a beam and EN 1992-1-1 reinforces to the halved geometric
+    #: minimum of a foundation instead.
+    #:
+    #: A ClassVar and not a field on purpose: it says what kind of element this
+    #: is, so it belongs to the class -- ``Footing`` sets it -- rather than
+    #: being a constructor argument any beam could be handed.
+    support: ClassVar[str] = "free"
 
     concrete: Concrete = field(kw_only=True)
     steel_bar: SteelBar = field(kw_only=True)

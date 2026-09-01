@@ -304,6 +304,56 @@ def _min_max_flexural_reinforcement_ratio_EN_1992_2004(
     return rho_min, rho_max
 
 
+#: Stress distribution coefficient k_c of EN 1992-1-1 §7.3.2(2) for a
+#: rectangular section in pure bending. The clause's other value, 1.0, is for
+#: pure tension, which is not a state a section designed here is in.
+_K_C_BENDING = 0.4
+
+
+def _minimum_flexural_reinforcement_area_EN_1992_2004(self: "RectangularBeam", d: float) -> float:
+    """A_s,min on the tension face, for the way this element is supported.
+
+    A member spanning between supports gets the non-fragility minimum of
+    §9.2.1.1, ``rho_min * b_t * d``.
+
+    A member bearing on the ground does not: the brittle failure that clause
+    guards against needs the support to disappear when the section cracks, and
+    here the soil goes on carrying it. Two rules take its place, and the larger
+    governs:
+
+    * the halved geometric minimum of a foundation, on the gross section; and
+    * the crack-control minimum of §7.3.2(2), which is what actually sizes the
+      steel of a thick footing — the concrete releases its tension at the
+      instant of cracking and the bars have to take it without breaking.
+
+    Args:
+        d: Effective depth of the tension reinforcement (mm).
+
+    Returns:
+        A_s,min (mm²).
+    """
+    sec = section_floats(self)
+    if self.support != "soil":
+        rho_min, _ = _min_max_flexural_reinforcement_ratio_EN_1992_2004(self)
+        return rho_min * d * sec.width
+
+    concrete_en = cast("Concrete_EN_1992_2004", self.concrete)
+    A_s_geometric = flexure_eq.foundation_min_reinforcement_ratio(sec.f_y) * sec.width * sec.height
+    A_s_crack = flexure_eq.crack_control_min_reinforcement(
+        _K_C_BENDING,
+        flexure_eq.crack_control_coefficient_k(sec.height),
+        concrete_en.f_ctm.to(MPa).magnitude,
+        # The tension zone just before the first crack: the section is still
+        # uncracked there, so the neutral axis sits at mid-depth and half of a
+        # rectangle is in tension.
+        sec.width * sec.height / 2,
+        # The stress permitted in the bars right after cracking, taken at the
+        # design yield strength.
+        sec.f_y / concrete_en._gamma_s,
+    )
+    return max(A_s_geometric, A_s_crack)
+
+
 def _compression_zone_limits_EN_1992_2004(self: "RectangularBeam", d: float) -> Tuple[float, float]:
     """Compression zone at the ductility limit, as (neutral axis, block depth).
 
@@ -339,13 +389,13 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
     """
     Calculate the required top and bottom reinforcement areas for bending.
     """
-    rho_min, rho_max = _min_max_flexural_reinforcement_ratio_EN_1992_2004(self)
+    _, rho_max = _min_max_flexural_reinforcement_ratio_EN_1992_2004(self)
     # ADR-0005 boundary: convert once, compute in floats (N, mm, MPa, N·mm),
     # re-apply units on the way out.
     sec = section_floats(self)
     b = sec.width
     d_mm = d
-    A_s_min = rho_min * d_mm * b
+    A_s_min = _minimum_flexural_reinforcement_area_EN_1992_2004(self, d_mm)
     A_s_max = rho_max * d_mm * b
 
     # Constants and material properties
@@ -477,26 +527,24 @@ def _determine_nominal_moment_EN_1992_2004(self: "RectangularBeam", st: ENFlexur
         None
     """
     # Calculate minimum and maximum reinforcement ratios
-    [rho_min, rho_max] = _min_max_flexural_reinforcement_ratio_EN_1992_2004(self)
+    [_, rho_max] = _min_max_flexural_reinforcement_ratio_EN_1992_2004(self)
 
-    # For positive moments (tension in the bottom), set minimum reinforcement accordingly.
+    # For positive moments (tension in the bottom), set minimum reinforcement
+    # accordingly. The minimum is asked for as an area rather than a ratio: the
+    # rules that apply to a member on the ground are written on the gross
+    # section, so there is no single ratio both cases can be expressed in.
     sec = section_floats(self)
-    if force._M_y > 0 * kNm:
-        rho_min_top = 0.0
-        rho_min_bot = rho_min
-    else:
-        rho_min_top = rho_min
-        rho_min_bot = 0.0
+    tension_at_bottom = force._M_y > 0 * kNm
 
     # Calculate minimum and maximum bottom reinforcement areas
-    st.A_s_min_bot = rho_min_bot * sec.d_bot * sec.width
+    st.A_s_min_bot = _minimum_flexural_reinforcement_area_EN_1992_2004(self, sec.d_bot) if tension_at_bottom else 0.0
     st.A_s_max_bot = rho_max * sec.d_bot * sec.width
     # Determine the nominal moment for positive moments
     st.M_Rd_bot = _simple_determine_nominal_moment_EN_1992_2004(
         self, sec.A_s_bot, sec.d_bot, sec.A_s_top, sec.c_mec_top
     )
     # Determine capacity for negative moment (tension at the top)
-    st.A_s_min_top = rho_min_top * sec.d_top * sec.width
+    st.A_s_min_top = 0.0 if tension_at_bottom else _minimum_flexural_reinforcement_area_EN_1992_2004(self, sec.d_top)
     st.A_s_max_top = rho_max * sec.d_top * sec.width
     st.M_Rd_top = _simple_determine_nominal_moment_EN_1992_2004(
         self, sec.A_s_top, sec.d_top, sec.A_s_bot, sec.c_mec_bot
