@@ -485,3 +485,117 @@ def test_a_code_without_the_footing_rules_imposes_none() -> None:
         assert footing.settings.max_bars_per_layer >= 200
     finally:
         _REGISTRY.pop(invented.title, None)
+
+
+# ---------------------------------------------------------------------------
+# One mat: both faces at one spacing
+# ---------------------------------------------------------------------------
+
+
+def _design_envelope(section, M_bot, M_top):  # type: ignore[no-untyped-def]
+    """Design for an envelope with a moment on each face, and return it."""
+    combo = [Forces(label="C1", M_y=M_bot), Forces(label="C2", M_y=-M_top)]
+    Node(section=section, forces=combo).design()
+    return section, combo
+
+
+@pytest.mark.parametrize(
+    "concrete, steel",
+    [
+        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), SteelBar(name="ADN 420", f_y=420 * MPa)),
+        (Concrete_EN_1992_2004(name="C25", f_c=25 * MPa), SteelBar(name="B500S", f_y=500 * MPa)),
+    ],
+    ids=["aci", "en"],
+)
+def test_a_designed_footing_is_one_mat(concrete, steel) -> None:  # type: ignore[no-untyped-def]
+    """Both faces come out set out at the same spacing.
+
+    The bottom carries five times the top's moment here, so the two faces would
+    otherwise be detailed at spacings nobody would draw on one mat.
+    """
+    footing, _ = _design_envelope(_strip(Footing, concrete, steel, "Z1"), 600 * kNm, 120 * kNm)
+
+    assert footing._s_b1_b.to("mm").magnitude == pytest.approx(footing._s_b1_t.to("mm").magnitude)
+
+
+def test_the_mat_takes_the_smaller_of_the_two_spacings(steel_b500s: SteelBar) -> None:
+    """The face that governed keeps the spacing it needed; the other closes up
+    to it, which can only add bars.
+
+    Driven from a layout set by hand rather than from a design, so that the two
+    spacings going in are known and the rule can be read off the result.
+    """
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    footing = _strip(Footing, concrete, steel_b500s, "Z1")
+    footing.set_slab_longitudinal_rebar_bot(d_b1=16 * mm, s_b1=120 * mm)
+    footing.set_slab_longitudinal_rebar_top(d_b1=12 * mm, s_b1=250 * mm)
+    A_s_top_before = footing._A_s_top
+
+    footing._finalize_longitudinal_design()
+
+    assert footing._s_b1_b.to("mm").magnitude == pytest.approx(120.0)
+    assert footing._s_b1_t.to("mm").magnitude == pytest.approx(120.0)
+    # Closing the top up added bars, and left its bar alone.
+    assert footing._A_s_top > A_s_top_before
+    assert footing._d_b1_t.to("mm").magnitude == pytest.approx(12.0)
+
+
+def test_matching_the_mat_never_undoes_the_design(steel_b500s: SteelBar) -> None:
+    """Closing the wider face up only adds steel, so both faces still pass."""
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    footing, combo = _design_envelope(_strip(Footing, concrete, steel_b500s, "Z1"), 600 * kNm, 120 * kNm)
+
+    results = footing.flexure_check_results(combo)
+    assert max(r.bottom.DCR for r in results) <= 1.0
+    assert max(r.top.DCR for r in results) <= 1.0
+    assert footing._A_s_bot >= footing._A_s_min_bot
+    assert footing._A_s_top >= footing._A_s_min_top
+
+
+def test_the_mat_keeps_each_face_within_the_spacing_range(steel_b500s: SteelBar) -> None:
+    """Matching down cannot push a face below the 100 mm floor: the module is
+    one of the two spacings the design already chose."""
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    footing, _ = _design_envelope(_strip(Footing, concrete, steel_b500s, "Z1"), 900 * kNm, 100 * kNm)
+
+    for spacing in (footing._s_b1_b, footing._s_b1_t):
+        assert 100.0 <= spacing.to("mm").magnitude <= 300.0
+
+
+def test_the_diameters_are_left_as_designed(steel_b500s: SteelBar) -> None:
+    """Only the module is shared. A face carrying a fifth of the moment is
+    still allowed its own, thinner bar."""
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    footing, _ = _design_envelope(_strip(Footing, concrete, steel_b500s, "Z1"), 600 * kNm, 120 * kNm)
+
+    assert footing._d_b1_t < footing._d_b1_b
+
+
+def test_a_footing_reinforced_on_one_face_gets_no_second_grid(steel_b500s: SteelBar) -> None:
+    """Nothing to reconcile, and a grid is not invented to reconcile with."""
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    footing = _design(_strip(Footing, concrete, steel_b500s, "Z1"), M_y=300 * kNm)
+
+    assert footing._s_b1_b.magnitude > 0
+    assert footing._s_b1_t.magnitude == 0
+    assert footing._d_b1_t.magnitude == 0
+
+
+def test_a_slab_still_details_its_faces_independently(steel_b500s: SteelBar) -> None:
+    """The mat is a footing's; a suspended slab keeps the spacing each face
+    actually needed."""
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    slab, _ = _design_envelope(_strip(OneWaySlab, concrete, steel_b500s, "L1"), 600 * kNm, 120 * kNm)
+
+    assert slab._s_b1_b != slab._s_b1_t
+
+
+def test_matching_is_idempotent(steel_b500s: SteelBar) -> None:
+    """Running it on a mat that is already one leaves it alone."""
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    footing, _ = _design_envelope(_strip(Footing, concrete, steel_b500s, "Z1"), 600 * kNm, 120 * kNm)
+    before = (footing._s_b1_b, footing._s_b1_t, footing._A_s_bot, footing._A_s_top)
+
+    footing._finalize_longitudinal_design()
+
+    assert (footing._s_b1_b, footing._s_b1_t, footing._A_s_bot, footing._A_s_top) == before

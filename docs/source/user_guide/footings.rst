@@ -87,6 +87,10 @@ Three rules, and the design applies all of them for you:
 - **Bar spacing.** Kept between 100 and 300 mm. A design answers a heavier demand with
   a larger bar rather than with bars closer than 100 mm, and both bounds appear in the
   flexure check table.
+- **One mat.** A footing is placed as a single grid, not as two independently detailed
+  faces, so a design ends with **bottom and top set out at the same spacing** — the
+  smaller of the two it arrived at. The diameters are left as designed, so the faces can
+  still differ there. A footing reinforced on one face only keeps its single grid.
 - **Thickness.** A section thinner than the code asks of a footing on soil warns when
   it is built:
 

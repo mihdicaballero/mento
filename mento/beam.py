@@ -325,6 +325,15 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
             design.get("d_b4"),
         )
 
+    def _finalize_longitudinal_design(self) -> None:
+        """Last word on the layout, once both faces have been designed.
+
+        Nothing to do for a beam: its two faces are detailed independently, so
+        the layout the design arrived at is the layout it keeps. It exists for
+        the elements whose faces are tied to each other -- a footing is placed
+        as one mat, and reconciles the two spacings here.
+        """
+
     def _clear_top_longitudinal(self) -> None:
         """Reset the top reinforcement to the default placeholder bars."""
         if self.concrete.unit_system == "metric":

@@ -188,6 +188,32 @@ A heavier demand is therefore answered with a larger bar rather than with bars c
 together. Both bounds are reported in the flexure check table, so a footing detailed
 outside the range fails the check rather than passing quietly.
 
+One spacing for the whole mat
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A footing is not built as two independently detailed faces. The bars go down as one
+mat: the bottom grid is placed, the top grid is placed over it on the same module, and
+the two are tied at the same spacing. A design that answers the bottom at 120 mm and
+the top at 250 mm is not a drawing anyone details, so once both faces are settled they
+are reconciled to one number:
+
+.. math::
+
+   s_{mat} = \min\bigl(s_{bot},\ s_{top}\bigr)
+
+The **smaller** of the two, because it is the only direction that is safe. Closing the
+wider face up adds bars to it, so each face still covers the area its own moment asked
+for, and the face that governed keeps exactly the spacing it needed. The lightly loaded
+face ends up with more steel than its own moment required — which is what detailing a
+mat costs, and what the drawing would have shown anyway.
+
+Only the spacing is reconciled; the diameters stay as the design chose them, so the two
+faces may differ there. Adding bars to a layer does not move its centroid, so the
+effective depths are unchanged and the capacity of the closed-up face can only rise —
+which is why the reconciliation runs **after** the design's final capacity
+verification. A face carrying no reinforcement is left with none: a footing reinforced
+on the bottom only has no second grid to match, and one is not invented for it.
+
 Minimum thickness
 ^^^^^^^^^^^^^^^^^
 
@@ -322,6 +348,18 @@ Validation
      - Detailing rules above
    * - Both bounds reported in the check table
      - ``test_the_spacing_row_of_a_footing_reports_both_bounds``
+     - Internal consistency
+   * - One spacing across both faces, the smaller of the two
+     - ``test_a_designed_footing_is_one_mat``,
+       ``test_the_mat_takes_the_smaller_of_the_two_spacings``,
+       ``test_the_diameters_are_left_as_designed``,
+       ``test_matching_is_idempotent``
+     - Detailing practice; the rule above
+   * - Matching never undoes the design
+     - ``test_matching_the_mat_never_undoes_the_design``,
+       ``test_the_mat_keeps_each_face_within_the_spacing_range``,
+       ``test_a_footing_reinforced_on_one_face_gets_no_second_grid``,
+       ``test_a_slab_still_details_its_faces_independently``
      - Internal consistency
    * - The bounds are a footing's, not every slab's
      - ``test_a_slab_keeps_the_wider_slab_limits``,

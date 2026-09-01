@@ -346,7 +346,10 @@ class Footing(OneWaySlab):
 
     It is also detailed differently, which the same ``support`` tells the codes:
     the bars are kept between 100 and 300 mm apart, and a footing thinner than
-    its code allows says so when it is built.
+    its code allows says so when it is built. And because a footing is placed as
+    a single mat rather than as two independently detailed faces, a design ends
+    with both faces set out at one spacing -- see
+    :meth:`_finalize_longitudinal_design`.
 
     Note:
         A `Footing` designs the section, not the foundation. It says nothing
@@ -361,6 +364,52 @@ class Footing(OneWaySlab):
     def __post_init__(self) -> None:
         super().__post_init__()
         self._warn_if_thinner_than_the_code_allows()
+
+    #: The layers a mat is placed in, as (diameter attribute, spacing attribute).
+    _MAT_LAYERS = (("_d_b1_b", "_s_b1_b"), ("_d_b3_b", "_s_b3_b"), ("_d_b1_t", "_s_b1_t"), ("_d_b3_t", "_s_b3_t"))
+
+    def _finalize_longitudinal_design(self) -> None:
+        """Detail both faces at one spacing, the smaller of the two designed.
+
+        A footing is not built as two independently detailed faces. The bars go
+        down as one mat: the bottom grid is placed, the top grid is placed over
+        it on the same module, and the two are tied at the same spacing. A
+        design that answered the bottom at 120 mm and the top at 250 mm is not
+        a drawing anyone details, so the two are reconciled here into the one
+        number the mat is set out at.
+
+        The *smaller* of the two, because that is the only direction that is
+        safe: it adds bars to the face that had the wider spacing, so each face
+        still covers the area its own moment asked for, and the face that
+        governed keeps exactly the spacing it needed. The lightly loaded face
+        therefore ends up with more steel than its own moment required, which
+        is what detailing a mat costs and what the drawing would have shown
+        anyway.
+
+        Only the spacing is reconciled. The diameters stay as the design chose
+        them, so the two faces can differ there -- it is the module the mat is
+        set out at that has to be one number, not the bar.
+
+        A face with no reinforcement is left with none: a footing reinforced on
+        the bottom only has no second grid to match, and inventing one is not
+        this method's call.
+        """
+        placed = [
+            (diameter, spacing)
+            for diameter, spacing in self._MAT_LAYERS
+            if getattr(self, diameter).magnitude > 0 and getattr(self, spacing).magnitude > 0
+        ]
+        if len(placed) < 2:
+            return  # one grid, or none: nothing to reconcile
+
+        module = min(getattr(self, spacing) for _, spacing in placed)
+        if all(getattr(self, spacing) == module for _, spacing in placed):
+            return  # already one mat
+
+        for _, spacing in placed:
+            setattr(self, spacing, module)
+        self._calculate_longitudinal_rebars()
+        self._update_longitudinal_rebar_attributes()
 
     def _warn_if_thinner_than_the_code_allows(self) -> None:
         """Say so when the section is thinner than a footing is built.

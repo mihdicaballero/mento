@@ -371,3 +371,9 @@ def _run_flexure_design(
         if capacity("top", M_demand_top) < M_demand_top and top_visited:
             chosen_top = _select_safe_design(self, list(top_visited.values()), M_demand_top, "top", capacity)
             self._apply_longitudinal_design_top(chosen_top)
+
+    # Both faces are settled. An element whose faces are detailed as one -- a
+    # footing mat -- gets the last word here, after the verification above and
+    # never before it: what it does can only add steel, so a layout that passed
+    # still passes.
+    self._finalize_longitudinal_design()
