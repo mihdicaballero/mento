@@ -328,9 +328,18 @@ def _minimum_flexural_reinforcement_area_EN_1992_2004(self: "RectangularBeam", d
     governs:
 
     * the halved geometric minimum of a foundation, on the gross section; and
-    * the crack-control minimum of §7.3.2(2), which is what actually sizes the
-      steel of a thick footing — the concrete releases its tension at the
-      instant of cracking and the bars have to take it without breaking.
+    * the crack-control minimum of §7.3.2(2), which sizes the steel that has to
+      carry the tension the concrete releases at the instant it cracks.
+
+    The second governs the THIN footings, not the thick ones: it is written on
+    ``A_ct = b*h/2``, so its ratio goes with ``k/2``, and ``k`` decays from 1.00
+    to 0.65 between 300 and 800 mm of depth. The geometric minimum takes over
+    once it has -- around h = 640 mm for C25 with B500S.
+
+    Only a face in tension is asked for this. The caller splits the two faces by
+    which one the moment puts in tension, and a face that is not in tension is
+    given no minimum at all rather than a smaller one: whether a footing carries
+    steel on that face is not a question a single section can answer.
 
     Args:
         d: Effective depth of the tension reinforcement (mm).
