@@ -804,7 +804,7 @@ def test_both_faces_in_tension_both_get_the_crack_minimum(steel_b500s: SteelBar)
     Node(section=footing, forces=combo).design()
 
     results = footing.flexure_check_results(combo)
-    gross = (footing.width * footing.height).to("mm**2").magnitude
+    gross = footing.width * footing.height
     for face in ("bottom", "top"):
         governing = max(getattr(r, face).A_s_min for r in results)
-        assert governing / gross * 1000 == pytest.approx(1.097, abs=0.001)
+        assert (governing / gross).to("dimensionless").magnitude * 1000 == pytest.approx(1.097, abs=0.001)
