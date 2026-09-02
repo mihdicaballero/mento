@@ -1,7 +1,8 @@
 # Brief — the frozen results should carry the capacity
 
-Status: proposed (2026-09-02). Raised from mako, which hit it building the footing
-reinforcement tables.
+Status: implemented (2026-09-02). Raised from mako, which hit it building the footing
+reinforcement tables. See *Outcome* at the end for where the implementation departs from
+the proposal.
 
 ## The gap in one sentence
 
@@ -159,3 +160,33 @@ mako's `get_footing_rebar_summary()`, one row per footing type, direction and fa
 | 3 | y | inferior | 2.0 | 38.6 | 0.0 | *(vacío)* | Ø10/24 | 0.051 |
 
 The `MRd` column is the division above; the blank `VRd` is the `DCR = 0` case.
+
+## Outcome
+
+Implemented as proposed -- `M_capacity` on `FlexureFaceCheck` / `FlexureFaceDesign`,
+`V_capacity` on `ShearCheck` / `ShearDesign`, populated for ACI 318-19, CIRSOC 201-25 and
+EN 1992-1-1 on beams, slabs and footings -- with two departures the numbers forced:
+
+1. **ACI shear reports `min(ØVn, ØVmax)`, not `ØVn`.** The check ratios the demand
+   against the smaller of the two (`_calculate_total_shear_strength_aci`), so that is the
+   resistance the ratio was formed from. Reporting `ØVn` alone would break
+   `demand / DCR == capacity` on every section governed by the 22.5.1.2 cap.
+2. **The envelope takes the governing combination's capacity, not the minimum.** The
+   proposal assumed a capacity is the section's alone. Under ACI 318-19 the shear
+   resistance moves with the combination -- `Vc` depends on the axial load and on which
+   face is in tension -- and a beam checked against three combinations reported three
+   different `ØVn`. The minimum would have left `shear_design.DCR` and
+   `shear_design.V_capacity` formed from different combinations, so the triple mako
+   prints would not have been a ratio. The envelope now carries the capacity of the
+   combination with the largest DCR; among ties (every combination, when nothing is
+   demanded) the smallest, which is the reading the proposal wanted.
+
+The wrinkle on EN's dynamic state attributes had already been resolved before this landed:
+`ENFlexureCheckState` declares `M_Rd_bot` / `M_Rd_top` and `ENShearCheckState` declares
+`V_Rd`. Each state hands its capacity to the frozen result through one method
+(`face_quantities`, `shear_capacity_quantity`), so the result never has to know which
+name a code uses.
+
+One thing fixed on the way: `flexure_check_results()` was handing `A_s_req`, `A_s_min` and
+`A_s_max` to the frozen result as bare floats in canonical units, where `check_flexure()`
+returned quantities. Both paths now read the state through `face_quantities` and agree.

@@ -62,6 +62,21 @@ def to_display(value: float, kind: str, imperial: bool) -> Any:
     return (value * CANONICAL[imperial][kind]).to(DISPLAY[imperial][kind])
 
 
+def _face_quantities(state: Any, face: str, capacity: str, imperial: bool) -> tuple[Any, Any, Any, Any]:
+    """``(A_s_req, A_s_min, A_s_max, capacity)`` of one face of a flexure state.
+
+    The two flexure states name their capacity differently -- ``phi_M_n`` and
+    ``M_Rd`` -- and share everything else, so each names its own field and
+    this does the wrapping.
+    """
+    return (
+        to_display(getattr(state, f"A_s_req_{face}"), "area", imperial),
+        to_display(getattr(state, f"A_s_min_{face}"), "area", imperial),
+        to_display(getattr(state, f"A_s_max_{face}"), "area", imperial),
+        to_display(getattr(state, capacity), "moment", imperial),
+    )
+
+
 @dataclass
 class ShearCheckState:
     """One combination's shear result, in the design code's own units.
@@ -100,6 +115,16 @@ class ShearCheckState:
             to_display(self.A_v_req, "per_length", imperial),
             to_display(self.A_v_min, "per_length", imperial),
         )
+
+    def shear_capacity_quantity(self, imperial: bool) -> Any:
+        """The design shear strength the DCR was formed from, as a quantity.
+
+        ``min(phi_V_n, phi_V_max)``: the check ratios the demand against the
+        smaller of the truss strength and the cap of ACI 318-19 22.5.1.2, so
+        that is the resistance the public result has to report for
+        ``demand / DCR`` to give it back.
+        """
+        return to_display(min(self.phi_V_n, self.phi_V_max), "force", imperial)
 
 
 def new_shear_state(section: "RectangularBeam") -> ShearCheckState:
@@ -216,6 +241,10 @@ class ENShearCheckState:
             to_display(self.A_v_req, "per_length", imperial),
             to_display(self.A_v_min, "per_length", imperial),
         )
+
+    def shear_capacity_quantity(self, imperial: bool) -> Any:
+        """``V_Rd``, the design shear resistance the DCR was formed from."""
+        return to_display(self.V_Rd, "force", imperial)
 
 
 def new_en_shear_state(section: "RectangularBeam") -> ENShearCheckState:
@@ -400,6 +429,14 @@ class FlexureCheckState:
     A_s_bool_top: bool
     doubly_reinforced: bool
 
+    def face_quantities(self, face: str, imperial: bool) -> tuple[Any, Any, Any, Any]:
+        """``(A_s_req, A_s_min, A_s_max, phi_M_n)`` of one face as quantities.
+
+        For the frozen public result; ``face`` is ``"bot"`` or ``"top"``. The
+        capacity is the ``phi_M_n`` the face's DCR was divided by.
+        """
+        return _face_quantities(self, face, f"phi_M_n_{face}", imperial)
+
 
 def new_flexure_state(section: "RectangularBeam") -> FlexureCheckState:
     """A zeroed flexure state. Every field is a float, so nothing is converted."""
@@ -498,6 +535,14 @@ class ENFlexureCheckState:
     rho_l_top: float
     DCR_bot: float
     DCR_top: float
+
+    def face_quantities(self, face: str, imperial: bool) -> tuple[Any, Any, Any, Any]:
+        """``(A_s_req, A_s_min, A_s_max, M_Rd)`` of one face as quantities.
+
+        For the frozen public result; ``face`` is ``"bot"`` or ``"top"``. The
+        capacity is the ``M_Rd`` the face's DCR was divided by.
+        """
+        return _face_quantities(self, face, f"M_Rd_{face}", imperial)
 
 
 def new_en_flexure_state(section: "RectangularBeam") -> ENFlexureCheckState:

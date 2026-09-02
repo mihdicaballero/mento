@@ -1,6 +1,7 @@
 """Tests for the public design results API (mento.design_results)."""
 
 import math
+from typing import Any
 
 import pytest
 from pandas import DataFrame
@@ -410,8 +411,12 @@ def test_values_only_checks_give_the_same_numbers_as_the_reporting_ones(concrete
 
     assert [c.DCR for c in shear] == [c.DCR for c in reporting.shear_checks]
     assert [c.A_v_req for c in shear] == [c.A_v_req for c in reporting.shear_checks]
+    assert [c.V_capacity for c in shear] == [c.V_capacity for c in reporting.shear_checks]
     assert [c.bottom.DCR for c in flexure] == [c.bottom.DCR for c in reporting.flexure_checks]
     assert [c.top.DCR for c in flexure] == [c.top.DCR for c in reporting.flexure_checks]
+    assert [c.bottom.A_s_req for c in flexure] == [c.bottom.A_s_req for c in reporting.flexure_checks]
+    assert [c.bottom.M_capacity for c in flexure] == [c.bottom.M_capacity for c in reporting.flexure_checks]
+    assert [c.top.M_capacity for c in flexure] == [c.top.M_capacity for c in reporting.flexure_checks]
 
 
 def test_values_only_checks_still_produce_readable_designs() -> None:
@@ -474,3 +479,164 @@ def test_results_are_frozen(designed_beam: RectangularBeam) -> None:
 
     with pytest.raises(FrozenInstanceError):
         designed_beam.flexure_design.bottom.A_s = 0 * cm**2  # type: ignore[misc]
+
+
+# ============================================================================
+# Capacity: the resistance the DCR was formed from
+# ============================================================================
+
+_BOTH_CODES = pytest.mark.parametrize(
+    "concrete, steel",
+    [
+        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), SteelBar(name="ADN 420", f_y=420 * MPa)),
+        (Concrete_EN_1992_2004(name="C25", f_c=25 * MPa), SteelBar(name="B500S", f_y=500 * MPa)),
+    ],
+    ids=["ACI", "EN"],
+)
+
+
+def _three_combinations() -> list[Forces]:
+    """The two of ``_two_combinations`` plus one that demands nothing at all."""
+    return [*_two_combinations(), Forces(label="C3")]
+
+
+@_BOTH_CODES
+def test_demand_over_dcr_gives_the_capacity_back(concrete, steel) -> None:  # type: ignore[no-untyped-def]
+    """The invariant a consumer used to lean on, now guaranteed by construction.
+
+    EN rounds the ratio to three decimals, so the comparison is made on the
+    ratio rather than on the moment: a rounded DCR of 0.051 is 1 % off, a
+    capacity is not.
+    """
+    beam = RectangularBeam(label="101", concrete=concrete, steel_bar=steel, width=20 * cm, height=60 * cm, c_c=25 * mm)
+    forces = _three_combinations()
+    Node(section=beam, forces=forces).design()
+
+    tested = 0
+    for check, force in zip(beam.flexure_checks, forces):
+        for face in (check.bottom, check.top):
+            if face.DCR > 0:
+                assert abs(force.M_y) / face.M_capacity == pytest.approx(face.DCR, abs=TABLE_ROUNDING)
+                tested += 1
+    for check, force in zip(beam.shear_checks, forces):
+        if check.DCR > 0:
+            assert abs(force.V_z) / check.V_capacity == pytest.approx(check.DCR, abs=TABLE_ROUNDING)
+            tested += 1
+    # Bottom, top and two shear combinations: nothing above was vacuous.
+    assert tested == 4
+
+
+@_BOTH_CODES
+def test_a_face_with_no_demand_still_reports_its_capacity(concrete, steel) -> None:  # type: ignore[no-untyped-def]
+    """The case the ratio cannot cover: a footing's top mat against nothing.
+
+    Its DCR is zero, and dividing by it says nothing. The capacity is a real
+    number -- and so is the shear resistance of a slab strip with no stirrups
+    and no shear, which printed as a blank cell downstream.
+    """
+    from mento.slab import Footing
+
+    footing = Footing(label="Z1", concrete=concrete, steel_bar=steel, width=100 * cm, height=40 * cm, c_c=50 * mm)
+    # The mild negative moment puts minimum reinforcement on the top face; the
+    # first combination then finds a reinforced face with no demand on it.
+    forces = [Forces(label="C1", M_y=50 * kNm), Forces(label="C2", M_y=-5 * kNm)]
+    Node(section=footing, forces=forces).design()
+
+    assert footing.flexure_design.top.A_s.magnitude > 0
+    unloaded = footing.flexure_checks[0].top
+    assert unloaded.DCR == 0
+    assert unloaded.M_capacity.magnitude > 0
+    assert footing.flexure_design.top.M_capacity == unloaded.M_capacity
+
+    shear = footing.shear_checks[0]
+    assert shear.DCR == 0
+    assert shear.V_capacity.magnitude > 0
+    assert footing.shear_design.V_capacity.magnitude > 0
+
+
+@_BOTH_CODES
+def test_two_faces_with_the_same_bars_report_the_same_capacity(concrete, steel) -> None:  # type: ignore[no-untyped-def]
+    """What dividing by a rounded ratio lost: the same section printed 43.3 on
+    one face and 43.4 on the other."""
+    beam = RectangularBeam(label="101", concrete=concrete, steel_bar=steel, width=20 * cm, height=60 * cm, c_c=25 * mm)
+    beam.set_longitudinal_rebar_bot(n1=3, d_b1=16 * mm)
+    beam.set_longitudinal_rebar_top(n1=3, d_b1=16 * mm)
+
+    bottom, top = beam.flexure_check_results([Forces(label="C1", M_y=43 * kNm), Forces(label="C2", M_y=-43 * kNm)])
+
+    assert bottom.bottom.M_capacity == top.top.M_capacity
+
+
+def test_design_capacity_is_the_one_the_governing_combination_saw() -> None:
+    """Under ACI 318-19 the shear resistance moves with the combination, so the
+    envelope has to pick one: the one its DCR came from, or the two stop being
+    a ratio."""
+    beam = RectangularBeam(
+        label="101",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=20 * cm,
+        height=60 * cm,
+        c_c=25 * mm,
+    )
+    forces = _three_combinations()
+    Node(section=beam, forces=forces).design()
+
+    capacities = {c.V_capacity for c in beam.shear_checks}
+    assert len(capacities) > 1, "the premise: V_c differs between these combinations"
+
+    governing = max(beam.shear_checks, key=lambda c: c.DCR)
+    shear = beam.shear_design
+    assert shear.V_capacity == governing.V_capacity
+    assert abs(forces[0].V_z) / shear.V_capacity == pytest.approx(shear.DCR)
+
+    flexure = beam.flexure_design
+    assert abs(forces[0].M_y) / flexure.bottom.M_capacity == pytest.approx(flexure.bottom.DCR)
+    assert abs(forces[1].M_y) / flexure.top.M_capacity == pytest.approx(flexure.top.DCR)
+
+
+def test_envelope_capacity_follows_the_dcr() -> None:
+    """Built by hand, so the rule is visible: the governing combination's
+    capacity, the smallest among ties, and absent when no combination set one."""
+
+    def shear(label: str, DCR: float, V_capacity: Any) -> ShearCheck:
+        return ShearCheck(label=label, A_v_req=None, A_v_min=None, DCR=DCR, V_capacity=V_capacity)
+
+    # The largest capacity belongs to the combination that governs.
+    assert envelope_shear([shear("C1", 0.4, 150 * kN), shear("C2", 0.9, 200 * kN)]).V_capacity == 200 * kN
+    # Nothing demanded anywhere: the smallest is the safe reading.
+    assert envelope_shear([shear("C1", 0.0, 150 * kN), shear("C2", 0.0, 120 * kN)]).V_capacity == 120 * kN
+    # A code that did not set it is skipped, and stays absent if none did.
+    assert envelope_shear([shear("C1", 0.9, None), shear("C2", 0.4, 150 * kN)]).V_capacity == 150 * kN
+    assert envelope_shear([shear("C1", 0.9, None)]).V_capacity is None
+    assert envelope_shear([]).V_capacity is None
+
+    def face(DCR: float, M_capacity: Any) -> FlexureFaceCheck:
+        return FlexureFaceCheck(A_s_req=None, A_s_min=None, A_s_max=None, DCR=DCR, M_capacity=M_capacity)
+
+    checks = [
+        FlexureCheck(label="C1", bottom=face(0.4, 100 * kNm), top=face(0.0, 40 * kNm)),
+        FlexureCheck(label="C2", bottom=face(0.9, 90 * kNm), top=face(0.0, 30 * kNm)),
+    ]
+    assert envelope_flexure_face(checks, "bottom").M_capacity == 90 * kNm
+    assert envelope_flexure_face(checks, "top").M_capacity == 30 * kNm
+    assert envelope_flexure_face([], "bottom").M_capacity is None
+
+
+def test_capacity_is_reported_in_the_display_units_of_the_section() -> None:
+    """An imperial section reports kip·ft and kip, as every other quantity does."""
+    from mento.units import ft, inch, kip, ksi, psi
+
+    beam = RectangularBeam(
+        label="101",
+        concrete=Concrete_ACI_318_19(name="C4", f_c=4000 * psi),
+        steel_bar=SteelBar(name="G60", f_y=60 * ksi),
+        width=10 * inch,
+        height=16 * inch,
+        c_c=1.5 * inch,
+    )
+    Node(section=beam, forces=[Forces(label="C1", V_z=20 * kip, M_y=40 * kip * ft)]).design()
+
+    assert beam.flexure_design.bottom.M_capacity.units == kip * ft
+    assert beam.shear_design.V_capacity.units == kip
+    assert beam.flexure_design.bottom.M_capacity.magnitude > 0
