@@ -71,26 +71,9 @@ On a 1 m strip 600 mm deep in H25 with :math:`f_y = 420` MPa, the footing rule g
 EN 1992-1-1:2004
 ----------------
 
-Two rules take the place of the exempted one, and **they do not apply to the same
-faces**:
-
-.. list-table::
-   :header-rows: 1
-   :widths: 30 34 36
-
-   * - Rule
-     - Applies to
-     - Why
-   * - Geometric minimum
-     - **Every face**
-     - Shrinkage and restraint steel. It does not depend on the section bending.
-   * - Crack control, §7.3.2(2)
-     - **A face that is bending**
-     - Written on :math:`A_{ct}`, the area of the section *in tension*. A face
-       asked for with no moment on it has no tension zone and no crack to
-       control.
-
-Where both apply, the larger governs.
+Two rules apply and **the larger governs**. Both are asked only for a face the moment
+puts in tension: a face that is not in tension is given no minimum at all, not a smaller
+one.
 
 Geometric minimum
 ^^^^^^^^^^^^^^^^^
@@ -162,8 +145,8 @@ against a geometric minimum of :math:`0.0009 \times 1000 \times 600 = 540` mm²,
 crack control governs. The beam rule this replaces,
 :math:`\max(0.26 f_{ctm}/f_{yk},\ 0.0013)\, b\, d`, would give 7.26 cm².
 
-Which of the two governs a bending face depends only on :math:`k`, since both are
-proportional to :math:`h`. With :math:`A_{ct} = b\,h/2` the crack-control ratio goes
+Which of the two governs depends only on :math:`k`, since both are proportional to
+:math:`h`. With :math:`A_{ct} = b\,h/2` the crack-control ratio goes
 with :math:`k/2`, and :math:`k` decays from 1.00 to 0.65 between 300 and 800 mm — so
 crack control governs the **thin** footings and the geometric minimum takes over in the
 thick ones, the crossover falling around :math:`h = 640` mm for C25 with B500S:
@@ -173,8 +156,8 @@ thick ones, the crossover falling around :math:`h = 640` mm for C25 with B500S:
    :widths: 20 27 27 26
 
    * - :math:`h`
-     - Bending face
-     - Face with no moment
+     - A_s,min applied
+     - Geometric alone
      - Governing rule
    * - 0.40 m
      - 1.097 ‰
@@ -191,10 +174,15 @@ thick ones, the crossover falling around :math:`h = 640` mm for C25 with B500S:
 
 .. note::
 
-   Every face getting the geometric minimum does **not** mean mento places a face
-   nobody asked for. Whether a footing carries top steel is the consumer's call — it is
-   the only one that sees both orthogonal sections of the element — so a design given no
-   negative moment leaves the top face empty.
+   A footing bending both ways has a tension zone on each face, so each is owed the
+   crack-control minimum. A face the moment does not put in tension is given no minimum
+   at all: whether a footing carries steel there is the consumer's call — it is the only
+   one that sees both orthogonal sections of the element — so a design given no negative
+   moment leaves the top face empty.
+
+   The distribution reinforcement perpendicular to the span is the same question asked
+   of a different section, and is designed as one. mento never reasons about two
+   directions at once.
 
 Detailing
 ---------
@@ -413,17 +401,18 @@ Validation
    * - Eq. (7.1) as written
      - ``test_en_crack_control_min_reinforcement_is_equation_7_1``
      - EN 1992-1-1 §7.3.2(2)
-   * - The larger of the two rules governs a bending face
+   * - The larger of the two rules governs
      - ``test_en_footing_minimum_is_the_crack_control_rule``,
-       ``test_en_footing_minimum_is_the_larger_of_the_two_rules``,
-       ``test_a_bending_face_still_gets_the_larger_of_the_two``
+       ``test_en_footing_minimum_is_the_larger_of_the_two_rules``
      - Worked reference case above
-   * - Crack control only on a face in tension, and only in the thin sections
-     - ``test_only_a_bending_face_gets_the_crack_control_minimum``,
-       ``test_the_crack_rule_governs_the_thin_footings_not_the_thick``,
-       ``test_a_face_designed_without_a_moment_takes_only_the_geometric_minimum``
+   * - Crack control governs the thin sections, not the thick
+     - ``test_the_crack_rule_governs_the_thin_footings_not_the_thick``,
+       ``test_the_excess_over_the_geometric_minimum_shrinks_with_depth``
      - EN 1992-1-1 §7.3.2(2); the depth table above
-   * - A face nobody asked for is not placed
+   * - Both faces in tension are both owed it
+     - ``test_both_faces_in_tension_both_get_the_crack_minimum``
+     - EN 1992-1-1 §7.3.2(2)
+   * - A face not in tension is given no minimum
      - ``test_a_footing_with_no_top_moment_is_left_without_top_steel``
      - Internal consistency
    * - A design covers the minimum without correction
