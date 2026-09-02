@@ -21,6 +21,7 @@ from mento.material import (
     SteelBar,
 )
 from mento.node import Node
+from mento.codes.EN_1992_2004_beam import _minimum_flexural_reinforcement_area_EN_1992_2004
 from mento.slab import Footing, OneWaySlab
 from mento.units import cm, inch, kNm, kip, m, mm, MPa, psi
 
@@ -730,3 +731,91 @@ def test_a_section_that_cannot_carry_the_moment_falls_back(steel_b500s, height, 
 
     results = footing.flexure_check_results(combo)
     assert max(max(r.bottom.DCR, r.top.DCR) for r in results) > 1
+
+
+# ---------------------------------------------------------------------------
+# Which face each of the EN rules applies to
+# ---------------------------------------------------------------------------
+
+
+def _en_minimum_per_mille(footing, M_Ed):  # type: ignore[no-untyped-def]
+    """A_s,min on one face of a metre strip, as a ratio of the gross section."""
+    d = (footing.height - footing.c_c - 10 * mm).to("mm").magnitude
+    area = _minimum_flexural_reinforcement_area_EN_1992_2004(footing, M_Ed, d)
+    gross = (footing.width * footing.height).to("mm**2").magnitude
+    return area / gross * 1000
+
+
+@pytest.mark.parametrize(
+    "height, bending",
+    [(40 * cm, 1.097), (60 * cm, 0.932), (90 * cm, 0.900)],
+    ids=["h040", "h060", "h090"],
+)
+def test_only_a_bending_face_gets_the_crack_control_minimum(steel_b500s, height, bending) -> None:  # type: ignore[no-untyped-def]
+    """§7.3.2 sizes the steel that carries the tension released at cracking, and
+    is written on A_ct, the area of the section in tension.
+
+    A face asked for with no moment on it has no tension zone and no crack to
+    control, so only the geometric minimum is owed. A face that is bending
+    takes the larger of the two -- which is the crack rule until the section is
+    thick enough for k to have decayed.
+    """
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    footing = _strip(Footing, concrete, steel_b500s, "Z1", height=height)
+
+    assert _en_minimum_per_mille(footing, 100e6) == pytest.approx(bending, abs=0.001)
+    assert _en_minimum_per_mille(footing, 0.0) == pytest.approx(0.900, abs=0.001)
+
+
+def test_the_crack_rule_governs_the_thin_footings_not_the_thick(steel_b500s: SteelBar) -> None:
+    """The ratio goes with k/2, and k decays with the depth, so the excess over
+    the geometric minimum shrinks as the footing gets thicker."""
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    excess = [
+        _en_minimum_per_mille(_strip(Footing, concrete, steel_b500s, "Z1", height=h * cm), 100e6) - 0.900
+        for h in (40, 60, 90)
+    ]
+
+    assert excess[0] > excess[1] > 0
+    assert excess[2] == pytest.approx(0.0, abs=1e-9)
+
+
+def test_a_face_designed_without_a_moment_takes_only_the_geometric_minimum(steel_b500s: SteelBar) -> None:
+    """Through the design, not just the equation: a footing whose bottom face
+    is asked for with no positive moment gets the geometric minimum there."""
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    footing = _strip(Footing, concrete, steel_b500s, "Z1", height=40 * cm)
+    combo = [Forces(label="C1", M_y=-80 * kNm)]
+    Node(section=footing, forces=combo).design()
+
+    geometric = 0.0009 * (footing.width * footing.height)
+    assert footing._A_s_bot.to("cm**2").magnitude >= geometric.to("cm**2").magnitude
+    # And not the crack minimum, which on a 400 mm section is 22% above it.
+    assert footing._A_s_bot.to("cm**2").magnitude < 1.22 * geometric.to("cm**2").magnitude
+
+
+def test_a_bending_face_still_gets_the_larger_of_the_two(steel_b500s: SteelBar) -> None:
+    """The face that is bending is unaffected by the distinction."""
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    footing = _strip(Footing, concrete, steel_b500s, "Z1", height=40 * cm)
+    _design(footing, M_y=120 * kNm)
+
+    geometric = (0.0009 * footing.width * footing.height).to("cm**2").magnitude
+    assert footing._A_s_min_bot.to("cm**2").magnitude == pytest.approx(1.097 / 0.900 * geometric, rel=1e-3)
+
+
+def test_a_footing_with_no_top_moment_is_left_without_top_steel(steel_b500s: SteelBar) -> None:
+    """The geometric minimum applying to every face does not mean mento places
+    a face nobody asked for.
+
+    Whether a footing carries top steel is the consumer's call -- it is the only
+    one that sees both orthogonal sections of the element -- so a design given
+    no negative moment leaves the top empty.
+    """
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    footing = _strip(Footing, concrete, steel_b500s, "Z1", height=40 * cm)
+    Node(section=footing, forces=[Forces(label="C1", M_y=200 * kNm)]).design()
+
+    assert footing._A_s_top.magnitude == 0
+    assert footing._d_b1_t.magnitude == 0
+    assert footing._s_b1_t.magnitude == 0

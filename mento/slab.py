@@ -332,9 +332,11 @@ class Footing(OneWaySlab):
       flexural minimum with the shrinkage and temperature reinforcement of
       §24.4.3.2 -- 0.0018*b*h at f_y = 420 MPa, on the gross section. CIRSOC
       201-25 shares the clause.
-    * EN 1992-1-1 takes the larger of the halved geometric minimum of a
-      foundation and the crack-control minimum of §7.3.2(2), which is usually
-      the one that governs a thick footing.
+    * EN 1992-1-1 takes the halved geometric minimum of a foundation on every
+      face, and on a face that is bending, the larger of that and the
+      crack-control minimum of §7.3.2(2). The second governs the thin footings:
+      its ratio goes with k/2, and k decays from 1.00 to 0.65 between 300 and
+      800 mm of depth.
 
     Both are returned already resolved to the largest applicable minimum, so a
     caller designs a footing and takes the answer as it comes.

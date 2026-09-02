@@ -84,6 +84,10 @@ Three rules, and the design applies all of them for you:
   minimum written for a member spanning between supports, and each code puts a
   different rule in its place. `Footing` returns the largest applicable minimum
   **already applied**, so the reinforcement it reports needs no correction afterwards.
+  Under EN, a face that is bending takes the larger of the geometric and crack-control
+  minimums; a face asked for with no moment on it takes only the geometric one. A face
+  nobody asked for is not reinforced at all — whether a footing carries top steel is
+  yours to decide, since only you see both orthogonal sections of the element.
 - **Bar spacing.** Kept between 100 and 300 mm. A design answers a heavier demand with
   a larger bar rather than with bars closer than 100 mm, and both bounds appear in the
   flexure check table.
