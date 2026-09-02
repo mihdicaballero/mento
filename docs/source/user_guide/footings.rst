@@ -84,6 +84,10 @@ Three rules, and the design applies all of them for you:
   minimum written for a member spanning between supports, and each code puts a
   different rule in its place. `Footing` returns the largest applicable minimum
   **already applied**, so the reinforcement it reports needs no correction afterwards.
+  A face the moment puts in tension takes the minimum; a face it does not is left
+  unreinforced — whether a footing carries top steel is yours to decide, since only you
+  see both orthogonal sections of the element. The distribution reinforcement across the
+  span is the same question asked of a different section, and is designed as one.
 - **Bar spacing.** Kept between 100 and 300 mm. A design answers a heavier demand with
   a larger bar rather than with bars closer than 100 mm, and both bounds appear in the
   flexure check table.

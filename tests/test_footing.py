@@ -21,6 +21,7 @@ from mento.material import (
     SteelBar,
 )
 from mento.node import Node
+from mento.codes.EN_1992_2004_beam import _minimum_flexural_reinforcement_area_EN_1992_2004
 from mento.slab import Footing, OneWaySlab
 from mento.units import cm, inch, kNm, kip, m, mm, MPa, psi
 
@@ -730,3 +731,80 @@ def test_a_section_that_cannot_carry_the_moment_falls_back(steel_b500s, height, 
 
     results = footing.flexure_check_results(combo)
     assert max(max(r.bottom.DCR, r.top.DCR) for r in results) > 1
+
+
+# ---------------------------------------------------------------------------
+# Which of the two EN rules governs, and at what depth
+# ---------------------------------------------------------------------------
+
+
+def _en_minimum_per_mille(footing):  # type: ignore[no-untyped-def]
+    """A_s,min on the tension face of a metre strip, per mille of the gross section."""
+    d = (footing.height - footing.c_c - 10 * mm).to("mm").magnitude
+    area = _minimum_flexural_reinforcement_area_EN_1992_2004(footing, d)
+    gross = (footing.width * footing.height).to("mm**2").magnitude
+    return area / gross * 1000
+
+
+@pytest.mark.parametrize(
+    "height, expected",
+    [(40 * cm, 1.097), (60 * cm, 0.932), (90 * cm, 0.900)],
+    ids=["h040", "h060", "h090"],
+)
+def test_the_crack_rule_governs_the_thin_footings_not_the_thick(steel_b500s, height, expected) -> None:  # type: ignore[no-untyped-def]
+    """Crack control is written on A_ct = b*h/2, so its ratio goes with k/2, and
+    k decays from 1.00 to 0.65 between 300 and 800 mm.
+
+    Both rules are proportional to h, so only k separates them: crack control
+    governs while the section is thin, and the 0.9 per mille geometric minimum
+    takes over once k has decayed — by 0.90 m it already has.
+    """
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    footing = _strip(Footing, concrete, steel_b500s, "Z1", height=height)
+
+    assert _en_minimum_per_mille(footing) == pytest.approx(expected, abs=0.001)
+
+
+def test_the_excess_over_the_geometric_minimum_shrinks_with_depth(steel_b500s: SteelBar) -> None:
+    """The same thing read as a trend rather than three numbers."""
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    excess = [
+        _en_minimum_per_mille(_strip(Footing, concrete, steel_b500s, "Z1", height=h * cm)) - 0.900 for h in (40, 60, 90)
+    ]
+
+    assert excess[0] > excess[1] > 0
+    assert excess[2] == pytest.approx(0.0, abs=1e-9)
+
+
+def test_a_footing_with_no_top_moment_is_left_without_top_steel(steel_b500s: SteelBar) -> None:
+    """A face that is not in tension is given no minimum, not a smaller one.
+
+    Whether a footing carries top steel is the consumer's call — it is the only
+    one that sees both orthogonal sections of the element — so a design given no
+    negative moment leaves the top empty rather than reasoning about what
+    minimum an unloaded face would be owed.
+    """
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    footing = _strip(Footing, concrete, steel_b500s, "Z1", height=40 * cm)
+    combo = [Forces(label="C1", M_y=200 * kNm)]
+    Node(section=footing, forces=combo).design()
+
+    assert footing._A_s_top.magnitude == 0
+    assert footing._d_b1_t.magnitude == 0
+    assert footing._s_b1_t.magnitude == 0
+    assert max(r.top.A_s_min for r in footing.flexure_check_results(combo)) == 0
+
+
+def test_both_faces_in_tension_both_get_the_crack_minimum(steel_b500s: SteelBar) -> None:
+    """A footing bending both ways has a tension zone on each face, so each is
+    owed the crack-control minimum."""
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    footing = _strip(Footing, concrete, steel_b500s, "Z1", height=40 * cm)
+    combo = [Forces(label="M+", M_y=150 * kNm), Forces(label="M-", M_y=-60 * kNm)]
+    Node(section=footing, forces=combo).design()
+
+    results = footing.flexure_check_results(combo)
+    gross = (footing.width * footing.height).to("mm**2").magnitude
+    for face in ("bottom", "top"):
+        governing = max(getattr(r, face).A_s_min for r in results)
+        assert governing / gross * 1000 == pytest.approx(1.097, abs=0.001)
