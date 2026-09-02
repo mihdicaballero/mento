@@ -12,6 +12,25 @@ from the release history and are summaries rather than complete lists.
 
 ## [Unreleased]
 
+### Added
+
+- **The frozen results carry the capacity the DCR was formed from.** `FlexureFaceCheck`
+  and `FlexureFaceDesign` gain `M_capacity`; `ShearCheck` and `ShearDesign` gain
+  `V_capacity`. One neutral name for every code: `ØMn` and `ØVn` (capped by `ØVmax`)
+  under ACI 318-19 and CIRSOC 201-25, `MRd` and `VRd` under EN 1992-1-1. A caller
+  printing the resistance next to the demand no longer divides the demand by a rounded
+  ratio, gets a real number for a face reinforced against no demand, and needs none of
+  the `_phi_M_n_*`, `_M_Rd_*`, `_phi_V_n` or `_V_Rd` attributes of the compatibility
+  layer. On a design the capacity is the governing combination's, so `demand / DCR`
+  gives it back there too. Brief: `docs/architecture/capacity-in-design-results.md`.
+
+### Fixed
+
+- **`flexure_check_results()` returned `A_s_req`, `A_s_min` and `A_s_max` as bare
+  floats** in the design code's canonical units (mm² or in²), where `check_flexure()`
+  returned them as quantities in cm² or in². Both entry points now read the check state
+  through the same path and return quantities.
+
 ## [1.0.1] - 2026-08-31
 
 ### Changed

@@ -38,6 +38,7 @@ Flexure
     flexure.bottom.A_s_req.to("cm**2")  # 4.96 cm², steel required
     flexure.bottom.A_s_min, flexure.bottom.A_s_max
     flexure.bottom.DCR                  # 0.965
+    flexure.bottom.M_capacity           # 103.6 kN·m, ØMn here; MRd under EN 1992
     flexure.bottom.n_bars               # 3
 
     flexure.DCR                         # worst of the two faces
@@ -82,6 +83,7 @@ Shear
     shear.A_v.to("cm**2/m") # 5.82 cm²/m, provided
     shear.A_v_req, shear.A_v_min
     shear.DCR               # 0.462
+    shear.V_capacity        # 173 kN, ØVn here; VRd under EN 1992
 
     str(shear)              # '1eØ10 mm/27 cm'
 
@@ -103,6 +105,38 @@ be checked last:
 
 The provided reinforcement — ``A_s``, the layers and the stirrup layout — describes the
 section itself and does not depend on the combination.
+
+The capacity follows the DCR: it is the one of the combination that governs, so the two
+remain the ratio they were. Under ACI 318-19 the shear resistance can differ between
+combinations, since ``Vc`` depends on the axial load and on which face is in tension; the
+per-combination results keep each one's own.
+
+Capacities
+----------
+
+Each result also carries the resistance its ``DCR`` was formed from: ``M_capacity`` on a
+flexure face and ``V_capacity`` on the shear result. The name is the same under every
+design code — it holds ``ØMn`` and ``ØVn`` under ACI 318-19 and CIRSOC 201-25, ``MRd``
+and ``VRd`` under EN 1992-1-1 — so a report that prints the symbol names it per code and
+the data does not have to.
+
+For any combination with a demand, dividing the demand by its ``DCR`` gives the capacity
+back, to within the rounding the design code applies to the ratio. The field is there for
+the cases the ratio cannot cover: a face carrying minimum reinforcement against no demand
+has a ``DCR`` of zero and a real capacity, and two faces with identical reinforcement
+report exactly the same one.
+
+The per-combination results are available too, one per combination of the last check:
+
+.. code-block:: python
+
+    for check in beam.shear_checks:
+        check.label, check.DCR, check.V_capacity
+
+    for check in beam.flexure_checks:
+        check.label, check.bottom.DCR, check.bottom.M_capacity
+
+    beam.shear_design.V_capacity            # the governing combination's
 
 Reading results too early
 -------------------------

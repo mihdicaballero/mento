@@ -23,6 +23,8 @@ from typing import TYPE_CHECKING, Any, Optional, Sequence, Tuple
 
 from pint import Quantity
 
+from mento.codes.check_state import to_display
+
 if TYPE_CHECKING:
     from mento.beam import RectangularBeam
 
@@ -78,6 +80,13 @@ class RebarLayer:
 class FlexureFaceCheck:
     """What a single load combination demanded of one face.
 
+    ``M_capacity`` is the design moment resistance the ``DCR`` was formed
+    from -- ``ØMn`` under ACI 318-19 and CIRSOC 201-25, ``MRd`` under
+    EN 1992-1-1. One neutral name for every code: the symbol belongs to the
+    presentation layer, which already names it per code. A face carrying only
+    minimum reinforcement against no demand still reports it, which is what
+    the ratio alone cannot tell.
+
     A field is ``None`` when the design code did not set it for this
     combination; enveloping skips those rather than treating them as zero.
     """
@@ -86,6 +95,7 @@ class FlexureFaceCheck:
     A_s_min: Optional[Quantity]
     A_s_max: Optional[Quantity]
     DCR: float
+    M_capacity: Optional[Quantity] = None
 
 
 @dataclass(frozen=True)
@@ -99,12 +109,18 @@ class FlexureCheck:
 
 @dataclass(frozen=True)
 class ShearCheck:
-    """The shear result of one load combination."""
+    """The shear result of one load combination.
+
+    ``V_capacity`` is the design shear resistance the ``DCR`` was formed from
+    -- ``ØVn``, capped by ``ØVmax``, under ACI 318-19 and CIRSOC 201-25;
+    ``VRd`` under EN 1992-1-1. See :class:`FlexureFaceCheck` for the naming.
+    """
 
     label: str
     A_v_req: Optional[Quantity]
     A_v_min: Optional[Quantity]
     DCR: float
+    V_capacity: Optional[Quantity] = None
 
 
 def _worst(values: Sequence[Optional[Quantity]]) -> Optional[Quantity]:
@@ -113,12 +129,31 @@ def _worst(values: Sequence[Optional[Quantity]]) -> Optional[Quantity]:
     return max(present) if present else None
 
 
+def _governing(pairs: Sequence[Tuple[float, Optional[Quantity]]]) -> Optional[Quantity]:
+    """The capacity of the combination that governs, or None if none reported one.
+
+    ``pairs`` are ``(DCR, capacity)``, one per combination. The envelope's DCR
+    is the largest of them, and its capacity has to be the resistance that DCR
+    was formed from, so that ``demand / DCR`` gives it back on the envelope as
+    it does on each combination. That matters because a capacity is not always
+    the section's alone: under ACI 318-19 the shear resistance moves with the
+    combination, through the axial load and the face in tension that enter
+    ``V_c``. Among combinations tied on DCR -- every one of them, when nothing
+    is demanded -- the smallest capacity is the safe reading.
+    """
+    present = [(dcr, capacity) for dcr, capacity in pairs if capacity is not None]
+    if not present:
+        return None
+    return min(present, key=lambda pair: (-pair[0], pair[1]))[1]
+
+
 def envelope_flexure_face(checks: Sequence[FlexureCheck], face: str) -> FlexureFaceCheck:
     """Worst demand on one face across every combination checked.
 
     A pure function of the results: the governing combination differs per
-    quantity and per face, so each one is enveloped independently. ``face`` is
-    ``"bottom"`` or ``"top"``.
+    quantity and per face, so each one is enveloped independently -- except
+    the capacity, which follows the DCR so the two stay the ratio they were.
+    ``face`` is ``"bottom"`` or ``"top"``.
     """
     faces = [getattr(check, face) for check in checks]
     return FlexureFaceCheck(
@@ -126,6 +161,7 @@ def envelope_flexure_face(checks: Sequence[FlexureCheck], face: str) -> FlexureF
         A_s_min=_worst([f.A_s_min for f in faces]),
         A_s_max=_worst([f.A_s_max for f in faces]),
         DCR=max([f.DCR for f in faces], default=0.0),
+        M_capacity=_governing([(f.DCR, f.M_capacity) for f in faces]),
     )
 
 
@@ -136,59 +172,46 @@ def envelope_shear(checks: Sequence[ShearCheck]) -> ShearCheck:
         A_v_req=_worst([c.A_v_req for c in checks]),
         A_v_min=_worst([c.A_v_min for c in checks]),
         DCR=max([c.DCR for c in checks], default=0.0),
+        V_capacity=_governing([(c.DCR, c.V_capacity) for c in checks]),
     )
 
 
-def capture_flexure_check(beam: RectangularBeam, label: str, state: Any = None) -> FlexureCheck:
+def capture_flexure_check(beam: RectangularBeam, label: str, state: Any) -> FlexureCheck:
     """The flexure result of the combination just run.
 
-    Reads ``state`` when the design code returned one, so nothing had to be
-    written to the beam; falls back to its attributes for codes still on the
-    older path.
+    Reads the ``state`` the design code returned, so nothing has to have been
+    written to the beam: the result is a value of the check, not a reading of
+    the section afterwards.
     """
-    if state is not None:
-        return FlexureCheck(
-            label=label,
-            bottom=FlexureFaceCheck(
-                A_s_req=state.A_s_req_bot,
-                A_s_min=state.A_s_min_bot,
-                A_s_max=state.A_s_max_bot,
-                DCR=float(state.DCR_bot),
-            ),
-            top=FlexureFaceCheck(
-                A_s_req=state.A_s_req_top,
-                A_s_min=state.A_s_min_top,
-                A_s_max=state.A_s_max_top,
-                DCR=float(state.DCR_top),
-            ),
-        )
+    imperial = beam.concrete.is_imperial
 
     def face(suffix: str) -> FlexureFaceCheck:
+        A_s_req, A_s_min, A_s_max, M_capacity = state.face_quantities(suffix, imperial)
         return FlexureFaceCheck(
-            A_s_req=getattr(beam, f"_A_s_req_{suffix}", None),
-            A_s_min=getattr(beam, f"_A_s_min_{suffix}", None),
-            A_s_max=getattr(beam, f"_A_s_max_{suffix}", None),
-            DCR=float(getattr(beam, f"_DCRb_{suffix}", 0.0)),
+            A_s_req=A_s_req,
+            A_s_min=A_s_min,
+            A_s_max=A_s_max,
+            DCR=float(getattr(state, f"DCR_{suffix}")),
+            M_capacity=M_capacity,
         )
 
     return FlexureCheck(label=label, bottom=face("bot"), top=face("top"))
 
 
-def capture_shear_check(beam: RectangularBeam, label: str, state: Any = None) -> ShearCheck:
+def capture_shear_check(beam: RectangularBeam, label: str, state: Any) -> ShearCheck:
     """The shear result of the combination just run.
 
-    Reads ``state`` when the design code returned one — then nothing had to be
-    written to the beam for this to work. Falls back to the beam's attributes
-    for the codes still on the older path.
+    Reads the ``state`` the design code returned; see
+    :func:`capture_flexure_check`.
     """
-    if state is not None:
-        A_v_req, A_v_min = state.shear_reinforcement_quantities(beam.concrete.is_imperial)
-        return ShearCheck(label=label, A_v_req=A_v_req, A_v_min=A_v_min, DCR=float(state.DCR))
+    imperial = beam.concrete.is_imperial
+    A_v_req, A_v_min = state.shear_reinforcement_quantities(imperial)
     return ShearCheck(
         label=label,
-        A_v_req=getattr(beam, "_A_v_req", None),
-        A_v_min=getattr(beam, "_A_v_min", None),
-        DCR=float(getattr(beam, "_DCRv", 0.0)),
+        A_v_req=A_v_req,
+        A_v_min=A_v_min,
+        DCR=float(state.DCR),
+        V_capacity=state.shear_capacity_quantity(imperial),
     )
 
 
@@ -296,6 +319,11 @@ class FlexureFaceDesign:
     ``A_s`` is what the section carries. ``A_s_req``, ``A_s_min``, ``A_s_max``
     and ``DCR`` are the envelope over every load combination that was checked,
     so ``DCR`` is the one of the combination that governs this face.
+
+    ``M_capacity`` is the design moment resistance of the face as reinforced
+    -- ``ØMn`` under ACI 318-19 and CIRSOC 201-25, ``MRd`` under EN 1992-1-1
+    -- as the governing combination saw it, so it is the resistance ``DCR``
+    was formed from.
     """
 
     layers: Tuple[RebarLayer, ...]
@@ -304,6 +332,7 @@ class FlexureFaceDesign:
     A_s_min: Quantity
     A_s_max: Quantity
     DCR: float
+    M_capacity: Quantity
 
     @property
     def n_bars(self) -> int:
@@ -341,6 +370,13 @@ class ShearDesign:
 
     ``A_v_req``, ``A_v_min`` and ``DCR`` are the envelope over every load
     combination that was checked, so ``DCR`` is the governing one.
+
+    ``V_capacity`` is the design shear resistance of the section as reinforced
+    -- ``ØVn``, capped by ``ØVmax``, under ACI 318-19 and CIRSOC 201-25;
+    ``VRd`` under EN 1992-1-1 -- as the governing combination saw it, so it is
+    the resistance ``DCR`` was formed from. Under ACI it can differ between
+    combinations: ``V_c`` moves with the axial load and with which face is in
+    tension. The per-combination results carry each one's own.
     """
 
     n_stirrups: int
@@ -350,6 +386,7 @@ class ShearDesign:
     A_v_req: Quantity
     A_v_min: Quantity
     DCR: float
+    V_capacity: Quantity
     s_w: Quantity
     layout: str = STIRRUPS
 
@@ -401,6 +438,9 @@ def _face(beam: RectangularBeam, face: str) -> FlexureFaceDesign:
 
     # A_s is the reinforcement the section carries, not a per-combination result.
     A_s: Optional[Quantity] = getattr(beam, f"_A_s_{suffix}", None)
+    # Nothing checked means nothing to divide by; a zero moment in the display
+    # unit of this section keeps the field a quantity either way.
+    no_capacity: Quantity = to_display(0.0, "moment", beam.concrete.is_imperial)
 
     return FlexureFaceDesign(
         layers=_layers(beam, face),
@@ -409,6 +449,7 @@ def _face(beam: RectangularBeam, face: str) -> FlexureFaceDesign:
         A_s_min=zero if worst.A_s_min is None else worst.A_s_min,
         A_s_max=zero if worst.A_s_max is None else worst.A_s_max,
         DCR=worst.DCR,
+        M_capacity=no_capacity if worst.M_capacity is None else worst.M_capacity,
     )
 
 
@@ -462,6 +503,7 @@ def build_shear_design(beam: RectangularBeam) -> ShearDesign:
     # As in _face: the private attributes describe the combination that ran last,
     # so the envelope is taken over the results of every combination checked.
     worst = envelope_shear(getattr(beam, "_shear_checks", ()))
+    no_capacity: Quantity = to_display(0.0, "force", beam.concrete.is_imperial)
 
     return ShearDesign(
         n_stirrups=int(beam._stirrup_n),
@@ -471,6 +513,7 @@ def build_shear_design(beam: RectangularBeam) -> ShearDesign:
         A_v_req=zero if worst.A_v_req is None else worst.A_v_req,
         A_v_min=zero if worst.A_v_min is None else worst.A_v_min,
         DCR=worst.DCR,
+        V_capacity=no_capacity if worst.V_capacity is None else worst.V_capacity,
         s_w=beam._leg_spacing_across_width(),
         layout=transverse_layout(beam),
     )

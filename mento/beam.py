@@ -772,7 +772,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         self._flexure_checks = []
 
         for force in forces:
-            self._run_flexure_check(force, report=True)
+            state = self._run_flexure_check(force, report=True)
             result = self._flexure_report_row
             self._flexure_results_list.append(result)
 
@@ -785,9 +785,10 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
                 "checks_pass": self._all_flexure_checks_passed,
             }
 
-            # Capture this combination's result as a value, before the next one
-            # overwrites the attributes it just left on the beam.
-            self._flexure_checks.append(capture_flexure_check(self, force.label))
+            # The result is a value of the check itself, not a reading of the
+            # attributes it left on the beam -- those describe the last
+            # combination only, and are on their way out with them.
+            self._flexure_checks.append(capture_flexure_check(self, force.label, state))
 
             # Extract the DCR values for top and bottom from the results
             current_dcr_top = self._DCRb_top
@@ -921,7 +922,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         self._shear_checks = []
 
         for force in forces:
-            self._run_shear_check(force, report=True)
+            state = self._run_shear_check(force, report=True)
             result = self._shear_report_row
             self._shear_results_list.append(result)
 
@@ -933,9 +934,9 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
                 "shear_concrete": self._shear_concrete.copy(),
             }
 
-            # Capture this combination's result as a value, before the next one
-            # overwrites the attributes it just left on the beam.
-            self._shear_checks.append(capture_shear_check(self, force.label))
+            # As in check_flexure: the value of the check, not the beam's
+            # attributes afterwards.
+            self._shear_checks.append(capture_shear_check(self, force.label, state))
 
             # Check if this result is the limiting case
             current_dcr = result["DCR"][0]
