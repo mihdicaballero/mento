@@ -87,6 +87,12 @@ class FlexureFaceCheck:
     minimum reinforcement against no demand still reports it, which is what
     the ratio alone cannot tell.
 
+    ``A_s_req`` is the steel to detail: what the moment asks for or the
+    minimum, whichever is larger. ``A_s_calc`` is the first of those alone,
+    before the minimum -- zero with no moment. An anchorage scaled by
+    ``A_s,nec / A_s,prov`` reads it, because a face governed by its minimum
+    carries little of the stress that minimum is sized for.
+
     A field is ``None`` when the design code did not set it for this
     combination; enveloping skips those rather than treating them as zero.
     """
@@ -96,6 +102,7 @@ class FlexureFaceCheck:
     A_s_max: Optional[Quantity]
     DCR: float
     M_capacity: Optional[Quantity] = None
+    A_s_calc: Optional[Quantity] = None
 
 
 @dataclass(frozen=True)
@@ -162,6 +169,7 @@ def envelope_flexure_face(checks: Sequence[FlexureCheck], face: str) -> FlexureF
         A_s_max=_worst([f.A_s_max for f in faces]),
         DCR=max([f.DCR for f in faces], default=0.0),
         M_capacity=_governing([(f.DCR, f.M_capacity) for f in faces]),
+        A_s_calc=_worst([f.A_s_calc for f in faces]),
     )
 
 
@@ -186,13 +194,14 @@ def capture_flexure_check(beam: RectangularBeam, label: str, state: Any) -> Flex
     imperial = beam.concrete.is_imperial
 
     def face(suffix: str) -> FlexureFaceCheck:
-        A_s_req, A_s_min, A_s_max, M_capacity = state.face_quantities(suffix, imperial)
+        A_s_req, A_s_min, A_s_max, M_capacity, A_s_calc = state.face_quantities(suffix, imperial)
         return FlexureFaceCheck(
             A_s_req=A_s_req,
             A_s_min=A_s_min,
             A_s_max=A_s_max,
             DCR=float(getattr(state, f"DCR_{suffix}")),
             M_capacity=M_capacity,
+            A_s_calc=A_s_calc,
         )
 
     return FlexureCheck(label=label, bottom=face("bot"), top=face("top"))
@@ -320,6 +329,13 @@ class FlexureFaceDesign:
     and ``DCR`` are the envelope over every load combination that was checked,
     so ``DCR`` is the one of the combination that governs this face.
 
+    ``A_s_req`` is the steel to detail, never below the minimum. ``A_s_calc``
+    is what the moment alone asked for, before that minimum -- the envelope of
+    the same over the combinations, so the governing one's. Choose bars from
+    the first; scale an anchorage by ``A_s,nec / A_s,prov`` from the second,
+    since a face governed by its minimum carries little of the stress the
+    minimum is sized for.
+
     ``M_capacity`` is the design moment resistance of the face as reinforced
     -- ``ØMn`` under ACI 318-19 and CIRSOC 201-25, ``MRd`` under EN 1992-1-1
     -- as the governing combination saw it, so it is the resistance ``DCR``
@@ -329,6 +345,7 @@ class FlexureFaceDesign:
     layers: Tuple[RebarLayer, ...]
     A_s: Quantity
     A_s_req: Quantity
+    A_s_calc: Quantity
     A_s_min: Quantity
     A_s_max: Quantity
     DCR: float
@@ -446,6 +463,7 @@ def _face(beam: RectangularBeam, face: str) -> FlexureFaceDesign:
         layers=_layers(beam, face),
         A_s=zero if A_s is None else A_s,
         A_s_req=zero if worst.A_s_req is None else worst.A_s_req,
+        A_s_calc=zero if worst.A_s_calc is None else worst.A_s_calc,
         A_s_min=zero if worst.A_s_min is None else worst.A_s_min,
         A_s_max=zero if worst.A_s_max is None else worst.A_s_max,
         DCR=worst.DCR,

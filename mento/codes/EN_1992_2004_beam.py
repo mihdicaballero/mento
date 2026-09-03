@@ -400,9 +400,16 @@ def _compression_zone_limits_EN_1992_2004(self: "RectangularBeam", d: float) -> 
 
 def _calculate_flexural_reinforcement_EN_1992_2004(
     self: "RectangularBeam", M_Ed: float, d: float, d_prima: float
-) -> tuple[float, float, float, float]:
+) -> tuple[float, float, float, float, float]:
     """
     Calculate the required top and bottom reinforcement areas for bending.
+
+    Returns ``(A_s_min, A_s_max, A_s1, A_s2, A_s_calc)``. ``A_s1`` is the
+    tension steel to detail, never below the minimum; ``A_s_calc`` is the steel
+    the moment alone asks for, before that minimum -- zero with no moment, and
+    ``A_s1_lim + A_s2`` once compression steel is needed. An anchorage scaled by
+    ``A_s,nec / A_s,prov`` reads the second, since a face governed by its
+    minimum carries little of the stress the minimum is sized for.
     """
     _, rho_max = _min_max_flexural_reinforcement_ratio_EN_1992_2004(self)
     # ADR-0005 boundary: convert once, compute in floats (N, mm, MPa, N·mm),
@@ -435,11 +442,10 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
             # lambda must NOT be applied again to the lever arm below.
             x_eff = flexure_eq.compression_block_depth_for_moment(M, b, d_mm, eta, f_cd)
 
-            # Area of required tensile reinforcement, at least the minimum
-            A_s1 = max(
-                flexure_eq.reinforcement_for_moment(M, flexure_eq.lever_arm(d_mm, x_eff), f_yd),
-                A_s_min,
-            )
+            # Area the moment asks for, and the tensile reinforcement to
+            # detail: that or the minimum, whichever is larger
+            A_s_calc = flexure_eq.reinforcement_for_moment(M, flexure_eq.lever_arm(d_mm, x_eff), f_yd)
+            A_s1 = max(A_s_calc, A_s_min)
             # No compressive reinforcement required
             A_s2 = 0.0
 
@@ -464,10 +470,11 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
             # (d - d') of the compression steel couple
             A_s2 = flexure_eq.reinforcement_for_moment(M - M_lim, d_mm - d_prime, f_sd)
 
-            # Required tensile reinforcement area
-            A_s1 = max(A_s1_lim + A_s2, A_s_min)
+            # Required tensile reinforcement area: the couple, or the minimum
+            A_s_calc = A_s1_lim + A_s2
+            A_s1 = max(A_s_calc, A_s_min)
 
-    return A_s_min, A_s_max, A_s1, A_s2
+    return A_s_min, A_s_max, A_s1, A_s2, A_s_calc
 
 
 def _simple_determine_nominal_moment_EN_1992_2004(
@@ -608,7 +615,8 @@ def _required_areas_EN_1992_2004(
     self: "RectangularBeam", face: str, M: Quantity, d: Quantity, d_prime: Quantity
 ) -> _FaceDemand:
     """Steel required by EN 1992-2004 on `face` for the moment `M`."""
-    A_s_min, A_s_max, A_s1, A_s2 = _calculate_flexural_reinforcement_EN_1992_2004(
+    # The design sizes bars, so it wants the minimum folded in, not A_s_calc.
+    A_s_min, A_s_max, A_s1, A_s2, _A_s_calc = _calculate_flexural_reinforcement_EN_1992_2004(
         self, M.to(_Nmm).magnitude, d.to(mm).magnitude, d_prime.to(mm).magnitude
     )
     # The design path speaks pint on both sides; only the calculation is floats.
@@ -669,6 +677,7 @@ def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> ENFle
             st.A_s_max_bot,
             st.A_s_req_bot,
             st.A_s_req_top,
+            st.A_s_calc_bot,
         ) = _calculate_flexural_reinforcement_EN_1992_2004(self, st.M_Ed_bot, sec.d_bot, sec.c_mec_top)
         st.c_d_top = 0
         # Calculate the design capacity ratio for the bottom side.
@@ -683,6 +692,7 @@ def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> ENFle
             st.A_s_max_top,
             st.A_s_req_top,
             st.A_s_req_bot,
+            st.A_s_calc_top,
         ) = _calculate_flexural_reinforcement_EN_1992_2004(self, abs(st.M_Ed_top), sec.d_top, sec.c_mec_bot)
         st.c_d_bot = 0
         # Calculate the design capacity ratio for the top side.

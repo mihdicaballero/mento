@@ -476,7 +476,7 @@ def _minimum_flexural_reinforcement_area_ACI_318_19(self: "RectangularBeam", M_u
 
 def _calculate_flexural_reinforcement_ACI_318_19(
     self: "RectangularBeam", M_u: float, d: float, d_prima: float
-) -> tuple[float, float, float, float, float, bool, bool]:
+) -> tuple[float, float, float, float, float, bool, bool, float]:
     """
     Calculates the flexural reinforcement for a given factored moment according to ACI 318-19.
 
@@ -501,6 +501,12 @@ def _calculate_flexural_reinforcement_ACI_318_19(
             - A_s_bool: Boolean indicating if 4/3*A_s_calc is adopted instead of A_s_min
             - doubly: True when compression reinforcement was required. Returned
               rather than written, so a check does not mark the section.
+            - A_s_calc: The steel the moment alone asks for, before any minimum
+              or the 4/3 rule -- zero with no moment, and the tension steel of
+              the couple when compression reinforcement is required. What an
+              anchorage scaled by A_s,nec / A_s,prov has to read, since a face
+              governed by its minimum carries little of the stress the minimum
+              is sized for.
     """
     concrete_aci = cast("Concrete_ACI_318_19", self.concrete)
     sec = section_floats(self)
@@ -612,8 +618,11 @@ def _calculate_flexural_reinforcement_ACI_318_19(
         f_s_prima_net = _f_s_prime_net_at_ductility_limit_ACI_318_19(self, d, d_prima)
         A_s_comp = M_n_prima / (f_s_prima_net * (d - d_prima))
         A_s_final = rho * b * d + A_s_comp * f_s_prima_net / f_y_mag
+        # Beyond the ductility limit the moment is carried as a couple, and the
+        # tension steel of that couple is what the moment asks for.
+        A_s_calc = A_s_final
 
-    return A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool, doubly
+    return A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool, doubly, clean_zero(A_s_calc)
 
 
 def _determine_nominal_moment_simple_reinf_ACI_318_19(self: "RectangularBeam", A_s: float, d: float) -> float:
@@ -805,6 +814,7 @@ def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> Flexure
             st.c_d_bot,
             st.A_s_bool_bot,
             st.doubly_reinforced,
+            st.A_s_calc_bot,
         ) = _calculate_flexural_reinforcement_ACI_318_19(
             self,
             st.M_u_bot,
@@ -827,6 +837,7 @@ def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> Flexure
             st.c_d_top,
             st.A_s_bool_top,
             st.doubly_reinforced,
+            st.A_s_calc_top,
         ) = _calculate_flexural_reinforcement_ACI_318_19(
             self,
             abs(st.M_u_top),
@@ -892,6 +903,7 @@ def _required_areas_ACI_318_19(
         c_d,
         A_s_bool,
         doubly,
+        _A_s_calc,  # the design sizes bars, so it wants the minimum folded in
     ) = _calculate_flexural_reinforcement_ACI_318_19(
         self,
         M.to(canonical["moment"]).magnitude,

@@ -36,6 +36,7 @@ Flexure
 
     flexure.bottom.A_s.to("cm**2")      # 5.15 cm², steel provided
     flexure.bottom.A_s_req.to("cm**2")  # 4.96 cm², steel required
+    flexure.bottom.A_s_calc.to("cm**2") # 4.96 cm², what the moment alone asks for
     flexure.bottom.A_s_min, flexure.bottom.A_s_max
     flexure.bottom.DCR                  # 0.965
     flexure.bottom.M_capacity           # 103.6 kN·m, ØMn here; MRd under EN 1992
@@ -53,6 +54,22 @@ Each face carries its layers, in order, and only the layers that hold bars:
 
 A face with no reinforcement has an empty ``layers`` tuple, which is what
 ``str(flexure.top)`` reports as ``'no reinforcement'``.
+
+``A_s_req`` and ``A_s_calc`` are the same number on this beam because the moment
+governs. They part on a face governed by its minimum: ``A_s_req`` is the steel to detail,
+``max(A_s_calc, A_s_min)`` — or the 4/3 rule under ACI — while ``A_s_calc`` is what the
+moment alone asked for, and is zero with no moment. Choose bars from the first. Scale an
+anchorage by ``A_s,nec / A_s,prov`` from the second: a footing mat governed by its
+minimum carries little of the stress that minimum is sized for, and charging it the full
+development length anchors a force that is not there.
+
+.. code-block:: python
+
+    face = footing.flexure_design.bottom      # a 1 m × 0.40 m strip under 20 kN·m, ACI
+
+    face.A_s_calc.to("cm**2")                 # 1.5 cm², the moment's own demand
+    face.A_s_min.to("cm**2")                  # 7.2 cm², the minimum on the ground
+    face.A_s_req == face.A_s_min              # True: the minimum governs
 
 A slab is detailed by a spacing rather than by a bar count, so each of its layers also
 carries the spacing it was designed with, and reads as one bar repeated across the strip.
