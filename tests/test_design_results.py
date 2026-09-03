@@ -640,3 +640,78 @@ def test_capacity_is_reported_in_the_display_units_of_the_section() -> None:
     assert beam.flexure_design.bottom.M_capacity.units == kip * ft
     assert beam.shear_design.V_capacity.units == kip
     assert beam.flexure_design.bottom.M_capacity.magnitude > 0
+
+
+# ============================================================================
+# A_s_calc: what the moment alone asks for, before the minimum
+# ============================================================================
+
+
+def _footing_under(concrete, steel, M_y):  # type: ignore[no-untyped-def]
+    """A metre strip of a 40 cm footing, designed for one moment."""
+    from mento.slab import Footing
+
+    footing = Footing(label="Z1", concrete=concrete, steel_bar=steel, width=100 * cm, height=40 * cm, c_c=50 * mm)
+    Node(section=footing, forces=[Forces(label="C1", M_y=M_y)]).design()
+    return footing
+
+
+@_BOTH_CODES
+def test_a_face_governed_by_its_minimum_still_says_what_the_moment_asked_for(concrete, steel) -> None:  # type: ignore[no-untyped-def]
+    """The case the field is for: a footing mat sized by the minimum, barely
+    working. A_s_req is the minimum, as bar selection needs; A_s_calc is the
+    much smaller area the moment alone demands, as an anchorage needs."""
+    face = _footing_under(concrete, steel, 5 * kNm).flexure_design.bottom
+
+    assert face.A_s_req == face.A_s_min
+    assert 0 < face.A_s_calc.magnitude
+    assert face.A_s_calc < 0.5 * face.A_s_min
+
+
+@_BOTH_CODES
+def test_a_face_governed_by_the_moment_reports_the_same_area_twice(concrete, steel) -> None:  # type: ignore[no-untyped-def]
+    face = _footing_under(concrete, steel, 250 * kNm).flexure_design.bottom
+
+    assert face.A_s_calc == face.A_s_req
+    assert face.A_s_req > face.A_s_min
+
+
+@_BOTH_CODES
+def test_a_face_with_no_moment_asks_for_nothing(concrete, steel) -> None:  # type: ignore[no-untyped-def]
+    """Zero, not None and not the minimum: the top face of a footing bent one way."""
+    footing = _footing_under(concrete, steel, 50 * kNm)
+
+    assert footing.flexure_checks[0].top.A_s_calc.magnitude == 0
+    assert footing.flexure_design.top.A_s_calc.magnitude == 0
+
+
+@_BOTH_CODES
+def test_a_section_needing_compression_steel_asks_for_the_couple(concrete, steel) -> None:  # type: ignore[no-untyped-def]
+    """Beyond the ductility limit the moment is carried as a couple, and the
+    tension steel of that couple is what the moment asks for -- so A_s_calc
+    is A_s_req there too, above the singly reinforced maximum."""
+    beam = RectangularBeam(label="101", concrete=concrete, steel_bar=steel, width=20 * cm, height=40 * cm, c_c=25 * mm)
+    beam.set_longitudinal_rebar_bot(n1=4, d_b1=25 * mm)
+    beam.set_longitudinal_rebar_top(n1=2, d_b1=16 * mm)
+
+    beam.check_flexure([Forces(label="C1", M_y=220 * kNm)])
+    face = beam.flexure_checks[0].bottom
+
+    assert beam._doubly_reinforced
+    assert face.A_s_req > face.A_s_min
+    assert face.A_s_calc == face.A_s_req
+
+
+def test_a_s_calc_is_enveloped_like_a_s_req() -> None:
+    """The governing combination's, skipping the ones a code did not set."""
+
+    def face(A_s_calc: Any) -> FlexureFaceCheck:
+        return FlexureFaceCheck(A_s_req=None, A_s_min=None, A_s_max=None, DCR=0.0, A_s_calc=A_s_calc)
+
+    checks = [
+        FlexureCheck(label="C1", bottom=face(3 * cm**2), top=face(None)),
+        FlexureCheck(label="C2", bottom=face(5 * cm**2), top=face(None)),
+    ]
+    assert envelope_flexure_face(checks, "bottom").A_s_calc == 5 * cm**2
+    assert envelope_flexure_face(checks, "top").A_s_calc is None
+    assert envelope_flexure_face([], "bottom").A_s_calc is None

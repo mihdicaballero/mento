@@ -62,8 +62,8 @@ def to_display(value: float, kind: str, imperial: bool) -> Any:
     return (value * CANONICAL[imperial][kind]).to(DISPLAY[imperial][kind])
 
 
-def _face_quantities(state: Any, face: str, capacity: str, imperial: bool) -> tuple[Any, Any, Any, Any]:
-    """``(A_s_req, A_s_min, A_s_max, capacity)`` of one face of a flexure state.
+def _face_quantities(state: Any, face: str, capacity: str, imperial: bool) -> tuple[Any, Any, Any, Any, Any]:
+    """``(A_s_req, A_s_min, A_s_max, capacity, A_s_calc)`` of one face of a flexure state.
 
     The two flexure states name their capacity differently -- ``phi_M_n`` and
     ``M_Rd`` -- and share everything else, so each names its own field and
@@ -74,6 +74,7 @@ def _face_quantities(state: Any, face: str, capacity: str, imperial: bool) -> tu
         to_display(getattr(state, f"A_s_min_{face}"), "area", imperial),
         to_display(getattr(state, f"A_s_max_{face}"), "area", imperial),
         to_display(getattr(state, capacity), "moment", imperial),
+        to_display(getattr(state, f"A_s_calc_{face}"), "area", imperial),
     )
 
 
@@ -415,6 +416,10 @@ class FlexureCheckState:
     A_s_max_top: float
     A_s_req_bot: float
     A_s_req_top: float
+    #: The steel the moment alone asks for, before the minimum folded into
+    #: A_s_req. Not on the compatibility layer: no report table prints it.
+    A_s_calc_bot: float
+    A_s_calc_top: float
     phi_M_n_bot: float
     phi_M_n_top: float
     c_d_bot: float
@@ -429,8 +434,8 @@ class FlexureCheckState:
     A_s_bool_top: bool
     doubly_reinforced: bool
 
-    def face_quantities(self, face: str, imperial: bool) -> tuple[Any, Any, Any, Any]:
-        """``(A_s_req, A_s_min, A_s_max, phi_M_n)`` of one face as quantities.
+    def face_quantities(self, face: str, imperial: bool) -> tuple[Any, Any, Any, Any, Any]:
+        """``(A_s_req, A_s_min, A_s_max, phi_M_n, A_s_calc)`` of one face as quantities.
 
         For the frozen public result; ``face`` is ``"bot"`` or ``"top"``. The
         capacity is the ``phi_M_n`` the face's DCR was divided by.
@@ -452,6 +457,8 @@ def new_flexure_state(section: "RectangularBeam") -> FlexureCheckState:
         A_s_max_top=0.0,
         A_s_req_bot=0.0,
         A_s_req_top=0.0,
+        A_s_calc_bot=0.0,
+        A_s_calc_top=0.0,
         phi_M_n_bot=0.0,
         phi_M_n_top=0.0,
         c_d_bot=0.0,
@@ -527,6 +534,9 @@ class ENFlexureCheckState:
     A_s_max_top: float
     A_s_req_bot: float
     A_s_req_top: float
+    #: As on :class:`FlexureCheckState`: the moment's own demand, no minimum.
+    A_s_calc_bot: float
+    A_s_calc_top: float
     c_d_bot: float
     c_d_top: float
     d_b_max_bot: float
@@ -536,8 +546,8 @@ class ENFlexureCheckState:
     DCR_bot: float
     DCR_top: float
 
-    def face_quantities(self, face: str, imperial: bool) -> tuple[Any, Any, Any, Any]:
-        """``(A_s_req, A_s_min, A_s_max, M_Rd)`` of one face as quantities.
+    def face_quantities(self, face: str, imperial: bool) -> tuple[Any, Any, Any, Any, Any]:
+        """``(A_s_req, A_s_min, A_s_max, M_Rd, A_s_calc)`` of one face as quantities.
 
         For the frozen public result; ``face`` is ``"bot"`` or ``"top"``. The
         capacity is the ``M_Rd`` the face's DCR was divided by.
@@ -562,6 +572,8 @@ def new_en_flexure_state(section: "RectangularBeam") -> ENFlexureCheckState:
         A_s_max_top=0.0,
         A_s_req_bot=0.0,
         A_s_req_top=0.0,
+        A_s_calc_bot=0.0,
+        A_s_calc_top=0.0,
         c_d_bot=0.0,
         c_d_top=0.0,
         d_b_max_bot=0.0,

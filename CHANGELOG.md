@@ -56,6 +56,17 @@ correct the engine's output for the first and divide it back out for the second.
   gives it back there too. Brief: `docs/architecture/capacity-in-design-results.md`.
   (#152)
 
+- **`A_s_calc`: the steel the moment alone asks for, next to `A_s_req`.** `A_s_req` on
+  `FlexureFaceCheck` and `FlexureFaceDesign` has the minimum folded in — `max(mechanical,
+  minimum)`, or the 4/3 rule under ACI — which is right for choosing bars and wrong for
+  anchoring them: a development length scaled by `A_s,nec / A_s,prov` needs the
+  mechanical area, and a footing mat governed by its minimum carries little of the
+  stress the minimum is sized for. Both design codes now return that area before the
+  `max` — `reinforcement_for_moment` or `A_s1_lim + A_s2` under EN, `A_s_calc` under
+  ACI — and it reaches the results as `A_s_calc`, enveloped over the combinations like
+  `A_s_req`. Zero with no moment; equal to `A_s_req` once the moment governs, compression
+  steel included. `A_s_req` does not change meaning.
+
 ### Fixed
 
 - **`flexure_check_results()` returned `A_s_req`, `A_s_min` and `A_s_max` as bare

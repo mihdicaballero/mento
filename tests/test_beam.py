@@ -52,11 +52,13 @@ def _flexural_reinforcement_in_pint(
     """
     imperial = beam.concrete.is_imperial
     canonical = CANONICAL[imperial]
-    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool, doubly = _calculate_flexural_reinforcement_ACI_318_19(
-        beam,
-        M_u.to(canonical["moment"]).magnitude,
-        d.to(canonical["length"]).magnitude,
-        d_prima.to(canonical["length"]).magnitude,
+    A_s_min, A_s_max, A_s_final, A_s_comp, c_d, A_s_bool, doubly, _A_s_calc = (
+        _calculate_flexural_reinforcement_ACI_318_19(
+            beam,
+            M_u.to(canonical["moment"]).magnitude,
+            d.to(canonical["length"]).magnitude,
+            d_prima.to(canonical["length"]).magnitude,
+        )
     )
     return (
         to_display(A_s_min, "area", imperial),
