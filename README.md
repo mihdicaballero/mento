@@ -60,12 +60,12 @@ Not looking for anything? A ⭐ on the repo or feedback in [Discussions](https:/
 The development is structured around key milestones, with ongoing tasks that aim to enhance functionality and compliance with design standards:
 - [x] Rectangular concrete beam section check and design for ACI 318-19 and CIRSOC 201-25.
 - [x] Rectangular concrete beam section check and design for EN 1992-2004.
-- [x] One way concrete slab check and design for ACI 318-19 and CIRSOC 201-25.
-- [x] One way concrete slab check and design for EN 1992-2004.
+- [x] One way concrete slab and footing check and design for ACI 318-19 and CIRSOC 201-25.
+- [x] One way concrete slab and footing check and design for EN 1992-2004.
 - [x] Shear wall shear check and design for ACI 318-19 and CIRSOC 201-25.
+- [ ] Shear wall shear check and design for EN 1992-2004. (in progress)
 - [ ] Slab shear punching check and design for ACI 318-19 and CIRSOC 201-25. (in progress)
-- [ ] Slab shear punching check and design for EN 1992-2004.
-- [ ] Shear wall shear check and design for EN 1992-2004.
+- [ ] Slab shear punching check and design for EN 1992-2004. (in progress)
 
 Each milestone incorporates rigorous testing and continuous integration to ensure code quality and reliability.
 
