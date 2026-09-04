@@ -34,9 +34,11 @@ from mento.material import (
     Concrete_EN_1992_2004,
     SteelBar,
 )
+from mento.beam_summary import BeamSummary
 from mento.node import Node
 from mento.results import DocumentBuilder, TablePrinter
 from mento.shear_wall import ShearWall
+from mento.shear_wall_summary import ShearWallSummary
 from mento.slab import OneWaySlab
 from mento.units import MPa, cm, kN, kNm, m, mm
 
@@ -286,7 +288,13 @@ def _rendered_strings(monkeypatch: pytest.MonkeyPatch, render: Any) -> Set[str]:
     def tp_print(self: Any, data: Dict[str, List[Any]], **kwargs: Any) -> None:
         record(data)
 
+    document_init = DocumentBuilder.__init__
+
     def db_init(self: Any, title: str, font_name: str = "Lato", font_size: int = 9, language: str = "en") -> None:
+        # The real one, so the builder has a document: the summary reports
+        # measure their column widths against the page. Nothing reaches disk --
+        # `save` is stubbed out below.
+        document_init(self, title, font_name, font_size, language)
         found.add(title)
 
     def db_heading(self: Any, text: str, level: int, font_size: float = 10, **fields: Any) -> None:
@@ -307,6 +315,7 @@ def _rendered_strings(monkeypatch: pytest.MonkeyPatch, render: Any) -> Set[str]:
     monkeypatch.setattr(DocumentBuilder, "add_table_data", db_table)
     monkeypatch.setattr(DocumentBuilder, "add_table_dcr", db_table)
     monkeypatch.setattr(DocumentBuilder, "add_table_min_max", db_table)
+    monkeypatch.setattr(DocumentBuilder, "add_table_status", db_table)
     monkeypatch.setattr(DocumentBuilder, "save", lambda self, filename: None)
 
     render()
@@ -470,3 +479,178 @@ class TestEndToEnd:
         """Summaries are out of scope; they must not pick the language up."""
         set_language("es")
         assert DocumentBuilder(title="Beam Summary Analysis", font_size=8).language == i18n.DEFAULT_LANGUAGE
+
+
+# ---------------------------------------------------------------------------
+# Summaries
+# ---------------------------------------------------------------------------
+#
+# `BeamSummary` and `ShearWallSummary` return DataFrames rather than printing,
+# so they translate on the way out instead of going through `TablePrinter`.
+# Only the columns holding words are translated: the symbol columns are
+# variable names, and a report that renamed `Av` would be reporting something
+# else.
+
+
+def _beam_summary() -> BeamSummary:
+    data = {
+        "Label": ["", "V101", "V102"],
+        "Comb.": ["", "ELU 1", "ELU 2"],
+        "b": ["cm", 20, 20],
+        "h": ["cm", 50, 50],
+        "cc": ["mm", 25, 25],
+        "Nx": ["kN", 0, 0],
+        "Vz": ["kN", 20, 50],
+        "My": ["kNm", 30, -35],
+        "ns": ["", 1.0, 1.0],
+        "dbs": ["mm", 6, 6],
+        "sl": ["cm", 20, 20],
+        "n1": ["", 2.0, 2.0],
+        "db1": ["mm", 12, 12],
+        "n2": ["", 1.0, 1.0],
+        "db2": ["mm", 10, 16],
+        "n3": ["", 2.0, 2.0],
+        "db3": ["mm", 12, 12],
+        "n4": ["", 0, 0],
+        "db4": ["mm", 0, 0],
+    }
+    return BeamSummary(
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        beam_list=pd.DataFrame(data),
+    )
+
+
+def _wall_summary() -> ShearWallSummary:
+    data = {
+        "Level": ["", "Level 1", "Level 1"],
+        "Label": ["", "M1", "M1"],
+        "Comb.": ["", "ELU 1", "ELU 2"],
+        "t": ["cm", 20, 20],
+        "lw": ["m", 3.0, 3.0],
+        "hw": ["m", 3.0, 3.0],
+        "cc": ["mm", 25, 25],
+        "Nx": ["kN", 0, -301],
+        "Vz": ["kN", 264, 152],
+        "My": ["kNm", -172, -234],
+        "dbh": ["mm", 0, 0],
+        "sh": ["cm", 0, 0],
+        "dbv": ["mm", 0, 0],
+        "sv": ["cm", 0, 0],
+    }
+    summary = ShearWallSummary(
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        wall_list=pd.DataFrame(data),
+    )
+    summary.design()
+    return summary
+
+
+class TestSummaryTables:
+    def test_beam_check_headers_are_translated(self) -> None:
+        set_language("es")
+        columns = list(_beam_summary().check().columns)
+        assert ES["Beam"] in columns
+        assert ES["Ok?"] in columns
+        assert "Beam" not in columns
+
+    def test_beam_check_keeps_variable_names(self) -> None:
+        """`Av` and `DCRv` name quantities, not prose: they read the same in both."""
+        set_language("es")
+        columns = list(_beam_summary().check().columns)
+        for symbol in ("b", "h", "As,top", "As,bot", "Av", "DCRv"):
+            assert symbol in columns
+
+    def test_flexure_results_translate_the_position_column(self) -> None:
+        """The header and its values: a row reading "Top" under "Posición" is
+        the half-translated output this covers."""
+        set_language("es")
+        df = _beam_summary().flexure_results()
+        assert ES["Position"] in df.columns
+        positions = set(df[ES["Position"]])
+        assert ES["Top"] in positions
+        assert ES["Bottom"] in positions
+        assert "Top" not in positions
+
+    def test_shear_results_are_translated(self) -> None:
+        set_language("es")
+        columns = list(_beam_summary().shear_results().columns)
+        assert ES["Label"] in columns
+        assert "Label" not in columns
+
+    def test_wall_check_is_translated(self) -> None:
+        set_language("es")
+        columns = list(_wall_summary().check().columns)
+        assert ES["Level"] in columns
+        assert ES["Status"] in columns
+        assert "Status" not in columns
+
+    def test_english_is_unchanged(self) -> None:
+        """The default output is the one every existing notebook reads."""
+        columns = list(_beam_summary().check().columns)
+        assert "Beam" in columns
+        assert "Ok?" in columns
+
+
+def _rendered_prose(monkeypatch: pytest.MonkeyPatch, render: Any) -> Set[str]:
+    """The headings and paragraphs ``render`` writes, in English.
+
+    Narrower than :func:`_rendered_strings`, which also records table headers:
+    a summary table's headers are mostly symbols -- `Av`, `My`, `DCR` -- and
+    those are deliberately the same in every language. What has to be
+    translated, and what a new report line is likely to forget, is the prose.
+    The tables are left to run for real, so the document is built the way it
+    would be for a user; only ``save`` is stubbed out.
+    """
+    found: Set[str] = set()
+    heading, text = DocumentBuilder.add_heading, DocumentBuilder.add_text
+
+    def db_heading(self: Any, text_: str, level: int, font_size: float = 10, **fields: Any) -> None:
+        found.add(text_)
+        heading(self, text_, level, font_size, **fields)
+
+    def db_text(self: Any, text_: str, **fields: Any) -> None:
+        found.add(text_)
+        text(self, text_, **fields)
+
+    monkeypatch.setattr(DocumentBuilder, "add_heading", db_heading)
+    monkeypatch.setattr(DocumentBuilder, "add_text", db_text)
+    monkeypatch.setattr(DocumentBuilder, "save", lambda self, filename: None)
+
+    render()
+    return found
+
+
+class TestSummaryCatalogCoverage:
+    """Same guard as :class:`TestCatalogCoverage`, for the summary reports: a
+    heading added without a translation fails here instead of printing English
+    inside a Spanish document."""
+
+    def test_beam_summary_doc(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        summary = _beam_summary()
+        prose = _rendered_prose(monkeypatch, lambda: summary.results_detailed_doc(index=1))
+        assert "Beam Summary Analysis" in prose, "the harness saw no report"
+        assert sorted(s for s in prose if s not in ES) == []
+
+    def test_wall_summary_doc(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        summary = _wall_summary()
+        prose = _rendered_prose(monkeypatch, lambda: summary.results_detailed_doc(index=1))
+        assert "Shear Wall Summary Analysis" in prose, "the harness saw no report"
+        assert sorted(s for s in prose if s not in ES) == []
+
+    def test_the_summary_document_renders_in_spanish(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """End to end: the headings reach the document translated, and the
+        status column still finds itself once the table is translated."""
+        saved: Dict[str, Any] = {}
+        monkeypatch.setattr(
+            DocumentBuilder, "save", lambda self, filename: saved.update(doc=self.doc, filename=filename)
+        )
+        set_language("es")
+        _beam_summary().results_detailed_doc(index=1)
+
+        text = "\n".join(p.text for p in saved["doc"].paragraphs)
+        assert ES["Beam Summary Analysis"] in text
+        assert ES["Design Check Summary"] in text
+        assert "Design Check Summary" not in text
+        assert saved["filename"] == "Beam_Summary_ACI 318-19.docx"

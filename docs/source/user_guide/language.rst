@@ -60,11 +60,18 @@ The language applies to the detailed reports of every element — ``RectangularB
 - ``flexure_results_detailed()`` and ``shear_results_detailed()``, printed to the console
 - ``flexure_results_detailed_doc()`` and ``shear_results_detailed_doc()``, written to Word
 
+and to the summaries, :doc:`beam_summary` and :doc:`shear_wall_summary`:
+
+- ``check()``, ``flexure_results()`` and ``shear_results()``, whose DataFrames come back
+  with their headers translated
+- ``results_detailed_doc()``, written to Word
+
 Table headers, row labels and document headings are translated. These are deliberately
 left as they are:
 
 - **Variable names** — ``fc``, ``Av``, ``ØVn``, ``DCR`` are the notation of the design
-  code and stay identical in every language.
+  code and stay identical in every language. This is why a summary table translates
+  ``Beam`` and ``Position`` but leaves ``As,bot`` and ``DCRv`` alone.
 - **Units and numbers** — ``cm``, ``MPa``, ``kNm``.
 - **The design code designation** — ``CIRSOC 201-25`` keeps its official name.
 - **Generated file names** — a project keeps one naming scheme regardless of the language
@@ -76,8 +83,8 @@ renders.
 
 .. note::
 
-   Summary tables (:doc:`beam_summary`, :doc:`shear_wall_summary`) and the Jupyter output
-   of the ``results`` properties are not translated yet, and stay in English.
+   The Jupyter output of the ``results`` properties is not translated yet, and stays in
+   English.
 
 Adding a language
 -----------------

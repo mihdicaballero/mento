@@ -18,6 +18,7 @@ from docx.shared import Cm
 
 from mento._version import __version__ as MENTO_VERSION
 from mento.codes.registry import design_code
+from mento.i18n import get_language
 from mento.results import DocumentBuilder
 
 if TYPE_CHECKING:
@@ -146,15 +147,19 @@ def beam_summary_doc(self: "BeamSummary", index: int = 1) -> None:
     node.check_shear()
 
     # Create document with smaller font
-    doc_builder = DocumentBuilder(title="Beam Summary Analysis", font_size=8)
+    doc_builder = DocumentBuilder(title="Beam Summary Analysis", font_size=8, language=get_language())
     doc_builder.add_heading("Beam Summary Analysis", level=1)
-    doc_builder.add_text(f"Made with mento {MENTO_VERSION}. Design code: {self.concrete.design_code}")
+    doc_builder.add_text(
+        "Made with mento {version}. Design code: {design_code}",
+        version=MENTO_VERSION,
+        design_code=self.concrete.design_code,
+    )
     doc_builder.add_text(
         "This report presents the detailed results for the first beam of the summary, followed by summary tables for all beams."
     )
 
     # --- DETAILED FLEXURE RESULTS FOR SELECTED BEAM ---
-    doc_builder.add_heading(f"Beam {beam.label} flexure check", level=2)
+    doc_builder.add_heading("Beam {label} flexure check", level=2, label=beam.label)
 
     # Build dataframes same as flexure_results_detailed_doc
     top_details = _details(beam._limiting_case_flexure_top_details)
@@ -226,7 +231,7 @@ def beam_summary_doc(self: "BeamSummary", index: int = 1) -> None:
     doc_builder.add_table_dcr(df_flex_capacity_bot)
 
     # --- DETAILED SHEAR RESULTS FOR SELECTED BEAM ---
-    doc_builder.add_heading(f"Beam {beam.label} shear check", level=2)
+    doc_builder.add_heading("Beam {label} shear check", level=2, label=beam.label)
 
     result_data = _details(beam._limiting_case_shear_details)
     df_shear_materials = pd.DataFrame(beam._materials_shear)
@@ -305,12 +310,18 @@ def wall_summary_doc(self: "ShearWallSummary", index: int = 1) -> None:
 
     node.check_shear()
 
-    doc_builder = DocumentBuilder(title="Shear Wall Summary Analysis", font_size=8)
+    doc_builder = DocumentBuilder(title="Shear Wall Summary Analysis", font_size=8, language=get_language())
     doc_builder.add_heading("Shear Wall Summary Analysis", level=1)
-    doc_builder.add_text(f"Made with mento {MENTO_VERSION}. Design code: {self.concrete.design_code}")
+    doc_builder.add_text(
+        "Made with mento {version}. Design code: {design_code}",
+        version=MENTO_VERSION,
+        design_code=self.concrete.design_code,
+    )
 
     # --- DETAILED RESULTS FOR SELECTED WALL ---
-    doc_builder.add_heading(f"Wall {wall.level} - {wall.label} shear check", level=2)
+    # The placeholder is `storey`, not `level`: `level` is add_heading's own
+    # argument for the heading depth.
+    doc_builder.add_heading("Wall {storey} - {label} shear check", level=2, storey=wall.level, label=wall.label)
 
     result_data = _details(wall._limiting_case_shear_details)
     df_materials = pd.DataFrame(wall._materials_shear_wall)

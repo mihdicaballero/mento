@@ -637,13 +637,31 @@ class DocumentBuilder:
         """
         self.add_table(df, column_widths, font_size=font_size or self.font_size)
 
+    def _verdict_column(self, df: pd.DataFrame, column: str) -> Optional[str]:
+        """``column`` as ``df`` spells it -- in English, or already translated.
+
+        A summary frame arrives translated, so its verdict column is "¿Ok?"
+        rather than "Ok?" in Spanish, while a detail table arrives in English and
+        is translated on its way into the Word table. Accepting either spelling
+        means the shading finds its column in both cases. ``None`` when the frame
+        has no such column, which is a table without a verdict rather than an
+        error.
+        """
+        if column in df.columns:
+            return column
+        translated = translate(column, self.language)
+        return translated if translated in df.columns else None
+
     def _shade_verdicts(self, table: Any, df: pd.DataFrame, column: str) -> None:
         """Shade every cell of ``column`` that holds a verdict, green or red.
 
         Cells that hold neither mark -- a units row, a blank -- are left alone,
         so the colouring says something wherever it appears.
         """
-        column_idx = df.columns.get_loc(column)
+        resolved = self._verdict_column(df, column)
+        if resolved is None:
+            return
+        column_idx = df.columns.get_loc(resolved)
         for row_offset in range(df.shape[0]):
             verdict = str(df.iat[row_offset, column_idx])
             if verdict not in (PASS_MARK, FAIL_MARK):
@@ -707,8 +725,7 @@ class DocumentBuilder:
         cross is what the colour saves.
         """
         self.add_table(df, LIMIT_TABLE_WIDTHS, font_size=self.font_size)
-        if verdict_column in df.columns:
-            self._shade_verdicts(self.doc.tables[-1], df, verdict_column)
+        self._shade_verdicts(self.doc.tables[-1], df, verdict_column)
 
     def add_figure(self, fig: "plt.Figure", width: float = 16) -> None:
         """

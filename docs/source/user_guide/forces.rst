@@ -8,15 +8,33 @@ them in different stages of a structural analysis or design workflow.
 Key Concepts
 ------------
 
-- **Axial Force (`N_x`)**: Force applied along the axis of the element, along the x-x axis.
-- **Shear Force (`V_z`)**: Force acting perpendicular to the axis of the element, along the z-z local axis.
-- **Bending Moment (`M_y`)**: The moment caused by forces that induce bending about the y-y axis.
+- **Axial Force (`N_x`)**: Force applied along the axis of the element, along the x-x axis. **Positive in compression.**
+- **Shear Force (`V_z`)**: Force acting perpendicular to the axis of the element, along the z-z local axis. **Always entered as a positive magnitude.**
+- **Bending Moment (`M_y`)**: The moment caused by forces that induce bending about the y-y axis. **Positive when it produces tension at the bottom** of the section.
 - **Unit System**: You can define the unit system to display the forces for a Force object, *metric* or *imperial*.
 
 These are the main forces considered to  analyze a beam along it's main axis.
 For Columns analysis in future releases, the Forces object will have to have shear and bending moment in both axis.
 
 These forces are defined using compatible units from the `Pint` library, like `kN` or `kip` for forces and `kN*m` or `ft*kip` for moments.
+
+Sign Convention
+---------------
+
+The signs are part of the input, not a formatting detail — they change the result of a check:
+
+- **`N_x` is positive in compression**, negative in tension. Compression adds to the concrete
+  shear strength (:math:`\sigma_{Nu} = N_u / 6 A_g` in ACI 318-19 §22.5.5.1,
+  :math:`\sigma_{cp} = N_{Ed} / A_c` in EN 1992-1-1 §6.2.2(1)); a tensile force subtracts from
+  it. Entering a tension force as a positive number is unconservative.
+- **`M_y` is positive for sagging**, i.e. tension at the bottom fibre. The sign selects the
+  tension face, so a support moment must be entered as negative for the top reinforcement to
+  be designed.
+- **`V_z` is the magnitude of the design shear.** The demand-capacity ratio uses its absolute
+  value, but the design routine sizes stirrups from the largest required :math:`A_v` across the
+  combinations, so a negative value would be read as a smaller demand.
+
+See :doc:`local_axes` for the axes these components refer to.
 
 Usage
 -----
