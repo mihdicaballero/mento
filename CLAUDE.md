@@ -10,7 +10,7 @@ Reinforced concrete design Python package. Covers beams, slabs, sections, materi
 
 ## Python environment
 
-**Always use the `rame-env` conda environment.** The base `anaconda3` env should never be used for mento. (The old `py312` env no longer exists.)
+**Always use the `rame-env` conda environment.** The base `anaconda3` env should never be used for mento.
 
 ```
 C:\Users\mihdi\anaconda3\envs\rame-env\python.exe
