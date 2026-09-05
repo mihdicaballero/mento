@@ -12,6 +12,36 @@ from the release history and are summaries rather than complete lists.
 
 ## [Unreleased]
 
+### Added
+
+- **`set_language` now reaches the summaries.** It translated every detailed report but
+  stopped at `BeamSummary` and `ShearWallSummary`, which printed English tables and wrote
+  English Word documents whatever the language was set to — the user guide said as much.
+  `check()`, `flexure_results()` and `shear_results()` now return their DataFrames in the
+  active language, and `results_detailed_doc()` writes a translated document: it was
+  building its `DocumentBuilder` without passing the language along, and naming its
+  headings with f-strings, so the interpolated text could never match a catalog key. Only
+  the columns holding words are translated — `Beam`, `Label`, `Level`, `Position` and its
+  `Top`/`Bottom`, `Status`. `b`, `As,bot`, `Av` and `DCRv` are the notation of the design
+  code and stay identical in every language, as everywhere else in the catalog. English
+  output is unchanged. (#155)
+
+- **The sign convention is documented.** `N_x` is positive in compression, which is what
+  feeds σ_Nu into v_c under ACI 318-19 §22.5.5.1 and σ_cp under EN 1992-1-1 §6.2.2(1), so
+  a tension force entered positive is unconservative and silent; `M_y` is positive
+  sagging and selects the tension face; `V_z` is a magnitude, and the design routine sizes
+  stirrups from the largest required `A_v`, so a negative one reads as a smaller demand.
+  The coordinate system page states all three with the clause each comes from, and the
+  forces page states them where the components are introduced. No behaviour change — this
+  is what the code already did, written down. (#155)
+
+### Fixed
+
+- **A translated summary table lost its pass/fail shading.** The Word builder looked its
+  verdict column up by the English name and raised `KeyError` on a frame that had already
+  been translated. It resolves the name against the document's language now, so the
+  shading finds its column whichever spelling arrives. (#155)
+
 ## [1.1.0] - 2026-09-02
 
 A footing is a section mento now designs as it is built, and the results a check returns
