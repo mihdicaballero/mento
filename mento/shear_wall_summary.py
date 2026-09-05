@@ -10,6 +10,7 @@ from mento.material import Concrete, SteelBar
 from mento.forces import Forces
 from mento.shear_wall import ShearWall
 from mento import mm, cm, kN, m, kNm, MPa, inch, ft
+from mento.i18n import translate_dataframe
 from mento.node import Node
 from mento.reports.summaries import wall_summary_doc
 
@@ -225,7 +226,7 @@ class ShearWallSummary:
         )
 
         results_df = pd.DataFrame(results_list)
-        return pd.concat([units_row, results_df], ignore_index=True)
+        return translate_dataframe(pd.concat([units_row, results_df], ignore_index=True))
 
     # ------------------------------------------------------------------
     # Design
@@ -261,7 +262,7 @@ class ShearWallSummary:
             if index < 1 or index > len(self.nodes):
                 raise IndexError(f"Index {index} is out of range. Valid: 1 to {len(self.nodes)}")
             node = self.nodes[index - 1]
-            return node.check_shear()
+            return translate_dataframe(node.check_shear())
 
         results = []
         units_row_added = False
@@ -272,7 +273,7 @@ class ShearWallSummary:
                 units_row_added = True
             results.append(df.iloc[1:])
         out: DataFrame = pd.concat(results, ignore_index=True)
-        return out
+        return translate_dataframe(out)
 
     # ------------------------------------------------------------------
     # Excel I/O

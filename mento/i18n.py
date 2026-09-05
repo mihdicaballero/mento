@@ -162,6 +162,28 @@ ES: Dict[str, str] = {
     "Vertical bar spacing (E.F.)": "Separación de barras verticales (en cada cara)",
     "Horizontal reinforcement ratio": "Cuantía de armadura horizontal",
     "Minimum vertical reinf. ratio": "Cuantía vertical mínima",
+    # -- summary tables: headers and cell values ---------------------------
+    # Only the columns that hold words. The symbol columns (b, h, As,bot, Av,
+    # Mu, DCRv) are variable names and stay as they are, like everywhere else.
+    "Beam": "Viga",
+    "Label": "Etiqueta",
+    "Level": "Nivel",
+    "Position": "Posición",
+    "Top": "Superior",
+    "Bottom": "Inferior",
+    "Status": "Estado",
+    # -- summary Word reports ----------------------------------------------
+    "Beam Summary Analysis": "Análisis del resumen de vigas",
+    "Shear Wall Summary Analysis": "Análisis del resumen de tabiques",
+    "This report presents the detailed results for the first beam of the summary, followed by summary tables for all beams.": "Este informe presenta los resultados detallados de la primera viga del resumen, seguidos de las tablas resumen de todas las vigas.",
+    "Wall {storey} - {label} shear check": "Verificación a corte del tabique {storey} - {label}",
+    "Summary - All Beams": "Resumen - Todas las vigas",
+    "Summary - All Walls": "Resumen - Todos los tabiques",
+    "Beam Data": "Datos de las vigas",
+    "Wall Data": "Datos de los tabiques",
+    "Flexure Results": "Resultados de flexión",
+    "Shear Results": "Resultados de corte",
+    "Design Check Summary": "Resumen de verificaciones",
 }
 
 # English is the source language, so its catalog is empty: every lookup falls

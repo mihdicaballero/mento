@@ -11,10 +11,32 @@ from mento.material import (
 from mento.forces import Forces
 from mento.beam import RectangularBeam
 from mento.codes.registry import design_code
+from mento.i18n import translate, translate_dataframe
 from mento.results import FAIL_MARK, PASS_MARK, VERDICT_COLUMN
 from mento import mm, cm, kN, MPa, m, inch, ft, kNm
 from mento.node import Node
 from mento.reports.summaries import beam_summary_doc
+
+
+#: Summary-table columns that hold words rather than a number, a symbol or a
+#: check mark. ``translate_dataframe`` already covers the first column -- the
+#: element label -- but "Position" sits in the middle of the flexure table and
+#: would otherwise print "Top"/"Bottom" in an otherwise translated row.
+_WORD_COLUMNS = ("Position",)
+
+
+def _translated(df: DataFrame) -> DataFrame:
+    """A summary table in the language reports are currently rendered in.
+
+    Only the columns holding words are touched. The symbol columns -- ``b``,
+    ``As,bot``, ``Av``, ``Mu``, ``DCRv`` -- are variable names, and units and
+    numbers read the same in every language, so they are left alone.
+    """
+    out = df.copy()
+    for column in _WORD_COLUMNS:
+        if column in out.columns:
+            out[column] = [translate(value) if isinstance(value, str) else value for value in out[column]]
+    return translate_dataframe(out)
 
 
 class BeamSummary:
@@ -323,7 +345,7 @@ class BeamSummary:
 
         # Combine the units row with the results DataFrame
         final_df = pd.concat([units_row, results_df], ignore_index=True)
-        return final_df
+        return _translated(final_df)
 
     def design(self) -> DataFrame:
         """
@@ -414,7 +436,7 @@ class BeamSummary:
 
         # Recombine units + data
         df_final = pd.concat([units_row, data_rows], ignore_index=True)
-        return df_final
+        return _translated(df_final)
 
     def flexure_results(self, index: Optional[int] = None, capacity_check: bool = False) -> DataFrame:
         """
@@ -448,7 +470,7 @@ class BeamSummary:
 
         # Recombine units + data
         df_final = pd.concat([units_row, data_rows], ignore_index=True)
-        return df_final
+        return _translated(df_final)
 
     def _process_beam_for_check(self, node: Node, check_type: str, capacity_check: bool) -> DataFrame:
         """
