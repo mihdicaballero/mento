@@ -12,7 +12,38 @@ from the release history and are summaries rather than complete lists.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-02
+
+A footing is a section mento now designs as it is built, and the results a check returns
+carry the resistance their ratio was formed from. Both came from mako, which had to
+correct the engine's output for the first and divide it back out for the second.
+
 ### Added
+
+- **`Footing`: a one-way slab bearing on the ground.** Everything about it is a
+  `OneWaySlab`; what changes is the minimum longitudinal reinforcement, and that change is
+  the design codes' rather than the class's. `Section.support` (`"free"` / `"soil"`) is
+  a ClassVar the codes read, so the clause lives in `codes/`: ACI 318-19 §9.6.1.1(b)
+  grants the exemption and §13.3.1.2 substitutes the shrinkage and temperature steel of
+  §24.4.3.2 on the gross section (CIRSOC 201-25 shares the clause); EN 1992-1-1 takes the
+  halved geometric minimum of a foundation on every face and, on a face that is bending,
+  the larger of that and the crack-control minimum of §7.3.2(2). A footing is detailed
+  between 100 and 300 mm, both faces set out at one spacing (or the top at twice the
+  bottom), and a thin one warns. mento does no geotechnical calculation: bearing,
+  settlement, sliding, overturning, plan size and thickness stay with the caller, and
+  a face the moment does not put in tension is left unreinforced, because whether a
+  footing carries steel there is the consumer's call. A theory page and a user guide
+  page open on exactly that. (#150, #151)
+
+- **A designed slab reads as a spacing, and its bars may only sit so far apart.** The
+  rebar search answers in groups of bars, and `OneWaySlab` applied that answer the beam's
+  way, so a designed strip came out as `2Ø12 + 4Ø12` with the spacing that actually
+  details a slab left at zero. Each layer is now spread over the strip when the design is
+  applied and the spacing is what the slab stores — `str(slab.reinforcement.bottom)` is
+  `Ø12 mm/17 cm` — with `RebarLayer.s` carrying it and reading `None` on a beam. Both
+  codes also cap the centre-to-centre spacing (ACI 318-19 §7.7.2.3, EN 1992-1-1 §9.3.1.1)
+  through a registry hook, so a lightly loaded strip no longer covers its area with a bar
+  every half metre. Areas and DCRs are unchanged. (#149)
 
 - **The frozen results carry the capacity the DCR was formed from.** `FlexureFaceCheck`
   and `FlexureFaceDesign` gain `M_capacity`; `ShearCheck` and `ShearDesign` gain
@@ -23,13 +54,31 @@ from the release history and are summaries rather than complete lists.
   the `_phi_M_n_*`, `_M_Rd_*`, `_phi_V_n` or `_V_Rd` attributes of the compatibility
   layer. On a design the capacity is the governing combination's, so `demand / DCR`
   gives it back there too. Brief: `docs/architecture/capacity-in-design-results.md`.
+  (#152)
+
+- **`A_s_calc`: the steel the moment alone asks for, next to `A_s_req`.** `A_s_req` on
+  `FlexureFaceCheck` and `FlexureFaceDesign` has the minimum folded in — `max(mechanical,
+  minimum)`, or the 4/3 rule under ACI — which is right for choosing bars and wrong for
+  anchoring them: a development length scaled by `A_s,nec / A_s,prov` needs the
+  mechanical area, and a footing mat governed by its minimum carries little of the
+  stress the minimum is sized for. Both design codes now return that area before the
+  `max` — `reinforcement_for_moment` or `A_s1_lim + A_s2` under EN, `A_s_calc` under
+  ACI — and it reaches the results as `A_s_calc`, enveloped over the combinations like
+  `A_s_req`. Zero with no moment; equal to `A_s_req` once the moment governs, compression
+  steel included. `A_s_req` does not change meaning.
 
 ### Fixed
 
 - **`flexure_check_results()` returned `A_s_req`, `A_s_min` and `A_s_max` as bare
   floats** in the design code's canonical units (mm² or in²), where `check_flexure()`
   returned them as quantities in cm² or in². Both entry points now read the check state
-  through the same path and return quantities.
+  through the same path and return quantities. (#152)
+
+- **The EN crack-control minimum governs the thin footings, not the thick ones.** Two
+  docstrings had it inverted; the calculation and the theory page were right all along.
+  Written on `A_ct = b·h/2`, its ratio goes with `k/2`, and `k` decays from 1.00 to 0.65
+  between 300 and 800 mm, so the geometric minimum takes over around h = 640 mm for C25
+  with B500S. The trend is now pinned by tests. (#151)
 
 ## [1.0.1] - 2026-08-31
 
@@ -322,7 +371,8 @@ First public release on PyPI: rectangular concrete beam check and design for fle
 shear under ACI 318-19 and CIRSOC 201-25, unit aware calculations, results as pandas
 DataFrames, and Word calculation reports.
 
-[Unreleased]: https://github.com/mihdicaballero/mento/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/mihdicaballero/mento/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/mihdicaballero/mento/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/mihdicaballero/mento/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/mihdicaballero/mento/compare/v0.5.2...v1.0.0
 [0.5.2]: https://github.com/mihdicaballero/mento/compare/v0.5.1...v0.5.2
