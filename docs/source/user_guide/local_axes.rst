@@ -92,19 +92,23 @@ so it reads a different subset of the same ``Forces`` object:
 
    * - Component
      - At a punching node
-   * - ``N_x``
-     - The **punching load**: the column's axial force, along the column's own
-       longitudinal axis. Compression positive, as everywhere else — the usual case of a
-       column pushing down through the slab.
+   * - ``V_z``
+     - The **design punching load**: the vertical force transferred at the connection.
+       This is what both codes call the demand — ``V_u`` in ACI 318-19 §22.6, ``V_Ed``
+       in EN 1992-1-1 §6.4 — so it is named after the symbol you are reading in the
+       clause. Enter it as a positive magnitude.
    * - ``M_x``, ``M_y``
      - The **unbalanced moments** transferred to the slab, about its two in-plane axes.
        Biaxial transfer is the normal case at a corner column, so both are read.
-   * - ``V_z``
-     - **Not used.** A shear across a member's cross-section; at a column that is a
-       horizontal storey shear, which is not what punches the slab.
+   * - ``N_x``
+     - **Not used.** The column's axial force is usually where ``V_z`` comes from, but
+       that is a modelling step, not the demand itself; see below.
 
-The punching load is a normal force — it is read out of an analysis model as the column
-axial load. It is the slab's *response* to it that is a shear.
+Taking the column's axial load as the punching load is a simplification, and a common
+one — both codes allow the load acting *inside* the control perimeter to be deducted
+(EN 1992-1-1 §6.4.3(3) writes it ``V_Ed,red``), and at an edge or corner column the two
+are not the same number anyway. mento takes ``V_z`` as the design punching load you have
+already worked out, whichever way you worked it out.
 
 Note that ``M_x`` means something different here than on a member, where a moment about
 the longitudinal axis is torsion. At a punching node there is no longitudinal axis, and

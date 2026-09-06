@@ -100,17 +100,15 @@ def slab_data(self: "PunchingSlab") -> None:
 
 
 def _forces_label(self: "PunchingNode") -> str:
-    """One line per load combination: the column's axial load and both moments.
+    """One line per load combination: the punching load and both moments.
 
-    A punching node reads the *column's* axes, not a beam's. The load punching
-    through the slab is the column's axial force ``N_x`` — a normal force,
-    compression positive — and ``M_x`` / ``M_y`` are the unbalanced moments
-    transferred to the slab about its two in-plane axes. ``V_z``, a shear across
-    a member's cross-section, is not a punching demand and is not shown.
+    ``V_z`` is the design punching load — ``V_u`` under ACI 318-19, ``V_Ed``
+    under EN 1992-1-1 — and ``M_x`` / ``M_y`` are the unbalanced moments
+    transferred to the slab about its two in-plane axes.
     """
     rows = []
     for force in self.forces:
-        parts = [f"$N$={force.N_x:~P.1f}"]
+        parts = [f"$V$={force.V_z:~P.1f}"]
         if force.M_x.magnitude != 0:
             parts.append(f"$M_{{x}}$={force.M_x:~P.1f}")
         if force.M_y.magnitude != 0:

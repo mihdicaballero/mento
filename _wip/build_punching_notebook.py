@@ -18,7 +18,7 @@ This notebook demonstrates the `punching` module. It covers:
 - Defining a `Column` (interior, edge, corner; rectangular or circular)
 - Adding a `Capital` and an `Opening`
 - Creating a `PunchingNode`, inspecting it with `.data` and drawing it with `.plot()`
-- Which force components a punching node reads: `N_x` and the moments `M_x` / `M_y`
+- Which force components a punching node reads: `V_z` and the moments `M_x` / `M_y`
 
 > **Status.** `check()` and `design()` are not implemented yet — ACI 318-19 arrives in
 > Phase 2, the reinforcement design in Phase 4 and EN 1992 in Phase 5. The phase plan is
@@ -27,7 +27,7 @@ This notebook demonstrates the `punching` module. It covers:
     ),
     (
         CODE,
-        """from mento import Concrete_ACI_318_19, SteelBar, Forces
+        """from mento import Concrete_ACI_318_19, Concrete_EN_1992_2004, SteelBar, Forces
 from mento import MPa, mm, cm, kN, kNm
 from mento import Column, PunchingSlab, Opening, Capital, PunchingNode""",
     ),
@@ -189,12 +189,14 @@ different subset of `Forces` than a beam does:
 
 | Component | At a punching node |
 | --- | --- |
-| `N_x` | **The punching load** — the column's axial force, compression positive. |
+| `V_z` | **The design punching load** — the vertical force transferred at the connection. This is what both codes call the demand: `V_u` in ACI 318-19 §22.6, `V_Ed` in EN 1992-1-1 §6.4. |
 | `M_x`, `M_y` | **The unbalanced moments** transferred to the slab, about its two in-plane axes. |
-| `V_z` | **Not used** — a shear across a member's cross-section. At a column that is a horizontal storey shear, which is not what punches the slab. |
+| `N_x` | **Not used.** |
 
-The punching load is a *normal* force: it is read out of an analysis model as the column
-axial load, one to one with `N_x`. It is the slab's *response* to it that is a shear.
+Taking the column's axial load as `V_z` is a simplification, and a common one — both codes
+let the load acting *inside* the control perimeter be deducted (EN writes it `V_Ed,red`,
+§6.4.3(3)), and at an edge or corner column the two are not the same number anyway. mento
+takes `V_z` as the design punching load you have already worked out.
 
 Note that `M_x` means something different here than on a beam, where a moment about the
 longitudinal axis is torsion. At a punching node there is no longitudinal axis, and `M_x`
@@ -225,7 +227,7 @@ column, and checking the geometry you just typed means seeing both.""",
     h = 40 * cm,
 )
 
-f1 = Forces(label="ELU 1", N_x=500 * kN)
+f1 = Forces(label="ELU 1", V_z=500 * kN)
 
 node_1 = PunchingNode(
     slab   = slab,
@@ -243,8 +245,8 @@ node_1.data""",
 An edge column has one free slab edge. Supply `edge_distance_x` — the distance from the
 column centroid to the free edge in x. The hatched region in the plot is outside the slab.
 
-Forces are the column axial load `N_x` plus `M_y`, the unbalanced moment about the
-y-axis (typical for a frame spanning in x).""",
+Forces are the punching load `V_z` plus `M_y`, the unbalanced moment about the y-axis
+(typical for a frame spanning in x).""",
     ),
     (
         CODE,
@@ -256,7 +258,7 @@ y-axis (typical for a frame spanning in x).""",
     edge_distance_x = 20 * cm,   # column face flush with the slab edge
 )
 
-f2 = Forces(label="ELU 1", N_x=300 * kN, M_y=50 * kNm)
+f2 = Forces(label="ELU 1", V_z=300 * kN, M_y=50 * kNm)
 
 node_2 = PunchingNode(
     slab   = slab,
@@ -309,7 +311,7 @@ opening = Opening(
 )
 
 # Biaxial transfer: M_y (about the y-axis) + M_x (about the x-axis)
-f3 = Forces(label="ELU 1", N_x=200 * kN, M_y=30 * kNm, M_x=20 * kNm)
+f3 = Forces(label="ELU 1", V_z=200 * kN, M_y=30 * kNm, M_x=20 * kNm)
 
 node_3 = PunchingNode(
     slab     = slab,
@@ -354,9 +356,9 @@ Pass a list of `Forces` to carry every combination on the node. Once `check()` l
     ),
     (
         CODE,
-        """fa = Forces(label="1.4D",      N_x=480 * kN, M_y= 40 * kNm)
-fb = Forces(label="1.2D+1.6L", N_x=550 * kN, M_y= 60 * kNm)
-fc = Forces(label="1.2D+1.0W", N_x=410 * kN, M_y=110 * kNm)
+        """fa = Forces(label="1.4D",      V_z=480 * kN, M_y= 40 * kNm)
+fb = Forces(label="1.2D+1.6L", V_z=550 * kN, M_y= 60 * kNm)
+fc = Forces(label="1.2D+1.0W", V_z=410 * kN, M_y=110 * kNm)
 
 node_multi = PunchingNode(
     slab   = slab,
@@ -386,23 +388,66 @@ slab_imp.data""",
     ),
     (
         MD,
-        """## 11. What is not implemented yet
+        """## 11. What is wired, and what is missing
 
-`check()` and `design()` are placeholders. When Phase 2 lands, a check will return a
-frozen result dataclass — not a DataFrame — with the report tables built in
-`mento/reports/punching.py`, matching the rest of the package (ADR-0001, ADR-0004).""",
+`check()` is wired end to end: it dispatches through the design-code registry, so the
+connection never names a code, and it returns a frozen `PunchingCheck` — not a DataFrame
+— with the report tables built in `mento/reports/punching.py` (ADR-0001, ADR-0004).
+
+What is missing is the arithmetic. The equations of
+`mento/codes/aci_318_19/equations/punching.py` and its EN counterpart are signatures with
+their clause and their argument units, and bodies that raise, because the formulas are
+being recreated from a validated Calcpad sheet.""",
     ),
     (
         CODE,
         """try:
     node_1.check()
 except NotImplementedError as e:
-    print(f"check():  {e}")
+    print(f"ACI check:  {e}")
+    print()
 
 try:
     node_1.design()
 except NotImplementedError as e:
-    print(f"design(): {e}")""",
+    print(f"design():   {e}")""",
+    ),
+    (
+        MD,
+        """### The preconditions are real
+
+What the check *does* enforce today is what Phase 2 will rely on, so a mistake in the
+input is caught by name rather than becoming a plausible-looking number later.""",
+    ),
+    (
+        CODE,
+        """cases = {
+    "no punching load": PunchingNode(
+        slab=slab, column=col_interior, forces=Forces(label="ELU", M_y=50 * kNm)
+    ),
+    "capital (Phase 3)": PunchingNode(
+        slab=slab, column=col_interior, forces=f1, capital=capital
+    ),
+    "opening (Phase 3)": PunchingNode(
+        slab=slab, column=col_interior, forces=f1, openings=[opening]
+    ),
+    # EN reads rho for v_Rd,c; ACI never does, so only EN refuses this one.
+    "EN, no rho declared": PunchingNode(
+        slab=PunchingSlab(
+            concrete=Concrete_EN_1992_2004(name="C25/30", f_c=25 * MPa),
+            steel_bar=steel, h=25 * cm, c_c=25 * mm,
+        ),
+        column=col_interior, forces=f1,
+    ),
+}
+
+for name, node in cases.items():
+    try:
+        node.check()
+    except (ValueError, NotImplementedError) as e:
+        print(f"{name}:")
+        print(f"  {e}")
+        print()""",
     ),
 ]
 

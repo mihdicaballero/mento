@@ -178,38 +178,46 @@ Three consequences worth being explicit about:
 ## 2bis. Which force components a punching node reads
 
 Settled 2026-09-06, while writing the worked notebook — the geometry was right and the
-forces were not.
+forces were not. Revisited the same day, and the second reading is the one that stands.
 
 `docs/source/user_guide/local_axes.rst` defines the convention for a *member*: local x is
-the element's longitudinal axis, `N_x` is the axial force on it (compression positive),
-`V_z` a shear across its cross-section, `M_y` a bending moment about the section's y-axis.
+the element's longitudinal axis, `N_x` is the axial force on it, `V_z` a shear across its
+cross-section, `M_y` a bending moment about the section's y-axis.
 
-A punching node is not a member. It is the **column-to-slab connection**, and the demands
-a punching check takes are the ones the column hands to the slab:
+A punching node is not a member. It is the **column-to-slab connection**:
 
 | Component | At a punching node |
 | --- | --- |
-| `N_x` | **The punching load.** The column's axial force, along the column's own longitudinal axis. Compression positive — the usual case, the column pushing down through the slab. |
-| `M_x`, `M_y` | **The unbalanced moments** transferred to the slab, about its two in-plane axes. Both are needed; biaxial transfer is the normal case at a corner column. |
-| `V_z` | **Not a punching demand.** A shear across a member's cross-section. At a column that is a horizontal storey shear, which is not what punches the slab. Never read. |
+| `V_z` | **The design punching load** — the vertical force transferred at the connection. Positive magnitude. |
+| `M_x`, `M_y` | **The unbalanced moments** transferred to the slab, about its two in-plane axes. Both read; biaxial transfer is normal at a corner column. |
+| `N_x` | **Not used.** |
 
-The distinction is not cosmetic. The punching load is a *normal* force — an engineer reads
-it out of an analysis model as the column axial load, one to one with `N_x`. It is the
-slab's *response* to it that is a shear, and naming the input `V_z` would put the
-consequence where the cause belongs. `N_x` also already carries "compression positive",
-which is exactly the sign the punching case wants.
+### Why `V_z` and not `N_x`
 
-Two naming collisions to state rather than discover later:
+The first attempt used `N_x`, reasoning that the punching load *is* the column's axial
+force and should be named as the normal force it is. That was wrong for two reasons, and
+the second is the one that settles it:
 
-- In the member convention, `M_x` about a longitudinal axis is **torsion**. At a punching
-  node there is no longitudinal axis, and `M_x` is an in-plane moment on the slab. The
-  `Forces` container is shared; the meaning is per element.
-- `N_x` on a beam feeds the axial term of the concrete shear strength (ACI §22.5.5.1,
-  EN §6.2.2(1)). At a punching node it is the whole demand. Same field, different role.
+1. **The codes name this quantity `V_u` / `V_Ed`.** ACI 318-19 §22.6 and EN 1992-1-1 §6.4
+   both call the punching demand a shear, and an engineer reading the clause alongside the
+   API should find the same symbol on both. `V_z` maps to it; `N_x` does not.
+2. **Equating it to the column axial load is a modelling simplification, not a
+   definition.** Both codes let the load acting *inside* the control perimeter be deducted
+   — EN writes it `V_Ed,red`, §6.4.3(3) — and at an edge or corner column the two are not
+   the same number anyway. Baking the simplification into the input name would make mento
+   assert something the codes do not.
 
-Phase 2 reads `N_x` for `v_u`/`v_Ed` and `M_x`/`M_y` for `γ_v`/`β`. A `Forces` carrying
-only `V_z` should be **refused with a message naming `N_x`**, not silently checked at
-zero load — the failure mode otherwise is a DCR of 0.00 that looks like a pass.
+So mento takes `V_z` as *the design punching load already worked out*, however it was
+worked out. Where it came from is the engineer's modelling step, not the API's business.
+
+One naming collision to state rather than discover later: in the member convention, `M_x`
+about a longitudinal axis is **torsion**. At a punching node there is no longitudinal
+axis, and `M_x` is an in-plane moment on the slab. The `Forces` container is shared; the
+meaning is per element.
+
+A `Forces` carrying only moments is **refused with a message naming `V_z`**, not silently
+checked at zero load — the failure mode otherwise is a DCR of 0.00 that looks like a pass.
+That guard is in place; see §4.
 
 ---
 
@@ -237,21 +245,48 @@ geometry you just typed.
 
 ```
 mento/
-├── punching.py                     PunchingSlab, Opening, Capital, PunchingNode
-│                                     — geometry + orchestration only
-├── column.py                       Column (unchanged)
-├── punching_results.py             frozen dataclasses: PunchingCheck, PunchingDesign
-├── plots/punching.py               plan view (exists; grows the critical perimeter)
-├── reports/punching.py             data / results / detailed views + Word doc
+├── punching.py                       PunchingSlab, Opening, Capital, PunchingNode
+│                                       — geometry + orchestration only
+├── column.py                         Column (unchanged)
+├── punching_results.py               frozen PunchingCheck + envelope_punching
+├── plots/punching.py                 plan view (exists; grows the critical perimeter)
+├── reports/punching.py               data views (exist); results views with Phase 2
 └── codes/
-    ├── registry.py                 + check_punching / design_punching hooks
+    ├── registry.py                   check_punching / design_punching hooks
+    ├── ACI_318_19_punching.py        the ACI checker
+    ├── EN_1992_2004_punching.py      the EN checker
     ├── aci_318_19/
-    │   ├── code.py                 registers the hooks
-    │   └── equations/punching.py   floats: v_c, λ_s, γ_v, J_c, b_o …
+    │   ├── code.py                   registers check_punching
+    │   └── equations/punching.py     floats: v_c, λ_s, α_s, γ_v, J_c …
     └── en_1992_2004/
-        ├── code.py
-        └── equations/punching.py   floats: v_Rd,c, k, β, u_1, u_out …
+        ├── code.py                   registers check_punching
+        └── equations/punching.py     floats: v_Rd,c, k, ρ_l, β, v_Rd,max …
 ```
+
+**The skeleton of all of that is in place as of 2026-09-06** — every file above
+exists, `node.check()` dispatches through the registry, and the preconditions each
+code needs are written and tested. What is deliberately absent is the arithmetic:
+every function in the two `equations/punching.py` modules is a signature with its
+clause, its argument units and a body that raises, because the formulas are being
+recreated from a validated Calcpad sheet and each one lands with the worked example
+that checks it. A test asserts no stub has quietly grown a body that returns a
+number; it shrinks as the module fills in.
+
+Preconditions already enforced by the checkers, so Phase 2 is only equations:
+
+- **A force with no `V_z` is refused, naming `V_z`** (§2bis). Checking at zero load
+  would report a DCR of 0.00, which reads as a pass.
+- **A capital or an opening is refused** until Phase 3. Ignoring either is not
+  conservative — it is wrong in the unsafe direction for an opening and the safe one
+  for a capital, with nothing on the result to say which.
+- **EN refuses a slab with no declared ρ**, naming `set_rebar_x()` / `set_rebar_y()`.
+  ACI does not, and must not: its `v_c` never reads ρ.
+
+`PunchingCheck` carries `label`, `b_0`, `d`, `v_u`, `v_c` and `DCR` — the intersection
+both codes report — with `v_c` being the resistance its own `DCR` was formed from, the
+same contract `ShearCheck` keeps. Its envelope *is* one of the combinations rather than
+a mixture of several: punching is a single stress against a single resistance on one
+perimeter, unlike flexure, where each face envelopes its quantities independently.
 
 Two boundary consequences to plan for:
 
@@ -294,9 +329,20 @@ Two things Phase 2 inherits from it:
 
 ### Phase 2 — ACI 318-19 check, no capital, no openings
 
-`equations/punching.py` (floats), the checker in `aci_318_19/code.py`, a `PunchingCheck`
-frozen result, registry hooks, `node.check()`. Covers the three column positions,
-rectangular and circular, uniaxial and biaxial via γ_v and J_c.
+**Skeleton landed 2026-09-06** (see §4): `PunchingCheck`, both checkers, the registry
+hooks, `node.check()`, the preconditions, and both `equations/punching.py` modules as
+clause-cited signatures that raise.
+
+**What is left is the arithmetic**, recreated from the validated Calcpad sheet:
+
+1. The critical section — `b_0` and the section property `J_c` — for the three column
+   positions, rectangular and circular. This is geometry, so it lives in `punching.py`
+   and reaches the equations as numbers; only the `d/2` offset itself is a clause.
+2. `v_c` from §22.6.5.2, least of the three expressions, with `λ_s` (§22.5.5.1.3) and
+   `α_s` (§22.6.5.3).
+3. `γ_v` from §8.4.4.2.2 and the combined stress at the critical point from §8.4.4.2.3,
+   biaxial.
+4. The `PunchingCheck` assembled from them, and the report tables in `reports/punching.py`.
 
 *Exit:* a CRSI / ACI worked example within the suite's usual tolerance; a biaxial case;
 `test_architecture_boundaries.py` green — which means the equations import no units and
@@ -321,8 +367,10 @@ perimeter, iteration outward until an unreinforced perimeter passes, `s_r ≤ 0.
 
 ### Phase 5 — EN 1992-1-1 check and design
 
-`v_Rd,c` with the ρ of Phase 1, `u_1` at 2d, β per position (eqs. 6.38–6.46),
-`v_Rd,max` at `u_0`, reinforcement per eq. (6.52) with `s_r ≤ 0.75d`, and `u_out`.
+Skeleton landed with Phase 2's: the checker, its ρ precondition, and the equation
+signatures. Left: `v_Rd,c` (eq. 6.47) with the ρ of Phase 1, `u_1` at 2d, β per position
+(eqs. 6.38–6.46), `v_Rd,max` at `u_0`, reinforcement per eq. (6.52) with `s_r ≤ 0.75d`,
+and `u_out`.
 
 *Exit:* a published EN worked example; and `test_a_new_design_code_needs_no_element_edited`
 still passes — i.e. EN was added without touching `punching.py`.

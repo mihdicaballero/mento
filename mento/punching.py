@@ -4,12 +4,13 @@ import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal, Optional, Tuple
 
-from pandas import DataFrame
 from pint import Quantity
 
+from mento.codes.registry import design_code
 from mento.column import Column
 from mento.material import Concrete, SteelBar
 from mento.plots.punching import plot_punching_node
+from mento.punching_results import PunchingCheck, PunchingCheckNotRunError, envelope_punching
 from mento.reports import punching as punching_reports
 from mento.units import mm, cm, inch
 
@@ -438,18 +439,41 @@ class PunchingNode:
         self.forces = forces if isinstance(forces, list) else [forces]
         self.openings = openings if openings is not None else []
         self.capital = capital
+        self._punching_checks: Tuple[PunchingCheck, ...] = ()
+        self._punching_checked = False
 
     @property
     def id(self) -> int:
         return self._id
 
-    def check(self) -> DataFrame:
-        """Run punching shear check for all forces. (Available from Phase 2.)"""
-        raise NotImplementedError("Punching check not yet implemented — coming in Phase 2 (ACI) / Phase 5 (EN 1992).")
+    def check(self) -> PunchingCheck:
+        """Check every load combination and return the governing result.
 
-    def design(self) -> DataFrame:
-        """Design punching shear reinforcement. (Available from Phase 4.)"""
-        raise NotImplementedError("Punching design not yet implemented — coming in Phase 4.")
+        Dispatch goes through the registry, so the connection never names a
+        design code and a code that has no punching check says so by name.
+
+        The per-combination results stay on :attr:`punching_checks`; this
+        returns their envelope, which for punching *is* one of them — a single
+        stress against a single resistance on one perimeter, not a mixture.
+        """
+        if not self.forces:
+            raise ValueError("check() requires at least one Forces object.")
+        code = design_code(self.slab.concrete)
+        checker = code.requires("check_punching")
+        self._punching_checks = tuple(checker(self, force) for force in self.forces)
+        self._punching_checked = True
+        return envelope_punching(self._punching_checks)
+
+    @property
+    def punching_checks(self) -> Tuple[PunchingCheck, ...]:
+        """One result per load combination, in the order they were given."""
+        if not self._punching_checked:
+            raise PunchingCheckNotRunError("No punching results yet: call check() first.")
+        return self._punching_checks
+
+    def design(self) -> None:
+        """Size the punching shear reinforcement. (Phase 4.)"""
+        design_code(self.slab.concrete).requires("design_punching")(self)
 
     def plot(self) -> None:
         """Display a plan-view of the punching node geometry.

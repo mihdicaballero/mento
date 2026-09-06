@@ -1,3 +1,4 @@
+import inspect
 import math
 from unittest.mock import patch
 
@@ -5,10 +6,14 @@ import pytest
 
 from typing import Generator
 
+from mento.codes.aci_318_19.equations import punching as aci_punching_eq
+from mento.codes.en_1992_2004.equations import punching as en_punching_eq
+from mento.codes.registry import design_code
 from mento.column import Column
 from mento.punching import Capital, Opening, PunchingNode, PunchingSlab
+from mento.punching_results import PunchingCheck, PunchingCheckNotRunError, envelope_punching
 from mento.forces import Forces
-from mento.material import Concrete_ACI_318_19, Concrete_EN_1992_2004
+from mento.material import Concrete_ACI_318_19, Concrete_CIRSOC_201_25, Concrete_EN_1992_2004
 from mento.units import cm, mm, kN, kNm, MPa, inch, psi
 
 
@@ -69,7 +74,7 @@ def col_corner() -> Column:
 
 @pytest.fixture
 def f1() -> Forces:
-    return Forces(label="ELU 1", N_x=500 * kN)
+    return Forces(label="ELU 1", V_z=500 * kN)
 
 
 # ---------------------------------------------------------------------------
@@ -414,8 +419,8 @@ class TestPunchingNode:
         assert node.forces[0] is f1
 
     def test_list_of_forces(self, slab, col_interior):
-        fa = Forces(label="1.4D", N_x=400 * kN)
-        fb = Forces(label="1.2D+1.6L", N_x=500 * kN)
+        fa = Forces(label="1.4D", V_z=400 * kN)
+        fb = Forces(label="1.2D+1.6L", V_z=500 * kN)
         node = PunchingNode(slab=slab, column=col_interior, forces=[fa, fb])
         assert len(node.forces) == 2
 
@@ -476,7 +481,7 @@ class TestPunchingNode:
         assert "capital=" in r
 
     def test_biaxial_forces(self, slab, col_interior):
-        f = Forces(label="ELU", N_x=300 * kN, M_y=50 * kNm, M_x=30 * kNm)
+        f = Forces(label="ELU", V_z=300 * kN, M_y=50 * kNm, M_x=30 * kNm)
         node = PunchingNode(slab=slab, column=col_interior, forces=f)
         assert node.forces[0]._M_x.to("kN*m").magnitude == pytest.approx(30)
 
@@ -546,7 +551,7 @@ class TestPunchingData:
         assert "cm" not in slab._md_data
 
     def test_node_data_shows_column_slab_and_forces(self, slab, col_edge):
-        f = Forces(label="ELU", N_x=300 * kN, M_y=50 * kNm, M_x=30 * kNm)
+        f = Forces(label="ELU", V_z=300 * kN, M_y=50 * kNm, M_x=30 * kNm)
         node = PunchingNode(slab=slab, column=col_edge, forces=f)
         with patch("mento.reports.punching.display") as mock_display:
             assert node.data is None
@@ -555,9 +560,9 @@ class TestPunchingData:
         assert "free edge" in rendered
         assert "ELU" in rendered
         assert "M_{x}" in rendered and "M_{y}" in rendered
-        # The punching demand is the column's axial force, not a section shear.
-        assert "$N$=300.0 kN" in rendered
-        assert "$V$" not in rendered
+        # The punching demand is Vu / VEd, the vertical load at the connection.
+        assert "$V$=300.0 kN" in rendered
+        assert "$N$" not in rendered
         assert slab._md_data in rendered
 
     def test_node_data_omits_absent_moments(self, slab, col_interior, f1):
@@ -586,3 +591,175 @@ class TestPunchingData:
         rendered = " ".join(str(call.args[0].data) for call in mock_display.call_args_list)
         assert "D$=50.0 cm" in rendered
         assert "free edge" not in rendered
+
+
+# ---------------------------------------------------------------------------
+# Result type
+# ---------------------------------------------------------------------------
+
+
+def _check(label: str, dcr: float, v_c: float = 1.0) -> PunchingCheck:
+    return PunchingCheck(
+        label=label,
+        b_0=200 * cm,
+        d=21 * cm,
+        v_u=dcr * v_c * MPa,
+        v_c=v_c * MPa,
+        DCR=dcr,
+    )
+
+
+class TestPunchingCheckEnvelope:
+    def test_envelope_is_the_worst_combination(self):
+        env = envelope_punching([_check("a", 0.40), _check("b", 0.90), _check("c", 0.55)])
+        assert env.DCR == pytest.approx(0.90)
+        assert env.label == "envelope"
+
+    def test_envelope_carries_the_capacity_its_dcr_was_formed_from(self):
+        env = envelope_punching([_check("a", 0.90, v_c=1.0), _check("b", 0.40, v_c=2.0)])
+        assert env.v_c.to("MPa").magnitude == pytest.approx(1.0)
+        assert (env.v_u / env.DCR).to("MPa").magnitude == pytest.approx(env.v_c.to("MPa").magnitude)
+
+    def test_a_tie_on_dcr_breaks_to_the_lowest_resistance(self):
+        env = envelope_punching([_check("a", 0.0, v_c=2.0), _check("b", 0.0, v_c=1.0)])
+        assert env.v_c.to("MPa").magnitude == pytest.approx(1.0)
+
+    def test_envelope_needs_a_combination(self):
+        with pytest.raises(ValueError, match="at least one checked combination"):
+            envelope_punching([])
+
+    def test_result_is_frozen(self):
+        with pytest.raises(AttributeError):
+            _check("a", 0.5).DCR = 0.9  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
+# Check skeleton: dispatch and preconditions (the equations are Phase 2 / 5)
+# ---------------------------------------------------------------------------
+
+
+class TestPunchingCheckWiring:
+    @pytest.mark.parametrize(
+        "concrete",
+        [
+            Concrete_ACI_318_19(name="C25", f_c=25 * MPa),
+            Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa),
+            Concrete_EN_1992_2004(name="C25/30", f_c=25 * MPa),
+        ],
+        ids=lambda c: c.design_code,
+    )
+    def test_every_code_registers_a_punching_check(self, concrete):
+        assert design_code(concrete).check_punching is not None
+
+    def test_check_needs_a_force(self, slab, col_interior, f1):
+        node = PunchingNode(slab=slab, column=col_interior, forces=f1)
+        node.forces = []
+        with pytest.raises(ValueError, match="at least one Forces"):
+            node.check()
+
+    def test_results_are_not_readable_before_check(self, slab, col_interior, f1):
+        node = PunchingNode(slab=slab, column=col_interior, forces=f1)
+        with pytest.raises(PunchingCheckNotRunError, match=r"call check\(\) first"):
+            node.punching_checks
+
+    def test_aci_check_reaches_the_missing_equations(self, slab, col_interior, f1):
+        node = PunchingNode(slab=slab, column=col_interior, forces=f1)
+        with pytest.raises(NotImplementedError, match="Phase 2"):
+            node.check()
+
+    def test_en_check_reaches_the_missing_equations(self, conc_en, steel, col_interior, f1):
+        slab_en = PunchingSlab(concrete=conc_en, steel_bar=steel, h=25 * cm, c_c=25 * mm)
+        slab_en.set_rebar_x(d_b1=12 * mm, s_b1=15 * cm)
+        slab_en.set_rebar_y(d_b1=12 * mm, s_b1=15 * cm)
+        node = PunchingNode(slab=slab_en, column=col_interior, forces=f1)
+        with pytest.raises(NotImplementedError, match="Phase 5"):
+            node.check()
+
+    def test_a_force_without_vertical_load_is_refused_by_name(self, slab, col_interior):
+        node = PunchingNode(slab=slab, column=col_interior, forces=Forces(label="ELU", M_y=50 * kNm))
+        with pytest.raises(ValueError, match="V_z"):
+            node.check()
+
+    def test_en_refuses_a_slab_with_no_declared_rho(self, conc_en, steel, col_interior, f1):
+        bare_en = PunchingSlab(concrete=conc_en, steel_bar=steel, h=25 * cm, c_c=25 * mm)
+        node = PunchingNode(slab=bare_en, column=col_interior, forces=f1)
+        with pytest.raises(ValueError, match="set_rebar_x"):
+            node.check()
+
+    def test_aci_does_not_need_rho(self, bare_slab, col_interior, f1):
+        """ACI's v_c never reads rho, so an undeclared one must not block the check."""
+        node = PunchingNode(slab=bare_slab, column=col_interior, forces=f1)
+        with pytest.raises(NotImplementedError, match="Phase 2"):
+            node.check()
+
+    def test_a_capital_is_refused_until_phase_3(self, slab, col_interior, f1):
+        cap = Capital(b=100 * cm, h=100 * cm, thickness=25 * cm)
+        node = PunchingNode(slab=slab, column=col_interior, forces=f1, capital=cap)
+        with pytest.raises(NotImplementedError, match="Phase 3"):
+            node.check()
+
+    def test_an_opening_is_refused_until_phase_3(self, slab, col_interior, f1):
+        op = Opening(shape="rectangular", x=60 * cm, y=0 * cm, b=40 * cm, h=40 * cm)
+        node = PunchingNode(slab=slab, column=col_interior, forces=f1, openings=[op])
+        with pytest.raises(NotImplementedError, match="Phase 3"):
+            node.check()
+
+    def test_the_node_keeps_every_combination_and_returns_their_envelope(self, slab, col_interior, monkeypatch):
+        """The wiring around the equations, exercised without them.
+
+        Stands in for the checker so that storing the per-combination results and
+        enveloping them is covered now rather than waiting on Phase 2.
+        """
+        results = iter([_check("a", 0.40), _check("b", 0.90)])
+
+        class _StubCode:
+            def requires(self, hook: str):
+                assert hook == "check_punching"
+                return lambda node, force: next(results)
+
+        monkeypatch.setattr("mento.punching.design_code", lambda concrete: _StubCode())
+
+        fa = Forces(label="a", V_z=400 * kN)
+        fb = Forces(label="b", V_z=900 * kN)
+        node = PunchingNode(slab=slab, column=col_interior, forces=[fa, fb])
+
+        envelope = node.check()
+        assert envelope.DCR == pytest.approx(0.90)
+        assert [c.label for c in node.punching_checks] == ["a", "b"]
+
+    def test_design_names_the_code_that_lacks_it(self, slab, col_interior, f1):
+        node = PunchingNode(slab=slab, column=col_interior, forces=f1)
+        with pytest.raises(NotImplementedError, match="design punching is not implemented"):
+            node.design()
+
+
+# ---------------------------------------------------------------------------
+# Equation stubs
+# ---------------------------------------------------------------------------
+
+
+def _public_equations(module) -> list:
+    return [
+        getattr(module, name)
+        for name in dir(module)
+        if not name.startswith("_") and inspect.isfunction(getattr(module, name))
+    ]
+
+
+class TestEquationStubs:
+    """The equations are recreated from a validated Calcpad sheet, one at a time.
+
+    Until each lands, its stub must raise rather than return a wrong number, and
+    these tests shrink as the module fills in.
+    """
+
+    @pytest.mark.parametrize("module", [aci_punching_eq, en_punching_eq], ids=["aci", "en"])
+    def test_the_module_declares_equations(self, module):
+        assert _public_equations(module), f"{module.__name__} declares no equations"
+
+    @pytest.mark.parametrize("module", [aci_punching_eq, en_punching_eq], ids=["aci", "en"])
+    def test_no_stub_returns_a_number(self, module):
+        for function in _public_equations(module):
+            n_args = len(inspect.signature(function).parameters)
+            with pytest.raises(NotImplementedError, match="punching-roadmap"):
+                function(*([0.0] * n_args))

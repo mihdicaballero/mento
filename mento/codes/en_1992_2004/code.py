@@ -11,6 +11,7 @@ from mento.codes.EN_1992_2004_beam import (
     _design_flexure_EN_1992_2004,
     _design_shear_EN_1992_2004,
 )
+from mento.codes.EN_1992_2004_punching import check_punching_EN_1992_2004
 from mento.codes.registry import DesignCode, register
 from mento.material import Concrete_EN_1992_2004
 from mento.units import cm, kN, kNm, mm, MPa
@@ -204,6 +205,7 @@ EN_1992_2004 = register(
         longitudinal_rebar=_longitudinal_rebar,
         initialize_attributes=_initialize_attributes,
         # EN shear walls are not implemented; requires() names the code.
+        check_punching=check_punching_EN_1992_2004,
         flexure_symbols=_FLEXURE_SYMBOLS,
         units_row_shear=_UNITS_ROW_SHEAR,
         units_row_flexure=_UNITS_ROW_FLEXURE,

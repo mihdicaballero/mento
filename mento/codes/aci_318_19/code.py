@@ -16,6 +16,7 @@ from mento.codes.ACI_318_19_beam import (
     _design_flexure_ACI_318_19,
     _design_shear_ACI_318_19,
 )
+from mento.codes.ACI_318_19_punching import check_punching_ACI_318_19
 from mento.codes.ACI_318_19_wall import _check_shear_ACI_318_19_wall, _design_shear_ACI_318_19_wall
 from mento.codes.check_state import (
     apply_flexure_state,
@@ -228,6 +229,8 @@ _COMMON = dict(
     # selected inside the design itself.
     design_shear_wall=_design_shear_ACI_318_19_wall,
     apply_wall_shear_state=apply_wall_shear_state,
+    # Two-way shear. `design_punching` is Phase 4; requires() names the code.
+    check_punching=check_punching_ACI_318_19,
     flexure_symbols=_FLEXURE_SYMBOLS,
     units_row_shear=_UNITS_ROW_SHEAR,
     units_row_flexure=_UNITS_ROW_FLEXURE,

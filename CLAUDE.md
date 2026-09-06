@@ -177,7 +177,9 @@ PunchingSlab (standalone dataclass, uses Column)
 - With no bars declared, the depths fall back to a two-mat Ø16 / #5 layout (so `d_avg = h - c_c - 16 mm` as before) and `rho_x`/`rho_y` are `None`, not zero.
 - `slab.data` / `node.data` render the inputs as Markdown (delegate to `mento/reports/punching.py`), like `beam.data`.
 - Requires a `Column` instance describing `shape` (`"rectangular"` / `"circular"`), `position` (`"interior"` / `"edge"` / `"corner"`), and edge distances when applicable.
-- `PunchingNode.check()` / `.design()` still raise `NotImplementedError` — Phases 2/4.
+- Forces at a node: **`V_z`** is the punching load (`Vu` / `VEd`), plus `M_x` and `M_y`. `N_x` is not used — see `docs/source/user_guide/local_axes.rst`.
+- `node.check()` is wired: it dispatches through the code registry and returns a frozen `PunchingCheck` (`mento/punching_results.py`), not a DataFrame. The **equations are stubs that raise** — they are being recreated from a validated Calcpad sheet (Phase 2 ACI, Phase 5 EN). The checkers already refuse a force with no `V_z`, a capital or opening (Phase 3), and — for EN only — a slab with no declared ρ.
+- `node.design()` raises via the registry: `design_punching` is Phase 4.
 
 ### units
 
