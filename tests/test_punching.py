@@ -69,7 +69,7 @@ def col_corner() -> Column:
 
 @pytest.fixture
 def f1() -> Forces:
-    return Forces(label="ELU 1", V_z=500 * kN)
+    return Forces(label="ELU 1", N_x=500 * kN)
 
 
 # ---------------------------------------------------------------------------
@@ -414,8 +414,8 @@ class TestPunchingNode:
         assert node.forces[0] is f1
 
     def test_list_of_forces(self, slab, col_interior):
-        fa = Forces(label="1.4D", V_z=400 * kN)
-        fb = Forces(label="1.2D+1.6L", V_z=500 * kN)
+        fa = Forces(label="1.4D", N_x=400 * kN)
+        fb = Forces(label="1.2D+1.6L", N_x=500 * kN)
         node = PunchingNode(slab=slab, column=col_interior, forces=[fa, fb])
         assert len(node.forces) == 2
 
@@ -476,7 +476,7 @@ class TestPunchingNode:
         assert "capital=" in r
 
     def test_biaxial_forces(self, slab, col_interior):
-        f = Forces(label="ELU", V_z=300 * kN, M_y=50 * kNm, M_x=30 * kNm)
+        f = Forces(label="ELU", N_x=300 * kN, M_y=50 * kNm, M_x=30 * kNm)
         node = PunchingNode(slab=slab, column=col_interior, forces=f)
         assert node.forces[0]._M_x.to("kN*m").magnitude == pytest.approx(30)
 
@@ -546,7 +546,7 @@ class TestPunchingData:
         assert "cm" not in slab._md_data
 
     def test_node_data_shows_column_slab_and_forces(self, slab, col_edge):
-        f = Forces(label="ELU", V_z=300 * kN, M_y=50 * kNm, M_x=30 * kNm)
+        f = Forces(label="ELU", N_x=300 * kN, M_y=50 * kNm, M_x=30 * kNm)
         node = PunchingNode(slab=slab, column=col_edge, forces=f)
         with patch("mento.reports.punching.display") as mock_display:
             assert node.data is None
@@ -555,6 +555,9 @@ class TestPunchingData:
         assert "free edge" in rendered
         assert "ELU" in rendered
         assert "M_{x}" in rendered and "M_{y}" in rendered
+        # The punching demand is the column's axial force, not a section shear.
+        assert "$N$=300.0 kN" in rendered
+        assert "$V$" not in rendered
         assert slab._md_data in rendered
 
     def test_node_data_omits_absent_moments(self, slab, col_interior, f1):

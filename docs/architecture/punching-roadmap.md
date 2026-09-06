@@ -175,6 +175,44 @@ Three consequences worth being explicit about:
 
 ---
 
+## 2bis. Which force components a punching node reads
+
+Settled 2026-09-06, while writing the worked notebook — the geometry was right and the
+forces were not.
+
+`docs/source/user_guide/local_axes.rst` defines the convention for a *member*: local x is
+the element's longitudinal axis, `N_x` is the axial force on it (compression positive),
+`V_z` a shear across its cross-section, `M_y` a bending moment about the section's y-axis.
+
+A punching node is not a member. It is the **column-to-slab connection**, and the demands
+a punching check takes are the ones the column hands to the slab:
+
+| Component | At a punching node |
+| --- | --- |
+| `N_x` | **The punching load.** The column's axial force, along the column's own longitudinal axis. Compression positive — the usual case, the column pushing down through the slab. |
+| `M_x`, `M_y` | **The unbalanced moments** transferred to the slab, about its two in-plane axes. Both are needed; biaxial transfer is the normal case at a corner column. |
+| `V_z` | **Not a punching demand.** A shear across a member's cross-section. At a column that is a horizontal storey shear, which is not what punches the slab. Never read. |
+
+The distinction is not cosmetic. The punching load is a *normal* force — an engineer reads
+it out of an analysis model as the column axial load, one to one with `N_x`. It is the
+slab's *response* to it that is a shear, and naming the input `V_z` would put the
+consequence where the cause belongs. `N_x` also already carries "compression positive",
+which is exactly the sign the punching case wants.
+
+Two naming collisions to state rather than discover later:
+
+- In the member convention, `M_x` about a longitudinal axis is **torsion**. At a punching
+  node there is no longitudinal axis, and `M_x` is an in-plane moment on the slab. The
+  `Forces` container is shared; the meaning is per element.
+- `N_x` on a beam feeds the axial term of the concrete shear strength (ACI §22.5.5.1,
+  EN §6.2.2(1)). At a punching node it is the whole demand. Same field, different role.
+
+Phase 2 reads `N_x` for `v_u`/`v_Ed` and `M_x`/`M_y` for `γ_v`/`β`. A `Forces` carrying
+only `V_z` should be **refused with a message naming `N_x`**, not silently checked at
+zero load — the failure mode otherwise is a DCR of 0.00 that looks like a pass.
+
+---
+
 ## 3. `slab.data` and the presentation surface
 
 The request is the same affordance `RectangularBeam` and `ShearWall` already have:
