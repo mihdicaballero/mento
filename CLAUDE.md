@@ -166,9 +166,18 @@ PunchingSlab (standalone dataclass, uses Column)
 
 ### punching
 
-- `PunchingSlab` takes `(concrete, steel_bar, h, c_c, rho_x, rho_y)`.
-- `d_avg` is computed as `h - c_c - 16 mm` (metric) or `h - c_c - 5/8 in` (imperial); override after construction if needed: `slab.d_avg = custom_value`.
+- `PunchingSlab` takes `(concrete, steel_bar, h, c_c, outer_direction="x")`. Plan and status: [docs/architecture/punching-roadmap.md](docs/architecture/punching-roadmap.md).
+- The top reinforcement is declared as bars, and `d` and ρ are **derived** from it — position 1 is the base mat, position 3 the extra bars over the column:
+  ```python
+  slab.set_rebar_x(d_b1=12*mm, s_b1=15*cm, d_b3=16*mm, s_b3=15*cm)
+  slab.set_rebar_y(d_b1=12*mm, s_b1=15*cm)
+  slab.d_x, slab.d_y, slab.d_avg, slab.rho_x, slab.rho_y, slab.rho_l, slab.A_s_x
+  ```
+- `rho_x` / `rho_y` / `d_avg` are read-only. `slab.d_avg = ...` raises; use `slab.set_effective_depth(d_x=..., d_y=...)`, which re-derives ρ against the depths it sets.
+- With no bars declared, the depths fall back to a two-mat Ø16 / #5 layout (so `d_avg = h - c_c - 16 mm` as before) and `rho_x`/`rho_y` are `None`, not zero.
+- `slab.data` / `node.data` render the inputs as Markdown (delegate to `mento/reports/punching.py`), like `beam.data`.
 - Requires a `Column` instance describing `shape` (`"rectangular"` / `"circular"`), `position` (`"interior"` / `"edge"` / `"corner"`), and edge distances when applicable.
+- `PunchingNode.check()` / `.design()` still raise `NotImplementedError` — Phases 2/4.
 
 ### units
 

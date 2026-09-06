@@ -1,8 +1,8 @@
 # Punching shear — module roadmap
 
-Status: **draft, for review** (2026-09-06). Supersedes the eight-phase plan drafted in
-August 2026, which was written against the pre-migration architecture and is no longer
-buildable as written. Nothing in this document has been implemented yet beyond §1.
+Status: **accepted** (2026-09-06); Phase 1 done the same day. Supersedes the eight-phase
+plan drafted in August 2026, which was written against the pre-migration architecture and
+is no longer buildable as written.
 
 Companion documents: [`ROADMAP.md`](ROADMAP.md) (Phases 0–4, all done) and
 [`adr/`](adr/) — in particular [ADR-0001](adr/0001-immutable-result-dataclasses.md),
@@ -32,9 +32,9 @@ So the phase *content* survives; the file layout and the return types do not.
 
 ---
 
-## 1. What exists today (Phase 1 of the old plan, landed)
+## 1. What exists today
 
-Geometry and containers only — no calculation anywhere.
+Geometry, reinforcement and containers — no design-code calculation anywhere yet.
 
 - `mento/column.py` — `Column(shape, position, b, h, edge_distance_x, edge_distance_y)`,
   with validation that edge/corner columns declare their edge distances.
@@ -42,10 +42,14 @@ Geometry and containers only — no calculation anywhere.
   `PunchingNode.check()` and `.design()` raise `NotImplementedError`.
 - `mento/plots/punching.py` — `plot_punching_node`, a plan view of column, capital,
   openings and free edges.
-- `tests/test_punching.py` — 380 lines, geometry and validation only.
+- `mento/reports/punching.py` — the Markdown views `slab_data` / `node_data`
+  (§3), added by Phase 1.
 - All five names exported lazily from `mento/__init__.py`.
 - `Forces` carries `M_x` alongside `M_y`, `V_z`, `N_x`.
 - **`shapely` is not a dependency yet.**
+
+Since Phase 1 (§5), `PunchingSlab` also carries the top reinforcement and derives `d` and
+ρ from it — §2 is the record of why.
 
 ---
 
@@ -54,7 +58,7 @@ Geometry and containers only — no calculation anywhere.
 This is the part of the module that is currently wrong, and it has to be settled before
 any calculation is written, because every capacity equation reads from it.
 
-### 2.1 What the API does today
+### 2.1 What the API did before Phase 1
 
 ```python
 slab = PunchingSlab(concrete=conc, steel_bar=steel,
@@ -63,7 +67,7 @@ slab = PunchingSlab(concrete=conc, steel_bar=steel,
 slab.d_avg = (d_x + d_y) / 2          # "override after construction if needed"
 ```
 
-Three things are wrong with it:
+Three things were wrong with it:
 
 1. **ρ and *d* are supplied independently, but they are not independent.**
    ρ = A_s /(b·d). A user who overrides `d_avg` has silently changed the denominator of
@@ -107,10 +111,10 @@ ACI needs only `d` (and `b_o`, `β`, `α_s`). ρ becomes relevant to ACI only if
 implement the flexural half of the unbalanced-moment transfer, §8.4.2.3, which
 concentrates γ_f·M_sc into the strip `c_2 + 3h` — the same "extra bars over the column"
 the EN width is about. Worth stating plainly in the docs, because a user who fills in
-`rho_x`/`rho_y` for an ACI check today gets no effect from them whatsoever and has no
-way to know that.
+`rho_x`/`rho_y` for an ACI check gets no effect from them whatsoever and has no way to
+know that.
 
-### 2.3 Proposal
+### 2.3 Proposal (implemented in Phase 1)
 
 **Reinforcement is declared as bars, not as ratios. ρ and *d* are derived and read-only.**
 Naming mirrors `OneWaySlab.set_slab_longitudinal_rebar_top`, where position 1 is the base
@@ -153,19 +157,21 @@ Three consequences worth being explicit about:
   it is a reasonable first pass for an ACI check, which needs no ρ. An EN check with no
   ρ declared should **raise**, not silently use ρ = 0, because `(100·ρ·f_ck)^(1/3) = 0`
   drops `v_Rd,c` to `v_min` and quietly under-reports capacity.
-- **`rho_x` / `rho_y` as constructor arguments stay accepted** as a direct override for
-  the user who has ρ from a FE model and no bar schedule, but they are then the *source*
-  of ρ and `set_rebar_*` refuses to co-exist with them (raise, don't silently pick one).
+- **`rho_x` / `rho_y` are removed as constructor arguments** (decision D2 below). A ρ
+  supplied next to a *d* derived from something else is the inconsistency this whole
+  section is about; the module is pre-release, so the second way of saying it goes rather
+  than being carried as a legacy path. `set_effective_depth` covers the user who has a
+  depth from elsewhere, and re-derives ρ against it.
 
-### 2.4 Open decisions for you
+### 2.4 Decisions (settled 2026-09-06)
 
-| # | Question | Default if you don't say |
+| # | Question | Decision |
 | --- | --- | --- |
-| D1 | Is `outer_direction="x"` the right default? | yes, x outermost |
-| D2 | Should `rho_*` constructor args be kept at all, or removed now while the module is pre-release? | kept, as an override |
-| D3 | ρ averaging width: EN's `c + 3d` each side, or the full tributary width? | EN's `c + 3d` |
-| D4 | Does the refuerzo need an extent (`l_x`, `l_y` from the column face), so we can tell whether it reaches across the ρ band, or do we assume it always does? | assume it always does in Phase 1; add extent in Phase 3 |
-| D5 | ACI: implement §8.4.2.3 flexural moment transfer (which is what makes ρ matter to ACI), or leave punching as a shear-stress check only? | shear only in Phase 2; flexural transfer is its own phase |
+| D1 | Is `outer_direction="x"` the right default? | Yes, x outermost — overridable per slab. |
+| D2 | Keep `rho_*` constructor args as an override, or remove them? | **Removed.** ρ only ever comes from declared bars. |
+| D3 | ρ averaging width: EN's `c + 3d` each side, or the full tributary width? | EN's `c + 3d`. Under D4 it cancels out of the ratio, so it costs nothing to state. |
+| D4 | Does the refuerzo need an extent (`l_x`, `l_y` from the column face)? | Assumed to span the ρ band in Phase 1; add the extent in Phase 3 with the rest of the perimeter geometry. |
+| D5 | ACI: implement §8.4.2.3 flexural moment transfer? | Shear only in Phase 2; the flexural transfer is its own phase. |
 
 ---
 
@@ -227,15 +233,26 @@ Two boundary consequences to plan for:
 Each phase is a commit on `feat/punching-general`, and each has an exit criterion that is
 a passing test, not a judgement.
 
-### Phase 1 — Reinforcement, ρ and *d* (the §2.3 proposal)
+### Phase 1 — Reinforcement, ρ and *d* (the §2.3 proposal) — **done 2026-09-06**
 
 No design code involved. `set_rebar_x` / `set_rebar_y`, derived `d_x`/`d_y`/`d_avg`,
-derived `ρ_x`/`ρ_y`/`ρ_l`, `outer_direction`, `set_effective_depth`, the raise on
-`slab.d_avg = ...`, and `slab.data` / `node.data` in `reports/punching.py`.
+derived `ρ_x`/`ρ_y`/`ρ_l`/`A_s_x`/`A_s_y`, `outer_direction`, `set_effective_depth`, the
+raise on `slab.d_avg = ...`, `rho_x`/`rho_y` gone from the constructor, and
+`slab.data` / `node.data` in a new `reports/punching.py`.
 
-*Exit:* a slab built from bars reproduces hand-computed `d_x`, `d_y`, ρ_x, ρ_y for a
-metric and an imperial case; the legacy `rho_x`/`rho_y` path still gives today's numbers;
-`node.data` renders without `punching.py` importing IPython.
+*Exit met.* A slab built from bars reproduces hand-computed `d_x`, `d_y`, ρ_x, ρ_y in
+metric and imperial; a slab with no bars still gives the historical
+`d_avg = h - c_c - 16 mm` and returns `None` rather than zero for ρ; `node.data` renders
+with `punching.py` importing no IPython, so `test_architecture_boundaries.py` stays green.
+`mento/punching.py` and `mento/reports/punching.py` are at 100 % line coverage.
+
+Two things Phase 2 inherits from it:
+
+- `PunchingSlab.has_rebar` is the flag the EN checker reads to refuse a check with no ρ.
+  ACI does not need it: `v_c` never uses ρ.
+- The largest declared bar in a direction governs that mat's depth. Two interleaved sets
+  of different diameters do not physically sit at one depth; the larger is the reading a
+  drawing dimensions to, and the conservative one.
 
 ### Phase 2 — ACI 318-19 check, no capital, no openings
 
