@@ -58,6 +58,13 @@ class DesignCode:
     apply_wall_shear_state: Callable[..., None] | None = None
     design_shear_wall: Callable[..., None] | None = None
 
+    #: Two-way shear at a slab-column connection. Optional for the same reason
+    #: the wall hooks are: a code that has no punching implementation should say
+    #: so by name through :func:`requires`, not fail somewhere inside a check.
+    #: ``design_punching`` sizes the shear reinforcement and is Phase 4.
+    check_punching: Callable[..., Any] | None = None
+    design_punching: Callable[..., None] | None = None
+
     #: Presentation the code owns: the symbols it names its quantities with and
     #: the unit rows of its summary tables. Not a calculation, but it is
     #: per-code, so a new code must be able to supply it without editing a
