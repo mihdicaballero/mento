@@ -14,6 +14,25 @@ from the release history and are summaries rather than complete lists.
 
 ### Added
 
+- **The Word tables have a style of their own, and it can be set.** Every table was tagged
+  with Word's built-in `Light Shading`, whose grey and rule weights live in python-docx's
+  template where no argument reaches them, whose fill names a colour and a *theme* colour
+  at once — Word resolves the theme, so the grey on the page was never the grey declared —
+  and which bolds the first column, which the builder then undid cell by cell. mento now
+  writes its own definition into the document's `styles.xml`, once per document however
+  many tables point at it, and `mento.set_table_style(TableStyle(...))` chooses it for the
+  rest of the session the way `set_language` chooses the language. The knobs are the band
+  fill and size, the header fill, colour and weight, the text and border colours, and the
+  rules above the header, under it, at the foot, between rows and between columns. Because
+  the look is a rule in the document rather than paint on the cells that existed when it
+  was written, a row added in Word afterwards is banded like the rest. Colours are six hex
+  digits and a `#` raises rather than being dropped silently by Word; thicknesses are
+  points, clamped to the 0.25–12 pt Word will draw, and a thickness of zero means no rule.
+  The default look is unchanged in kind — banded grey, bold header, ruled top, header and
+  foot — and the green and red of a verdict column still outrank it. (#157)
+
+### Added
+
 - **`set_language` now reaches the summaries.** It translated every detailed report but
   stopped at `BeamSummary` and `ShearWallSummary`, which printed English tables and wrote
   English Word documents whatever the language was set to — the user guide said as much.

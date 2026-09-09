@@ -13,6 +13,7 @@ from io import BytesIO
 from pandas.io.formats.style import Styler
 
 from mento.i18n import DEFAULT_LANGUAGE, translate, translate_dataframe, translate_table
+from mento.reports.table_style import TableStyle, get_table_style
 
 #: The verdict marks a summary's Status column carries. Named because the Word
 #: builder shades that column by matching them: a literal on one side and a
@@ -30,6 +31,21 @@ VERDICT_COLUMN = "Ok?"
 #: decimals is the resolution a reader acts on.
 FORCE_DECIMALS = 1
 DCR_DECIMALS = 2
+
+#: Which of a table style's conditional parts Word is allowed to apply. The
+#: header row, and no banded or emphasised first column: python-docx creates
+#: every table with the first-column flag on, which is what made the built-in
+#: style bold that column. ``w:val`` is the same six flags as a hexadecimal
+#: word, and Word reads whichever it finds, so the two have to agree.
+TABLE_LOOK = {
+    "val": "0420",
+    "firstRow": "1",
+    "lastRow": "0",
+    "firstColumn": "0",
+    "lastColumn": "0",
+    "noHBand": "0",
+    "noVBand": "1",
+}
 
 #: The units a force or a moment is quoted in. A value in one of these is
 #: rounded to `FORCE_DECIMALS` for display.
@@ -374,6 +390,7 @@ class DocumentBuilder:
         font_name: str = "Lato",
         font_size: int = 9,
         language: str = DEFAULT_LANGUAGE,
+        table_style: Optional[TableStyle] = None,
     ) -> None:
         """
         Initializes the DocumentBuilder with a title, font name, and font size.
@@ -392,12 +409,22 @@ class DocumentBuilder:
         language : str, default="en"
             Language the document is written in. Headings, table headers and row
             labels without a translation are written in English.
+
+        table_style : TableStyle, optional
+            The look of the document's tables. Defaults to whatever
+            :func:`~mento.reports.table_style.set_table_style` last set, so a
+            report configured at the top of a script needs no argument here.
         """
         self.doc = Document()
         self.language = language
         self.title = translate(title, language)
         self.font_name = font_name
         self.font_size = font_size
+        self.table_style = table_style or get_table_style()
+        # Which style ids this document already carries a definition for. One
+        # entry per distinct style, however many tables point at it -- and the
+        # reason a document of forty tables holds one definition, not forty.
+        self._table_style_ids: dict[TableStyle, str] = {}
         self.set_document_style()
         self.set_page_size()
         self.set_margins()
@@ -536,6 +563,59 @@ class DocumentBuilder:
             for idx, width in enumerate(widths):
                 row.cells[idx].width = width
 
+    def table_style_id(self, style: Optional[TableStyle] = None) -> str:
+        """The id to tag a table with, defining ``style`` first if need be.
+
+        The definition is written into the document's ``styles.xml`` the first
+        time a style is asked for and never again: a table points at it by id,
+        so the second table costs an attribute rather than a copy of the whole
+        definition. That is also what makes the look survive editing -- a row
+        added in Word is banded because the rule is in the document, not
+        because forty cells were painted.
+
+        A style whose id is already taken -- Word's own ``TableGrid``, or a
+        second :class:`TableStyle` under a name that reduces to the same id --
+        is written under the next free one, so two styles in one document
+        cannot overwrite each other.
+        """
+        style = style or self.table_style
+        if style in self._table_style_ids:
+            return self._table_style_ids[style]
+
+        styles = self.doc.styles.element
+        taken = {existing.get(qn("w:styleId")) for existing in styles.findall(qn("w:style"))}
+        style_id = style.style_id
+        suffix = 2
+        while style_id in taken:
+            style_id = f"{style.style_id}{suffix}"
+            suffix += 1
+
+        styles.append(parse_xml(style.definition_xml(style_id)))
+        self._table_style_ids[style] = style_id
+        return style_id
+
+    def _apply_table_style(self, table: Any, style_id: str) -> None:
+        """Point ``table`` at ``style_id`` and let the style do the formatting.
+
+        Word decides which of a style's conditional parts apply from the
+        table's ``w:tblLook``, and python-docx creates every table with the
+        first-column flag on. That flag is what made ``Light Shading`` bold the
+        first column, which the builder then had to undo cell by cell; turning
+        it off is the same fix, made once and in the right place. The first-row
+        flag stays on -- the header is a header -- and vertical banding stays
+        off, which is what ``w:val="0420"`` says.
+        """
+        tbl_pr = table._tbl.tblPr
+        tbl_pr.get_or_add_tblStyle().val = style_id
+
+        looks = tbl_pr.findall(qn("w:tblLook"))
+        if not looks:
+            looks = [parse_xml(f"<w:tblLook {nsdecls('w')}/>")]
+            tbl_pr.append(looks[0])
+        for look in looks:
+            for attribute, value in TABLE_LOOK.items():
+                look.set(qn(f"w:{attribute}"), value)
+
     def add_table(
         self,
         df: pd.DataFrame,
@@ -565,7 +645,7 @@ class DocumentBuilder:
 
         # --- Create and style table ---
         table = self.doc.add_table(rows=df.shape[0] + 1, cols=df.shape[1])
-        table.style = "Light Shading"
+        self._apply_table_style(table, self.table_style_id())
         self.set_col_widths(table, column_widths)
 
         # --- Header row ---
@@ -585,12 +665,6 @@ class DocumentBuilder:
                     for paragraph in cell.paragraphs:
                         for run in paragraph.runs:
                             run.font.size = Pt(font_size)
-
-        # --- First column not bold ---
-        for row in table.rows[1:]:
-            first_cell = row.cells[0]
-            for run in first_cell.paragraphs[0].runs:
-                run.font.bold = False
 
         # --- Add spacer paragraph ---
         spacer = self.doc.add_paragraph()
