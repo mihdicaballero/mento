@@ -80,6 +80,9 @@ __all__ = [
     "set_language",
     "get_language",
     "available_languages",
+    "TableStyle",
+    "set_table_style",
+    "get_table_style",
 ]
 
 if TYPE_CHECKING:
@@ -102,6 +105,7 @@ if TYPE_CHECKING:
     from mento.shear_wall import ShearWall
     from mento.shear_wall_summary import ShearWallSummary
     from mento.i18n import available_languages, get_language, set_language
+    from mento.reports.table_style import TableStyle, get_table_style, set_table_style
 
 
 def __getattr__(name: str) -> object:
@@ -133,6 +137,9 @@ def __getattr__(name: str) -> object:
         "set_language": "i18n",
         "get_language": "i18n",
         "available_languages": "i18n",
+        "TableStyle": "reports.table_style",
+        "set_table_style": "reports.table_style",
+        "get_table_style": "reports.table_style",
     }
 
     if name in module_mapping:

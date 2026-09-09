@@ -87,7 +87,16 @@ jobs:
       - name: Install pandoc
         # nbsphinx shells out to pandoc to convert the markdown cells of the
         # example notebooks; it is not a pip dependency.
-        run: sudo apt-get update && sudo apt-get install -y pandoc
+        #
+        # `apt-get update` also reads the third-party repositories the runner
+        # image ships -- Google Chrome's among them -- and exits non-zero when
+        # any one of their indexes is broken, which is neither mento's problem
+        # nor pandoc's. Chained with `&&` that took the docs build down with it.
+        # Installing pandoc is the actual requirement, so let the install be
+        # what decides: a genuinely unreachable archive still fails there.
+        run: |
+          sudo apt-get update || echo "apt-get update reported errors; the install below is the real check"
+          sudo apt-get install -y pandoc
 
       - name: Install package and docs dependencies
         run: |

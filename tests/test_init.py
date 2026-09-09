@@ -248,6 +248,9 @@ def test_all_exports_in_all() -> None:
         "set_language",
         "get_language",
         "available_languages",
+        "TableStyle",
+        "set_table_style",
+        "get_table_style",
     ]
 
     assert set(mento.__all__) == set(expected_exports)

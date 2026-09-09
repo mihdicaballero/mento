@@ -12,6 +12,70 @@ from the release history and are summaries rather than complete lists.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-09
+
+How a Word report looks is now something a caller decides. The tables carried Word's
+own `Light Shading`, whose colours were unreachable and whose fill Word overrode with a
+theme; mento writes its own style definition instead, and `set_table_style` chooses it.
+
+### Added
+
+- **The section over a report's first three tables is called "Section Data".** It was
+  called "Materials", which named only the first of the three tables under it — the others
+  are the geometry and the design forces. The shear section that follows the limit checks
+  is "Strength Checks" rather than "Design checks", because it is the strength that is
+  checked there whether the run was a check or a design. Both are renamed in the per-beam
+  reports, the shear wall report and the summaries, and both are translated. (#157)
+
+- **The report headings are numbered and coloured.** The title is a `Heading 1` and the
+  sections under it are `Heading 2`, numbered `1`, `1.1`, `1.2` … The numbers are Word's
+  own rather than text mento wrote: the heading styles are attached to a multilevel list
+  defined once in the document, so a section moved, deleted or inserted in Word renumbers
+  the rest. The `Heading 1` is `#0A3E81`; the sub-headings, the running text and the tables
+  are all `#323232`, so the one colour that appears reads as a heading rather than as
+  decoration — `TableStyle.text_color` follows, and its default is no longer `1A1A1A`.
+  Word's built-in heading styles are named in terms of the document theme twice over —
+  `w:themeColor` beside `w:color`, `w:asciiTheme` beside `w:ascii` — and Word resolves the
+  theme side first, the same trap as the theme fill in a table style. The colour survives
+  because python-docx replaces the whole `w:color` element; the font needed the theme names
+  removed by hand, which showed up in a place nobody looks: a heading's number is drawn in
+  the paragraph mark's font, and the mark kept the theme's Calibri while the heading text,
+  set run by run, was Lato. (#157)
+
+- **The detailed annexes close on one page.** `flexure_results_detailed_doc()` and
+  `shear_results_detailed_doc()` ran to two pages, and the title sat below the top margin
+  rather than on it. Both came from python-docx's template defaults, which mento never
+  overrode: 1.15-line spacing and a 10 pt gap after every paragraph. The extra leading of a
+  multiple-spaced line goes *above* the text, and a heading's paragraph mark keeps the
+  heading style's 14 pt whatever size its runs are, so a 10 pt title was set at the foot of
+  a 14 pt line. `Normal` now carries single spacing and no trailing gap, a heading's mark
+  is sized to its text, the space around a heading belongs to the heading, and the
+  paragraph that keeps two tables from merging is 3 pt rather than a full line of body
+  text. With the document text at 8.5 pt and `TableStyle.cell_padding_pt` — a new field —
+  defaulting to 0.8 pt, a detailed annex produces
+  one-page flexure and shear annexes under both ACI 318-19 and EN 1992-1-1, measured in
+  Word. They stay one page whatever is checked: each report is built from the governing
+  combination rather than from every one of them, so its tables have a fixed shape — 42
+  rows for a flexure report, 40 for a shear one. `TableStyle(cell_padding_pt=1.4)` restores
+  Word's own padding. (#157)
+
+- **The Word tables have a style of their own, and it can be set.** Every table was tagged
+  with Word's built-in `Light Shading`, whose grey and rule weights live in python-docx's
+  template where no argument reaches them, whose fill names a colour and a *theme* colour
+  at once — Word resolves the theme, so the grey on the page was never the grey declared —
+  and which bolds the first column, which the builder then undid cell by cell. mento now
+  writes its own definition into the document's `styles.xml`, once per document however
+  many tables point at it, and `mento.set_table_style(TableStyle(...))` chooses it for the
+  rest of the session the way `set_language` chooses the language. The knobs are the band
+  fill and size, the header fill, colour and weight, the text and border colours, and the
+  rules above the header, under it, at the foot, between rows and between columns. Because
+  the look is a rule in the document rather than paint on the cells that existed when it
+  was written, a row added in Word afterwards is banded like the rest. Colours are six hex
+  digits and a `#` raises rather than being dropped silently by Word; thicknesses are
+  points, clamped to the 0.25–12 pt Word will draw, and a thickness of zero means no rule.
+  The default look is unchanged in kind — banded grey, bold header, ruled top, header and
+  foot — and the green and red of a verdict column still outrank it. (#157)
+
 ### Added
 
 - **`set_language` now reaches the summaries.** It translated every detailed report but
@@ -401,7 +465,8 @@ First public release on PyPI: rectangular concrete beam check and design for fle
 shear under ACI 318-19 and CIRSOC 201-25, unit aware calculations, results as pandas
 DataFrames, and Word calculation reports.
 
-[Unreleased]: https://github.com/mihdicaballero/mento/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/mihdicaballero/mento/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/mihdicaballero/mento/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/mihdicaballero/mento/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/mihdicaballero/mento/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/mihdicaballero/mento/compare/v0.5.2...v1.0.0

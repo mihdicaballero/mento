@@ -82,7 +82,8 @@ ES: Dict[str, str] = {
         "Generado con mento {version}. Código de diseño: {design_code}"
     ),
     "Limit checks": "Verificaciones de límites",
-    "Design checks": "Verificaciones de diseño",
+    "Strength Checks": "Verificaciones de resistencia",
+    "Section Data": "Datos de la sección",
     "Flexural Capacity Top": "Capacidad a flexión superior",
     "Flexural Capacity Bottom": "Capacidad a flexión inferior",
     # -- row labels: materials and geometry --------------------------------
