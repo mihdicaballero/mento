@@ -14,6 +14,13 @@ from the release history and are summaries rather than complete lists.
 
 ### Added
 
+- **The section over a report's first three tables is called "Section Data".** It was
+  called "Materials", which named only the first of the three tables under it — the others
+  are the geometry and the design forces. The shear section that follows the limit checks
+  is "Strength Checks" rather than "Design checks", because it is the strength that is
+  checked there whether the run was a check or a design. Both are renamed in the per-beam
+  reports, the shear wall report and the summaries, and both are translated. (#157)
+
 - **The report headings are numbered and coloured.** The title is a `Heading 1` and the
   sections under it are `Heading 2`, numbered `1`, `1.1`, `1.2` … The numbers are Word's
   own rather than text mento wrote: the heading styles are attached to a multilevel list
@@ -21,9 +28,13 @@ from the release history and are summaries rather than complete lists.
   the rest. The `Heading 1` is `#0A3E81`; the sub-headings, the running text and the tables
   are all `#323232`, so the one colour that appears reads as a heading rather than as
   decoration — `TableStyle.text_color` follows, and its default is no longer `1A1A1A`.
-  Word's built-in heading styles name a `w:themeColor` beside their literal colour and
-  resolve the theme first, which is the same trap as the theme fill in a table style;
-  replacing the whole `w:color` element takes the theme attributes with it. (#157)
+  Word's built-in heading styles are named in terms of the document theme twice over —
+  `w:themeColor` beside `w:color`, `w:asciiTheme` beside `w:ascii` — and Word resolves the
+  theme side first, the same trap as the theme fill in a table style. The colour survives
+  because python-docx replaces the whole `w:color` element; the font needed the theme names
+  removed by hand, which showed up in a place nobody looks: a heading's number is drawn in
+  the paragraph mark's font, and the mark kept the theme's Calibri while the heading text,
+  set run by run, was Lato. (#157)
 
 - **The detailed annexes close on one page.** `flexure_results_detailed_doc()` and
   `shear_results_detailed_doc()` ran to two pages, and the title sat below the top margin

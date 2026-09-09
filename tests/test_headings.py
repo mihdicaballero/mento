@@ -13,7 +13,7 @@ import pytest
 from docx import Document
 from docx.oxml.ns import qn
 
-from mento.reports.headings import NUMBERED_LEVELS, color_headings, number_headings
+from mento.reports.headings import NUMBERED_LEVELS, number_headings, style_headings
 from mento.results import HEADING_COLOR, TEXT_COLOR, DocumentBuilder
 
 
@@ -69,7 +69,7 @@ def test_a_heading_colour_carries_no_theme_attribute(document: Any) -> None:
     It resolves the theme first, so a colour set next to one is a colour that
     never appears -- the same trap as the theme fill in a table style.
     """
-    color_headings(document, "0A3E81", "323232", "323232")
+    style_headings(document, "Lato", "0A3E81", "323232", "323232")
     run_properties = document.styles["Heading 1"].element.find(qn("w:rPr"))
     color = run_properties.find(qn("w:color"))
 
@@ -79,7 +79,7 @@ def test_a_heading_colour_carries_no_theme_attribute(document: Any) -> None:
 
 
 def test_deeper_headings_take_the_subheading_colour(document: Any) -> None:
-    color_headings(document, "0A3E81", "323232", "323232")
+    style_headings(document, "Lato", "0A3E81", "323232", "323232")
 
     for level in (2, 3, 4):
         assert str(document.styles[f"Heading {level}"].font.color.rgb) == "323232"
@@ -131,7 +131,7 @@ def test_the_list_does_not_take_an_id_the_template_uses(document: Any) -> None:
         element.get(qn("w:abstractNumId")) for element in _numbering(document).findall(qn("w:abstractNum"))
     }
 
-    num_id = str(number_headings(document))
+    num_id = str(number_headings(document, "Lato"))
 
     assert num_id not in before
     assert _abstract_id_of(document, num_id) not in before_abstract
@@ -161,3 +161,40 @@ def test_a_document_defines_the_list_once(builder: DocumentBuilder) -> None:
     ]
 
     assert len(mento_lists) == 1
+
+
+# --- Font ---
+
+
+def test_a_heading_font_carries_no_theme_name(builder: DocumentBuilder) -> None:
+    """``font.name`` only adds an attribute to the ``w:rFonts`` already there.
+
+    The built-in heading styles carry ``w:asciiTheme``, Word reads that one
+    first, and the name written beside it never appears.
+    """
+    fonts = builder.doc.styles["Heading 1"].element.find(qn("w:rPr")).find(qn("w:rFonts"))
+
+    assert fonts.get(qn("w:ascii")) == builder.font_name
+    assert fonts.get(qn("w:asciiTheme")) is None
+    assert fonts.get(qn("w:hAnsiTheme")) is None
+
+
+def test_the_heading_number_is_named_the_document_font(builder: DocumentBuilder) -> None:
+    """A number is drawn in the paragraph mark's font unless its level says
+    otherwise -- which is how a Lato report ends up with Calibri numbers."""
+    num_id = _style_num_id(builder.doc, 1)
+
+    for level in _levels(builder.doc, _abstract_id_of(builder.doc, num_id)):
+        fonts = level.find(qn("w:rPr")).find(qn("w:rFonts"))
+        assert fonts.get(qn("w:ascii")) == builder.font_name
+        assert fonts.get(qn("w:hAnsi")) == builder.font_name
+
+
+def test_the_font_follows_the_builder(builder: DocumentBuilder) -> None:
+    """A document asked for another face gets it in its headings too."""
+    other = DocumentBuilder(title="Test Document", font_name="Arial")
+    num_id = _style_num_id(other.doc, 1)
+    level = _levels(other.doc, _abstract_id_of(other.doc, num_id))[0]
+
+    assert other.doc.styles["Heading 1"].element.find(qn("w:rPr")).find(qn("w:rFonts")).get(qn("w:ascii")) == "Arial"
+    assert level.find(qn("w:rPr")).find(qn("w:rFonts")).get(qn("w:ascii")) == "Arial"

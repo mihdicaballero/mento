@@ -13,7 +13,7 @@ from io import BytesIO
 from pandas.io.formats.style import Styler
 
 from mento.i18n import DEFAULT_LANGUAGE, translate, translate_dataframe, translate_table
-from mento.reports.headings import color_headings, number_headings
+from mento.reports.headings import number_headings, style_headings
 from mento.reports.table_style import TableStyle, get_table_style
 
 #: The verdict marks a summary's Status column carries. Named because the Word
@@ -490,8 +490,8 @@ class DocumentBuilder:
         style.paragraph_format.space_after = Pt(0)
         style.paragraph_format.line_spacing = 1.0
 
-        color_headings(self.doc, HEADING_COLOR, TEXT_COLOR, TEXT_COLOR)
-        number_headings(self.doc)
+        style_headings(self.doc, self.font_name, HEADING_COLOR, TEXT_COLOR, TEXT_COLOR)
+        number_headings(self.doc, self.font_name)
 
     def set_page_size(self) -> None:
         """

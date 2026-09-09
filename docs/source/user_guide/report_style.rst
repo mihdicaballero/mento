@@ -167,7 +167,7 @@ numbered and coloured by the document's styles:
 .. code-block:: text
 
     1 Beam 101 flexure check
-    1.1 Materials
+    1.1 Section Data
     1.2 Limit checks
     1.3 Flexural Capacity Top
     1.4 Flexural Capacity Bottom
@@ -175,6 +175,12 @@ numbered and coloured by the document's styles:
 The numbers are Word's own, not text mento wrote: the styles are attached to a multilevel
 list defined in the document, so a section moved, deleted or inserted in Word renumbers
 the rest.
+
+The headings are set in the document's font, which needs saying because Word's built-in
+heading styles name the *theme* font beside the literal one and resolve the theme first —
+the same trap as the theme fill in a table style. It shows up in a place nobody looks: a
+heading's number is drawn in the paragraph mark's font, so a report whose heading text was
+set run by run still came out with Calibri numbers in front of Lato titles.
 
 The ``Heading 1`` is ``#0A3E81`` and everything else on the page — the sub-headings, the
 running text and the tables — is ``#323232``, so the one colour that appears reads as a

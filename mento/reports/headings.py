@@ -14,12 +14,19 @@ way the numbers are Word's own -- they renumber when a section is moved,
 deleted or inserted, which is the whole point of not writing "1.1" into the
 text.
 
-Two attributes decide whether a colour survives. Word's built-in heading styles
-declare ``w:themeColor`` beside ``w:color``, and resolve the theme first, so a
-colour named next to a theme is a colour that never appears -- the same trap as
-the theme fill in :mod:`~mento.reports.table_style`. Replacing the whole
-``w:color`` element, which is what python-docx's ``font.color.rgb`` does, takes
-the theme attributes with it.
+Word's built-in heading styles are named in terms of the document *theme*
+twice over: ``w:themeColor`` beside ``w:color``, and ``w:asciiTheme`` beside
+``w:ascii``. Word resolves the theme side first, so a colour or a font named
+next to one is a colour or a font that never appears -- the same trap as the
+theme fill in :mod:`~mento.reports.table_style`. python-docx's
+``font.color.rgb`` replaces the whole ``w:color`` element and so takes the
+theme attributes with it; ``font.name`` only adds an attribute to the
+``w:rFonts`` already there, so the theme names have to be removed by hand.
+
+That one bites in a place nobody looks: the heading *text* is set run by run
+and comes out right, while the paragraph mark keeps the style's theme font --
+and a heading's number is drawn in the mark's font. A Lato report with Calibri
+numbers in front of its headings is what that looks like.
 """
 
 from __future__ import annotations
@@ -43,29 +50,66 @@ NUMBERED_LEVELS = {1: 0, 2: 1}
 _NUMBER_SUFFIX = "space"
 
 
+#: The heading levels styled here. Word's template defines nine; the reports
+#: use two, and the rest are given the same treatment so a document that grows
+#: a level does not grow a Calibri heading with it.
+_STYLED_LEVELS = range(1, 5)
+
+
 def _style_id(level: int) -> str:
     return f"Heading{level}"
 
 
-def color_headings(document: Any, heading_color: str, subheading_color: str, text_color: str) -> None:
-    """Colour the document's text and heading styles.
+def _name_font(style: Any, font_name: str) -> None:
+    """Name the font of a style, and unname the theme's.
+
+    ``font.name`` writes ``w:ascii`` into the ``w:rFonts`` that is already
+    there, next to the ``w:asciiTheme`` the built-in heading styles carry --
+    and Word reads the theme one. The attribute has to go, or the name beside
+    it is decoration.
+    """
+    style.font.name = font_name
+    fonts = style.element.find(qn("w:rPr")).find(qn("w:rFonts"))
+    for attribute in ("asciiTheme", "hAnsiTheme", "eastAsiaTheme", "cstheme"):
+        if fonts.get(qn(f"w:{attribute}")) is not None:
+            del fonts.attrib[qn(f"w:{attribute}")]
+    fonts.set(qn("w:cs"), font_name)
+
+
+def style_headings(
+    document: Any,
+    font_name: str,
+    heading_color: str,
+    subheading_color: str,
+    text_color: str,
+) -> None:
+    """Give the document's text and heading styles their font and colour.
 
     ``heading_color`` is for ``Heading 1``, ``subheading_color`` for every
     deeper heading, and ``text_color`` for the body -- set on ``Normal``, which
     the rest inherit from.
     """
-    document.styles["Normal"].font.color.rgb = RGBColor.from_string(text_color)
-    for level in range(1, 5):
+    normal = document.styles["Normal"]
+    normal.font.color.rgb = RGBColor.from_string(text_color)
+    _name_font(normal, font_name)
+
+    for level in _STYLED_LEVELS:
         style = document.styles[f"Heading {level}"]
         style.font.color.rgb = RGBColor.from_string(heading_color if level == 1 else subheading_color)
+        _name_font(style, font_name)
 
 
-def _abstract_numbering_xml(abstract_id: int) -> str:
+def _abstract_numbering_xml(abstract_id: int, font_name: str) -> str:
     """A two-level list whose levels belong to the heading styles.
 
     ``w:pStyle`` inside a level is what ties it to the style, and
     ``w:lvlText`` is the number itself: ``%1`` is this level's counter and
     ``%1.%2`` the first level's followed by the second's.
+
+    The level names its font as well. A number is drawn in the paragraph
+    mark's font unless the level says otherwise, and saying so here is what
+    keeps a heading's number from being the one word of the report in a font
+    nobody chose.
     """
     levels = "".join(
         f'<w:lvl w:ilvl="{ilvl}">'
@@ -76,6 +120,7 @@ def _abstract_numbering_xml(abstract_id: int) -> str:
         f'<w:lvlText w:val="{".".join(f"%{n + 1}" for n in range(ilvl + 1))}"/>'
         '<w:lvlJc w:val="left"/>'
         '<w:pPr><w:ind w:left="0" w:firstLine="0"/></w:pPr>'
+        f'<w:rPr><w:rFonts w:ascii="{font_name}" w:hAnsi="{font_name}" w:cs="{font_name}"/></w:rPr>'
         "</w:lvl>"
         for level, ilvl in sorted(NUMBERED_LEVELS.items())
     )
@@ -98,7 +143,7 @@ def _next_free_id(numbering: Any, tag: str, attribute: str) -> int:
     return max(used, default=-1) + 1
 
 
-def number_headings(document: Any) -> int:
+def number_headings(document: Any, font_name: str) -> int:
     """Number the heading styles ``1`` and ``1.1``, and return the list's id.
 
     The definition goes into ``numbering.xml`` once; each heading style is then
@@ -109,7 +154,7 @@ def number_headings(document: Any) -> int:
     numbering = document.part.numbering_part.element
 
     abstract_id = _next_free_id(numbering, "w:abstractNum", "w:abstractNumId")
-    numbering.append(parse_xml(_abstract_numbering_xml(abstract_id)))
+    numbering.append(parse_xml(_abstract_numbering_xml(abstract_id, font_name)))
 
     # A style points at a `w:num`, which points at the definition. The
     # indirection is Word's: it is what lets two lists share a shape.

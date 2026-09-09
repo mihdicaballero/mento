@@ -219,7 +219,7 @@ def beam_summary_doc(self: "BeamSummary", index: int = 1) -> None:
     df_flex_capacity_top = pd.DataFrame(top_result_data)
     df_flex_capacity_bot = pd.DataFrame(bot_result_data)
 
-    doc_builder.add_heading("Materials", level=3)
+    doc_builder.add_heading("Section Data", level=3)
     doc_builder.add_table_data(df_flex_materials)
     doc_builder.add_table_data(df_flex_geometry)
     doc_builder.add_table_data(df_flex_forces)
@@ -241,13 +241,13 @@ def beam_summary_doc(self: "BeamSummary", index: int = 1) -> None:
     df_shear_min_max = pd.DataFrame(result_data["min_max"])
     df_shear_concrete = pd.DataFrame(result_data["shear_concrete"])
 
-    doc_builder.add_heading("Materials", level=3)
+    doc_builder.add_heading("Section Data", level=3)
     doc_builder.add_table_data(df_shear_materials)
     doc_builder.add_table_data(df_shear_geometry)
     doc_builder.add_table_data(df_shear_forces)
     doc_builder.add_heading("Limit checks", level=3)
     doc_builder.add_table_min_max(df_shear_min_max)
-    doc_builder.add_heading("Design checks", level=3)
+    doc_builder.add_heading("Strength Checks", level=3)
     doc_builder.add_table_data(df_shear_reinforcement)
     doc_builder.add_table_dcr(df_shear_concrete)
 
@@ -330,13 +330,13 @@ def wall_summary_doc(self: "ShearWallSummary", index: int = 1) -> None:
     df_min_max = pd.DataFrame(result_data["min_max"])
     df_capacity = pd.DataFrame(result_data["shear_capacity"])
 
-    doc_builder.add_heading("Materials", level=3)
+    doc_builder.add_heading("Section Data", level=3)
     doc_builder.add_table_data(df_materials)
     doc_builder.add_table_data(df_geometry)
     doc_builder.add_table_data(df_forces)
     doc_builder.add_heading("Limit checks", level=3)
     doc_builder.add_table_min_max(df_min_max)
-    doc_builder.add_heading("Design checks", level=3)
+    doc_builder.add_heading("Strength Checks", level=3)
     doc_builder.add_table_dcr(df_capacity)
 
     # --- SUMMARY TABLES FOR ALL WALLS ---

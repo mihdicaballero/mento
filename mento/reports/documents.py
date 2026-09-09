@@ -137,7 +137,7 @@ def flexure_report_doc(self: "RectangularBeam", force: Optional[Forces] = None) 
         version=MENTO_VERSION,
         design_code=self.concrete.design_code,
     )
-    doc_builder.add_heading("Materials", level=2)
+    doc_builder.add_heading("Section Data", level=2)
     doc_builder.add_table_data(df_materials)
     doc_builder.add_table_data(df_geometry)
     doc_builder.add_table_data(df_forces)
@@ -201,7 +201,7 @@ def shear_report_doc(self: "RectangularBeam", force: Optional[Forces] = None) ->
         version=MENTO_VERSION,
         design_code=self.concrete.design_code,
     )
-    doc_builder.add_heading("Materials", level=2)
+    doc_builder.add_heading("Section Data", level=2)
     doc_builder.add_table_data(df_materials)
     doc_builder.add_table_data(df_geometry)
     doc_builder.add_table_data(df_forces)
@@ -209,7 +209,7 @@ def shear_report_doc(self: "RectangularBeam", force: Optional[Forces] = None) ->
     # Add second section and another table (can use different data)
     doc_builder.add_heading("Limit checks", level=2)
     doc_builder.add_table_min_max(df_data_min_max)
-    doc_builder.add_heading("Design checks", level=2)
+    doc_builder.add_heading("Strength Checks", level=2)
     doc_builder.add_table_data(df_shear_reinforcement)
     doc_builder.add_table_dcr(df_shear_concrete)
 

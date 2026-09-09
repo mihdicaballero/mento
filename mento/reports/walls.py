@@ -148,13 +148,13 @@ def wall_shear_results_detailed_doc(self: "ShearWall", force: Optional[Forces] =
         version=MENTO_VERSION,
         design_code=self.concrete.design_code,
     )
-    doc_builder.add_heading("Materials", level=2)
+    doc_builder.add_heading("Section Data", level=2)
     doc_builder.add_table_data(df_materials)
     doc_builder.add_table_data(df_geometry)
     doc_builder.add_table_data(df_forces)
     doc_builder.add_heading("Limit checks", level=2)
     doc_builder.add_table_min_max(df_min_max)
-    doc_builder.add_heading("Design checks", level=2)
+    doc_builder.add_heading("Strength Checks", level=2)
     doc_builder.add_table_dcr(df_capacity)
     doc_builder.save(f"Shear Wall {self.label} shear check {self.concrete.design_code}.docx")
 
