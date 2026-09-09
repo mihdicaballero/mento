@@ -12,6 +12,12 @@ from the release history and are summaries rather than complete lists.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-09
+
+How a Word report looks is now something a caller decides. The tables carried Word's
+own `Light Shading`, whose colours were unreachable and whose fill Word overrode with a
+theme; mento writes its own style definition instead, and `set_table_style` chooses it.
+
 ### Added
 
 - **The section over a report's first three tables is called "Section Data".** It was
@@ -459,7 +465,8 @@ First public release on PyPI: rectangular concrete beam check and design for fle
 shear under ACI 318-19 and CIRSOC 201-25, unit aware calculations, results as pandas
 DataFrames, and Word calculation reports.
 
-[Unreleased]: https://github.com/mihdicaballero/mento/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/mihdicaballero/mento/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/mihdicaballero/mento/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/mihdicaballero/mento/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/mihdicaballero/mento/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/mihdicaballero/mento/compare/v0.5.2...v1.0.0
