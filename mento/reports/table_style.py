@@ -179,7 +179,7 @@ class TableStyle:
     header_fill: str = ""
     header_color: str = ""
     header_bold: bool = True
-    text_color: str = "1A1A1A"
+    text_color: str = "323232"
     border_color: str = "404040"
     top_pt: float = 1.0
     header_rule_pt: float = 1.0

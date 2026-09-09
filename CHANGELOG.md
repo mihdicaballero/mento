@@ -14,6 +14,17 @@ from the release history and are summaries rather than complete lists.
 
 ### Added
 
+- **The report headings are numbered and coloured.** The title is a `Heading 1` and the
+  sections under it are `Heading 2`, numbered `1`, `1.1`, `1.2` … The numbers are Word's
+  own rather than text mento wrote: the heading styles are attached to a multilevel list
+  defined once in the document, so a section moved, deleted or inserted in Word renumbers
+  the rest. The `Heading 1` is `#0A3E81`; the sub-headings, the running text and the tables
+  are all `#323232`, so the one colour that appears reads as a heading rather than as
+  decoration — `TableStyle.text_color` follows, and its default is no longer `1A1A1A`.
+  Word's built-in heading styles name a `w:themeColor` beside their literal colour and
+  resolve the theme first, which is the same trap as the theme fill in a table style;
+  replacing the whole `w:color` element takes the theme attributes with it. (#157)
+
 - **The detailed annexes close on one page.** `flexure_results_detailed_doc()` and
   `shear_results_detailed_doc()` ran to two pages, and the title sat below the top margin
   rather than on it. Both came from python-docx's template defaults, which mento never
@@ -24,11 +35,12 @@ from the release history and are summaries rather than complete lists.
   is sized to its text, the space around a heading belongs to the heading, and the
   paragraph that keeps two tables from merging is 3 pt rather than a full line of body
   text. With the document text at 8.5 pt and `TableStyle.cell_padding_pt` — a new field —
-  defaulting to 0.8 pt, a beam checked against one or two load combinations produces
+  defaulting to 0.8 pt, a detailed annex produces
   one-page flexure and shear annexes under both ACI 318-19 and EN 1992-1-1, measured in
-  Word. Each further combination adds a row to the design forces and to the limit checks,
-  so a beam checked against several of them still runs longer: that is content, not
-  layout. `TableStyle(cell_padding_pt=1.4)` restores Word's own padding. (#157)
+  Word. They stay one page whatever is checked: each report is built from the governing
+  combination rather than from every one of them, so its tables have a fixed shape — 42
+  rows for a flexure report, 40 for a shear one. `TableStyle(cell_padding_pt=1.4)` restores
+  Word's own padding. (#157)
 
 - **The Word tables have a style of their own, and it can be set.** Every table was tagged
   with Word's built-in `Light Shading`, whose grey and rule weights live in python-docx's

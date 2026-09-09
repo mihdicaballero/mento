@@ -20,7 +20,7 @@ User Guide
    node
    design_results
    language
-   table_style
+   report_style
    beam_summary
    shear_wall_summary
 

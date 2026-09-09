@@ -149,7 +149,7 @@ def test_defaults_are_the_house_look() -> None:
     assert style.header_fill == ""
     assert style.header_color == ""
     assert style.header_bold is True
-    assert style.text_color == "1A1A1A"
+    assert style.text_color == "323232"  # the same grey as the report body
     assert style.border_color == "404040"
     assert (style.top_pt, style.header_rule_pt, style.bottom_pt) == (1.0, 1.0, 1.0)
     assert (style.inside_pt, style.vertical_pt) == (0.0, 0.0)

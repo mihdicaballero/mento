@@ -13,6 +13,7 @@ from io import BytesIO
 from pandas.io.formats.style import Styler
 
 from mento.i18n import DEFAULT_LANGUAGE, translate, translate_dataframe, translate_table
+from mento.reports.headings import color_headings, number_headings
 from mento.reports.table_style import TableStyle, get_table_style
 
 #: The verdict marks a summary's Status column carries. Named because the Word
@@ -46,6 +47,14 @@ TABLE_LOOK = {
     "noHBand": "0",
     "noVBand": "1",
 }
+
+#: The colours of a report. The Heading 1 blue is the only thing on the page
+#: that is not near-black; everything else -- the sub-headings, the running
+#: text and the tables -- is one grey, so the colour that does appear reads as
+#: a heading rather than as decoration. The green and red of a verdict are the
+#: exception, and are applied to those cells directly.
+HEADING_COLOR = "0A3E81"
+TEXT_COLOR = "323232"
 
 #: Air around a heading, in points. A section heading carries its own space
 #: above; the title carries none, so the report opens on the top margin.
@@ -459,6 +468,10 @@ class DocumentBuilder:
         """
         Sets the default style of the document, applying the font name and size.
 
+        The heading colours and their numbering are set here as well, on the
+        styles rather than on the paragraphs, so a heading added in Word
+        afterwards is coloured and numbered like the ones mento wrote.
+
         The line spacing and the gap after a paragraph are set here too, over
         python-docx's template defaults of 1.15 lines and 10 pt. Both are wrong
         for this kind of document: a report is a stack of tables with a heading
@@ -476,6 +489,9 @@ class DocumentBuilder:
         style.font.size = Pt(self.font_size)
         style.paragraph_format.space_after = Pt(0)
         style.paragraph_format.line_spacing = 1.0
+
+        color_headings(self.doc, HEADING_COLOR, TEXT_COLOR, TEXT_COLOR)
+        number_headings(self.doc)
 
     def set_page_size(self) -> None:
         """

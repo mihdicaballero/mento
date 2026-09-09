@@ -10,6 +10,8 @@ producers of them:
 - :mod:`~mento.reports.summaries` — the Word reports for a summary of many.
 - :mod:`~mento.reports.table_style` — how a Word table looks, as against what
   the modules above put in it.
+- :mod:`~mento.reports.headings` — the colour and the numbering of the headings
+  above those tables.
 
 Nothing here is imported by ``codes/`` or by the element classes' calculation
 paths; the dependency only points this way.

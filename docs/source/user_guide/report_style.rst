@@ -1,7 +1,14 @@
-.. _user_guide/table_style:
+.. _user_guide/report_style:
+
+Report appearance
+=================
+
+This page is about how a Word report looks: the tables, and the headings above them.
+Everything here is written into the document's styles, so it survives editing — a row or
+a section added in Word afterwards looks like the ones mento wrote.
 
 Table style
-===========
+-----------
 
 The tables in a Word report are banded grey with a bold header, ruled above, below and
 under the header row and nowhere else. ``set_table_style`` replaces that look for the rest
@@ -43,7 +50,7 @@ without changing the setting, by building its own ``DocumentBuilder``:
     builder = DocumentBuilder(title="Report", table_style=TableStyle(band_fill=""))
 
 What can be set
----------------
+~~~~~~~~~~~~~~~
 
 .. list-table::
    :header-rows: 1
@@ -71,7 +78,7 @@ What can be set
      - ``True``
      - Whether the header row is bold.
    * - ``text_color``
-     - ``"1A1A1A"``
+     - ``"323232"``
      - Text colour of the table.
    * - ``border_color``
      - ``"404040"``
@@ -96,7 +103,7 @@ What can be set
      - Air above and below the text in a cell.
 
 Colours and thicknesses
------------------------
+~~~~~~~~~~~~~~~~~~~~~~~
 
 A **colour** is six hexadecimal digits with no ``#``. Word does not object to ``"#F2F2F2"``;
 it discards the fill and renders the table without it, so ``TableStyle`` raises
@@ -126,18 +133,20 @@ report that has room for it can ask:
     mento.set_table_style(TableStyle(cell_padding_pt=1.4))
 
 One page
---------
+~~~~~~~~
 
-``flexure_results_detailed_doc()`` and ``shear_results_detailed_doc()`` are meant to be
-one-page annexes, and the default settings keep them there: the document text is 8.5 pt,
-paragraphs carry no trailing gap and no extra leading, and the space between blocks is put
-there by the builder rather than trailing every line. A report of one or two load
-combinations fits with room to spare; each further combination adds a row to the design
-forces and to the limit checks, so a beam checked against several of them runs longer —
-that is content, not layout.
+``flexure_results_detailed_doc()`` and ``shear_results_detailed_doc()`` are one-page
+annexes, and the default settings keep them there: the document text is 8.5 pt, paragraphs
+carry no trailing gap and no extra leading, and the space between blocks is put there by
+the builder rather than trailing every line.
+
+They stay one page whatever is checked. Each report is built from the governing
+combination rather than from every one of them, so its tables have a fixed shape — 42 rows
+for a flexure report, 40 for a shear one — and the beam, the design code and the number of
+load combinations change the numbers in them rather than their number of rows.
 
 Why a style and not formatting
-------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The look is written into the document once, as a table style, and every table points at
 it. Two things follow from that. A table keeps its look when it is edited — a row added in
@@ -148,3 +157,26 @@ definition, so the choice can be changed in one place, including by hand in Word
 The pass/fail column of a summary is the exception: green and red are applied to those
 cells directly, which outranks the style, so the verdict keeps its colour whatever the
 table style says.
+
+Headings
+--------
+
+The report title is a ``Heading 1``, the sections under it are ``Heading 2``, and both are
+numbered and coloured by the document's styles:
+
+.. code-block:: text
+
+    1 Beam 101 flexure check
+    1.1 Materials
+    1.2 Limit checks
+    1.3 Flexural Capacity Top
+    1.4 Flexural Capacity Bottom
+
+The numbers are Word's own, not text mento wrote: the styles are attached to a multilevel
+list defined in the document, so a section moved, deleted or inserted in Word renumbers
+the rest.
+
+The ``Heading 1`` is ``#0A3E81`` and everything else on the page — the sub-headings, the
+running text and the tables — is ``#323232``, so the one colour that appears reads as a
+heading rather than as decoration. The green and red of a verdict column are the
+exception, and are applied to those cells directly.
