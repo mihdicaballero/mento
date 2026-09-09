@@ -358,3 +358,22 @@ def test_default_padding_is_tighter_than_words() -> None:
 def test_negative_padding_is_refused() -> None:
     with pytest.raises(ValueError, match="cell_padding_pt"):
         TableStyle(cell_padding_pt=-0.5)
+
+
+def test_a_header_colour_reaches_the_header_row(builder: DocumentBuilder) -> None:
+    """``header_color`` is the header's text, and only the header's.
+
+    It is written into the ``firstRow`` part of the definition rather than the
+    style's own run properties, so the body keeps ``text_color``.
+    """
+    style = TableStyle(header_fill="2C6DC4", header_color="FFFFFF")
+    header = style.definition_xml().split('w:type="firstRow"')[1]
+
+    assert '<w:color w:val="FFFFFF"/>' in header
+    assert '<w:color w:val="FFFFFF"/>' not in style.definition_xml().split("<w:tblPr>")[0]
+    assert f'<w:color w:val="{style.text_color}"/>' in style.definition_xml().split("<w:tblPr>")[0]
+
+    builder.add_table(_table_frame(), _widths())
+    other_id = builder.table_style_id(style)
+    assert 'w:val="FFFFFF"' in builder.doc.styles.element.xml
+    assert other_id in builder.doc.styles.element.xml

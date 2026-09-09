@@ -495,3 +495,46 @@ def test_the_spacer_between_tables_is_not_a_line_of_text(document_builder: Docum
 
     assert spacer.text == ""
     assert 0 < _mark_size(spacer) < document_builder.font_size
+
+
+def test_setting_a_mark_size_twice_leaves_one_set_of_properties(document_builder: DocumentBuilder) -> None:
+    """A paragraph carries at most one ``w:rPr``, and the last size wins.
+
+    Two of them is not a bigger number, it is an invalid paragraph -- so the
+    mark's properties are replaced rather than appended to.
+    """
+    from docx.oxml.ns import qn
+
+    from mento.results import _set_mark_size
+
+    document_builder.add_heading("Beam 101 shear check", level=1, font_size=10)
+    heading = document_builder.doc.paragraphs[0]
+    _set_mark_size(heading, 7)
+
+    assert len(heading._p.pPr.findall(qn("w:rPr"))) == 1
+    assert _mark_size(heading) == 7
+
+
+def test_a_table_that_arrives_without_a_look_is_given_one(document_builder: DocumentBuilder) -> None:
+    """``w:tblLook`` is what tells Word which parts of a style to apply.
+
+    python-docx writes one into every table it creates, so this is the case
+    that does not happen -- but a table reaching the builder without one would
+    silently take Word's defaults, first-column emphasis included, and the
+    style would appear not to work.
+    """
+    from docx.oxml.ns import qn
+
+    df = pd.DataFrame({"Variable": ["b"], "Value": [20]})
+    document_builder.add_table(df, [Cm(4), Cm(2)])
+    table = document_builder.doc.tables[0]
+    tbl_pr = table._tbl.tblPr
+    for look in tbl_pr.findall(qn("w:tblLook")):
+        tbl_pr.remove(look)
+
+    document_builder._apply_table_style(table, document_builder.table_style_id())
+
+    looks = tbl_pr.findall(qn("w:tblLook"))
+    assert len(looks) == 1
+    assert looks[0].get(qn("w:firstColumn")) == "0"
+    assert looks[0].get(qn("w:firstRow")) == "1"
