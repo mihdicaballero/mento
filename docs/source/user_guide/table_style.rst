@@ -91,6 +91,9 @@ What can be set
    * - ``vertical_pt``
      - ``0.0``
      - Rule between columns.
+   * - ``cell_padding_pt``
+     - ``0.8``
+     - Air above and below the text in a cell.
 
 Colours and thicknesses
 -----------------------
@@ -112,6 +115,26 @@ A **thickness** is given in points. Word draws no rule thinner than 0.25 pt and 
 thicker than 12 pt, and anything outside that range is drawn at the nearest end of it. A
 thickness of exactly ``0`` is not a hairline but the absence of a rule, which is why the
 default table has no lines between its rows: the banding already separates them.
+
+``cell_padding_pt`` is in points too. It is charged once per row, so it is the field that
+decides how tall a long table is: a detailed annex is forty rows of it, and the default is
+set so those annexes close on one page. Word's own comfortable padding is 1.4 pt, and a
+report that has room for it can ask:
+
+.. code-block:: python
+
+    mento.set_table_style(TableStyle(cell_padding_pt=1.4))
+
+One page
+--------
+
+``flexure_results_detailed_doc()`` and ``shear_results_detailed_doc()`` are meant to be
+one-page annexes, and the default settings keep them there: the document text is 8.5 pt,
+paragraphs carry no trailing gap and no extra leading, and the space between blocks is put
+there by the builder rather than trailing every line. A report of one or two load
+combinations fits with room to spare; each further combination adds a row to the design
+forces and to the limit checks, so a beam checked against several of them runs longer —
+that is content, not layout.
 
 Why a style and not formatting
 ------------------------------

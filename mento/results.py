@@ -47,6 +47,31 @@ TABLE_LOOK = {
     "noVBand": "1",
 }
 
+#: Air around a heading, in points. A section heading carries its own space
+#: above; the title carries none, so the report opens on the top margin.
+HEADING_SPACE_BEFORE = 5.0
+HEADING_SPACE_AFTER = 2.0
+
+#: The paragraph between two tables, in points. Word merges tables with nothing
+#: between them into one, so the separator has to be a paragraph -- but it is a
+#: separator and not a line of text, and at the document's own size it cost a
+#: full line six times over in a report that wanted to be one page.
+SPACER_POINTS = 3.0
+
+
+def _set_mark_size(paragraph: Any, points: float) -> None:
+    """Size the paragraph mark, which is what Word measures the line by.
+
+    A paragraph's own runs are only half of it: the mark at the end carries the
+    style's size unless it is told otherwise, and a line is as tall as the
+    tallest thing in it. An empty spacer has nothing but the mark.
+    """
+    properties = paragraph._p.get_or_add_pPr()
+    for existing in properties.findall(qn("w:rPr")):
+        properties.remove(existing)
+    properties.append(parse_xml(f'<w:rPr {nsdecls("w")}><w:sz w:val="{int(round(points * 2))}"/></w:rPr>'))
+
+
 #: The units a force or a moment is quoted in. A value in one of these is
 #: rounded to `FORCE_DECIMALS` for display.
 FORCE_DISPLAY_UNITS = {"kN", "kNm", "kN*m", "kN·m", "kip", "kip*ft", "kip·ft"}
@@ -388,7 +413,7 @@ class DocumentBuilder:
         self,
         title: str,
         font_name: str = "Lato",
-        font_size: int = 9,
+        font_size: float = 8.5,
         language: str = DEFAULT_LANGUAGE,
         table_style: Optional[TableStyle] = None,
     ) -> None:
@@ -403,8 +428,9 @@ class DocumentBuilder:
         font_name : str, default='Lato'
             Font name to be used for the document text.
 
-        font_size : int, default=9
-            Font size for the document text.
+        font_size : float, default=8.5
+            Font size for the document text. The default is what closes a
+            detailed annex on one page.
 
         language : str, default="en"
             Language the document is written in. Headings, table headers and row
@@ -433,6 +459,13 @@ class DocumentBuilder:
         """
         Sets the default style of the document, applying the font name and size.
 
+        The line spacing and the gap after a paragraph are set here too, over
+        python-docx's template defaults of 1.15 lines and 10 pt. Both are wrong
+        for this kind of document: a report is a stack of tables with a heading
+        between them, where the space between blocks is what the builder puts
+        there rather than what trails every paragraph. Together they were 13 pt
+        of a detailed annex, measured in Word, which is a row of a table.
+
         Returns
         -------
         None
@@ -441,6 +474,8 @@ class DocumentBuilder:
         style = self.doc.styles["Normal"]
         style.font.name = self.font_name
         style.font.size = Pt(self.font_size)
+        style.paragraph_format.space_after = Pt(0)
+        style.paragraph_format.line_spacing = 1.0
 
     def set_page_size(self) -> None:
         """
@@ -491,12 +526,22 @@ class DocumentBuilder:
         None
         """
         heading = self.doc.add_heading(translate(text, self.language, **fields), level=level)
-        heading.paragraph_format.space_before = Pt(0)
+        # The title opens the page and takes no space above it; a section
+        # heading inside the report takes its own, rather than relying on what
+        # trails the block before it.
+        heading.paragraph_format.space_before = Pt(0 if level <= 1 else HEADING_SPACE_BEFORE)
+        heading.paragraph_format.space_after = Pt(HEADING_SPACE_AFTER)
 
         # Set font size for all runs in heading
         for run in heading.runs:
             run.font.size = Pt(font_size)
             run.font.name = self.font_name
+        # The paragraph mark keeps the heading style's own size -- 14 pt for a
+        # Heading 1 -- and Word measures the line by the tallest thing in it,
+        # mark included. Left alone it puts a 10 pt title in a 14 pt line and
+        # sets the text at its foot, which is the report starting below the top
+        # margin rather than at it.
+        _set_mark_size(heading, font_size)
 
     def add_text(self, text: str, **fields: Any) -> None:
         """Adds a paragraph to the document, translated into its language.
@@ -669,6 +714,7 @@ class DocumentBuilder:
         # --- Add spacer paragraph ---
         spacer = self.doc.add_paragraph()
         spacer.paragraph_format.space_after = Pt(0)
+        _set_mark_size(spacer, SPACER_POINTS)
 
         return table
 

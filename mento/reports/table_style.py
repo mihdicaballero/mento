@@ -38,6 +38,11 @@ Two units here are not the ones a user thinks in:
   nothing thinner than 0.25 pt and nothing thicker than 12 pt, so the value is
   clamped to that range. A thickness of exactly ``0`` is not a hairline but the
   absence of a line, written ``w:val="nil"``.
+
+The cell padding is in points too, written in twentieths. It is the field that
+decides how tall a long table is, because it is charged once per row: the
+detailed annexes are forty rows of it, and 0.4 pt either way is the difference
+between one page and two.
 """
 
 from __future__ import annotations
@@ -63,10 +68,13 @@ MAX_EIGHTHS = 96
 #: of the way of the styles a user actually picks from.
 _UI_PRIORITY = 59
 
-#: Cell padding, in twentieths of a point: a little air above and below the
-#: text, and Word's usual indent left and right.
-_CELL_MARGIN_VERTICAL = 28
+#: Cell padding left and right, in twentieths of a point: Word's usual indent.
+#: The padding above and below is a field, because it is the one dimension that
+#: multiplies -- forty rows of it decide whether an annex is one page or two.
 _CELL_MARGIN_HORIZONTAL = 108
+
+#: Twentieths of a point in a point, which is what ``w:tblCellMar`` counts in.
+_TWIPS_PER_POINT = 20
 
 
 def points_to_eighths(points: float) -> int:
@@ -158,6 +166,11 @@ class TableStyle:
         them, and a line as well makes the table louder than what it says.
     vertical_pt : float
         Rule between columns.
+    cell_padding_pt : float
+        Air above and below the text in a cell. It is charged once per row, so
+        it is the field that decides how tall a long table is. 1.4 pt is
+        Word's own comfortable padding; the default is tighter so that a
+        detailed annex closes on one page.
     """
 
     name: str = "Mento Table"
@@ -173,12 +186,15 @@ class TableStyle:
     bottom_pt: float = 1.0
     inside_pt: float = 0.0
     vertical_pt: float = 0.0
+    cell_padding_pt: float = 0.8
 
     def __post_init__(self) -> None:
         if not self.style_id:
             raise ValueError(f"name={self.name!r} has no letter or digit to make a style id from.")
         for field in ("band_fill", "header_fill", "header_color", "text_color", "border_color"):
             _validate_color(getattr(self, field), field)
+        if self.cell_padding_pt < 0:
+            raise ValueError(f"cell_padding_pt={self.cell_padding_pt} is not a padding; it cannot be negative.")
         if self.band_size < 1:
             raise ValueError(f"band_size={self.band_size} is not a number of rows; it must be 1 or more.")
         # Validating by conversion: every thickness has to survive the same
@@ -199,6 +215,7 @@ class TableStyle:
         already holding a style of that id take this one under another.
         """
         style_id = style_id or self.style_id
+        padding = int(round(self.cell_padding_pt * _TWIPS_PER_POINT))
         # A document that already held this id gets the definition under
         # another; the gallery name follows it, so two styles in one document
         # are two entries a user can tell apart rather than two "Mento Table"s.
@@ -247,9 +264,9 @@ class TableStyle:
             f"{_border('insideV', self.vertical_pt, self.border_color)}"
             "</w:tblBorders>"
             "<w:tblCellMar>"
-            f'<w:top w:w="{_CELL_MARGIN_VERTICAL}" w:type="dxa"/>'
+            f'<w:top w:w="{padding}" w:type="dxa"/>'
             f'<w:left w:w="{_CELL_MARGIN_HORIZONTAL}" w:type="dxa"/>'
-            f'<w:bottom w:w="{_CELL_MARGIN_VERTICAL}" w:type="dxa"/>'
+            f'<w:bottom w:w="{padding}" w:type="dxa"/>'
             f'<w:right w:w="{_CELL_MARGIN_HORIZONTAL}" w:type="dxa"/>'
             "</w:tblCellMar>"
             "</w:tblPr>" + conditional + "</w:style>"

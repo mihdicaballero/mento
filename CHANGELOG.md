@@ -14,6 +14,22 @@ from the release history and are summaries rather than complete lists.
 
 ### Added
 
+- **The detailed annexes close on one page.** `flexure_results_detailed_doc()` and
+  `shear_results_detailed_doc()` ran to two pages, and the title sat below the top margin
+  rather than on it. Both came from python-docx's template defaults, which mento never
+  overrode: 1.15-line spacing and a 10 pt gap after every paragraph. The extra leading of a
+  multiple-spaced line goes *above* the text, and a heading's paragraph mark keeps the
+  heading style's 14 pt whatever size its runs are, so a 10 pt title was set at the foot of
+  a 14 pt line. `Normal` now carries single spacing and no trailing gap, a heading's mark
+  is sized to its text, the space around a heading belongs to the heading, and the
+  paragraph that keeps two tables from merging is 3 pt rather than a full line of body
+  text. With the document text at 8.5 pt and `TableStyle.cell_padding_pt` — a new field —
+  defaulting to 0.8 pt, a beam checked against one or two load combinations produces
+  one-page flexure and shear annexes under both ACI 318-19 and EN 1992-1-1, measured in
+  Word. Each further combination adds a row to the design forces and to the limit checks,
+  so a beam checked against several of them still runs longer: that is content, not
+  layout. `TableStyle(cell_padding_pt=1.4)` restores Word's own padding. (#157)
+
 - **The Word tables have a style of their own, and it can be set.** Every table was tagged
   with Word's built-in `Light Shading`, whose grey and rule weights live in python-docx's
   template where no argument reaches them, whose fill names a colour and a *theme* colour

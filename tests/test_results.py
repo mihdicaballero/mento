@@ -4,7 +4,7 @@ import pytest
 import pandas as pd
 from docx import Document
 from typing import List, Any
-from docx.shared import Cm, Emu
+from docx.shared import Cm, Emu, Pt
 import matplotlib.pyplot as plt
 
 from mento.results import Formatter, TablePrinter, DocumentBuilder, configure_plot_settings
@@ -226,7 +226,7 @@ def test_document_builder_initialization(document_builder: DocumentBuilder) -> N
     """Test DocumentBuilder initializes correctly."""
     assert document_builder.title == "Test Document"
     assert document_builder.font_name == "Lato"
-    assert document_builder.font_size == 9
+    assert document_builder.font_size == 8.5
     assert isinstance(document_builder.doc, type(Document()))
 
 
@@ -435,3 +435,63 @@ def test_a_complete_width_list_is_left_alone() -> None:
         builder.add_table(df, [Cm(3), Cm(2)])
 
     assert not [w for w in caught if "widths were given" in str(w.message)]
+
+
+# --- Page layout: what decides whether an annex closes on one page ---
+
+
+def _mark_size(paragraph: Any) -> float:
+    """The size of a paragraph's mark, in points, or 0 when it carries none."""
+    from docx.oxml.ns import qn
+
+    properties = paragraph._p.pPr
+    run_properties = properties.find(qn("w:rPr")) if properties is not None else None
+    size = run_properties.find(qn("w:sz")) if run_properties is not None else None
+    return 0.0 if size is None else int(size.get(qn("w:val"))) / 2
+
+
+def test_normal_style_has_no_trailing_gap_or_extra_leading(document_builder: DocumentBuilder) -> None:
+    """python-docx's template defaults are 1.15 lines and 10 pt after.
+
+    Both are wrong for a report: the space between blocks is what the builder
+    puts there, and 15 % of extra leading over forty lines is what turned a
+    one-page annex into two.
+    """
+    style = document_builder.doc.styles["Normal"]
+
+    assert style.paragraph_format.space_after == Pt(0)
+    assert style.paragraph_format.line_spacing == 1.0
+
+
+def test_the_title_line_is_no_taller_than_its_text(document_builder: DocumentBuilder) -> None:
+    """A heading's mark keeps the style's 14 pt unless it is told otherwise.
+
+    Word measures a line by the tallest thing in it, mark included, so a 10 pt
+    title left in a 14 pt line is set at the foot of it -- the report starting
+    below the top margin rather than on it.
+    """
+    document_builder.add_heading("Beam 101 shear check", level=1, font_size=10)
+    heading = document_builder.doc.paragraphs[0]
+
+    assert _mark_size(heading) == 10
+    assert heading.paragraph_format.space_before == Pt(0)
+
+
+def test_a_section_heading_carries_its_own_space_above(document_builder: DocumentBuilder) -> None:
+    """The title opens the page; the headings under it need separating."""
+    document_builder.add_heading("Materials", level=2, font_size=10)
+    heading = document_builder.doc.paragraphs[0]
+
+    assert heading.paragraph_format.space_before > Pt(0)
+
+
+def test_the_spacer_between_tables_is_not_a_line_of_text(document_builder: DocumentBuilder) -> None:
+    """Word merges two tables with nothing between them, so the separator has
+    to be a paragraph -- but at the document's own size it cost a full line
+    after every table."""
+    df = pd.DataFrame({"Variable": ["b"], "Value": [20]})
+    document_builder.add_table(df, [Cm(4), Cm(2)])
+    spacer = document_builder.doc.paragraphs[-1]
+
+    assert spacer.text == ""
+    assert 0 < _mark_size(spacer) < document_builder.font_size

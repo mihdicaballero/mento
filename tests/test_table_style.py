@@ -333,3 +333,28 @@ def test_column_widths_are_still_respected(builder: DocumentBuilder) -> None:
     for row in table.rows:
         assert round(row.cells[0].width.cm, 2) == 4.0
         assert round(row.cells[1].width.cm, 2) == 2.0
+
+
+# --- Cell padding, the field that decides how tall a long table is ---
+
+
+def test_cell_padding_is_written_in_twentieths() -> None:
+    """``w:tblCellMar`` counts in twips, so 1.4 pt is 28 of them."""
+    margins = TableStyle(cell_padding_pt=1.4).definition_xml().split("<w:tblCellMar>")[1]
+    assert '<w:top w:w="28" w:type="dxa"/>' in margins
+    assert '<w:bottom w:w="28" w:type="dxa"/>' in margins
+    # The left and right indent is Word's own and does not follow the field:
+    # it costs a table nothing in height, which is the only budget that is
+    # tight here.
+    assert '<w:left w:w="108" w:type="dxa"/>' in margins
+    assert '<w:right w:w="108" w:type="dxa"/>' in margins
+
+
+def test_default_padding_is_tighter_than_words() -> None:
+    """The default is what makes a forty-row annex close on one page."""
+    assert TableStyle().cell_padding_pt < 1.4
+
+
+def test_negative_padding_is_refused() -> None:
+    with pytest.raises(ValueError, match="cell_padding_pt"):
+        TableStyle(cell_padding_pt=-0.5)
