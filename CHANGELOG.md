@@ -12,6 +12,13 @@ from the release history and are summaries rather than complete lists.
 
 ## [Unreleased]
 
+### Fixed
+
+- **pint is capped below 0.26.** pint 0.26 changed the pretty multiplication sign from
+  `·` to `⋅` and started typing every arithmetic result as `PlainQuantity`, which broke
+  a `Forces.__str__` test and around thirty strict-mypy checks on a fresh install. The
+  dependency is now `pint>=0.24,<0.26` until mento is adapted to the new release.
+
 ## [1.2.0] - 2026-09-09
 
 How a Word report looks is now something a caller decides. The tables carried Word's
