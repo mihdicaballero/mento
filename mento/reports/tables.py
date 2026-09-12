@@ -17,7 +17,7 @@ import math
 from typing import TYPE_CHECKING, Any, Dict, cast
 
 import pandas as pd
-from pint import Quantity
+from mento.units import Quantity
 
 from mento.units import inch, kN, kNm, mm
 

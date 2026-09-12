@@ -21,7 +21,7 @@ import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Optional, Sequence, Tuple
 
-from pint import Quantity
+from mento.units import Quantity
 
 from mento.codes.check_state import to_display
 

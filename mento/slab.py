@@ -14,7 +14,7 @@ from mento.units import m, mm, cm, inch
 _MM2 = mm**2
 
 if TYPE_CHECKING:
-    from pint import Quantity
+    from mento.units import Quantity
 
 
 def _bars_at_spacing(spacing: Quantity, width: Quantity) -> int:

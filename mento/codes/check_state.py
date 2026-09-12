@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, TYPE_CHECKING
 
-from pint import Quantity
+from mento.units import Quantity
 
 from mento.precompute import CANONICAL, DISPLAY
 from mento.units import cm, inch, kip, kN, mm, psi, MPa, dimensionless

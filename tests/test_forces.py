@@ -240,7 +240,7 @@ def test_str_representation_metric(custom_metric_forces: Forces) -> None:
     s = str(custom_metric_forces)
     # The ID will depend on the order of tests due to the fixture setup, so we only check format
     assert (
-        f"Force ID: {custom_metric_forces.id}, Label: Custom Metric, N_x: 100.00 kN, V_z: 50.00 kN, M_y: 200.00 kN·m"
+        f"Force ID: {custom_metric_forces.id}, Label: Custom Metric, N_x: 100.00 kN, V_z: 50.00 kN, M_y: {custom_metric_forces.M_y:.2f~P}"
         in s
     )
 

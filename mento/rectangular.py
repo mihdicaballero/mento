@@ -1,7 +1,7 @@
 import math
 from typing import Optional
 from dataclasses import dataclass, field
-from pint import Quantity
+from mento.units import Quantity
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
@@ -65,9 +65,9 @@ class RectangularSection(Section):
             raise ValueError("c_c must be less than half of the smallest section dimension.")
 
         # Calculate the rectangular section properties.
-        self._A_x = self.width * self.height
-        self._I_y = self.width * self.height**3 / 12
-        self._I_z = self.height * self.width**3 / 12
+        self._A_x: Quantity = self.width * self.height
+        self._I_y: Quantity = self.width * self.height**3 / 12
+        self._I_z: Quantity = self.height * self.width**3 / 12
 
     @property
     def A_x(self) -> Quantity:

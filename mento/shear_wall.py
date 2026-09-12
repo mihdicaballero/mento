@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 
 import pandas as pd
 from pandas import DataFrame
-from pint import Quantity
+from mento.units import Quantity
 
 from mento.beam import RectangularBeam
 from mento.forces import Forces

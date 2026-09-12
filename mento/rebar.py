@@ -12,7 +12,7 @@ from mento.units import mm, cm, inch
 
 if TYPE_CHECKING:
     from mento.beam import RectangularBeam
-    from pint import Quantity
+    from mento.units import Quantity
     from pandas import DataFrame
 
 # `cm**2` raises a pint Unit to a power, which is far from free. The rebar search

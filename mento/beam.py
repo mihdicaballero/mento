@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, Dict, Tuple
 
 if TYPE_CHECKING:
     from matplotlib.figure import Figure
-from pint import Quantity
+from mento.units import Quantity
 import numpy as np
 import pandas as pd
 from pandas import DataFrame

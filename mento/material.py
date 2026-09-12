@@ -6,7 +6,7 @@ from mento.units import kg, m, MPa, ksi, GPa, psi, Pa, lb, ft, kPa
 
 # Conditional import for type checking only
 if TYPE_CHECKING:
-    from pint import Quantity
+    from mento.units import Quantity
 
 
 @dataclass
@@ -246,7 +246,7 @@ class Concrete_EN_1992_2004(Concrete):
         # Converted once: lambda and eta are asked for it several times per
         # check, and f_ck does not change after construction.
         self._f_ck_MPa: float = self._f_ck.to(MPa).magnitude
-        self._f_cm = self._f_ck + 8 * MPa
+        self._f_cm: Quantity = self._f_ck + 8 * MPa
         self._E_cm = 22000 * (self._f_cm.to("MPa").magnitude / 10) ** 0.3 * MPa
         self._f_ctm = 0.3 * (self._f_ck.to("MPa").magnitude) ** (2 / 3) * MPa
         self._epsilon_cu1 = (

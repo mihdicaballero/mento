@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 from IPython.display import Markdown, display
-from pint import Quantity
+from mento.units import Quantity
 
 if TYPE_CHECKING:
     from mento.punching import PunchingNode, PunchingSlab
