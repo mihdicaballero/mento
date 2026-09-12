@@ -26,7 +26,7 @@ requirements:
     # names differ from the PyPI ones in three places: matplotlib-base and
     # seaborn-base are the light variants (mento only uses seaborn for plot
     # theming), and IPython is packaged as ipython.
-    - pint >=0.24,<0.26
+    - pint >=0.24
     - numpy >=1.26
     - pandas >=2.0
     - matplotlib-base >=3.8

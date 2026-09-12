@@ -1,5 +1,5 @@
 import math
-from pint import Quantity
+from mento.units import Quantity
 from typing import TYPE_CHECKING, Tuple, cast
 
 # from devtools import debug

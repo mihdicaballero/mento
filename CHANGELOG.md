@@ -12,12 +12,17 @@ from the release history and are summaries rather than complete lists.
 
 ## [Unreleased]
 
-### Fixed
+### Changed
 
-- **pint is capped below 0.26.** pint 0.26 changed the pretty multiplication sign from
-  `·` to `⋅` and started typing every arithmetic result as `PlainQuantity`, which broke
-  a `Forces.__str__` test and around thirty strict-mypy checks on a fresh install. The
-  dependency is now `pint>=0.24,<0.26` until mento is adapted to the new release.
+- **mento runs on pint 0.26.** The cap added after 0.26 broke CI is lifted and the
+  dependency is `pint>=0.24` again. pint 0.26 types every arithmetic result as
+  `PlainQuantity`, the base class of the registry's `Quantity`, so annotating with
+  `pint.Quantity` rejected the result of any calculation under strict mypy. mento now
+  annotates with `mento.units.Quantity`: the base class for the type checker and the
+  registry class at runtime, so `isinstance` checks and user-side construction are
+  unchanged. Under 0.26 the pretty multiplication sign in printed quantities is `⋅`
+  (U+22C5) rather than `·`; the test that pinned the old sign now formats the expected
+  value with pint itself, as the imperial one already did.
 
 ## [1.2.0] - 2026-09-09
 

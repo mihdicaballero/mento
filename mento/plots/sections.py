@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, cast
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.patches import Circle, FancyBboxPatch, Rectangle
-from pint import Quantity
+from mento.units import Quantity
 
 from mento.design_results import format_transverse_rebar
 from mento.results import CUSTOM_COLORS

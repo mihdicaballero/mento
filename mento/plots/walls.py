@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.patches import Rectangle
-from pint import Quantity
+from mento.units import Quantity
 
 from mento.results import CUSTOM_COLORS
 

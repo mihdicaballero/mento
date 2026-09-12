@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Optional, cast
 
 import pandas as pd
 from IPython.display import Markdown, display
-from pint import Quantity
+from mento.units import Quantity
 
 from mento._version import __version__ as MENTO_VERSION
 from mento.i18n import get_language, translate

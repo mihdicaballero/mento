@@ -6,7 +6,7 @@ from typing import Literal, Optional, TYPE_CHECKING
 from mento.units import cm
 
 if TYPE_CHECKING:
-    from pint import Quantity
+    from mento.units import Quantity
 
 
 @dataclass

@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
-from pint import Quantity
+from mento.units import Quantity
 
 from mento.codes.aci_318_19.equations import shear as shear_eq
 from mento.codes.aci_318_19.equations import wall as wall_eq

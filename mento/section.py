@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, ClassVar, List, Optional
 from mento.material import Concrete, SteelBar
 from mento.forces import Forces
 
-from pint import Quantity
+from mento.units import Quantity
 
 if TYPE_CHECKING:
     from mento.node import Node

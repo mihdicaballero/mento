@@ -34,7 +34,7 @@ of the published documentation.
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Dict
 
-from pint import Quantity
+from mento.units import Quantity
 
 from mento.rebar import RebarDesignInfeasibleError
 from mento.units import cm, kNm, mm
@@ -215,7 +215,7 @@ def _run_flexure_design(
     d_prima = self.c_c + self._stirrup_d_b + 1 * cm  # top mechanical cover to centroid (initial)
 
     tol = 0.01 * cm
-    Err = 2 * tol
+    Err: Quantity = 2 * tol
 
     # Cycle detection — store the layout payload for each fingerprint seen.
     # Using a dict preserves insertion order (3.7+) so we can recover the full
@@ -367,7 +367,7 @@ def _run_flexure_design(
             self._apply_longitudinal_design_bot(chosen_bot)
 
     if max_M_y_top < 0 * kNm:
-        M_demand_top = abs(max_M_y_top.to("kN*m"))
+        M_demand_top: Quantity = abs(max_M_y_top.to("kN*m"))
         if capacity("top", M_demand_top) < M_demand_top and top_visited:
             chosen_top = _select_safe_design(self, list(top_visited.values()), M_demand_top, "top", capacity)
             self._apply_longitudinal_design_top(chosen_top)
@@ -382,7 +382,7 @@ def _run_flexure_design(
         if max_M_y_bot > 0 * kNm and capacity("bot", max_M_y_bot) < max_M_y_bot:
             return False
         if max_M_y_top < 0 * kNm:
-            M_demand = abs(max_M_y_top.to("kN*m"))
+            M_demand: Quantity = abs(max_M_y_top.to("kN*m"))
             if capacity("top", M_demand) < M_demand:
                 return False
         return True

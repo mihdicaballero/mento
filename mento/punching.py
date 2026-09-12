@@ -4,7 +4,7 @@ import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal, Optional, Tuple
 
-from pint import Quantity
+from mento.units import Quantity
 
 from mento.codes.registry import design_code
 from mento.column import Column
@@ -238,11 +238,11 @@ class PunchingSlab:
         """Stack the two mats under the cover and record where each one sits."""
         d_b_x = self._governing_diameter("x")
         d_b_y = self._governing_diameter("y")
-        free = self.h - self.c_c
+        free: Quantity = self.h - self.c_c
 
         if self.outer_direction == "x":
-            d_x = free - d_b_x / 2
-            d_y = free - d_b_x - d_b_y / 2
+            d_x: Quantity = free - d_b_x / 2
+            d_y: Quantity = free - d_b_x - d_b_y / 2
         else:
             d_y = free - d_b_y / 2
             d_x = free - d_b_y - d_b_x / 2
@@ -289,7 +289,7 @@ class PunchingSlab:
 
     def _A_s(self, direction: str) -> Optional[Quantity]:
         """Top steel per unit width in one direction, base mat plus extra bars."""
-        total = 0 * mm**2 / mm
+        total: Quantity = 0 * mm**2 / mm
         declared = False
         for d_b, s_b in self._bar_sets(direction):
             if d_b.magnitude <= 0:

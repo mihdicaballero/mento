@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Dict, Optional
-from pint import Quantity
+from mento.units import Quantity
 
 from mento.units import kN, kNm
 

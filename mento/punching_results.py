@@ -37,7 +37,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, Sequence
 
-from pint import Quantity
+from mento.units import Quantity
 
 
 class PunchingCheckNotRunError(RuntimeError):
