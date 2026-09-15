@@ -7,7 +7,7 @@ The caller defines the perimeter and supplies the effective depth.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import hypot, isclose, isfinite, pi, sin
+from math import asin, atan2, cos, hypot, isclose, isfinite, pi, sin, ulp
 from typing import List, Literal, Sequence, Tuple
 from shapely import line_merge
 from shapely.geometry import LineString, MultiLineString, Polygon, box
@@ -534,3 +534,152 @@ def rectangular_slab_perimeter_candidates(
             candidates.append(candidate)
 
     return candidates
+
+def rectangular_opening_shadow_angles(
+    x: float,
+    y: float,
+    b: float,
+    h: float,
+    *,
+    rotation: float = 0.0,
+) -> Tuple[float, float]:
+    """Return the tangent angular interval of a rectangular opening.
+
+    The center (x, y) is measured from the column center in global axes.
+    Dimensions b and h follow the opening's local axes. All lengths must
+    use the same unit. Rotation is in radians, counterclockwise about
+    the opening center; zero keeps its sides aligned with the global axes.
+
+    Return (start, end) in global radians, counterclockwise from +x,
+    with 0 < end - start < pi. Angles may lie outside [-pi, pi].
+    Containment or contact with the origin, including numerically
+    indistinguishable contact, is rejected. This does not check overlap
+    with the column footprint or design-code proximity limits.
+    """
+    if not all(isfinite(value) for value in (x, y, b, h, rotation)):
+        raise ValueError("Opening coordinates, dimensions and rotation must be finite.")
+    if b <= 0 or h <= 0:
+        raise ValueError("Opening dimensions must be positive.")
+
+    # Express the opening center in its local axes, keeping the origin
+    # at the column center. The rectangle is axis-aligned in this frame.
+    c, s = cos(rotation), sin(rotation)
+    local_x = x * c + y * s
+    local_y = -x * s + y * c
+    xmin, xmax = local_x - b / 2, local_x + b / 2
+    ymin, ymax = local_y - h / 2, local_y + h / 2
+
+    if (
+        not all(isfinite(value) for value in (xmin, xmax, ymin, ymax))
+        or not xmin < xmax
+        or not ymin < ymax
+    ):
+        raise ValueError("Opening bounds cannot be represented at this numeric scale.")
+
+    # Allow for floating-point roundoff when testing contact with the origin.
+    tolerance = 8 * ulp(max(abs(x), abs(y), b, h))
+    if abs(local_x) <= b / 2 + tolerance and abs(local_y) <= h / 2 + tolerance:
+        raise ValueError("The opening contains or touches the column center within numeric precision.")
+
+    local_reference = atan2(local_y, local_x)
+    relative_angles = [
+        (atan2(py, px) - local_reference + pi) % (2 * pi) - pi
+        for px in (xmin, xmax)
+        for py in (ymin, ymax)
+    ]
+    global_reference = atan2(y, x)
+    start = global_reference + min(relative_angles)
+    end = global_reference + max(relative_angles)
+    if not 0 < end - start < pi:
+        raise ValueError("Opening tangents cannot be resolved at this numeric scale.")
+    return start, end
+
+def circular_opening_shadow_angles(
+    x: float,
+    y: float,
+    radius: float,
+) -> Tuple[float, float]:
+    """Return the tangent angular interval of a circular opening.
+
+    The center (x, y) is measured from the column center in global axes.
+    All lengths must use the same unit. Return (start, end) in radians,
+    counterclockwise from +x, with 0 < end - start < pi. Angles may lie
+    outside [-pi, pi]. Rotation does not affect a circular opening.
+
+    Containment or contact with the origin, including numerically
+    indistinguishable contact, is rejected. This does not check overlap
+    with the column footprint or design-code proximity limits.
+    """
+    if not all(isfinite(value) for value in (x, y, radius)):
+        raise ValueError("Opening coordinates and radius must be finite.")
+    if radius <= 0:
+        raise ValueError("Opening radius must be positive.")
+
+    distance = hypot(x, y)
+    if not isfinite(distance):
+        raise ValueError("Opening distance cannot be represented at this numeric scale.")
+
+    tolerance = 8 * ulp(max(distance, radius))
+    if distance - radius <= tolerance:
+        raise ValueError("The opening contains or touches the column center within numeric precision.")
+
+    center_angle = atan2(y, x)
+    half_angle = asin(radius / distance)
+    start = center_angle - half_angle
+    end = center_angle + half_angle
+    if not 0 < end - start < pi:
+        raise ValueError("Opening tangents cannot be resolved at this numeric scale.")
+    return start, end
+
+def subtract_opening_shadow(
+    perimeter: LineString | MultiLineString,
+    start: float,
+    end: float,
+) -> LineString | MultiLineString:
+    """Remove the angular shadow of an opening from a perimeter.
+
+    The shadow starts at the column center (0, 0). Angles are in radians,
+    measured counterclockwise from global +x, with 0 < end - start < pi.
+    They may lie outside [-pi, pi]. The input geometry must be valid and 2D.
+
+    Return a new linear geometry, possibly disconnected or empty. Do not
+    close the remaining paths or alter the original perimeter. Opening
+    proximity limits and design-code applicability are checked elsewhere.
+    """
+    if not isinstance(perimeter, (LineString, MultiLineString)):
+        raise TypeError("Perimeter must be a LineString or MultiLineString.")
+    if perimeter.has_z or perimeter.has_m:
+        raise ValueError("Perimeter coordinates must be two-dimensional.")
+    if not perimeter.is_valid:
+        raise ValueError("Perimeter geometry must be valid.")
+    if not all(isfinite(angle) for angle in (start, end)):
+        raise ValueError("Shadow angles must be finite.")
+
+    width = end - start
+    if not 0 < width < pi:
+        raise ValueError("The shadow must have an angular width between zero and pi.")
+    if perimeter.is_empty:
+        return LineString()
+
+    # Enclose the entire perimeter within a circle centered at the origin.
+    xmin, ymin, xmax, ymax = perimeter.bounds
+    radius = hypot(max(abs(xmin), abs(xmax)), max(abs(ymin), abs(ymax)))
+    reach = 2 * radius
+    if not isfinite(reach) or reach <= 0:
+        raise ValueError("Shadow extent cannot be represented at this numeric scale.")
+
+    # The middle point keeps both outer chords beyond the enclosing circle,
+    # even when the angular width approaches pi.
+    middle = start + width / 2
+    shadow = Polygon([
+        (0.0, 0.0),
+        (reach * cos(start), reach * sin(start)),
+        (reach * cos(middle), reach * sin(middle)),
+        (reach * cos(end), reach * sin(end)),
+    ])
+    if not shadow.is_valid:
+        raise ValueError("The shadow polygon could not be constructed.")
+
+    reduced = perimeter.difference(shadow)
+    merged = line_merge(reduced)
+    return LineString() if merged.is_empty else merged

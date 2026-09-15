@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+from matplotlib.transforms import Affine2D
 
 if TYPE_CHECKING:
     from mento.punching import PunchingNode
@@ -127,11 +128,18 @@ def plot_punching_node(self: "PunchingNode") -> None:
         if opening.shape == "rectangular":
             ob = opening.b.to("cm").magnitude
             oh = opening.h.to("cm").magnitude
+            angle = opening.rotation.to("degree").magnitude
+
+            opening_transform = (
+                Affine2D().rotate_deg_around(ox, oy, angle) + ax.transData
+            )
+
             ax.add_patch(
                 mpatches.Rectangle(
                     (ox - ob / 2, oy - oh / 2),
                     ob,
                     oh,
+                    transform=opening_transform,
                     linewidth=1.5,
                     edgecolor=_OP_COLOR,
                     facecolor="white",
@@ -139,9 +147,24 @@ def plot_punching_node(self: "PunchingNode") -> None:
                     label=label,
                 )
             )
-            # X from corner to corner
-            ax.plot([ox - ob / 2, ox + ob / 2], [oy - oh / 2, oy + oh / 2], color=_OP_COLOR, linewidth=1.2, zorder=6)
-            ax.plot([ox - ob / 2, ox + ob / 2], [oy + oh / 2, oy - oh / 2], color=_OP_COLOR, linewidth=1.2, zorder=6)
+
+            # Rotate both diagonals with the rectangle.
+            ax.plot(
+                [ox - ob / 2, ox + ob / 2],
+                [oy - oh / 2, oy + oh / 2],
+                transform=opening_transform,
+                color=_OP_COLOR,
+                linewidth=1.2,
+                zorder=6,
+            )
+            ax.plot(
+                [ox - ob / 2, ox + ob / 2],
+                [oy + oh / 2, oy - oh / 2],
+                transform=opening_transform,
+                color=_OP_COLOR,
+                linewidth=1.2,
+                zorder=6,
+            )
         else:
             od = opening.diameter.to("cm").magnitude
             ax.add_patch(
@@ -155,11 +178,19 @@ def plot_punching_node(self: "PunchingNode") -> None:
                     label=label,
                 )
             )
-            # X spanning the bounding box of the circle
-            r = od / 2
-            ax.plot([ox - r, ox + r], [oy - r, oy + r], color=_OP_COLOR, linewidth=1.2, zorder=6)
-            ax.plot([ox - r, ox + r], [oy + r, oy - r], color=_OP_COLOR, linewidth=1.2, zorder=6)
 
+            r = od / 2
+            ax.plot(
+                [ox - r, ox + r],
+                [oy - r, oy + r],
+                color=_OP_COLOR, linewidth=1.2, zorder=6,
+            )
+            ax.plot(
+                [ox - r, ox + r],
+                [oy + r, oy - r],
+                color=_OP_COLOR, linewidth=1.2, zorder=6,
+            )
+            
     ax.set_xlim(-extent * 1.1, extent * 1.1)
     ax.set_ylim(-extent * 1.1, extent * 1.1)
     ax.set_aspect("equal")

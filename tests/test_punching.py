@@ -14,8 +14,7 @@ from mento.punching import Capital, Opening, PunchingNode, PunchingSlab
 from mento.punching_results import PunchingCheck, PunchingCheckNotRunError, envelope_punching
 from mento.forces import Forces
 from mento.material import Concrete_ACI_318_19, Concrete_CIRSOC_201_25, Concrete_EN_1992_2004
-from mento.units import cm, mm, kN, kNm, MPa, inch, psi
-
+from mento.units import cm, mm, kN, kNm, MPa, inch, psi, deg
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -763,3 +762,44 @@ class TestEquationStubs:
             n_args = len(inspect.signature(function).parameters)
             with pytest.raises(NotImplementedError, match="punching-roadmap"):
                 function(*([0.0] * n_args))
+
+def test_opening_rotation_defaults_to_zero() -> None:
+    opening = Opening(
+        shape="rectangular",
+        x=40 * cm,
+        y=0 * cm,
+        b=40 * cm,
+        h=20 * cm,
+    )
+
+    assert opening.rotation.to("degree").magnitude == pytest.approx(0.0)
+
+
+def test_opening_rotation_is_passed_to_geometry() -> None:
+    opening = Opening(
+        shape="rectangular",
+        x=40 * cm,
+        y=0 * cm,
+        b=40 * cm,
+        h=20 * cm,
+        rotation=90 * deg,
+    )
+
+    angles = opening.shadow_angles()
+
+    expected = math.atan2(20.0, 30.0)
+    assert angles == pytest.approx((-expected, expected))
+
+def test_opening_circular_shadow_converts_units_and_diameter() -> None:
+    opening = Opening(
+        shape="circular",
+        x=400 * mm,
+        y=0 * cm,
+        diameter=40 * cm,
+    )
+
+    angles = opening.shadow_angles()
+
+    # Center distance: 400 mm. Radius: 200 mm.
+    # Half-angle: 30 degrees.
+    assert angles == pytest.approx((-math.pi / 6, math.pi / 6))

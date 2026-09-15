@@ -12,7 +12,13 @@ from mento.material import Concrete, SteelBar
 from mento.plots.punching import plot_punching_node
 from mento.punching_results import PunchingCheck, PunchingCheckNotRunError, envelope_punching
 from mento.reports import punching as punching_reports
-from mento.units import mm, cm, inch
+from mento.units import mm, cm, inch, deg
+from mento.punching_geometry import (
+    circular_opening_shadow_angles,
+    rectangular_opening_shadow_angles,
+)
+from mento.units import ureg
+
 
 if TYPE_CHECKING:
     from mento.forces import Forces
@@ -371,9 +377,12 @@ class Opening:
     shape : "rectangular" | "circular"
     x : Quantity — x-offset of opening centre from column centroid (+ = right)
     y : Quantity — y-offset of opening centre from column centroid (+ = up)
-    b : Quantity — opening width in x (rectangular only)
-    h : Quantity — opening height in y (rectangular only)
+    b : Quantity — opening width along its local x-axis (rectangular only)
+    h : Quantity — opening height along its local y-axis (rectangular only)
     diameter : Quantity — opening diameter (circular only)
+    rotation : Quantity — counterclockwise rotation of the opening's local axes
+        relative to the global axes, about its own centre. Defaults to 0 degrees.
+        Has no geometric effect on circular openings.
     """
 
     shape: Literal["rectangular", "circular"]
@@ -382,11 +391,45 @@ class Opening:
     b: Quantity = field(default=0 * cm)
     h: Quantity = field(default=0 * cm)
     diameter: Quantity = field(default=0 * cm)
+    rotation: Quantity = field(default_factory=lambda: 0 * deg)
 
     def __post_init__(self) -> None:
         if self.shape not in ("rectangular", "circular"):
             raise ValueError(f"Opening shape must be 'rectangular' or 'circular', got {self.shape!r}")
 
+        if not isinstance(self.rotation, Quantity):
+            raise TypeError("Opening rotation must be an angular Quantity.")
+
+        if not math.isfinite(self.rotation.to("radian").magnitude):
+            raise ValueError("Opening rotation must be finite.")
+
+    def shadow_angles(self) -> Tuple[float, float]:
+        """Return the opening's geometric shadow angles in global radians.
+
+        Convert all lengths to millimetres before calling the float geometry.
+        This does not decide design-code applicability, check overlap with
+        the complete column footprint, or modify any perimeter.
+        """
+        x = float(self.x.to(mm).magnitude)
+        y = float(self.y.to(mm).magnitude)
+
+        if self.shape == "rectangular":
+            return rectangular_opening_shadow_angles(
+                x=x,
+                y=y,
+                b=float(self.b.to(mm).magnitude),
+                h=float(self.h.to(mm).magnitude),
+                rotation=float(self.rotation.to(ureg.radian).magnitude),
+            )
+
+        if self.shape == "circular":
+            return circular_opening_shadow_angles(
+                x=x,
+                y=y,
+                radius=float(self.diameter.to(mm).magnitude) / 2,
+            )
+
+        raise ValueError(f"Unsupported opening shape: {self.shape!r}")
 
 @dataclass
 class Capital:
