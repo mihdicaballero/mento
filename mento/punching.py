@@ -14,8 +14,12 @@ from mento.punching_results import PunchingCheck, PunchingCheckNotRunError, enve
 from mento.reports import punching as punching_reports
 from mento.units import mm, cm, inch, deg
 from mento.punching_geometry import (
+    PunchingSectionProperties,
     circular_opening_shadow_angles,
+    column_offset_perimeter,
     rectangular_opening_shadow_angles,
+    section_properties,
+    segments_of,
 )
 from mento.units import ureg
 
@@ -541,3 +545,59 @@ class PunchingNode:
             cap = ""
         op = f", openings={n_openings}" if n_openings else ""
         return f"PunchingNode(id={self._id}, {self.column!r}, forces={n_forces}{op}{cap})"
+
+    def interior_section_properties(
+        self,
+        offset: Quantity,
+        *,
+        corner_style: Literal["sharp", "round"] = "sharp",
+        quad_segs: int = 32,
+    ) -> PunchingSectionProperties:
+        """Build an unobstructed interior section using the node's current data.
+
+        The column must be rectangular, with no declared free edges, openings
+        or capital. Offset is an explicit length, not a design-code default.
+        Use slab.d_avg as the effective depth. Return plain floats: lengths
+        in mm, area in mm**2 and J properties in mm**4.
+        This geometric helper does not run or store a punching check.
+        """
+        if self.column.shape != "rectangular":
+            raise NotImplementedError(
+                "Only rectangular columns are supported by this method."
+            )
+
+        if (
+            self.column.position != "interior"
+            or self.column.edge_distance_x is not None
+            or self.column.edge_distance_y is not None
+        ):
+            raise NotImplementedError(
+                "This method requires an interior column without declared free edges."
+            )
+
+        if self.openings:
+            raise NotImplementedError(
+                "Openings are not integrated into this method yet."
+            )
+
+        if self.capital is not None:
+            raise NotImplementedError(
+                "Capitals are not integrated into this method yet."
+            )
+
+        if not isinstance(offset, Quantity) or not offset.check("[length]"):
+            raise TypeError("offset must be a length Quantity.")
+
+        perimeter = column_offset_perimeter(
+            c_x=float(self.column.b.to(mm).magnitude),
+            c_y=float(self.column.h.to(mm).magnitude),
+            offset=float(offset.to(mm).magnitude),
+            corner_style=corner_style,
+            quad_segs=quad_segs,
+        )
+
+        return section_properties(
+            segments=segments_of(perimeter),
+            d=float(self.slab.d_avg.to(mm).magnitude),
+            parts=1,
+        )

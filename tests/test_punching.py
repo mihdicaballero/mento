@@ -803,3 +803,247 @@ def test_opening_circular_shadow_converts_units_and_diameter() -> None:
     # Center distance: 400 mm. Radius: 200 mm.
     # Half-angle: 30 degrees.
     assert angles == pytest.approx((-math.pi / 6, math.pi / 6))
+
+def test_node_interior_section_properties(
+    bare_slab: PunchingSlab,
+    f1: Forces,
+) -> None:
+    bare_slab.set_effective_depth(
+        d_x=190 * mm,
+        d_y=210 * mm,
+    )
+    column = Column(
+        shape="rectangular",
+        position="interior",
+        b=30 * cm,
+        h=500 * mm,
+    )
+    node = PunchingNode(
+        slab=bare_slab,
+        column=column,
+        forces=f1,
+    )
+
+    result = node.interior_section_properties(offset=10 * cm)
+
+    # Critical contour: 500 x 700 mm. Effective depth: 200 mm.
+    assert result.b_0 == pytest.approx(2400.0)
+    assert result.A_c == pytest.approx(480_000.0)
+    assert (result.x_g, result.y_g) == pytest.approx((0.0, 0.0))
+    assert result.extents == pytest.approx((500.0, 700.0))
+
+    assert result.J_x == pytest.approx(36_866_666_666.6667)
+    assert result.J_y == pytest.approx(22_333_333_333.3333)
+    assert result.J_xy == pytest.approx(0.0)
+
+    assert result.parts == 1
+    assert len(result.segments) == 4
+
+@pytest.fixture
+def interior_geometry_node(
+    bare_slab: PunchingSlab, f1: Forces,
+) -> PunchingNode:
+    bare_slab.set_effective_depth(d_x=190 * mm, d_y=210 * mm)
+
+    column = Column(
+        shape="rectangular",
+        position="interior",
+        b=30 * cm,
+        h=50 * cm,
+    )
+
+    return PunchingNode(slab=bare_slab, column=column, forces=f1)
+
+@pytest.mark.parametrize("unit", ["mm", "cm", "inch"])
+def test_node_properties_normalize_length_units(
+    interior_geometry_node: PunchingNode, unit: str,
+) -> None:
+    node = interior_geometry_node
+    node.column.b = (30 * cm).to(unit)
+    node.column.h = (50 * cm).to(unit)
+    node.slab.set_effective_depth(
+        d_x=(190 * mm).to(unit),
+        d_y=(210 * mm).to(unit),
+    )
+
+    result = node.interior_section_properties((10 * cm).to(unit))
+
+    assert result.b_0 == pytest.approx(2400.0)
+    assert result.A_c == pytest.approx(480_000.0)
+    assert result.extents == pytest.approx((500.0, 700.0))
+    assert result.J_x == pytest.approx(36_866_666_666.6667)
+    assert result.J_y == pytest.approx(22_333_333_333.3333)
+
+
+@pytest.mark.parametrize("quad_segs", [1, 8, 32])
+def test_node_properties_pass_rounding_options(
+    interior_geometry_node: PunchingNode, quad_segs: int,
+) -> None:
+    result = interior_geometry_node.interior_section_properties(
+        10 * cm,
+        corner_style="round",
+        quad_segs=quad_segs,
+    )
+
+    expected = (
+        1600.0
+        + 8 * quad_segs * 100.0 * math.sin(math.pi / (4 * quad_segs))
+    )
+
+    assert result.b_0 == pytest.approx(expected)
+    assert result.A_c == pytest.approx(expected * 200.0)
+    assert len(result.segments) == 4 + 4 * quad_segs
+
+
+def test_node_properties_accept_zero_offset(
+    interior_geometry_node: PunchingNode,
+) -> None:
+    result = interior_geometry_node.interior_section_properties(0 * mm)
+
+    assert result.b_0 == pytest.approx(1600.0)
+    assert result.extents == pytest.approx((300.0, 500.0))
+
+
+@pytest.mark.parametrize("offset", [100.0, None, 1 * MPa])
+def test_node_properties_reject_invalid_offset_type(
+    interior_geometry_node: PunchingNode, offset: object,
+) -> None:
+    with pytest.raises(TypeError, match="offset must be a length Quantity"):
+        interior_geometry_node.interior_section_properties(
+            offset,  # type: ignore[arg-type]
+        )
+
+
+@pytest.mark.parametrize(
+    "value",
+    [-1.0, float("nan"), float("inf"), float("-inf")],
+)
+def test_node_properties_forward_invalid_offset_value(
+    interior_geometry_node: PunchingNode, value: float,
+) -> None:
+    with pytest.raises(ValueError, match="Offset must be finite and nonnegative"):
+        interior_geometry_node.interior_section_properties(value * cm)
+
+
+@pytest.mark.parametrize(
+    "column",
+    [
+        Column(
+            shape="circular",
+            position="interior",
+            b=30 * cm,
+        ),
+        Column(
+            shape="rectangular",
+            position="edge",
+            b=30 * cm,
+            h=50 * cm,
+            edge_distance_x=20 * cm,
+        ),
+        Column(
+            shape="rectangular",
+            position="corner",
+            b=30 * cm,
+            h=50 * cm,
+            edge_distance_x=20 * cm,
+            edge_distance_y=30 * cm,
+        ),
+        Column(
+            shape="rectangular",
+            position="interior",
+            b=30 * cm,
+            h=50 * cm,
+            edge_distance_x=20 * cm,
+        ),
+        Column(
+            shape="rectangular",
+            position="interior",
+            b=30 * cm,
+            h=50 * cm,
+            edge_distance_y=30 * cm,
+        ),
+    ],
+)
+def test_node_properties_reject_unsupported_columns(
+    interior_geometry_node: PunchingNode, column: Column,
+) -> None:
+    interior_geometry_node.column = column
+
+    with pytest.raises(NotImplementedError):
+        interior_geometry_node.interior_section_properties(10 * cm)
+
+
+def test_node_properties_reject_openings(
+    interior_geometry_node: PunchingNode,
+) -> None:
+    interior_geometry_node.openings = [
+        Opening(
+            shape="rectangular",
+            x=60 * cm,
+            y=0 * cm,
+            b=20 * cm,
+            h=20 * cm,
+        ),
+    ]
+
+    with pytest.raises(NotImplementedError, match="Openings"):
+        interior_geometry_node.interior_section_properties(10 * cm)
+
+
+def test_node_properties_reject_capital(
+    interior_geometry_node: PunchingNode,
+) -> None:
+    interior_geometry_node.capital = Capital(
+        b=100 * cm,
+        h=100 * cm,
+        thickness=10 * cm,
+    )
+
+    with pytest.raises(NotImplementedError, match="Capitals"):
+        interior_geometry_node.interior_section_properties(10 * cm)
+
+
+def test_node_properties_read_current_dimensions_and_depth(
+    interior_geometry_node: PunchingNode,
+) -> None:
+    node = interior_geometry_node
+    first = node.interior_section_properties(10 * cm)
+
+    node.column.b = 40 * cm
+    second = node.interior_section_properties(10 * cm)
+
+    assert second.b_0 == pytest.approx(2600.0)
+    assert second.A_c == pytest.approx(520_000.0)
+
+    node.slab.set_effective_depth(d_x=210 * mm, d_y=210 * mm)
+    third = node.interior_section_properties(10 * cm)
+
+    assert third.b_0 == pytest.approx(2600.0)
+    assert third.A_c == pytest.approx(546_000.0)
+
+    # Previously returned results must remain unchanged.
+    assert first.b_0 == pytest.approx(2400.0)
+    assert first.A_c == pytest.approx(480_000.0)
+    assert second.A_c == pytest.approx(520_000.0)
+
+
+def test_node_geometry_does_not_mark_node_checked(
+    interior_geometry_node: PunchingNode,
+) -> None:
+    node = interior_geometry_node
+    node.forces = []  # Geometry does not require a load combination.
+
+    node.interior_section_properties(10 * cm)
+
+    with pytest.raises(PunchingCheckNotRunError):
+        _ = node.punching_checks
+
+
+def test_node_properties_forward_invalid_corner_style(
+    interior_geometry_node: PunchingNode,
+) -> None:
+    with pytest.raises(ValueError, match="Corner style"):
+        interior_geometry_node.interior_section_properties(
+            10 * cm,
+            corner_style="other",  # type: ignore[arg-type]
+        )
