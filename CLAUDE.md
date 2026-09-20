@@ -276,7 +276,7 @@ belongs in `.claude/rules/` (imported with `@`) or in a skill.
 
 Workflow: `.github/workflows/tests.yml`
 - Runs on push/PR to `main`
-- `tests` job: Python 3.12 and 3.13 on windows-latest, installing `-e ".[dev]"`.
+- `tests` job: Python 3.12 and 3.13 on windows-latest, installing `-e ".[test]"`.
   Runs `pytest --cov=mento --cov-config=.coveragerc --cov-report=xml`; the 3.12 job
   uploads coverage to Codecov.
 - `lint` job: ubuntu-latest, `ruff check .`, `ruff format --check .` and `mypy mento/`
