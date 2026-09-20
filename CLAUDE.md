@@ -1,8 +1,6 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 # CLAUDE.md — mento
+
+Guidance for Claude Code (claude.ai/code) when working in this repository.
 
 Reinforced concrete design Python package. Covers beams, slabs, sections, materials, rebar, and design code implementations (ACI 318-19, EN 1992-2004, CIRSOC 201-25). Uses strict mypy typing, ruff formatting, and pytest with coverage.
 
@@ -10,31 +8,56 @@ Reinforced concrete design Python package. Covers beams, slabs, sections, materi
 
 ## Python environment
 
-Use the `rame-env` conda environment. It is the only one with mento's dependencies installed, so the base `anaconda3` interpreter either fails on import or runs against stale packages.
+mento requires Python >= 3.12. Which interpreter to use depends on where the session runs.
+
+**Windows (local development):** use the `rame-env` conda environment. It is the only one
+with mento's dependencies installed, so the base `anaconda3` interpreter either fails on
+import or runs against stale packages.
 
 ```
 C:\Users\mihdi\anaconda3\envs\rame-env\python.exe
 ```
 
-`.vscode/settings.json` registers the project with the conda environment manager (`python-envs.pythonProjects`), so the VS Code test runner and IntelliSense resolve the same interpreter.
+`.vscode/settings.json` registers the project with the conda environment manager
+(`python-envs.pythonProjects`), so the VS Code test runner and IntelliSense resolve the same
+interpreter.
+
+**Linux / Claude Code on the web:** there is no conda environment. The SessionStart hook
+`.claude/hooks/session-start.sh` builds `.venv` on the first Python >= 3.12 it finds and
+installs mento with `-e ".[dev]"`. Use that interpreter:
+
+```bash
+.venv/bin/python
+```
+
+If `import mento` fails, run the hook by hand: `bash .claude/hooks/session-start.sh`.
+
+Every command below writes the interpreter as `$PY`. Substitute the one for your platform:
+the `rame-env` path on Windows, `.venv/bin/python` on Linux.
 
 ---
 
 ## Running tests
 
-```powershell
+```bash
 # Full suite (uses pyproject.toml addopts: --cov, --cov-report=html, --cov-report=term-missing)
-& "C:\Users\mihdi\anaconda3\envs\rame-env\python.exe" -m pytest tests/
+$PY -m pytest tests/
 
 # Single file, fast iteration (strip addopts to avoid --cov conflicts)
-& "C:\Users\mihdi\anaconda3\envs\rame-env\python.exe" -m pytest tests/test_beam.py --override-ini="addopts=" -v
+$PY -m pytest tests/test_beam.py --override-ini="addopts=" -v
 
 # Single file with coverage
-& "C:\Users\mihdi\anaconda3\envs\rame-env\python.exe" -m pytest tests/test_beam.py --override-ini="addopts=" --cov=mento --cov-report=term-missing -q
+$PY -m pytest tests/test_beam.py --override-ini="addopts=" --cov=mento --cov-report=term-missing -q
 
-# Check coverage for a specific module only
-& "C:\Users\mihdi\anaconda3\envs\rame-env\python.exe" -m pytest tests/ --override-ini="addopts=" --cov=mento --cov-report=term-missing -q 2>&1 | Select-String "beam|slab|rebar"
+# Single test by name
+$PY -m pytest tests/test_beam.py::test_my_function --override-ini="addopts=" -v
+
+# Coverage for one module only (Linux)
+$PY -m pytest tests/ --override-ini="addopts=" --cov=mento --cov-report=term-missing -q | grep -E "beam|slab|rebar"
 ```
+
+On Windows, pipe to `Select-String` instead of `grep`, and prefix the interpreter path with
+the call operator: `& "C:\...\python.exe" -m pytest ...`.
 
 > `--override-ini="addopts="` strips the default `--cov` flags from pyproject.toml. Required when running single files or adding custom `--cov` arguments to avoid argument conflicts.
 
@@ -42,16 +65,13 @@ C:\Users\mihdi\anaconda3\envs\rame-env\python.exe
 
 ## Linting and type checking
 
-```powershell
-# Ruff lint (auto-fix)
-& "C:\Users\mihdi\anaconda3\envs\rame-env\python.exe" -m ruff check . --fix
-
-# Ruff format
-& "C:\Users\mihdi\anaconda3\envs\rame-env\python.exe" -m ruff format .
-
-# MyPy (strict)
-& "C:\Users\mihdi\anaconda3\envs\rame-env\python.exe" -m mypy mento/
+```bash
+$PY -m ruff check . --fix     # lint, auto-fix
+$PY -m ruff format .          # format
+$PY -m mypy mento/            # strict type check
 ```
+
+`make all` runs mypy, ruff and pytest in one go when the tools are on `PATH`.
 
 Ruff config: 120-char line limit. MyPy config: `strict = true`, `allow_any_generics = true`. Package checked: `mento/`.
 
@@ -226,82 +246,29 @@ PunchingSlab (standalone dataclass); PunchingNode(slab, column, forces) pairs it
 
 ## Running mento interactively (design / check from the CLI)
 
-When asked to design or check a beam with mento, run a script via PowerShell with UTF-8 encoding to avoid unicode errors from special characters (≤, ✅, kN·m, etc.):
+The full API walkthrough — materials, section, forces, node, reading the designed rebar,
+printing results outside Jupyter, and the gotchas — lives in a rule file that Claude Code
+imports:
 
-```powershell
-$env:PYTHONIOENCODING="utf-8"
-C:\Users\mihdi\anaconda3\envs\rame-env\python.exe -c "..."
+@.claude/rules/interactive-usage.md
+
+---
+
+## Claude Code setup in this repo
+
+```
+.claude/
+├── settings.json                  Shared permissions and the SessionStart hook (committed)
+├── settings.local.json            Personal overrides, machine-specific paths (gitignored)
+├── hooks/session-start.sh         Builds .venv and installs mento on Linux/web sessions
+├── rules/interactive-usage.md     Imported by this file via @ — how to drive mento from a script
+└── skills/
+    ├── design-section/            Design or check a real section with mento
+    └── prepare-release/           Bump version + CHANGELOG for a release branch
 ```
 
-### Correct API pattern — RectangularBeam design
-
-```python
-from mento import Concrete_ACI_318_19, SteelBar, RectangularBeam, Node, Forces
-from mento import MPa, cm, mm, kN, kNm
-
-# 1. Materials
-conc  = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
-steel = SteelBar(name="ADN 420", f_y=420 * MPa)
-
-# 2. Section  — use `width` and `height`, NOT `b` and `h`
-beam = RectangularBeam(
-    label="101", concrete=conc, steel_bar=steel,
-    width=20 * cm, height=60 * cm, c_c=25 * mm,
-)
-
-# 3. Forces   — V_z for shear, M_y for flexure, N_x for axial
-f1 = Forces(label="1.4D",      V_z=80 * kN)
-f2 = Forces(label="1.2D+1.6L", M_y=100 * kNm)
-
-# 4. Node     — wraps section + forces; drives design/check
-node = Node(section=beam, forces=[f1, f2])
-node.design()   # runs flexure + shear design for the governing combination
-
-# 5. Results tables (DataFrame)
-node.check_flexure()   # per-combination flexure table
-node.check_shear()     # per-combination shear table
-node.results           # combined Markdown summary (IPython)
-```
-
-### Reading the designed rebar after `node.design()`
-
-Read results through the public dataclasses in `mento/design_results.py`; the `beam._*` attributes are implementation details and their names and units can change.
-
-```python
-fd = beam.flexure_design          # FlexureDesign: .bottom / .top are FlexureFaceDesign
-fd.bottom.layers                  # tuple of RebarLayer (one per layer)
-fd.bottom.A_s, fd.bottom.A_s_req  # provided / required steel area (Quantity)
-fd.bottom.A_s_min, fd.bottom.A_s_max, fd.bottom.DCR, fd.bottom.M_capacity
-
-sd = beam.shear_design            # ShearDesign: n_stirrups, d_b, s_l, A_v, ...
-beam.reinforcement                # SectionReinforcement: .bottom / .top / .transverse as plain data
-beam.flexure_checks, beam.shear_checks   # per-combination FlexureCheck / ShearCheck tuples
-```
-
-Reading a result before `design()` or `check()` has run raises `DesignNotRunError`.
-
-### Displaying results from CLI (not Jupyter)
-
-`node.results` uses `IPython.display.Markdown` — only renders in Jupyter notebooks. From PowerShell it produces nothing useful. Use these instead:
-
-```python
-node.shear_results_detailed()    # full shear table: materials, geometry, checks, DCR
-node.flexure_results_detailed()  # full flexure table: same
-node.check_flexure().to_string() # compact per-combination DataFrame as plain text
-node.check_shear().to_string()   # compact per-combination DataFrame as plain text
-```
-
-Always set `$env:PYTHONIOENCODING="utf-8"` before running to avoid codec errors from ≤, ·, ✅ etc.
-
-### API gotchas to remember
-
-- `RectangularBeam` uses `width`/`height`, **not** `b`/`h`.
-- `BeamSettings(unit_system="metric")` is optional — the beam works without it.
-- Forces belong to the `Node`: pass them to the constructor or call `node.add_forces()`. The beam has no forces of its own.
-- `node.design()` returns `None`; results live on `node` and `beam` attributes.
-- Detailed text output: `node.shear_results_detailed()` / `node.flexure_results_detailed()`.
-- Export to Word: `node.shear_results_detailed_doc()` / `node.flexure_results_detailed_doc()`.
-- `node.check_flexure()` / `node.check_shear()` take no arguments and use the node's forces; the beam-level `beam.check_flexure(forces)` / `beam.check_shear(forces)` require the list.
+Keep this file under ~2000 words. Anything longer, or only needed for one kind of task,
+belongs in `.claude/rules/` (imported with `@`) or in a skill.
 
 ---
 
@@ -332,12 +299,5 @@ obj.some_attr = value
 obj.some_method()
 ```
 
-**Checking coverage for one file:**
-```powershell
-& "C:\Users\mihdi\anaconda3\envs\rame-env\python.exe" -m pytest tests/ --override-ini="addopts=" --cov=mento --cov-report=term-missing -q 2>&1 | Select-String "filename_or_module"
-```
-
-**Running a single test by name:**
-```powershell
-& "C:\Users\mihdi\anaconda3\envs\rame-env\python.exe" -m pytest tests/test_beam.py::test_my_function --override-ini="addopts=" -v
-```
+**Checking coverage for one file:** see *Running tests* above — filter the
+`--cov-report=term-missing` output with `grep` (Linux) or `Select-String` (Windows).

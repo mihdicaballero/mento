@@ -98,4 +98,8 @@ static/
 *.so
 *.dylib
 *.dll
-.claude/worktrees/objective-napier-e4fd64/
+.claude/worktrees/
+
+# Claude Code personal settings (machine-specific paths)
+.claude/settings.local.json
+.claude/memory/

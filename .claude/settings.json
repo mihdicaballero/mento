@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(python -m pytest:*)",
+      "Bash(python -m ruff:*)",
+      "Bash(python -m mypy:*)",
+      "Bash(python -m pip install -e .[test])",
+      "Bash(python -m pip install -e .[dev])",
+      "Bash(pytest:*)",
+      "Bash(ruff check:*)",
+      "Bash(ruff format:*)",
+      "Bash(mypy:*)",
+      "Bash(make:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "PowerShell(& \"C:\\Users\\*\\anaconda3\\envs\\rame-env\\python.exe\" -m pytest:*)",
+      "PowerShell(& \"C:\\Users\\*\\anaconda3\\envs\\rame-env\\python.exe\" -m ruff:*)",
+      "PowerShell(& \"C:\\Users\\*\\anaconda3\\envs\\rame-env\\python.exe\" -m mypy:*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh\"",
+            "timeout": 300
+          }
+        ]
+      }
+    ]
+  }
+}
