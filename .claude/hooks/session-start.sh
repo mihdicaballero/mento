@@ -35,8 +35,8 @@ if [ -z "$INTERPRETER" ]; then
   exit 0
 fi
 
-echo "Creating .venv with $INTERPRETER and installing mento (editable, test extras)..."
+echo "Creating .venv with $INTERPRETER and installing mento (editable, dev extras)..."
 [ -x .venv/bin/python ] || "$INTERPRETER" -m venv .venv
 .venv/bin/python -m pip install --quiet --upgrade pip
-.venv/bin/python -m pip install --quiet -e ".[test]"
+.venv/bin/python -m pip install --quiet -e ".[dev]"
 .venv/bin/python -c "import mento; print('mento', mento.__version__, 'ready in .venv')"

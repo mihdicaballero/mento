@@ -27,7 +27,7 @@ under *Making a release*.
    `mento/_version.py` reads the installed distribution metadata, so it needs no edit.
 
 3. **Verify before committing.** Run the suite, ruff and mypy with the platform interpreter
-   from CLAUDE.md. A release branch that fails CI wastes a tag.
+   from CLAUDE.md (`ruff check .`, `ruff format --check .`, `mypy mento/`, `pytest tests/`). A release branch that fails CI wastes a tag.
 
 4. **Commit and push the branch.** Do not create the tag or the GitHub Release — the tag
    must point at the merge commit on `main`, and `publish.yml` refuses to continue if the

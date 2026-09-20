@@ -24,7 +24,7 @@ interpreter.
 
 **Linux / Claude Code on the web:** there is no conda environment. The SessionStart hook
 `.claude/hooks/session-start.sh` builds `.venv` on the first Python >= 3.12 it finds and
-installs mento with `-e ".[test]"`. Use that interpreter:
+installs mento with `-e ".[dev]"`. Use that interpreter:
 
 ```bash
 .venv/bin/python
@@ -276,7 +276,7 @@ belongs in `.claude/rules/` (imported with `@`) or in a skill.
 
 Workflow: `.github/workflows/tests.yml`
 - Runs on push/PR to `main`
-- `tests` job: Python 3.12 and 3.13 on windows-latest, installing `-e ".[test]"`.
+- `tests` job: Python 3.12 and 3.13 on windows-latest, installing `-e ".[dev]"`.
   Runs `pytest --cov=mento --cov-config=.coveragerc --cov-report=xml`; the 3.12 job
   uploads coverage to Codecov.
 - `lint` job: ubuntu-latest, `ruff check .`, `ruff format --check .` and `mypy mento/`
