@@ -864,7 +864,7 @@ def _initialize_dicts_EN_1992_2004_shear(self: "RectangularBeam") -> None:
     }
     check_max = "✅" if self._max_shear_ok else "❌"
     check_DCR = "✅" if self._DCRv < 1 else "❌"
-    rho_l = self._rho_l_shear_bot + self._rho_l_shear_top
+    rho_l: Quantity = self._rho_l_shear_bot + self._rho_l_shear_top
     self._shear_concrete = {
         "Shear strength": [
             "Longitudinal reinforcement ratio",
