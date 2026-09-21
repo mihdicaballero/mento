@@ -26,6 +26,7 @@ from mento.units import psi, kip, inch, ksi, mm, kN, cm, MPa, ft, kNm
 from mento.forces import Forces
 from mento.codes.ACI_318_19_beam import (
     _calculate_flexural_reinforcement_ACI_318_19,
+    _minimum_flexural_reinforcement_ratio_ACI_318_19,
     _determine_nominal_moment_simple_reinf_ACI_318_19,
     _determine_nominal_moment_double_reinf_ACI_318_19,
     _select_safe_design,
@@ -630,6 +631,71 @@ def test_shear_check_ACI_318_19_no_rebar_2(
     assert results.iloc[1]["Vu≤ØVn"] is True
 
 
+def _high_strength_beam(label: str) -> RectangularBeam:
+    """A 30x60 H-80 beam: f'c = 80 MPa, so sqrt(f'c) = 8.94 > the 8.3 of §22.5.3.1."""
+    concrete = Concrete_ACI_318_19(name="H80", f_c=80 * MPa)
+    steel_bar = SteelBar(name="ADN 420", f_y=420 * MPa)
+    beam = RectangularBeam(
+        label=label,
+        concrete=concrete,
+        steel_bar=steel_bar,
+        width=30 * cm,
+        height=60 * cm,
+        c_c=25 * mm,
+    )
+    beam.set_longitudinal_rebar_bot(n1=3, d_b1=20 * mm)
+    return beam
+
+
+def test_shear_check_caps_sqrt_f_c_without_min_web_reinforcement() -> None:
+    """ACI 318-19 §22.5.3.1 / CIRSOC 201-25 art. 22.5.3.1: sqrt(f'c) <= 8.3 MPa for V_c.
+
+    The beam has no stirrups, so Table 22.5.5.1 row (c) applies and §22.5.3.2
+    does not: the root is 8.3, not sqrt(80) = 8.944. rho_w and lambda_s are read
+    off the beam so the assertion is about the clause and not about mento's
+    effective depth; only the root is asserted by hand.
+
+    Negative control: before the cap was applied mento returned the uncapped
+    value, 7.8 % higher, so this test fails without the change.
+    """
+    beam = _high_strength_beam("HS-NOAV")
+    # No stirrups at all -- say so, as the other no-rebar tests do.
+    beam.set_transverse_rebar(n_stirrups=0, d_b=0 * mm, s_l=0 * mm)
+    Node(section=beam, forces=Forces(label="ELU", V_z=60 * kN)).check_shear()
+
+    assert beam._A_v_min.magnitude == pytest.approx(0.0)  # so row (c), and no exception
+    rho_w = beam._rho_w.magnitude
+    lambda_s = beam._lambda_s
+    capped = 0.66 * lambda_s * rho_w ** (1 / 3) * 8.3
+    uncapped = 0.66 * lambda_s * rho_w ** (1 / 3) * math.sqrt(80.0)
+
+    assert beam._k_c_min.to("MPa").magnitude == pytest.approx(capped, rel=1e-9)
+    assert capped == pytest.approx(uncapped / math.sqrt(80.0) * 8.3, rel=1e-12)
+    assert beam._k_c_min.to("MPa").magnitude < uncapped
+
+
+def test_shear_check_lifts_the_cap_with_min_web_reinforcement() -> None:
+    """§22.5.3.2: a beam carrying A_v,min of Table 9.6.3.4 keeps the full root.
+
+    Same section with 1eO10/20 (7.85 cm2/m) against an A_v,min of 3.96 cm2/m,
+    and V_u above the §9.6.3.1 threshold so A_v,min is actually required. Rows
+    (a)/(b) then apply and row (a) governs: 0.17*sqrt(80) = 1.5205 MPa.
+    """
+    beam = _high_strength_beam("HS-AV")
+    beam.set_transverse_rebar(n_stirrups=1, d_b=10 * mm, s_l=20 * cm)
+    Node(section=beam, forces=Forces(label="ELU", V_z=250 * kN)).check_shear()
+
+    # A_v,min = max(0.062*sqrt(80), 0.35)/420*300 = 3.96 cm2/m, and A_v = 7.85.
+    assert beam._A_v_min.to("cm**2/m").magnitude == pytest.approx(3.9612, rel=1e-4)
+    assert beam._A_v.to("cm**2/m").magnitude > beam._A_v_min.to("cm**2/m").magnitude
+
+    rho_w = beam._rho_w.magnitude
+    row_a = 0.17 * math.sqrt(80.0)
+    row_b = 0.66 * rho_w ** (1 / 3) * math.sqrt(80.0)
+    assert beam._k_c_min.to("MPa").magnitude == pytest.approx(max(row_a, row_b), rel=1e-9)
+    assert beam._k_c_min.to("MPa").magnitude == pytest.approx(1.520526, rel=1e-6)
+
+
 def test_shear_design_ACI_318_19(beam_example_imperial: RectangularBeam) -> None:
     # Tested with "ACI 318-19 Beam Shear 01 - Imperial.cpd" for beem that needs rebar
     f = Forces(V_z=37.727 * kip, N_x=0 * kip)
@@ -640,7 +706,9 @@ def test_shear_design_ACI_318_19(beam_example_imperial: RectangularBeam) -> None
     # Compare dictionaries with a tolerance for floating-point values, in m
     assert beam_example_imperial._d_shear.to("cm").magnitude == pytest.approx(35.08, rel=1e-3)
     assert results.iloc[1]["Av,min"] == pytest.approx(2.12, rel=1e-3)
-    assert beam_example_imperial._V_s_req.to("kN").magnitude == pytest.approx(109.53, rel=1e-3)
+    # Nominal required Vs = (Vu - phi*Vc)/phi = (167.82 - 58.29)/0.75 = 146.04 kN
+    # (it held phi*Vs = 109.53 kN before the Table 9.7.6.2.2 fix; Av,req is unchanged).
+    assert beam_example_imperial._V_s_req.to("kN").magnitude == pytest.approx(146.04, rel=1e-3)
     assert results.iloc[1]["Av,req"] == pytest.approx(10.06, rel=1e-3)
     assert results.iloc[1]["ØVc"] == pytest.approx(58.29, rel=1e-3)
     assert results.iloc[1]["ØVs"] == pytest.approx(122.15, rel=1e-3)
@@ -667,14 +735,16 @@ def test_shear_design_CIRSOC_201_2025(
     node = Node(section=beam_example_CIRSOC_201_2025, forces=f)
     results = node.design_shear()
 
+    # Vs,req = (120 - 72.04)/0.75 = 63.95 kN < 0.33*sqrt(25)*200*565 = 186.45 kN (Table
+    # 9.7.6.2.2): s_max = d/2 = 28.25 cm, so Ø6 c/20 -> Av = 2*0.283/0.20 = 2.83 cm²/m.
     assert results.iloc[1]["Av,min"] == pytest.approx(1.67, rel=1e-2)
     assert results.iloc[1]["Av,req"] == pytest.approx(2.69, rel=1e-2)
-    assert results.iloc[1]["Av"] == pytest.approx(4.04, rel=1e-2)
+    assert results.iloc[1]["Av"] == pytest.approx(2.83, rel=1e-2)
     assert results.iloc[1]["ØVc"] == pytest.approx(72.04, rel=1e-2)
-    assert results.iloc[1]["ØVs"] == pytest.approx(71.89, rel=1e-2)
-    assert results.iloc[1]["ØVn"] == pytest.approx(143.92, rel=1e-2)
+    assert results.iloc[1]["ØVs"] == pytest.approx(50.32, rel=1e-2)
+    assert results.iloc[1]["ØVn"] == pytest.approx(122.36, rel=1e-2)
     assert results.iloc[1]["ØVmax"] == pytest.approx(351.71, rel=1e-2)
-    assert results.iloc[1]["DCR"] == pytest.approx(0.834, rel=1e-2)
+    assert results.iloc[1]["DCR"] == pytest.approx(0.981, rel=1e-2)
 
     assert results.iloc[1]["Vu≤ØVmax"] is True
     assert results.iloc[1]["Vu≤ØVn"] is True
@@ -683,7 +753,45 @@ def test_shear_design_CIRSOC_201_2025(
     shear = beam_example_CIRSOC_201_2025.shear_design
     assert shear.n_stirrups == 1
     assert shear.d_b.to("mm").magnitude == 6
-    assert shear.s_l.to("cm").magnitude == 14
+    assert shear.s_l.to("cm").magnitude == 20
+
+
+def test_shear_spacing_threshold_compares_nominal_vs() -> None:
+    """Table 9.7.6.2.2 compares the NOMINAL Vs,req = (Vu - phi*Vc)/phi with 0.33*sqrt(f'c)*bw*d.
+
+    Vu is set so that phi*Vs = 0.9 times the threshold, i.e. Vs = 1.2 times it: the
+    spacing limits must halve (d/4 along, d/2 across). Comparing phi*Vs, as Mento did
+    before, would keep them at d/2 and d.
+    """
+    concrete = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
+    steel_bar = SteelBar(name="ADN 420", f_y=420 * MPa)
+    beam = RectangularBeam(
+        label="T1",
+        concrete=concrete,
+        steel_bar=steel_bar,
+        width=30 * cm,
+        height=60 * cm,
+        c_c=25 * mm,
+    )
+    beam.set_longitudinal_rebar_bot(n1=3, d_b1=20 * mm)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=10 * mm, s_l=10 * cm)
+    # phi*Vc does not depend on Vu (N_u = 0) once Vu is above the 9.6.3.1 threshold
+    # (below it Av,min = 0 and Table 22.5.5.1 changes row): read it from the check itself.
+    probe = Node(section=beam, forces=Forces(label="P", V_z=300 * kN)).check_shear()
+    phi_V_c = probe.iloc[1]["ØVc"]  # kN
+    d = beam._d_shear.to("mm").magnitude
+    threshold = 0.33 * math.sqrt(25) * 300 * d / 1000  # kN
+    V_u = phi_V_c + 0.9 * threshold
+
+    Node(section=beam, forces=Forces(label="ELU", V_z=V_u * kN)).check_shear()
+    # rel 1e-3: the results table rounds ØVc to 0.01 kN.
+    assert beam._V_s_req.to("kN").magnitude == pytest.approx(1.2 * threshold, rel=1e-3)
+    assert beam._stirrup_s_max_l.to("mm").magnitude == pytest.approx(min(d / 4, 300), rel=1e-6)
+    assert beam._stirrup_s_max_w.to("mm").magnitude == pytest.approx(min(d / 2, 300), rel=1e-6)
+
+    # The design path reads the same Vs,req: the spacing it picks respects d/4.
+    Node(section=beam, forces=Forces(label="ELU", V_z=V_u * kN)).design_shear()
+    assert beam.shear_design.s_l.to("mm").magnitude <= d / 4 + 1e-6
 
 
 def test_shear_design_spacing_along_width_wide_beam() -> None:
@@ -694,6 +802,11 @@ def test_shear_design_spacing_along_width_wide_beam() -> None:
     legs sat 44 cm apart, against the 28 cm ACI 318-19 Table 9.7.6.2.2 allows once V_s
     passes 0.33*sqrt(f_c)*b_w*d. The check reported the violation; the design did not
     avoid it.
+
+    Vu = 700 kN gives Vs,req = (700 - phi*Vc)/phi = 695 kN > 0.33*5*500*561 = 463 kN, so
+    the limit across the width is d/2 = 28.05 cm. (The original 350 kN only crossed the
+    threshold because Mento compared 0.083*sqrt(f_c) with phi*Vs; with Vs,req = 228 kN a
+    single stirrup with legs 44 cm apart is within d = 56 cm and is correct.)
     """
     concrete = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
     steel_bar = SteelBar(name="ADN 420", f_y=420 * MPa)
@@ -705,7 +818,7 @@ def test_shear_design_spacing_along_width_wide_beam() -> None:
         height=60 * cm,
         c_c=25 * mm,
     )
-    node = Node(section=beam, forces=Forces(label="ELU_01", V_z=350 * kN, M_y=100 * kNm))
+    node = Node(section=beam, forces=Forces(label="ELU_01", V_z=700 * kN, M_y=100 * kNm))
     results = node.design_shear()
 
     # Two stirrups, four legs: one stirrup cannot span 50 cm within the limit.
@@ -718,6 +831,118 @@ def test_shear_design_spacing_along_width_wide_beam() -> None:
 
     # The layout still carries the demand it was sized for.
     assert float(results.iloc[1]["DCR"]) <= 1.0
+
+
+def test_stirrup_spacing_caps_are_declared_per_code() -> None:
+    """Table 9.7.6.2.2 caps come from each code's registry entry: ACI 318-19
+    600/300 mm (24/12 in.), CIRSOC 201-25 400/200 mm."""
+    from mento.codes.registry import design_code
+
+    aci = design_code(Concrete_ACI_318_19(name="H25", f_c=25 * MPa)).stirrup_spacing_caps
+    cirsoc = design_code(Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa)).stirrup_spacing_caps
+    aci_imperial = Concrete_ACI_318_19(name="C4", f_c=4000 * psi)
+
+    assert [c.to("mm").magnitude for c in aci(Concrete_ACI_318_19(name="H25", f_c=25 * MPa))] == [600, 300]
+    assert [c.to("inch").magnitude for c in aci(aci_imperial)] == [24, 12]
+    assert [c.to("mm").magnitude for c in cirsoc(Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa))] == [400, 200]
+
+
+def test_flexural_min_fy_caps_are_declared_per_code() -> None:
+    """The f_y cap inside A_s,min comes from each code's registry entry:
+    ACI 318-19 §9.6.1.2 550 MPa (80,000 psi), CIRSOC 201-25 §9.6.1.2 500 MPa."""
+    from mento.codes.registry import design_code
+
+    aci_metric = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
+    aci_imperial = Concrete_ACI_318_19(name="C4", f_c=4000 * psi)
+    cirsoc_metric = Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa)
+
+    aci = design_code(aci_metric).flexural_min_fy_cap
+    cirsoc = design_code(cirsoc_metric).flexural_min_fy_cap
+
+    assert aci(aci_metric).to("MPa").magnitude == 550
+    assert aci(aci_imperial).to("psi").magnitude == 80_000
+    assert cirsoc(cirsoc_metric).to("MPa").magnitude == 500
+
+
+@pytest.mark.parametrize(
+    ("concrete_class", "f_y_allowed"),
+    [(Concrete_ACI_318_19, 550.0), (Concrete_CIRSOC_201_25, 500.0)],
+)
+def test_minimum_flexural_reinforcement_applies_the_codes_fy_cap(concrete_class: type, f_y_allowed: float) -> None:
+    """A beam with a 600 MPa steel: §9.6.1.2 does not let all of it into A_s,min.
+
+    f_c = 40 MPa, so the sqrt term governs in every reading:
+    0.25*sqrt(40) = 1.58114, over 550 -> 2.8748e-3 and over 500 -> 3.1623e-3,
+    against the 2.6352e-3 that the uncapped 600 would give. Only the ratio is
+    checked: A_s,min = rho_min*b*d brings in the effective depth, which is the
+    beam's business and not this clause's.
+    """
+    beam = RectangularBeam(
+        label="fy600",
+        concrete=concrete_class(name="H40", f_c=40 * MPa),
+        steel_bar=SteelBar(name="ATR 600", f_y=600 * MPa),
+        width=30 * cm,
+        height=60 * cm,
+        c_c=25 * mm,
+    )
+
+    # M_u in the beam's canonical unit (N*mm); only its being non-zero matters.
+    rho_min = _minimum_flexural_reinforcement_ratio_ACI_318_19(beam, 100e6)
+
+    expected = max(0.25 * math.sqrt(40.0) / f_y_allowed, 1.4 / f_y_allowed)
+    assert rho_min == pytest.approx(expected, rel=1e-12)
+    # Without the cap the minimum would come out light: -8.3 % under ACI,
+    # -16.7 % under CIRSOC.
+    assert rho_min > 0.25 * math.sqrt(40.0) / 600.0
+
+
+def test_minimum_flexural_reinforcement_fy_cap_in_us_units() -> None:
+    """ACI 318-19 §9.6.1.2 in-lb: the cap is 80,000 psi.
+
+    f_c = 6000 psi with a Grade 100 bar: 3*sqrt(6000)/80000 = 2.9047e-3.
+    """
+    beam = RectangularBeam(
+        label="G100",
+        concrete=Concrete_ACI_318_19(name="C6", f_c=6000 * psi),
+        steel_bar=SteelBar(name="G100", f_y=100 * ksi),
+        width=12 * inch,
+        height=24 * inch,
+        c_c=1.5 * inch,
+    )
+
+    # M_u in lb*in, non-zero.
+    rho_min = _minimum_flexural_reinforcement_ratio_ACI_318_19(beam, 1.0e6)
+
+    assert rho_min == pytest.approx(3 * math.sqrt(6000.0) / 80_000.0, rel=1e-12)
+    assert rho_min > 3 * math.sqrt(6000.0) / 100_000.0
+
+
+@pytest.mark.parametrize(
+    ("concrete_class", "n_stirrups", "n_legs"),
+    [(Concrete_ACI_318_19, 1, 2), (Concrete_CIRSOC_201_25, 2, 4)],
+)
+def test_shear_design_legs_across_width_follow_the_code_caps(
+    concrete_class: type, n_stirrups: int, n_legs: int
+) -> None:
+    """The same 50 cm beam with Vu = 350 kN: Vs,req = 228 kN is under the threshold
+    (463 kN), so the limit across the width is min(d, cap) with d = 56.1 cm.
+
+    ACI 318-19 caps it at 600 mm: one stirrup with its legs 44 cm apart is within
+    56.1 cm. CIRSOC 201-25 caps it at 400 mm: 44 cm is too far, two stirrups.
+    """
+    beam = RectangularBeam(
+        label="W1",
+        concrete=concrete_class(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=50 * cm,
+        height=60 * cm,
+        c_c=25 * mm,
+    )
+    Node(section=beam, forces=Forces(label="ELU_01", V_z=350 * kN, M_y=100 * kNm)).design_shear()
+
+    assert beam.shear_design.n_stirrups == n_stirrups
+    assert beam.shear_design.n_legs == n_legs
+    assert beam._stirrup_s_w <= beam._stirrup_s_max_w
 
 
 @pytest.mark.parametrize(
@@ -1363,6 +1588,86 @@ def test_check_flexure_ACI_318_19_3(beam_example_flexure_ACI: RectangularBeam) -
     assert results.iloc[1]["As,req top"] == pytest.approx(0, rel=1e-3)
     assert results.iloc[1]["As"] == pytest.approx(20.15, rel=1e-3)
     assert results.iloc[1]["ØMn"] == pytest.approx(364.37, rel=1e-3)
+
+
+@pytest.mark.parametrize(
+    "concrete_class",
+    [Concrete_ACI_318_19, Concrete_CIRSOC_201_25],
+    ids=["ACI 318-19", "CIRSOC 201-25"],
+)
+def test_flexure_rho_l_belongs_to_its_own_face_ACI_318_19(
+    concrete_class: type[Concrete_ACI_318_19],
+) -> None:
+    """rho = A_s/(b*d), one face at a time.
+
+    ACI 318-19 Ch. 2 (2.2) defines rho as the "ratio of A_s to bd" and CIRSOC
+    201-25 Cap. 2 repeats it word for word ("cuantia de la armadura traccionada,
+    no tesa; relacion entre A_s y el area b.d"). The flexure report prints that
+    ratio next to the A_s of the face it belongs to, so the top ratio has to be
+    built from the top steel and the top effective depth.
+
+    Top and bottom carry deliberately different bars: feeding the top ratio with
+    A_s_bot -- as the code did -- fails here by a factor of four.
+    """
+    beam = RectangularBeam(
+        label="B-30x50",
+        concrete=concrete_class(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=30 * cm,
+        height=50 * cm,
+        c_c=30 * mm,
+    )
+    beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=20 * cm)
+    beam.set_longitudinal_rebar_bot(n1=3, d_b1=20 * mm)
+    beam.set_longitudinal_rebar_top(n1=2, d_b1=12 * mm)
+    # One layer per face, so d = h - c_c - d_be - d_b/2:
+    #   d_bot = 500 - 30 - 8 - 20/2 = 452 mm
+    #   d_top = 500 - 30 - 8 - 12/2 = 456 mm
+    assert beam._d_bot.to(mm).magnitude == pytest.approx(452.0)
+    assert beam._d_top.to(mm).magnitude == pytest.approx(456.0)
+
+    Node(section=beam, forces=Forces(label="C1", M_y=80 * kNm)).check_flexure()
+
+    # A_s_bot = 3*pi*20^2/4 = 942.478 mm2 -> 942.478/(300*452) = 0.0069504
+    # A_s_top = 2*pi*12^2/4 = 226.195 mm2 -> 226.195/(300*456) = 0.0016535
+    assert beam._rho_l_bot.magnitude == pytest.approx(0.0069504, rel=1e-4)
+    assert beam._rho_l_top.magnitude == pytest.approx(0.0016535, rel=1e-4)
+    # The bottom steel over the top depth -- the ratio the top face used to get
+    # -- would be 942.478/(300*456) = 0.0068895, so the two faces must not land
+    # on the same value.
+    assert beam._rho_l_top.magnitude != pytest.approx(beam._rho_l_bot.magnitude, rel=1e-3)
+
+
+def test_flexure_rho_l_belongs_to_its_own_face_EN_1992_2004() -> None:
+    """Same per-face rule for EN: rho_l = A_sl/(b_w*d), EN 1992-1-1 §6.2.2(1).
+
+    Reported, not fed to Eq. (6.2.a), so no 0.02 cap applies here -- but the
+    steel still has to be the steel of the face being reported.
+    """
+    beam = RectangularBeam(
+        label="B-20x60",
+        concrete=Concrete_EN_1992_2004(name="C25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="B500S", f_y=500 * MPa),
+        width=20 * cm,
+        height=60 * cm,
+        c_c=2.6 * cm,
+    )
+    beam.set_transverse_rebar(n_stirrups=1, d_b=6 * mm, s_l=15 * cm)
+    beam.set_longitudinal_rebar_bot(n1=4, d_b1=16 * mm)
+    beam.set_longitudinal_rebar_top(n1=2, d_b1=12 * mm)
+    #   d_bot = 600 - 26 - 6 - 16/2 = 560 mm
+    #   d_top = 600 - 26 - 6 - 12/2 = 562 mm
+    assert beam._d_bot.to(mm).magnitude == pytest.approx(560.0)
+    assert beam._d_top.to(mm).magnitude == pytest.approx(562.0)
+
+    Node(section=beam, forces=Forces(label="C1", M_y=100 * kNm)).check_flexure()
+
+    # A_s_bot = 4*pi*16^2/4 = 804.248 mm2 -> 804.248/(200*560) = 0.0071808
+    # A_s_top = 2*pi*12^2/4 = 226.195 mm2 -> 226.195/(200*562) = 0.0020124
+    assert beam._rho_l_bot.magnitude == pytest.approx(0.0071808, rel=1e-4)
+    assert beam._rho_l_top.magnitude == pytest.approx(0.0020124, rel=1e-4)
+    # The bottom steel over the top depth would be 0.0071552.
+    assert beam._rho_l_top.magnitude != pytest.approx(beam._rho_l_bot.magnitude, rel=1e-3)
 
 
 def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_05() -> None:

@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Dict, cast
 import pandas as pd
 from mento.units import Quantity
 
-from mento.units import inch, kN, kNm, mm
+from mento.units import inch, kN, mm
 
 from mento.codes.registry import design_code
 from mento.design_results import GRID, format_longitudinal_rebar, transverse_layout
@@ -864,7 +864,7 @@ def _initialize_dicts_EN_1992_2004_shear(self: "RectangularBeam") -> None:
     }
     check_max = "✅" if self._max_shear_ok else "❌"
     check_DCR = "✅" if self._DCRv < 1 else "❌"
-    rho_l = self._rho_l_bot if self._M_Ed >= 0 * kNm else self._rho_l_top
+    rho_l = self._rho_l_shear_bot + self._rho_l_shear_top
     self._shear_concrete = {
         "Shear strength": [
             "Longitudinal reinforcement ratio",

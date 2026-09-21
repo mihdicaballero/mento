@@ -99,18 +99,24 @@ Three rules, and the design applies all of them for you:
   face only keeps its single grid.
 - **Ø10 minimum.** A footing mesh is not detailed with the thinnest bar in the
   catalogue, so the search does not reach below Ø10 to shave the lightly loaded face.
-- **Thickness.** A section thinner than the code asks of a footing on soil warns when
-  it is built:
+- **Depth.** A section shallower than the code asks of a footing on soil warns when it
+  is built. Under ACI 318-19 and CIRSOC 201-25 the clause is on the effective depth of
+  the bottom reinforcement — §13.3.1.2 asks at least 150 mm (6 in.) — so what is
+  measured is the depth left to the bars and not the overall thickness:
 
   .. code-block:: python
 
       Footing(label="Z2", concrete=concrete, steel_bar=steel,
               width=1 * m, height=18 * cm, c_c=50 * mm)
-      # UserWarning: Footing Z2 is 18 cm thick, below the 200 mm ACI 318-19 asks
-      # of a footing on soil. It is designed as given.
+      # UserWarning: Footing Z2 leaves 12.5 cm of effective depth to the bottom
+      # bars, below the 150 mm ACI 318-19 asks of a footing on soil. It is
+      # designed as given.
 
-  It is advice, not a limit. The section is still designed as given, because the
-  thickness is the engineer's to choose.
+  Under EN 1992-1-1 there is no such clause and the 250 mm of practice is compared
+  against the overall thickness instead. Either way it is advice, not a limit: the
+  section is still designed as given, because the depth is the engineer's to choose.
+  The check is repeated with the actual bars at the end of design and when checking
+  flexure or shear.
 
 For the clauses these come from, the equations, and the readings mento takes where the
 codes leave room for judgement, see :doc:`../theory/footing`.

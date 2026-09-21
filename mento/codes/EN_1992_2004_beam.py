@@ -65,7 +65,7 @@ def _initialize_shear_variables_EN_1992_2004(self: "RectangularBeam", st: ENShea
         sec = section_floats(self)
         # Set the initial variables
         st.N_Ed = force._N_x.to(N).magnitude
-        st.V_Ed_1 = force._V_z.to(N).magnitude  # Same shear at the edge of support and in d
+        st.V_Ed_1 = abs(force._V_z.to(N).magnitude)  # Same magnitude at support and at d
         st.V_Ed_2 = st.V_Ed_1
 
         # Minimum shear reinforcement calculation. Eq. (9.5N) gives the ratio;
@@ -105,7 +105,9 @@ def _shear_without_rebar_EN_1992_2004(self: "RectangularBeam", st: ENShearCheckS
     if isinstance(self.concrete, Concrete_EN_1992_2004):
         # Total shear capacity without rebar: Eq. (6.2.a), floored by Eq. (6.2.b).
         sec = section_floats(self)
-        rho_l = st.rho_l_bot if self._M_Ed >= 0 * kNm else st.rho_l_top
+        # Only the current force's tension face is populated in this state.
+        # The section's _M_Ed may belong to an earlier flexure combination.
+        rho_l = st.rho_l_bot + st.rho_l_top
         V_Rd_c_min = shear_eq.min_shear_resistance_without_reinforcement(
             sec.f_c, st.k_value, st.sigma_cp, sec.width, sec.d_shear
         )
@@ -118,7 +120,7 @@ def _shear_without_rebar_EN_1992_2004(self: "RectangularBeam", st: ENShearCheckS
             sec.width,
             sec.d_shear,
         )
-    return max(V_Rd_c_min, V_Rd_c)
+    return max(0.0, V_Rd_c_min, V_Rd_c)
 
 
 def _calculate_max_shear_strength_EN_1992_2004(self: "RectangularBeam", st: ENShearCheckState) -> None:
@@ -179,8 +181,8 @@ def _calculate_required_shear_reinforcement_EN_1992_2004(self: "RectangularBeam"
     )
     st.V_Rd_s = shear_eq.shear_reinforcement_resistance(sec.A_v, z, f_ywd, st.cot_theta)
     st.V_s_req = st.V_Rd_s
-    # Maximum shear capacity is the same as the steel capacity
-    st.V_Rd = st.V_Rd_s
+    # Eq. (6.8)/(6.9): adding stirrups cannot exceed the concrete-strut limit.
+    st.V_Rd = min(st.V_Rd_s, st.V_Rd_max)
 
 
 def _check_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> ENShearCheckState:
@@ -227,7 +229,7 @@ def _check_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> ENShear
             st.stirrup_s_max_w,
         ) = max_stirrup_spacing_EN_1992_2004(self, self._alpha)
 
-    st.DCR = abs(st.V_Ed_2 / st.V_Rd)
+    st.DCR = st.V_Ed_2 / st.V_Rd if st.V_Rd > 0 else float("inf")
     return st
 
 
@@ -706,8 +708,13 @@ def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> ENFle
     st.d_b_max_bot = max(self._d_b1_b, self._d_b2_b, self._d_b3_b, self._d_b4_b).to(mm).magnitude
 
     # Calculate the longitudinal reinforcement ratios for both sides.
+    # rho_l = A_sl/(b_w*d) of EN 1992-1-1 §6.2.2(1), reported per face: each one
+    # takes its OWN steel against its OWN effective depth. The top ratio used to
+    # be fed with A_s_bot, so the top flexure table printed a ratio that did not
+    # belong to the A_s it was printed next to. Unlike the shear state, these are
+    # not capped at 0.02: they are reported, not fed to Eq. (6.2.a).
     st.rho_l_bot = sec.A_s_bot / (sec.d_bot * sec.width)
-    st.rho_l_top = sec.A_s_bot / (sec.d_top * sec.width)
+    st.rho_l_top = sec.A_s_top / (sec.d_top * sec.width)
 
     return st
 

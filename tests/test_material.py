@@ -189,9 +189,9 @@ def test_aci_initialization_imperial(
         (17 * MPa, 0.85),  # boundary inferior de la zona plana
         (20 * MPa, 0.85),  # zona plana
         (28 * MPa, 0.85),  # boundary exacto 28 MPa
-        (30 * MPa, 0.85 - 0.05 / 7 * (30 - 28)),  # 28 < fc ≤ 55 MPa
+        (30 * MPa, 0.85 - 0.05 / 7 * (30 - 28)),  # 28 < fc < 55 MPa
         (40 * MPa, 0.85 - 0.05 / 7 * (40 - 28)),
-        (55 * MPa, 0.85 - 0.05 / 7 * (55 - 28)),  # boundary del cap
+        (55 * MPa, 0.65),  # fila (c): f'c >= 55, no la fórmula de la fila (b)
         (60 * MPa, 0.65),  # fc > 55 MPa → cap mínimo
         (70 * MPa, 0.65),
     ],
@@ -215,11 +215,11 @@ def test_aci_beta_1_metric(f_c_value: Quantity, expected_beta_1: float) -> None:
         (2500, 0.85),
         (3000, 0.85),
         (4000, 0.85),  # boundary exacto
-        # 4000 < fc <= 8000 psi → β₁ = 0.85 - 0.05/1000 * (fc - 4000)
+        # 4000 < fc < 8000 psi → β₁ = 0.85 - 0.05/1000 * (fc - 4000)
         (5000, 0.80),
         (6000, 0.75),  # el caso que fallaba en Test_Etabs_05
         (7000, 0.70),
-        (8000, 0.65),  # boundary exacto del cap
+        (8000, 0.65),  # fila (c): f'c >= 8000 (la fila (b) también da 0,65 acá)
         # fc > 8000 psi → β₁ = 0.65 (mínimo)
         (9000, 0.65),
         (12000, 0.65),
@@ -239,6 +239,37 @@ def test_aci_beta_1_imperial(fc_psi: float, expected_beta_1: float) -> None:
     """
     concrete = Concrete_ACI_318_19(name=f"fc{fc_psi}", f_c=fc_psi * psi)
     assert pytest.approx(concrete.beta_1, rel=1e-3) == expected_beta_1
+
+
+@pytest.mark.parametrize("concrete_cls", [Concrete_ACI_318_19, Concrete_CIRSOC_201_25])
+def test_beta_1_upper_break_belongs_to_row_c(concrete_cls: type) -> None:
+    """f'c exactly at the upper break reads row (c), not the row (b) formula.
+
+    ACI 318-19 Table 22.2.2.4.3 / CIRSOC 201-25 Tabla 22.2.2.4.3 write row (b)
+    for the open interval 28 < f'c < 55 and row (c) for f'c >= 55, so 55 MPa
+    itself is 0.65. Evaluating row (b) there gives 0.85 - 0.05*27/7 = 0.657143,
+    1.1 % high, and that error is carried straight into rho_max. Both codes
+    print the same table, so both classes are checked.
+
+    54.9 MPa pins the other side: just below the break row (b) still applies,
+    so the fix must not turn into a cap that swallows the sloped row.
+    """
+    assert concrete_cls(name="C55", f_c=55 * MPa).beta_1 == pytest.approx(0.65)
+    assert concrete_cls(name="C54_9", f_c=54.9 * MPa).beta_1 == pytest.approx(0.85 - 0.05 / 7 * (54.9 - 28))
+
+
+def test_beta_1_upper_break_imperial_reads_row_c() -> None:
+    """The psi table breaks at 8000 and row (c) owns that value too.
+
+    ACI 318-19 (in-lb) Table 22.2.2.4.3: row (b) is 4000 < f'c < 8000, row (c)
+    is f'c >= 8000. Row (b) evaluated at 8000 also lands on 0.65, so this pins
+    the reading rather than a number, and 7999 psi keeps row (b) alive just
+    below the break.
+    """
+    assert Concrete_ACI_318_19(name="fc8000", f_c=8000 * psi).beta_1 == pytest.approx(0.65)
+    assert Concrete_ACI_318_19(name="fc7999", f_c=7999 * psi).beta_1 == pytest.approx(
+        0.85 - 0.05 / 1000 * (7999 - 4000)
+    )
 
 
 def test_aci_get_properties(aci_metric_concrete: Concrete_ACI_318_19) -> None:

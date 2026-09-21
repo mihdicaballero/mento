@@ -6,7 +6,12 @@ from pint import Quantity
 from mento.beam import RectangularBeam
 from mento.node import Node
 from mento.slab import OneWaySlab, _bars_at_spacing
-from mento.material import Concrete_ACI_318_19, SteelBar, Concrete_EN_1992_2004
+from mento.material import (
+    Concrete_ACI_318_19,
+    Concrete_CIRSOC_201_25,
+    SteelBar,
+    Concrete_EN_1992_2004,
+)
 from mento.units import kip, inch, mm, cm, kN, MPa, kNm, ksi
 from mento.forces import Forces
 
@@ -700,15 +705,23 @@ def test_a_hogging_slab_is_designed_on_its_top_face_by_a_spacing() -> None:
     [
         (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), 12 * cm, 36),  # 3h governs
         (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), 25 * cm, 45),  # 450 mm governs
+        (Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa), 8 * cm, 24),  # 3h governs
+        (Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa), 12 * cm, 30),  # 300 mm governs
+        (Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa), 25 * cm, 30),  # 300 mm governs
         (Concrete_EN_1992_2004(name="C25", f_c=25 * MPa), 12 * cm, 36),  # 3h governs
         (Concrete_EN_1992_2004(name="C25", f_c=25 * MPa), 25 * cm, 40),  # 400 mm governs
     ],
-    ids=["ACI_3h", "ACI_450mm", "EN_3h", "EN_400mm"],
+    ids=["ACI_3h", "ACI_450mm", "CIRSOC_3h", "CIRSOC_300mm_12cm", "CIRSOC_300mm_25cm", "EN_3h", "EN_400mm"],
 )
 def test_the_code_caps_how_far_apart_the_bars_of_a_slab_may_sit(
     concrete: Concrete_ACI_318_19 | Concrete_EN_1992_2004, height: Quantity, expected_cm: float
 ) -> None:
-    """ACI 318-19 7.7.2.3 is 3h or 450 mm; EN 1992-1-1 9.3.1.1(3) is 3h or 400 mm."""
+    """ACI 318-19 7.7.2.3 is 3h or 450 mm, CIRSOC 201-25 art. 7.7.2.3 is 3h or
+    300 mm, EN 1992-1-1 9.3.1.1(3) is 3h or 400 mm.
+
+    The 300 mm of CIRSOC bites from 100 mm of thickness up, so the two codes
+    that share every other clause of Chapter 7 part company on the ordinary
+    slab: 36 cm against 30 cm at h = 12 cm."""
     slab = OneWaySlab(
         label="Slab s_max",
         concrete=concrete,
@@ -741,6 +754,30 @@ def test_a_design_is_never_spaced_beyond_the_code_maximum() -> None:
 
     s_max = slab._max_bar_spacing()
     assert s_max.to("cm").magnitude == 36  # 3h on a 12 cm slab
+    assert slab._s_b1_b <= s_max
+    assert slab.reinforcement.bottom.layers[0].n == _bars_at_spacing(s_max, slab.width)
+    assert slab.reinforcement.bottom.A_s >= slab.flexure_design.bottom.A_s_req
+
+
+def test_a_cirsoc_design_is_never_spaced_beyond_300_mm() -> None:
+    """The same light strip, under the code that prints 300 mm.
+
+    Under ACI 318-19 §7.7.2.3 a 12 cm slab is capped by 3h = 36 cm; CIRSOC
+    201-25 art. 7.7.2.3 caps it at 300 mm instead, and a strip this lightly
+    loaded is exactly where the cap, and not the area, decides the layout.
+    """
+    slab = OneWaySlab(
+        label="Slab CIRSOC lightly loaded",
+        concrete=Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=12 * cm,
+        c_c=20 * mm,
+    )
+    Node(section=slab, forces=Forces(label="C1", M_y=2 * kNm)).design()
+
+    s_max = slab._max_bar_spacing()
+    assert s_max.to("cm").magnitude == 30  # art. 7.7.2.3, not the 36 cm of 3h
     assert slab._s_b1_b <= s_max
     assert slab.reinforcement.bottom.layers[0].n == _bars_at_spacing(s_max, slab.width)
     assert slab.reinforcement.bottom.A_s >= slab.flexure_design.bottom.A_s_req

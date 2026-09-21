@@ -86,21 +86,52 @@ class DesignCode:
     #: Summary columns this code does not report, dropped from the Word tables.
     summary_drop_columns: Tuple[str, ...] = ()
     #: Smallest stirrup bar this code's detailing rules allow. Only the codes
-    #: whose report tables quote it need to supply one.
+    #: whose report tables quote it need to supply one. Where a code does state
+    #: one -- ACI 318-19 §9.7.6.4.2 / CIRSOC 201-25 §9.7.6.4.2, Tabla 9.7.6.4.2,
+    #: which differ: a No. 10 bar against 6 to 12 mm graded by longitudinal bar
+    #: size -- it applies to the stirrups supporting compression reinforcement,
+    #: not to every stirrup.
     min_stirrup_diameter: Callable[..., Any] | None = None
+    #: Absolute caps of Table 9.7.6.2.2 on the spacing of stirrup legs, as
+    #: ``(under the Vs threshold, over it)``; they bound the spacing both along
+    #: the member and across its width. Codes sharing the table differ only in
+    #: these two numbers: ACI 318-19 Table 9.7.6.2.2 gives 600/300 mm
+    #: (24/12 in.) and CIRSOC 201-25 Tabla 9.7.6.2.2 gives 400/200 mm.
+    stirrup_spacing_caps: Callable[..., Any] | None = None
+    #: Cap on f_y in A_s,min: ACI 318-19 §9.6.1.2 (550 MPa / 80 ksi)
+    #: and CIRSOC 201-25 §9.6.1.2 (500 MPa).
+    flexural_min_fy_cap: Callable[..., Any] | None = None
+    #: Coefficient of the beam minimum-shear-reinforcement threshold,
+    #: ACI 318-19 / CIRSOC 201-25 §9.6.3.1.
+    min_shear_reinforcement_coefficient: Callable[..., Any] | None = None
+    #: Stress divisor in alpha_c under net axial tension, Eq. (11.5.4.4).
+    wall_axial_tension_divisor: Callable[..., Any] | None = None
     #: Largest centre-to-centre spacing this code allows between the flexural
-    #: bars of a slab. ``None`` for a code that states none, which is read as
-    #: no limit rather than as an error: a spacing rule a code does not have is
-    #: not a rule an element can fail.
+    #: bars of a slab -- ACI 318-19 §7.7.2.3 / CIRSOC 201-25 art. 7.7.2.3, which
+    #: differ in their absolute term, 450 mm (18 in.) against 300 mm, and so
+    #: register a hook each rather than sharing one. ``None`` for a code that
+    #: states none, which is read as no limit rather than as an error: a spacing
+    #: rule a code does not have is not a rule an element can fail.
     max_bar_spacing_slab: Callable[..., Any] | None = None
     #: Smallest centre-to-centre spacing this code asks for between the
-    #: flexural bars of a slab, over and above the clear distance the settings
-    #: already impose. ``None`` where the code states none.
+    #: flexural bars of a slab, over and above the clear distance of
+    #: ACI 318-19 §25.2.1 / CIRSOC 201-25 §25.2.1 the settings already impose.
+    #: ``None`` where the code states none.
     min_bar_spacing_slab: Callable[..., Any] | None = None
-    #: Thinnest section this code allows for a member bearing on the ground.
-    #: Read as advice, not as a limit: a thinner footing is reported and still
-    #: designed, because the thickness is the engineer's to choose.
+    #: Thinnest *overall* section this code allows for a member bearing on the
+    #: ground. ``None`` for a code that instead writes its limit on the
+    #: effective depth, which is a different quantity and has its own hook
+    #: below. Read as advice, not as a limit: a thinner footing is reported and
+    #: still designed, because the thickness is the engineer's to choose.
     min_thickness_on_soil: Callable[..., Any] | None = None
+    #: Smallest *effective depth of the bottom reinforcement* this code allows
+    #: for a member bearing on the ground -- ACI 318-19 §13.3.1.2 /
+    #: CIRSOC 201-25 art. 13.3.1.2, the same clause in both: at least 150 mm
+    #: (6 in.). The clause is written on ``d`` and not on the overall
+    #: thickness, so a code that states it fills this in rather than
+    #: ``min_thickness_on_soil``. ``None`` where the code states none. Advice
+    #: on the same terms as the hook above.
+    min_effective_depth_on_soil: Callable[..., Any] | None = None
 
     def requires(self, hook: str) -> Callable[..., Any]:
         """The hook, or a clear error naming the code that lacks it."""

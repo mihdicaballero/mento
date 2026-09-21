@@ -284,8 +284,10 @@ under it. Practice rather than code: a mesh finer than that is not what goes dow
 the ground, and without the floor the optimisation reaches for the thinnest bar
 available to shave the lightly loaded face.
 
-Minimum thickness
-^^^^^^^^^^^^^^^^^
+Minimum depth
+^^^^^^^^^^^^^
+
+The two families measure a different quantity, so mento compares a different one:
 
 .. list-table::
    :header-rows: 1
@@ -295,15 +297,34 @@ Minimum thickness
      - Minimum
      - Source
    * - ACI 318-19, CIRSOC 201-25
-     - 200 mm (8 in.)
-     - §13.3.1.2, written as :math:`d \ge 150` mm above the bottom reinforcement
+     - :math:`d \ge 150` mm (6 in.)
+     - §13.3.1.2 / art. 13.3.1.2 — *the overall depth shall be selected such that the
+       effective depth of bottom reinforcement is at least 150 mm*. A limit on
+       :math:`d`, not on :math:`h`
    * - EN 1992-1-1
-     - 250 mm
+     - :math:`h \ge 250` mm
      - Practice, not a clause — the depth below which bar anchorage and the tolerance
        on a surface cast against the ground stop working out
 
-A thinner section **warns and is still designed**. The thickness is the engineer's to
-choose, and the design that follows is the right design for the section given;
+The distinction matters on a footing, because the cover against the ground is large:
+75 mm under ACI 318-19 Table 20.5.1.3.1, and 55 mm (under control of execution) or
+60 mm under CIRSOC 201-25 Tabla 20.5.1.3.1, fila (a), neither counting the blinding
+layer. A 200 mm section with a Ø16 bottom mat is left with :math:`d = 117` mm under ACI
+and 132 to 137 mm under CIRSOC — both short of the clause, though the section is over
+any overall figure in the 200 mm range. Meeting :math:`d \ge 150` mm with Ø16 takes
+:math:`h \approx 233` mm under ACI and :math:`\approx 218` mm under CIRSOC.
+
+The check runs when the section is built, before any bar is chosen, so what it measures
+is the depth the thinnest mat the settings allow would leave: :math:`h - c_c` less half
+the smallest longitudinal bar. That is the most depth the design can reach, so a section
+reported here falls short whatever the search later picks.
+
+The check is repeated with the actual bottom-bar effective depth when flexure or
+shear is checked, including the final check after design. This catches a section
+that admits the thinnest mat but falls below the limit with the selected bars.
+
+A section below the minimum **warns and is still designed**. The depth is the engineer's
+to choose, and the design that follows is the right design for the section given;
 refusing would decline to answer a question that has an answer.
 
 Implementation decisions
@@ -461,13 +482,20 @@ Validation
      - ``test_a_slab_keeps_the_wider_slab_limits``,
        ``test_support_says_which_clause_applies``
      - ACI 318-19 §7.7.2.3; EN 1992-1-1 §9.3.1.1(3)
-   * - Thickness warns and still designs
+   * - Depth warns and still designs
      - ``test_a_thin_footing_warns``,
        ``test_a_footing_of_the_usual_depth_does_not_warn``,
        ``test_a_thin_slab_does_not_warn``,
        ``test_a_thin_footing_is_still_designed``,
        ``test_the_warning_names_the_footing_and_the_code``
      - ACI 318-19 §13.3.1.2; EN practice
+   * - The limit is on :math:`d`, not on :math:`h`
+     - ``test_the_limit_is_on_the_effective_depth_not_on_the_thickness``,
+       ``test_a_thin_section_with_little_cover_meets_the_clause``,
+       ``test_the_effective_depth_limit_in_imperial_units``,
+       ``test_both_codes_register_the_same_effective_depth``
+     - ACI 318-19 §13.3.1.2, Table 20.5.1.3.1;
+       CIRSOC 201-25 art. 13.3.1.2, Tabla 20.5.1.3.1
    * - An unreinforced face reports a failing DCR
      - ``test_an_unreinforced_face_reports_a_failing_dcr``
      - Internal consistency, both codes

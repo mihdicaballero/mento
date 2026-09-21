@@ -110,6 +110,8 @@ class _DesignCodeAttributes:
         _k_value: float
         _theta: float
         _cot_theta: float
+        _rho_l_shear_bot: Quantity
+        _rho_l_shear_top: Quantity
         # Both
         _A_s_min_bot: Quantity
         _A_s_min_top: Quantity

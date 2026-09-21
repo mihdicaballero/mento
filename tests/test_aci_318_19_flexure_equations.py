@@ -20,6 +20,12 @@ BETA_1 = 0.85
 B = 300.0
 D = 450.0
 
+# The f_y cap of §9.6.1.2, which the caller passes in: ACI 318-19 550 MPa
+# (80,000 psi), CIRSOC 201-25 500 MPa.
+ACI_FY_CAP_SI = 550.0
+ACI_FY_CAP_US = 80_000.0
+CIRSOC_FY_CAP_SI = 500.0
+
 
 # ---------------------------------------------------------------------------
 # rho_max — §21.2.2
@@ -57,20 +63,71 @@ def test_max_reinforcement_ratio_falls_with_stronger_steel():
     ],
 )
 def test_min_reinforcement_ratio_si(f_c, f_y, expected, governing):
-    assert eq.min_reinforcement_ratio(f_c, f_y) == pytest.approx(expected, rel=1e-12)
+    assert eq.min_reinforcement_ratio(f_c, f_y, ACI_FY_CAP_SI) == pytest.approx(expected, rel=1e-12)
 
 
 def test_min_reinforcement_ratio_us_matches_the_validated_case():
     # Test_Etabs_05 in the beam suite: f_c = 6000 psi, f_y = 60 ksi.
     # 3*sqrt(6000)/60000 = 0.003873, which governs over 200/60000 = 0.003333.
-    got = eq.min_reinforcement_ratio(6000.0, 60_000.0, is_imperial=True)
+    got = eq.min_reinforcement_ratio(6000.0, 60_000.0, ACI_FY_CAP_US, is_imperial=True)
     assert got == pytest.approx(0.003873, rel=1e-4)
     assert got == pytest.approx(3 * math.sqrt(6000.0) / 60_000.0, rel=1e-12)
 
 
 def test_min_reinforcement_ratio_us_floor_governs_at_low_fc():
     # f_c = 3000 psi: 3*sqrt(3000)/60000 = 0.002739 < 200/60000 = 0.003333
-    assert eq.min_reinforcement_ratio(3000.0, 60_000.0, is_imperial=True) == pytest.approx(200 / 60_000.0, rel=1e-12)
+    assert eq.min_reinforcement_ratio(3000.0, 60_000.0, ACI_FY_CAP_US, is_imperial=True) == pytest.approx(
+        200 / 60_000.0, rel=1e-12
+    )
+
+
+def test_min_reinforcement_ratio_leaves_fy_alone_below_the_cap():
+    """The cap is a ceiling, not a substitution: ADN 420 goes in untouched.
+
+    ACI 318-19 §9.6.1.2 caps f_y at 550 MPa and CIRSOC 201-25 §9.6.1.2 at
+    500 MPa, so for the steel of ordinary practice both codes give the same
+    rho_min and the cap must not show up anywhere in it.
+    """
+    aci = eq.min_reinforcement_ratio(F_C, F_Y, ACI_FY_CAP_SI)
+    cirsoc = eq.min_reinforcement_ratio(F_C, F_Y, CIRSOC_FY_CAP_SI)
+    assert aci == cirsoc == pytest.approx(1.4 / F_Y, rel=1e-12)
+
+
+def test_min_reinforcement_ratio_caps_fy_at_what_the_code_allows():
+    """§9.6.1.2 limits the f_y that goes into the formula, and the two codes
+    limit it differently: 550 MPa in ACI 318-19, 500 MPa in CIRSOC 201-25.
+
+    f_c = 40 MPa with a 600 MPa steel, where the sqrt term governs in all three
+    readings:
+
+        uncapped   0.25*sqrt(40)/600 = 1.58114/600 = 2.6352e-3
+        ACI 550    0.25*sqrt(40)/550 = 1.58114/550 = 2.8748e-3  (+9.1 %)
+        CIRSOC 500 0.25*sqrt(40)/500 = 1.58114/500 = 3.1623e-3  (+20.0 %)
+
+    Ignoring the cap is unconservative, because f_y is in the denominator.
+    """
+    uncapped = 0.25 * math.sqrt(40.0) / 600.0
+    aci = eq.min_reinforcement_ratio(40.0, 600.0, ACI_FY_CAP_SI)
+    cirsoc = eq.min_reinforcement_ratio(40.0, 600.0, CIRSOC_FY_CAP_SI)
+
+    assert aci == pytest.approx(0.25 * math.sqrt(40.0) / 550.0, rel=1e-12)
+    assert aci == pytest.approx(2.8748e-3, rel=1e-4)
+    assert cirsoc == pytest.approx(0.25 * math.sqrt(40.0) / 500.0, rel=1e-12)
+    assert cirsoc == pytest.approx(3.1623e-3, rel=1e-4)
+    assert uncapped < aci < cirsoc
+
+
+def test_min_reinforcement_ratio_caps_fy_in_us_units():
+    """The in-lb edition of ACI 318-19 §9.6.1.2 prints the cap as 80,000 psi.
+
+    f_c = 6000 psi with a Grade 100 steel: 3*sqrt(6000)/80000 = 232.379/80000 =
+    2.9047e-3, against 3*sqrt(6000)/100000 = 2.3238e-3 uncapped. The 200/f_y
+    floor (2.5e-3 at the cap) does not govern.
+    """
+    got = eq.min_reinforcement_ratio(6000.0, 100_000.0, ACI_FY_CAP_US, is_imperial=True)
+    assert got == pytest.approx(3 * math.sqrt(6000.0) / 80_000.0, rel=1e-12)
+    assert got == pytest.approx(2.9047e-3, rel=1e-4)
+    assert got > 3 * math.sqrt(6000.0) / 100_000.0
 
 
 # ---------------------------------------------------------------------------

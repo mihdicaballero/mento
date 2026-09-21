@@ -67,6 +67,45 @@ def test_axial_stress_influence(N_u, A_g, f_c, expected):
 
 
 # ---------------------------------------------------------------------------
+# sqrt(f'c) for V_c — §22.5.3.1 and its exception §22.5.3.2
+# ---------------------------------------------------------------------------
+
+# f'c at which the cap starts to bite: 8.3**2 = 68.89 MPa, 100**2 = 10,000 psi.
+F_C_AT_THE_CAP_SI = 8.3**2
+F_C_AT_THE_CAP_US = 100.0**2
+
+
+@pytest.mark.parametrize(
+    "f_c, is_imperial, expected",
+    [
+        # Below the transition the clause changes nothing.
+        (25.0, False, 5.0),
+        (F_C_AT_THE_CAP_SI, False, 8.3),  # exactly at it
+        (80.0, False, 8.3),  # sqrt(80) = 8.944 -> capped
+        (4000.0, True, math.sqrt(4000.0)),
+        (F_C_AT_THE_CAP_US, True, 100.0),
+        (12_000.0, True, 100.0),  # sqrt(12000) = 109.5 -> capped
+    ],
+)
+def test_sqrt_f_c_for_shear_is_capped_without_min_web_reinforcement(f_c, is_imperial, expected):
+    # §22.5.3.1: sqrt(f'c) for V_c shall not exceed 8.3 MPa (100 psi).
+    got = eq.sqrt_f_c_for_shear(f_c, has_min_rebar=False, is_imperial=is_imperial)
+    assert got == pytest.approx(expected, rel=1e-12)
+
+
+@pytest.mark.parametrize("f_c, is_imperial", [(80.0, False), (120.0, False), (12_000.0, True)])
+def test_sqrt_f_c_for_shear_lifts_the_cap_with_min_web_reinforcement(f_c, is_imperial):
+    # §22.5.3.2: a beam or joist carrying A_v,min of Table 9.6.3.4 may exceed it.
+    got = eq.sqrt_f_c_for_shear(f_c, has_min_rebar=True, is_imperial=is_imperial)
+    assert got == pytest.approx(math.sqrt(f_c), rel=1e-12)
+
+
+def test_sqrt_f_c_for_shear_never_raises_v_c():
+    # The clause may only reduce sqrt(f'c), never increase it.
+    assert all(eq.sqrt_f_c_for_shear(f_c, has_min_rebar=False) <= math.sqrt(f_c) for f_c in range(17, 150))
+
+
+# ---------------------------------------------------------------------------
 # v_c — Table 22.5.5.1
 # ---------------------------------------------------------------------------
 
@@ -112,6 +151,53 @@ def test_concrete_shear_stress_adds_axial_term():
     assert with_axial == pytest.approx(base + 0.4, rel=1e-9)
 
 
+def test_concrete_shear_stress_row_c_uses_the_capped_root():
+    """§22.5.3.1 reaches row (c): a member without A_v,min may not use sqrt(f'c) > 8.3.
+
+    f_c = 80 MPa, lambda = lambda_s = 1, rho_w = 0.01, sigma_Nu = 0:
+        0.01**(1/3)    = 0.2154435
+        row (c) capped = 0.66*0.2154435*8.3       = 1.18020 MPa
+        row (c) uncapped                          = 0.66*0.2154435*sqrt(80)
+                                                  = 0.66*0.2154435*8.944272
+                                                  = 1.27180 MPa,  7.8 % higher
+    The uncapped value is what mento returned before §22.5.3.1 was applied, so
+    this test fails without the change rather than merely passing more tightly.
+    """
+    expected = 0.66 * 0.01 ** (1 / 3) * 8.3
+    got = eq.concrete_shear_stress(80.0, 1.0, 0.01, 0.0, 1.0, has_min_rebar=False)
+    assert got == pytest.approx(expected, rel=1e-12)
+    assert got == pytest.approx(1.18020, rel=1e-5)
+    # And it is strictly below the pre-change value, not equal to it.
+    assert got < 0.66 * 0.01 ** (1 / 3) * math.sqrt(80.0)
+
+
+def test_concrete_shear_stress_row_c_uses_the_capped_root_us():
+    # f_c = 12,000 psi: row (c) 8*0.01**(1/3)*100 = 172.35 psi, not 8*...*109.54.
+    expected = 8 * 0.01 ** (1 / 3) * 100.0
+    got = eq.concrete_shear_stress(12_000.0, 1.0, 0.01, 0.0, 1.0, has_min_rebar=False, is_imperial=True)
+    assert got == pytest.approx(expected, rel=1e-12)
+    assert got < 8 * 0.01 ** (1 / 3) * math.sqrt(12_000.0)
+
+
+def test_concrete_shear_stress_rows_a_b_keep_the_full_root():
+    """§22.5.3.2: with A_v,min in place the cap is lifted, so rows (a)/(b) do not move.
+
+    f_c = 80 MPa, rho_w = 0.01:
+        row (a) 0.17*sqrt(80)               = 1.52053 MPa   <- governs
+        row (b) 0.66*0.2154435*sqrt(80)     = 1.27180 MPa
+    """
+    got = eq.concrete_shear_stress(80.0, 1.0, 0.01, 0.0, 1.0, has_min_rebar=True)
+    assert got == pytest.approx(0.17 * math.sqrt(80.0), rel=1e-12)
+    assert got == pytest.approx(1.52053, rel=1e-5)
+
+
+def test_concrete_shear_stress_cap_does_not_touch_the_axial_term():
+    # sigma_Nu is added after the root, so the cap must not scale it.
+    base = eq.concrete_shear_stress(80.0, 1.0, 0.01, 0.0, 1.0, has_min_rebar=False)
+    with_axial = eq.concrete_shear_stress(80.0, 1.0, 0.01, 0.4, 1.0, has_min_rebar=False)
+    assert with_axial == pytest.approx(base + 0.4, rel=1e-12)
+
+
 # ---------------------------------------------------------------------------
 # Stress limits — §22.5.5.1.1, §22.5.1.2, §9.6.3.1
 # ---------------------------------------------------------------------------
@@ -135,6 +221,43 @@ def test_stress_limits(fn, f_c, is_imperial, expected):
 def test_stress_limits_scale_with_lambda():
     # Lightweight concrete reduces every sqrt(f_c) term linearly.
     assert eq.max_concrete_shear_stress(25.0, 0.75) == pytest.approx(0.75 * eq.max_concrete_shear_stress(25.0, 1.0))
+
+
+def test_max_concrete_shear_stress_is_capped_too():
+    """§22.5.5.1.1 is a calculation of V_c, so §22.5.3.1 caps its root as well.
+
+    f_c = 80 MPa, lambda = 1:
+        capped   0.42*8.3          = 3.48600 MPa
+        uncapped 0.42*sqrt(80)     = 0.42*8.944272 = 3.75659 MPa
+    """
+    capped = eq.max_concrete_shear_stress(80.0, 1.0)
+    assert capped == pytest.approx(0.42 * 8.3, rel=1e-12)
+    assert capped == pytest.approx(3.486, rel=1e-6)
+    assert capped < 0.42 * math.sqrt(80.0)
+
+
+def test_max_concrete_shear_stress_lifts_the_cap_with_min_web_reinforcement():
+    # §22.5.3.2 again: the ceiling rises with the table value, not independently.
+    got = eq.max_concrete_shear_stress(80.0, 1.0, has_min_rebar=True)
+    assert got == pytest.approx(0.42 * math.sqrt(80.0), rel=1e-12)
+    assert got == pytest.approx(3.75659, rel=1e-5)
+
+
+def test_max_concrete_shear_stress_defaults_to_the_capped_reading():
+    # No argument means the conservative branch: a caller that does not know
+    # whether A_v,min is there gets the cap, not the exception.
+    assert eq.max_concrete_shear_stress(80.0, 1.0) == eq.max_concrete_shear_stress(80.0, 1.0, has_min_rebar=False)
+
+
+@pytest.mark.parametrize("f_c, is_imperial", [(25.0, False), (68.0, False), (4000.0, True), (9000.0, True)])
+def test_the_cap_changes_nothing_below_the_transition(f_c, is_imperial):
+    # Every ordinary strength: capped and uncapped must agree exactly, so the
+    # clause cannot have shifted any of the validated examples.
+    root = math.sqrt(f_c)
+    assert eq.sqrt_f_c_for_shear(f_c, has_min_rebar=False, is_imperial=is_imperial) == root
+    assert eq.max_concrete_shear_stress(f_c, 1.0, is_imperial=is_imperial) == pytest.approx(
+        (5 if is_imperial else 0.42) * root, rel=1e-12
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -194,34 +317,58 @@ def test_min_shear_reinforcement_ratio_scales_with_width():
 # ---------------------------------------------------------------------------
 
 
+# Absolute caps (under, over the Vs threshold): ACI 318-19 in mm and in, CIRSOC 201-25 in mm.
+ACI_CAPS_MM = (600.0, 300.0)
+ACI_CAPS_IN = (24.0, 12.0)
+CIRSOC_CAPS_MM = (400.0, 200.0)
+
+
 def test_max_stirrup_spacing_below_the_threshold():
-    # f_c = 25, lambda = 1, A_cv = 300*450 = 135000 mm²:
-    # threshold = 0.083*1*5*135000 = 56,025 N. A demand under it gets the loose
+    # f_c = 25, A_cv = 300*450 = 135000 mm²:
+    # threshold = 0.33*5*135000 = 222,750 N. A demand under it gets the loose
     # limits: d/2 = 225 along, d = 450 across, both under the 600 mm cap.
-    s_l, s_w = eq.max_stirrup_spacing(50_000.0, 25.0, 1.0, 135_000.0, 450.0)
+    s_l, s_w = eq.max_stirrup_spacing(200_000.0, 25.0, 135_000.0, 450.0, *ACI_CAPS_MM)
     assert (s_l, s_w) == pytest.approx((225.0, 450.0))
 
 
 def test_max_stirrup_spacing_above_the_threshold_halves_the_limits():
-    s_l, s_w = eq.max_stirrup_spacing(60_000.0, 25.0, 1.0, 135_000.0, 450.0)
+    s_l, s_w = eq.max_stirrup_spacing(240_000.0, 25.0, 135_000.0, 450.0, *ACI_CAPS_MM)
     # d/4 = 112.5 along, d/2 = 225 across
     assert (s_l, s_w) == pytest.approx((112.5, 225.0))
 
 
+def test_max_stirrup_spacing_threshold_is_033_not_0083():
+    # Regression: the metric threshold was 0.083*sqrt(f'c)*bw*d (the SI form of
+    # 1*sqrt(f'c) psi, borrowed from the Av,min check of 9.6.3.1), so it halved
+    # the spacing four times too early. Vs = 100 kN sits between 56 kN (the old
+    # threshold) and 222.75 kN (Table 9.7.6.2.2): it keeps the loose limits.
+    s_l, s_w = eq.max_stirrup_spacing(100_000.0, 25.0, 135_000.0, 450.0, *ACI_CAPS_MM)
+    assert (s_l, s_w) == pytest.approx((225.0, 450.0))
+
+
 def test_max_stirrup_spacing_is_capped_for_a_deep_member():
     # d = 2000 mm: d/2 = 1000 and d = 2000 both exceed the 600 mm cap.
-    s_l, s_w = eq.max_stirrup_spacing(0.0, 25.0, 1.0, 135_000.0, 2000.0)
+    s_l, s_w = eq.max_stirrup_spacing(0.0, 25.0, 135_000.0, 2000.0, *ACI_CAPS_MM)
     assert (s_l, s_w) == pytest.approx((600.0, 600.0))
     # And above the threshold the cap is 300 mm.
-    s_l, s_w = eq.max_stirrup_spacing(1e9, 25.0, 1.0, 135_000.0, 2000.0)
+    s_l, s_w = eq.max_stirrup_spacing(1e9, 25.0, 135_000.0, 2000.0, *ACI_CAPS_MM)
     assert (s_l, s_w) == pytest.approx((300.0, 300.0))
+
+
+def test_max_stirrup_spacing_cirsoc_caps_for_a_deep_member():
+    # CIRSOC 201-25 Tabla 9.7.6.2.2 keeps 400/200 mm: the same deep member is
+    # capped at 400 mm under the threshold and 200 mm over it, along and across.
+    s_l, s_w = eq.max_stirrup_spacing(0.0, 25.0, 135_000.0, 2000.0, *CIRSOC_CAPS_MM)
+    assert (s_l, s_w) == pytest.approx((400.0, 400.0))
+    s_l, s_w = eq.max_stirrup_spacing(1e9, 25.0, 135_000.0, 2000.0, *CIRSOC_CAPS_MM)
+    assert (s_l, s_w) == pytest.approx((200.0, 200.0))
 
 
 def test_max_stirrup_spacing_us():
     # f_c = 4000 psi, A_cv = 12*20 = 240 in²: threshold = 4*sqrt(4000)*240 = 60,715 lb
-    s_l, s_w = eq.max_stirrup_spacing(50_000.0, 4000.0, 1.0, 240.0, 20.0, is_imperial=True)
+    s_l, s_w = eq.max_stirrup_spacing(50_000.0, 4000.0, 240.0, 20.0, *ACI_CAPS_IN, is_imperial=True)
     assert (s_l, s_w) == pytest.approx((10.0, 20.0))  # d/2, d — both under the 24 in cap
-    s_l, s_w = eq.max_stirrup_spacing(70_000.0, 4000.0, 1.0, 240.0, 20.0, is_imperial=True)
+    s_l, s_w = eq.max_stirrup_spacing(70_000.0, 4000.0, 240.0, 20.0, *ACI_CAPS_IN, is_imperial=True)
     assert (s_l, s_w) == pytest.approx((5.0, 10.0))  # d/4, d/2
 
 
