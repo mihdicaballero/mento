@@ -64,6 +64,17 @@ beam.flexure_checks, beam.shear_checks   # per-combination FlexureCheck / ShearC
 
 Reading a result before `design()` or `check()` has run raises `DesignNotRunError`.
 
+Alternatives and warnings, after a design or check:
+
+```python
+fd.bottom.options                 # RebarOption tuple, best first; options[0] is what was applied
+sd.options                        # StirrupOption tuple (n_stirrups, d_b, s_l, s_w, A_v, functional)
+node.warnings                     # DesignWarning tuple: .code (stable), .message (set_language), .values
+```
+
+`design()` starts from the same state every run, so it is safe to call it repeatedly.
+How many options are kept is `BeamSettings(design_options=3)`.
+
 ### Displaying results from CLI (not Jupyter)
 
 `node.results` uses `IPython.display.Markdown` — it only renders in Jupyter notebooks. From a terminal it produces nothing useful. Use these instead:

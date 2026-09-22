@@ -251,6 +251,9 @@ def test_all_exports_in_all() -> None:
         "TableStyle",
         "set_table_style",
         "get_table_style",
+        "DesignWarning",
+        "RebarOption",
+        "StirrupOption",
     ]
 
     assert set(mento.__all__) == set(expected_exports)

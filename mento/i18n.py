@@ -187,6 +187,51 @@ ES: Dict[str, str] = {
     "Design Check Summary": "Resumen de verificaciones",
 }
 
+# Structured warnings (mento.design_warnings). The English templates are the
+# keys; the placeholders are filled after translation.
+ES.update(
+    {
+        "bottom face": "cara inferior",
+        "top face": "cara superior",
+        "Steel on the {face}: A_s = {A_s} is below the minimum A_s,min = {A_s_min}.": (
+            "Armadura en la {face}: A_s = {A_s} es menor que la mínima A_s,mín = {A_s_min}."
+        ),
+        "Steel on the {face}: A_s = {A_s} exceeds the maximum A_s,max = {A_s_max}.": (
+            "Armadura en la {face}: A_s = {A_s} supera la máxima A_s,máx = {A_s_max}."
+        ),
+        "Clear spacing between the bars on the {face}: {s} is below the minimum {s_min}.": (
+            "Separación libre entre las barras de la {face}: {s} es menor que la mínima {s_min}."
+        ),
+        "Bar spacing on the {face}: {s} is below the minimum {s_min}.": (
+            "Separación de barras en la {face}: {s} es menor que la mínima {s_min}."
+        ),
+        "Bar spacing on the {face}: {s} exceeds the maximum {s_max}.": (
+            "Separación de barras en la {face}: {s} supera la máxima {s_max}."
+        ),
+        "The bars on the {face} do not fit in the width of the section.": (
+            "Las barras de la {face} no entran en el ancho de la sección."
+        ),
+        "The section has no stirrups and requires shear reinforcement A_v = {A_v_req}.": (
+            "La sección no tiene estribos y requiere armadura de corte A_v = {A_v_req}."
+        ),
+        "The stirrups provide A_v = {A_v}, below the minimum A_v,min = {A_v_min}.": (
+            "Los estribos aportan A_v = {A_v}, menos que el mínimo A_v,mín = {A_v_min}."
+        ),
+        "Stirrup spacing along the member: {s} exceeds the maximum {s_max}.": (
+            "Separación de estribos a lo largo del elemento: {s} supera la máxima {s_max}."
+        ),
+        "Stirrup leg spacing across the width: {s} exceeds the maximum {s_max}.": (
+            "Separación de las ramas de estribo en el ancho: {s} supera la máxima {s_max}."
+        ),
+        "Stirrup diameter {d_b} is below the minimum {d_b_min}.": (
+            "Diámetro de estribo {d_b} menor que el mínimo {d_b_min}."
+        ),
+        "Shear V = {V} exceeds the most the section can carry, {V_max}: enlarge the section.": (
+            "El corte V = {V} supera el máximo que admite la sección, {V_max}: hay que agrandarla."
+        ),
+    }
+)
+
 # English is the source language, so its catalog is empty: every lookup falls
 # through to the key itself.
 _CATALOGS: Dict[str, Dict[str, str]] = {

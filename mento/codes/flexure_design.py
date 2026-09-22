@@ -220,19 +220,30 @@ def _run_flexure_design(
     """
 
     # --- helpers -----------------------------------------------------------------
-    def _design_longitudinal_for_area(A_req: Quantity, A_max: Any, mech_cover: Quantity) -> Any:
+    # The ranked table behind every row the search handed back, by the row's
+    # fingerprint, per face. A row is only ever applied as the head of its own
+    # table, so once the face is settled the table of the row on it is the list
+    # of alternatives -- run with the mechanical cover the design finished on.
+    tables: Dict[str, Dict[tuple, Any]] = {"bot": {}, "top": {}}
+    infeasible: Dict[str, bool] = {"bot": False, "top": False}
+
+    def _design_longitudinal_for_area(A_req: Quantity, A_max: Any, mech_cover: Quantity, face: str) -> Any:
         """Run discrete design for a target area and return best_design dict, or
         None if the rebar designer cannot fit any combination in the section
         geometry (RebarDesignInfeasibleError). Callers must handle the None
         result — preserves the public contract that design_flexure never
         crashes, delegating the "insufficient section" report to check_flexure
-        via DCR>1."""
+        via DCR>1, and to the ``bars_do_not_fit`` warning."""
         rebar = self._create_rebar_designer()
         _ = rebar.longitudinal_rebar(A_req, A_max, mech_cover)
         try:
-            return rebar.longitudinal_rebar_design
+            best = rebar.longitudinal_rebar_design
         except RebarDesignInfeasibleError:
+            infeasible[face] = True
             return None
+        infeasible[face] = False
+        tables[face][_rebar_design_fingerprint(best)] = getattr(rebar, "_long_combos_df", None)
+        return best
 
     # --- initial guesses ----------------------------------------------------------
     # Mechanical cover = clear cover + stirrup diameter + the distance from the
@@ -297,12 +308,16 @@ def _run_flexure_design(
         # here would only leave the selector with nothing to fit.
         if A_req_bot >= 0 * (cm**2):
             A_cap_bot = self._A_s_max_bot if A_req_bot <= self._A_s_max_bot else None
-            self.flexure_design_results_bot = _design_longitudinal_for_area(A_req_bot, A_cap_bot, self._c_mec_bot)
+            self.flexure_design_results_bot = _design_longitudinal_for_area(
+                A_req_bot, A_cap_bot, self._c_mec_bot, "bot"
+            )
 
         self.flexure_design_results_top = None
         if A_req_top >= 0 * (cm**2):
             A_cap_top = self._A_s_max_top if A_req_top <= self._A_s_max_top else None
-            self.flexure_design_results_top = _design_longitudinal_for_area(A_req_top, A_cap_top, self._c_mec_top)
+            self.flexure_design_results_top = _design_longitudinal_for_area(
+                A_req_top, A_cap_top, self._c_mec_top, "top"
+            )
 
         # --- Apply both faces (hard overwrite) -----------------------------------
         if self.flexure_design_results_bot is not None:
@@ -327,7 +342,9 @@ def _run_flexure_design(
         # If compression from top (A_s_comp_bot) exceeds what bottom provides, re-upgrade bottom
         if A_s_comp_bot > A_prov_bot:
             A_cap_bot = self._A_s_max_bot if A_s_comp_bot <= self._A_s_max_bot else None
-            self.flexure_design_results_bot = _design_longitudinal_for_area(A_s_comp_bot, A_cap_bot, self._c_mec_bot)
+            self.flexure_design_results_bot = _design_longitudinal_for_area(
+                A_s_comp_bot, A_cap_bot, self._c_mec_bot, "bot"
+            )
             if self.flexure_design_results_bot is not None:
                 self._apply_longitudinal_design_bot(self.flexure_design_results_bot)
                 A_prov_bot = self.flexure_design_results_bot.get("total_as", A_s_comp_bot)
@@ -337,7 +354,9 @@ def _run_flexure_design(
         # (mirrors the bottom-face reconciliation above).
         if A_s_comp_top > A_prov_top:
             A_cap_top = self._A_s_max_top if A_s_comp_top <= self._A_s_max_top else None
-            self.flexure_design_results_top = _design_longitudinal_for_area(A_s_comp_top, A_cap_top, self._c_mec_top)
+            self.flexure_design_results_top = _design_longitudinal_for_area(
+                A_s_comp_top, A_cap_top, self._c_mec_top, "top"
+            )
             if self.flexure_design_results_top is not None:
                 self._apply_longitudinal_design_top(self.flexure_design_results_top)
                 A_prov_top = self.flexure_design_results_top.get("total_as", A_s_comp_top)
@@ -406,12 +425,14 @@ def _run_flexure_design(
         if capacity("bot", max_M_y_bot) < max_M_y_bot and bot_visited:
             chosen_bot = _select_safe_design(self, list(bot_visited.values()), max_M_y_bot, "bot", capacity)
             self._apply_longitudinal_design_bot(chosen_bot)
+            self.flexure_design_results_bot = chosen_bot
 
     if max_M_y_top < 0 * kNm:
         M_demand_top: Quantity = abs(max_M_y_top.to("kN*m"))
         if capacity("top", M_demand_top) < M_demand_top and top_visited:
             chosen_top = _select_safe_design(self, list(top_visited.values()), M_demand_top, "top", capacity)
             self._apply_longitudinal_design_top(chosen_top)
+            self.flexure_design_results_top = chosen_top
 
     # Both faces are settled. An element whose faces are detailed as one -- a
     # footing mat -- gets the last word here, after the verification above and
@@ -429,3 +450,15 @@ def _run_flexure_design(
         return True
 
     self._finalize_longitudinal_design(A_req_bot, A_req_top, _layout_resists)
+
+    # The alternatives of each face, headed by what it carries now.
+    for face, suffix, row in (
+        ("bot", "b", self.flexure_design_results_bot),
+        ("top", "t", self.flexure_design_results_top),
+    ):
+        table = tables[face].get(_rebar_design_fingerprint(row)) if row is not None else None
+        self._record_longitudinal_options(suffix, row, table)
+        if infeasible[face]:
+            self._infeasible_faces.add(face)
+        else:
+            self._infeasible_faces.discard(face)

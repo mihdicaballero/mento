@@ -1,0 +1,204 @@
+"""Structured warnings: the detailing limits a section misses, as data."""
+
+from types import MappingProxyType
+from typing import Iterator
+
+import pytest
+
+import mento
+from mento import (
+    Concrete_ACI_318_19,
+    Concrete_EN_1992_2004,
+    DesignWarning,
+    Forces,
+    Node,
+    RectangularBeam,
+    SteelBar,
+)
+from mento.units import MPa, Quantity, cm, kN, kNm, mm
+
+FORCES = [
+    Forces(label="1.2D+1.6L", V_z=250 * kN, M_y=150 * kNm),
+    Forces(label="1.4D", V_z=120 * kN, M_y=-40 * kNm),
+]
+
+
+@pytest.fixture(autouse=True)
+def english() -> Iterator[None]:
+    mento.set_language("en")
+    yield
+    mento.set_language("en")
+
+
+def _beam(width: Quantity = 20 * cm, height: Quantity = 60 * cm) -> RectangularBeam:
+    return RectangularBeam(
+        label="V101",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=width,
+        height=height,
+        c_c=25 * mm,
+    )
+
+
+def _poorly_detailed() -> tuple[RectangularBeam, Node]:
+    beam = _beam()
+    beam.set_longitudinal_rebar_bot(n1=2, d_b1=10 * mm)
+    beam.set_longitudinal_rebar_top(n1=6, d_b1=25 * mm)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=6 * mm, s_l=35 * cm)
+    node = Node(section=beam, forces=FORCES)
+    node.check()
+    return beam, node
+
+
+def _by_code(warnings: tuple[DesignWarning, ...]) -> dict[str, DesignWarning]:
+    return {w.code: w for w in warnings}
+
+
+def test_a_sound_design_has_no_warnings() -> None:
+    beam = _beam()
+    node = Node(section=beam, forces=FORCES)
+    node.design()
+
+    assert node.warnings == ()
+
+
+def test_each_missed_limit_is_one_warning_with_a_stable_code() -> None:
+    _, node = _poorly_detailed()
+    found = _by_code(node.warnings)
+
+    assert set(found) == {
+        "As_below_min",
+        "As_above_max",
+        "bars_do_not_fit",
+        "Av_below_min",
+        "stirrup_spacing_exceeds_max",
+        "stirrup_diameter_below_min",
+    }
+    assert found["As_below_min"].face == "bottom"
+    assert found["As_above_max"].face == "top"
+    assert found["bars_do_not_fit"].face == "top"
+    # Only the positive moment asks the bottom face for steel.
+    assert found["As_below_min"].combinations == ("1.2D+1.6L",)
+    assert found["stirrup_spacing_exceeds_max"].combinations == ("1.2D+1.6L", "1.4D")
+
+
+def test_values_are_quantities_in_report_units() -> None:
+    beam, node = _poorly_detailed()
+    found = _by_code(node.warnings)
+
+    below = found["As_below_min"].values
+    assert isinstance(below, MappingProxyType)
+    assert below["A_s"].units == (1 * cm**2).units
+    assert below["A_s"].magnitude == pytest.approx(beam._A_s_bot.to("cm**2").magnitude)
+    assert below["A_s"] < below["A_s_min"]
+
+    spacing = found["stirrup_spacing_exceeds_max"].values
+    assert spacing["s"] == 35 * cm
+    # The governing combination is the one furthest past the limit: the high
+    # shear halves the spacing limit to d/4.
+    assert spacing["s_max"].to("cm").magnitude == pytest.approx(beam._d_shear.to("cm").magnitude / 4)
+
+    diameter = found["stirrup_diameter_below_min"].values
+    assert (diameter["d_b"], diameter["d_b_min"]) == (6 * mm, 10 * mm)
+
+
+def test_messages_follow_the_language() -> None:
+    _, node = _poorly_detailed()
+    english = _by_code(node.warnings)["As_below_min"].message
+    mento.set_language("es")
+    spanish = _by_code(node.warnings)["As_below_min"].message
+
+    assert english.startswith("Steel on the bottom face: A_s = 1.57 cm²")
+    assert spanish.startswith("Armadura en la cara inferior: A_s = 1.57 cm²")
+    assert all("{" not in w.message for w in node.warnings)
+
+
+def test_a_warning_does_not_change_the_dcr() -> None:
+    """A strong but badly spaced cage: the check passes, the spacing does not."""
+    beam = _beam()
+    beam.set_longitudinal_rebar_bot(n1=4, d_b1=16 * mm)
+    beam.set_transverse_rebar(n_stirrups=2, d_b=12 * mm, s_l=40 * cm)
+    node = Node(section=beam, forces=[Forces(label="V", V_z=120 * kN, M_y=100 * kNm)])
+    node.check()
+
+    assert "stirrup_spacing_exceeds_max" in _by_code(node.warnings)
+    assert beam.shear_design.DCR < 1
+    assert beam.shear_design.DCR == max(check.DCR for check in beam.shear_checks)
+
+
+def test_no_stirrups_under_shear_asks_for_them() -> None:
+    beam = _beam()
+    beam.set_longitudinal_rebar_bot(n1=4, d_b1=16 * mm)
+    node = Node(section=beam, forces=[Forces(label="V", V_z=120 * kN)])
+    node.check_shear()
+
+    found = _by_code(node.warnings)
+    assert "stirrups_required" in found
+    assert found["stirrups_required"].values["A_v_req"].magnitude > 0
+
+
+def test_a_section_too_small_for_the_shear_says_so() -> None:
+    beam = _beam(height=40 * cm)
+    node = Node(section=beam, forces=[Forces(label="big", V_z=600 * kN, M_y=100 * kNm)])
+    node.design()
+
+    found = _by_code(node.warnings)
+    assert "shear_exceeds_section_limit" in found
+    values = found["shear_exceeds_section_limit"].values
+    assert values["V"] > values["V_max"]
+
+
+def test_values_only_checks_record_warnings_too() -> None:
+    beam = _beam()
+    beam.set_longitudinal_rebar_bot(n1=2, d_b1=10 * mm)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=10 * mm, s_l=35 * cm)
+    beam.flexure_check_results(FORCES)
+    beam.shear_check_results(FORCES)
+
+    assert {"As_below_min", "stirrup_spacing_exceeds_max"} <= set(_by_code(beam.warnings))
+
+
+def test_en_beam_reports_its_own_limits() -> None:
+    beam = RectangularBeam(
+        label="V",
+        concrete=Concrete_EN_1992_2004(name="C25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="B500S", f_y=500 * MPa),
+        width=20 * cm,
+        height=60 * cm,
+        c_c=25 * mm,
+    )
+    beam.set_longitudinal_rebar_bot(n1=4, d_b1=16 * mm)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=60 * cm)
+    node = Node(section=beam, forces=[Forces(label="V", V_z=100 * kN, M_y=80 * kNm)])
+    node.check()
+
+    codes = set(_by_code(node.warnings))
+    assert "stirrup_spacing_exceeds_max" in codes
+    # EN 1992-1-1 states no minimum stirrup diameter, so none is reported.
+    assert "stirrup_diameter_below_min" not in codes
+
+
+def test_warnings_are_empty_before_any_check() -> None:
+    assert _beam().warnings == ()
+
+
+def test_slab_bar_spacing_limits_are_warned() -> None:
+    from mento import OneWaySlab
+    from mento.units import m
+
+    slab = OneWaySlab(
+        label="L1",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=1 * m,
+        height=20 * cm,
+        c_c=25 * mm,
+    )
+    slab.set_slab_longitudinal_rebar_bot(d_b1=12 * mm, s_b1=60 * cm)
+    slab.set_slab_longitudinal_rebar_top(d_b1=12 * mm, s_b1=2 * cm)
+    Node(section=slab, forces=[Forces(label="M", M_y=10 * kNm)]).check_flexure()
+
+    found = {(w.code, w.face) for w in slab.warnings}
+    assert ("bar_spacing_exceeds_max", "bottom") in found
+    assert ("bar_spacing_below_min", "top") in found
