@@ -769,10 +769,32 @@ def test_shear_design_before_a_check_raises(wall_metric: ShearWall) -> None:
         wall_metric.shear_design
 
 
+def test_the_mesh_prints_both_directions(wall_metric: ShearWall) -> None:
+    wall_metric.set_horizontal_rebar(d_b=12 * mm, s=20 * cm)
+    wall_metric.set_vertical_rebar(d_b=10 * mm, s=25 * cm)
+
+    assert str(wall_metric.mesh) == "horizontal: 2×Ø12 mm/20 cm / vertical: 2×Ø10 mm/25 cm"
+
+
+def test_the_shear_design_prints_its_mesh(wall_metric: ShearWall) -> None:
+    """A wall is identified by the mesh it carries, so the design reads as that mesh."""
+    wall_metric.design_shear([Forces(label="U1", V_z=1200 * kN)])
+    design = wall_metric.shear_design
+
+    assert str(design) == str(design.mesh)
+    assert str(design).startswith("horizontal: ")
+
+
 @pytest.mark.parametrize("name", ["reinforcement", "flexure_design", "flexure_checks"])
 def test_beam_results_are_not_offered_on_a_wall(wall_metric: ShearWall, name: str) -> None:
     with pytest.raises(NotImplementedError, match="mesh"):
         getattr(wall_metric, name)
+
+
+def test_flexure_check_results_is_not_offered_on_a_wall(wall_metric: ShearWall) -> None:
+    """The values-only flexure entry point is a method, so the guard needs a call."""
+    with pytest.raises(NotImplementedError, match="mesh"):
+        wall_metric.flexure_check_results([Forces(label="U1", V_z=1200 * kN)])
 
 
 def test_wall_warnings(wall_metric: ShearWall) -> None:
