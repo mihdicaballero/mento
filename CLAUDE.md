@@ -94,6 +94,7 @@ mento/
 ├── column.py               Column — geometry (shape, position, edge distances) for punching shear
 ├── punching.py             PunchingSlab, PunchingNode, Opening, Capital — two-way punching shear
 ├── punching_results.py     PunchingCheck — frozen result of a punching check
+├── wall_results.py         WallMesh, WallShearCheck, WallShearDesign — public results of a ShearWall
 ├── design_results.py       Public read-only result dataclasses (FlexureDesign, ShearDesign, SectionReinforcement, ...) — ADR-0001
 ├── design_warnings.py      DesignWarning — detailing limits a section misses, with stable codes (beam.warnings / node.warnings)
 ├── precompute.py           SectionFloats — section geometry and materials as plain floats, converted once (ADR-0005)

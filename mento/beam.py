@@ -119,6 +119,8 @@ class _DesignCodeAttributes:
         # Both
         _A_s_min_bot: Quantity
         _A_s_min_top: Quantity
+        _A_s_min_eff_bot: Quantity
+        _A_s_min_eff_top: Quantity
         _A_s_max_bot: Quantity
         _A_s_max_top: Quantity
         flexure_design_results_bot: Any

@@ -362,14 +362,13 @@ class Footing(OneWaySlab):
     """A spread footing or raft: a one-way slab bearing directly on the ground.
 
     Everything about it is a :class:`OneWaySlab` -- the same flexure and shear
-    checks, the same reinforcement given as diameter and spacing -- with one
-    difference, and it is a difference the design codes make rather than this
-    class: the minimum longitudinal reinforcement.
+    checks, the same reinforcement given as diameter and spacing -- and, under
+    ACI 318-19 and CIRSOC 201-25, the same minimum longitudinal reinforcement,
+    reached by another road. Under EN 1992-1-1 the minimum is where they differ.
 
-    A member spanning between supports is given a minimum sized to keep it from
-    failing the instant it cracks. A member on the ground cannot fail that way,
-    because the soil goes on carrying it, so the codes send a footing somewhere
-    else for its minimum:
+    A beam is given a minimum sized to keep it from failing the instant it
+    cracks. A member on the ground cannot fail that way, because the soil goes
+    on carrying it, so the codes send a footing somewhere else for its minimum:
 
     * ACI 318-19 §13.3.2.1 sends a one-way shallow foundation to Chapters 7
       and 9, and it is Chapter 7 that applies: §7.6.1.1 asks for

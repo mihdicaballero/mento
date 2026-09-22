@@ -64,6 +64,12 @@ beam.flexure_checks, beam.shear_checks   # per-combination FlexureCheck / ShearC
 
 Reading a result before `design()` or `check()` has run raises `DesignNotRunError`.
 
+`fd.bottom.A_s_min` is the minimum as §9.6.1.2 writes it; `fd.bottom.A_s_min_eff` is the one the
+face has to meet after the 4/3 relief of §9.6.1.3 (ACI / CIRSOC). Compare `A_s` against the second.
+
+A `ShearWall` has no bars or stirrups: read `wall.mesh.horizontal` / `.vertical` (`d_b`, `s`, `rho`),
+`wall.shear_design` and `wall.shear_checks` instead.
+
 Alternatives and warnings, after a design or check:
 
 ```python

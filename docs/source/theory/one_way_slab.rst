@@ -149,9 +149,21 @@ engineer.
 Consequences for flexure
 ------------------------
 
-Nothing changes mechanically. The geometric minimum of :math:`1.8\text{‰}\,b\,h` that
-mento applies under ACI (see :ref:`aci-decisions`) is expressed on the gross section,
-so it scales with the design width as expected.
+Nothing changes mechanically. What changes is the minimum reinforcement.
+
+**ACI 318-19 and CIRSOC 201-25.** A one-way slab is designed under Chapter 7, and its
+minimum is §7.6.1.1 (CIRSOC 201-25 §7.6.1), not the beam minimum of §9.6.1.2:
+
+.. math::
+
+   A_{s,min} = 0.0018\, b\, h
+
+on the gross section and for every steel grade — the same ratio as the shrinkage and
+temperature reinforcement of §24.4.3.2, and the one a :doc:`footing` reaches through
+§13.3.2.1. The 4/3 relief of §9.6.1.3 relieves §9.6.1.2 only, so it does not apply to
+a slab: a face whose moment asks for less than :math:`A_{s,min}` is designed to
+:math:`A_{s,min}` itself. On a 1 m strip 200 mm deep that is 3.60 cm², where the beam
+rule asked 5.63 cm².
 
 .. note::
 
