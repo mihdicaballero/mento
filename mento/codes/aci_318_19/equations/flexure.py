@@ -95,36 +95,27 @@ def min_reinforcement_ratio(
     return max(0.25 * math.sqrt(f_c) / f_y_eff, 1.4 / f_y_eff)
 
 
-def shrinkage_and_temperature_ratio(f_y: float, *, is_imperial: bool = False) -> float:
-    """Shrinkage and temperature reinforcement ratio — ACI 318-19 §24.4.3.2 / CIRSOC 201-25 §24.4.3.2.
+def shrinkage_and_temperature_ratio() -> float:
+    """Slab minimum and shrinkage and temperature ratio — ACI 318-19 §7.6.1.1 and §24.4.3.2 / CIRSOC 201-25 §7.6.1 and §24.4.3.2.
 
-    The minimum that governs a member on the ground, written on the GROSS
-    section ``b*h`` rather than on the effective depth the flexural minimum of
-    §9.6.1.2 uses. The path to it is the same in both codes: ACI 318-19
-    §13.3.2.1 sends a one-way shallow foundation to Chapters 7 and 9, and
-    §7.6.1.1 asks there for A_s,min = 0.0018*A_g, the same ratio §24.4.3.2
-    gives (two-way: §13.3.3.1 → §8.6.1.1). CIRSOC 201-25 §13.3.2.1 → §7.6.1
-    (an unnumbered paragraph, "As,min de 0,0018Ag") and §13.3.3.1 → §8.6.1.1.
+    The minimum of a one-way slab and of a member on the ground, written on
+    the GROSS section ``b*h`` rather than on the effective depth the flexural
+    minimum of §9.6.1.2 uses. A slab reaches it directly; a one-way shallow
+    foundation through §13.3.2.1, which sends it to Chapters 7 and 9 (two-way:
+    §13.3.3.1 → §8.6.1.1, the same 0.0018*A_g). CIRSOC 201-25 prints the same
+    chain: §13.3.2.1 → §7.6.1 (an unnumbered paragraph, "As,min de 0,0018Ag")
+    and §13.3.3.1 → §8.6.1.1.
 
-    Both codes now state one flat ratio for every f_y: 0.0018. The scaling by
-    f_y and the 0.0014 floor below are the Table 24.4.3.2 of earlier editions,
-    which neither code carries any more — ACI 318-19 R24.4.3.2 records that the
-    reduction for f_y over 420 MPa was withdrawn because increased yield
-    strength gives no benefit for crack control. Correcting the returned value
-    is a behavioural change and is not made here.
-
-    Args:
-        f_y: Specified steel yield strength (MPa, or psi).
-        is_imperial: Selects the reference yield strength the withdrawn table
-            was anchored at: 60000 psi in US customary, 420 MPa in SI.
+    One flat ratio for every f_y. The 0.0018*420/f_y (60,000/f_y psi) with a
+    0.0014 floor is Table 7.6.1.1 / Table 24.4.3.2 of ACI 318-14, which neither
+    code carries any more -- ACI 318-19 R24.4.3.2 records that the reduction
+    for f_y over 420 MPa was withdrawn because a stronger steel gives no
+    benefit for crack control.
 
     Returns:
-        A_s,min/(b*h), dimensionless. 0.0018 at the reference yield strength,
-        scaled inversely for a stronger steel, and never below the 0.0014
-        floor.
+        A_s,min/(b*h), dimensionless: 0.0018.
     """
-    f_y_reference = 60000.0 if is_imperial else 420.0
-    return max(0.0018 * f_y_reference / f_y, 0.0014)
+    return 0.0018
 
 
 def neutral_axis_at_ductility_limit(d: float, epsilon_y: float) -> float:

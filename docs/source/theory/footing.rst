@@ -8,7 +8,9 @@ shallow beam, and every equation on the :doc:`ACI <beam_aci_318_19>` and
 :doc:`one_way_slab` page.
 
 This page covers only what differs: the minimum reinforcement, and the detailing
-limits that go with it.
+limits that go with it. Under ACI 318-19 and CIRSOC 201-25 the minimum is in fact the
+one a suspended one-way slab already takes; it is under EN 1992-1-1 that a footing has
+a minimum of its own.
 
 .. warning::
 
@@ -29,9 +31,8 @@ which is why the minimum is written as the steel needed to exceed the cracking m
 
 A member bearing on the ground cannot fail that way. The soil under it goes on
 carrying it after the section cracks, so there is no sudden loss of support to guard
-against. Both codes recognise this and exempt the member, then substitute a rule with
-a different purpose — restraining shrinkage and temperature movement under ACI,
-controlling crack widths under EN.
+against. Both codes send the member to a rule with a different purpose — restraining
+shrinkage and temperature movement under ACI, controlling crack widths under EN.
 
 mento expresses the distinction as a single attribute on the section,
 ``Section.support``: ``"free"`` for anything spanning between supports, ``"soil"``
@@ -42,22 +43,23 @@ it says what kind of element this is.
 ACI 318-19 and CIRSOC 201-25
 ----------------------------
 
-§9.6.1.1(b) exempts a member supported on the ground from the flexural minimum of
-§9.6.1.2, and §13.3.1.2 sends a footing to the shrinkage and temperature
-reinforcement of Table 24.4.3.2 instead. That minimum is written on the **gross**
-section, so the effective depth does not enter it:
+§13.3.2.1 sends a one-way shallow foundation to Chapters 7 and 9, and the minimum
+that answers there is Chapter 7's: §7.6.1.1 (CIRSOC 201-25 §7.6.1, an unnumbered
+paragraph under that heading), the same ratio as the shrinkage and temperature
+reinforcement of §24.4.3.2. A footing spanning two ways goes by §13.3.3.1 to §8.6.1.1,
+which repeats it. It is written on the **gross** section, so the effective depth does
+not enter it, and it is one ratio for every steel grade:
 
 .. math::
 
-   A_{s,min} = \rho_{st}\, b\, h
-   \qquad
-   \rho_{st} = \max\!\left(0.0018\,\frac{f_{y,ref}}{f_y},\ 0.0014\right)
+   A_{s,min} = 0.0018\, b\, h
 
-with :math:`f_{y,ref} = 420` MPa in SI and 60 000 psi in US customary. The ratio is
-0.0018 at the reference grade, scales inversely for a stronger steel, and never falls
-below the 0.0014 floor of the table.
+ACI 318-14 scaled it as :math:`0.0018 \times 420/f_y \ge 0.0014` above 420 MPa;
+ACI 318-19 withdrew that reduction (R24.4.3.2: a stronger steel gives no benefit for
+crack control), and CIRSOC 201-25 prints the flat 0.0018 as well. A suspended one-way
+slab takes the same minimum directly from §7.6.1.1 — see :doc:`one_way_slab`.
 
-For comparison, the beam minimum this replaces is
+For comparison, the beam minimum of §9.6.1.2 it replaces is
 
 .. math::
 
@@ -343,25 +345,17 @@ depth.
 
 **The 4/3 relief is not applied to a footing.** ACI §9.6.1.3 lets a section satisfy
 :math:`4/3` of the required steel instead of the minimum. It belongs to the clause it
-relieves, §9.6.1.2, which §9.6.1.1(b) has already exempted the member from — there is
-no sudden cracking failure here for extra steel to buy off, so the shrinkage and
-temperature minimum stands as written.
+relieves, §9.6.1.2, the beam minimum, which is not the one that governs here — so the
+§7.6.1.1 minimum stands as written, for a footing as for a suspended slab.
 
-**The 1.8‰ geometric minimum still applies to a free member.** The custom
-:math:`1.8\text{‰}\,b\,h` rule mento adds under ACI (see :ref:`aci-decisions`) is
-unchanged for beams and suspended slabs. On a footing it is superseded — and at
-:math:`f_y = 420` MPa the two coincide, since Table 24.4.3.2 gives exactly 0.0018.
+**The 1.8‰ geometric minimum of a beam is not needed here.** The custom
+:math:`1.8\text{‰}\,b\,h` floor mento adds to a beam under ACI (see
+:ref:`aci-decisions`) is the code minimum itself on a slab or a footing.
 
 **Steel grades between the EN anchors are interpolated.** The halved geometric
 minimum is tabulated at :math:`f_{yk} = 400` and 500 MPa only. mento interpolates
 linearly between them and holds the value flat outside, rather than extrapolating a
 rule the source does not state.
-
-**ACI's f_y < 420 MPa branch is not special-cased.** Table 24.4.3.2 gives a flat
-0.0020 for deformed bars below the reference grade, where the scaling used here gives
-:math:`0.0018 \times 420/f_y`, which is larger — 0.0025 at 300 MPa. mento uses the
-scaling in both directions, so the answer is conservative for the lower grades rather
-than exact.
 
 **The minimum is split by face, as it is for a beam.** A check reports the minimum on
 the face in tension for the combination and zero on the other, following the same
@@ -397,19 +391,20 @@ Validation
    * - Check
      - Test (``tests/test_footing.py``)
      - Verified against
-   * - :math:`\rho_{st}`, both unit systems and the 0.0014 floor
-     - ``test_aci_shrinkage_and_temperature_ratio``,
-       ``test_aci_shrinkage_and_temperature_ratio_imperial``
-     - ACI 318-19 Table 24.4.3.2
+   * - :math:`\rho_{st} = 0.0018` for every steel grade
+     - ``test_aci_shrinkage_and_temperature_ratio``
+     - ACI 318-19 §7.6.1.1, §24.4.3.2
    * - :math:`A_{s,min}` on the gross section, ACI
      - ``test_aci_footing_minimum_is_the_gross_section_rule``,
-       ``test_aci_footing_minimum_scales_with_the_steel_grade``,
+       ``test_aci_footing_minimum_does_not_scale_with_the_steel_grade``,
        ``test_aci_footing_minimum_in_imperial_units``
-     - ACI 318-19 §9.6.1.1(b), §13.3.1.2, Table 24.4.3.2
-   * - The exemption lowers the minimum
-     - ``test_aci_footing_minimum_is_lower_than_the_slab_minimum``,
-       ``test_en_footing_minimum_is_lower_than_the_slab_minimum``
-     - ACI 318-19 §9.6.1.1(b); EN 1992-1-1 §9.2.1.1
+     - ACI 318-19 §13.3.2.1, §7.6.1.1
+   * - ACI: the footing takes the slab minimum
+     - ``test_aci_footing_takes_the_slab_minimum``
+     - ACI 318-19 §13.3.2.1 → §7.6.1.1
+   * - EN: the foundation minimum is lower than the slab one
+     - ``test_en_footing_minimum_is_lower_than_the_slab_minimum``
+     - EN 1992-1-1 §9.2.1.1
    * - CIRSOC shares the ACI clause
      - ``test_cirsoc_shares_the_aci_clause``
      - CIRSOC 201-25

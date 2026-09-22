@@ -124,6 +124,13 @@ class FlexureFaceCheck:
     ``A_s,nec / A_s,prov`` reads it, because a face governed by its minimum
     carries little of the stress that minimum is sized for.
 
+    ``A_s_min`` is the minimum as the clause writes it. ``A_s_min_eff`` is the
+    one the face has to meet: under ACI 318-19 and CIRSOC 201-25 the relief of
+    §9.6.1.3 lets 4/3 of ``A_s_calc`` stand in for it when that is less, so a
+    face below ``A_s_min`` but not below ``A_s_min_eff`` complies. EN
+    1992-1-1 has no such relief, and there the two are the same. Compare the
+    steel provided against ``A_s_min_eff``.
+
     A field is ``None`` when the design code did not set it for this
     combination; enveloping skips those rather than treating them as zero.
     """
@@ -134,6 +141,7 @@ class FlexureFaceCheck:
     DCR: float
     M_capacity: Optional[Quantity] = None
     A_s_calc: Optional[Quantity] = None
+    A_s_min_eff: Optional[Quantity] = None
 
 
 @dataclass(frozen=True)
@@ -201,6 +209,7 @@ def envelope_flexure_face(checks: Sequence[FlexureCheck], face: str) -> FlexureF
         DCR=max([f.DCR for f in faces], default=0.0),
         M_capacity=_governing([(f.DCR, f.M_capacity) for f in faces]),
         A_s_calc=_worst([f.A_s_calc for f in faces]),
+        A_s_min_eff=_worst([f.A_s_min_eff for f in faces]),
     )
 
 
@@ -225,7 +234,7 @@ def capture_flexure_check(beam: RectangularBeam, label: str, state: Any) -> Flex
     imperial = beam.concrete.is_imperial
 
     def face(suffix: str) -> FlexureFaceCheck:
-        A_s_req, A_s_min, A_s_max, M_capacity, A_s_calc = state.face_quantities(suffix, imperial)
+        A_s_req, A_s_min, A_s_max, M_capacity, A_s_calc, A_s_min_eff = state.face_quantities(suffix, imperial)
         return FlexureFaceCheck(
             A_s_req=A_s_req,
             A_s_min=A_s_min,
@@ -233,6 +242,7 @@ def capture_flexure_check(beam: RectangularBeam, label: str, state: Any) -> Flex
             DCR=float(getattr(state, f"DCR_{suffix}")),
             M_capacity=M_capacity,
             A_s_calc=A_s_calc,
+            A_s_min_eff=A_s_min_eff,
         )
 
     return FlexureCheck(label=label, bottom=face("bot"), top=face("top"))
@@ -360,12 +370,17 @@ class FlexureFaceDesign:
     and ``DCR`` are the envelope over every load combination that was checked,
     so ``DCR`` is the one of the combination that governs this face.
 
-    ``A_s_req`` is the steel to detail, never below the minimum. ``A_s_calc``
+    ``A_s_req`` is the steel to detail, never below ``A_s_min_eff``. ``A_s_calc``
     is what the moment alone asked for, before that minimum -- the envelope of
     the same over the combinations, so the governing one's. Choose bars from
     the first; scale an anchorage by ``A_s,nec / A_s,prov`` from the second,
     since a face governed by its minimum carries little of the stress the
     minimum is sized for.
+
+    ``A_s_min`` is the minimum as the clause writes it, and ``A_s_min_eff``
+    the one the face has to meet, after the relief of ACI 318-19 / CIRSOC
+    201-25 §9.6.1.3 -- see :class:`FlexureFaceCheck`. A designed face can sit
+    below ``A_s_min`` and still comply; it cannot sit below ``A_s_min_eff``.
 
     ``options`` are the layouts the last design found for this face, best
     first; ``options[0]`` is the one applied. Empty when the face was not
@@ -382,6 +397,7 @@ class FlexureFaceDesign:
     A_s_req: Quantity
     A_s_calc: Quantity
     A_s_min: Quantity
+    A_s_min_eff: Quantity
     A_s_max: Quantity
     DCR: float
     M_capacity: Quantity
@@ -541,6 +557,7 @@ def _face(beam: RectangularBeam, face: str) -> FlexureFaceDesign:
         A_s_req=zero if worst.A_s_req is None else worst.A_s_req,
         A_s_calc=zero if worst.A_s_calc is None else worst.A_s_calc,
         A_s_min=zero if worst.A_s_min is None else worst.A_s_min,
+        A_s_min_eff=zero if worst.A_s_min_eff is None else worst.A_s_min_eff,
         A_s_max=zero if worst.A_s_max is None else worst.A_s_max,
         DCR=worst.DCR,
         M_capacity=no_capacity if worst.M_capacity is None else worst.M_capacity,

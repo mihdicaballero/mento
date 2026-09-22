@@ -21,7 +21,8 @@ Codes
 -----
 ``As_below_min``
     A face carries less steel than its minimum, and the 4/3 relief of
-    ACI 318-19 §9.6.1.3 / CIRSOC 201-25 §9.6.1.3 does not cover it.
+    ACI 318-19 §9.6.1.3 / CIRSOC 201-25 §9.6.1.3 does not cover it. The
+    minimum it quotes is the one left after that relief, ``A_s_min_eff``.
 ``As_above_max``
     A face carries more steel than the tension-controlled limit of a singly
     reinforced section.
@@ -47,7 +48,14 @@ Codes
 ``shear_exceeds_section_limit``
     The shear exceeds the most the section can carry however it is
     reinforced (ACI 318-19 §22.5.1.2, EN 1992-1-1 V_Rd,max): the section has
-    to grow.
+    to grow. A wall reports it against ØVn,max of §11.5.4.3.
+``mesh_ratio_below_min``
+    A wall mesh gives less than its direction asks for: the horizontal one
+    below the ρt the shear needs (never below its minimum), the vertical one
+    below ρl,min of ACI 318-19 / CIRSOC 201-25 §11.6.2. ``values`` carries
+    ``direction``, ``"h"`` or ``"v"``.
+``mesh_spacing_exceeds_max``
+    The bars of a wall mesh are further apart than §11.7 allows.
 """
 
 from __future__ import annotations
@@ -65,6 +73,7 @@ from mento.units import Quantity, inch, mm
 
 if TYPE_CHECKING:
     from mento.beam import RectangularBeam
+    from mento.wall_results import WallMesh, WallShearCheck
 
 
 @dataclass(frozen=True)
@@ -124,6 +133,10 @@ _MESSAGES: Dict[str, str] = {
     "stirrup_spacing_exceeds_max_w": "Stirrup leg spacing across the width: {s} exceeds the maximum {s_max}.",
     "stirrup_diameter_below_min": "Stirrup diameter {d_b} is below the minimum {d_b_min}.",
     "shear_exceeds_section_limit": "Shear V = {V} exceeds the most the section can carry, {V_max}: enlarge the section.",
+    "mesh_ratio_below_min_h": "Horizontal wall mesh: ρt = {rho} is below the required ρt = {rho_min}.",
+    "mesh_ratio_below_min_v": "Vertical wall mesh: ρl = {rho} is below the minimum ρl,min = {rho_min}.",
+    "mesh_spacing_exceeds_max_h": "Horizontal wall mesh spacing: {s} exceeds the maximum {s_max}.",
+    "mesh_spacing_exceeds_max_v": "Vertical wall mesh spacing: {s} exceeds the maximum {s_max}.",
 }
 
 _FACES = {"bottom": "bottom face", "top": "top face"}
@@ -133,8 +146,11 @@ def _format(value: Any) -> str:
     """A value as the messages print it: three significant figures.
 
     Everything a warning quotes is a quantity -- an area, a spacing, a force --
-    so there is one format, and pint's ``~P`` writes the unit with it.
+    so there is one format, and pint's ``~P`` writes the unit with it. A
+    reinforcement ratio is the exception, a bare number.
     """
+    if not isinstance(value, Quantity):
+        return f"{value:.3g}"
     return f"{value:.3g~P}"
 
 
@@ -191,10 +207,12 @@ def flexure_warnings(beam: "RectangularBeam", label: str, state: Any) -> List[_R
     doubly = bool(getattr(state, "doubly_reinforced", False))
     for suffix in ("bot", "top"):
         A_s: Quantity = getattr(beam, f"_A_s_{suffix}")
-        A_s_min = _q(getattr(state, f"A_s_min_{suffix}"), "area", beam).to(A_s.units)
+        # The minimum the face has to meet, relief of §9.6.1.3 included; a
+        # code with no relief (EN 1992-1-1) leaves it at A_s_min.
+        A_s_min_raw = getattr(state, f"A_s_min_{suffix}")
+        A_s_min = _q(getattr(state, f"A_s_min_eff_{suffix}", A_s_min_raw), "area", beam).to(A_s.units)
         A_s_max = _q(getattr(state, f"A_s_max_{suffix}"), "area", beam).to(A_s.units)
-        relieved = bool(getattr(state, f"A_s_bool_{suffix}", False))
-        if A_s < A_s_min and not relieved and not math.isclose(A_s.magnitude, A_s_min.magnitude):
+        if A_s < A_s_min and not math.isclose(A_s.magnitude, A_s_min.magnitude):
             found.append(
                 _Raw(
                     "As_below_min",
@@ -334,6 +352,45 @@ def shear_warnings(beam: "RectangularBeam", label: str, state: Any) -> List[_Raw
         if d_b < d_b_min:
             found.append(_Raw("stirrup_diameter_below_min", {"d_b": d_b, "d_b_min": d_b_min.to(d_b.units)}, None))
     return [_with_units(raw, beam) for raw in found]
+
+
+# ---------------------------------------------------------------------------
+# What a wall shear check leaves
+# ---------------------------------------------------------------------------
+
+
+def wall_warnings(wall: "RectangularBeam", mesh: "WallMesh", checks: Tuple["WallShearCheck", ...]) -> List[_Raw]:
+    """The mesh limits a wall misses, over every combination checked.
+
+    Mirrors the limit rows of the wall report: each ratio against what its
+    direction asks for, each spacing against its maximum, and the shear
+    against the most the section can carry. A mesh with a zero spacing has no
+    bars, so its spacing is not a limit it misses; its ratio is.
+    """
+    found: List[_Raw] = []
+    for check in checks:
+        for direction, provided, required in (
+            ("h", mesh.horizontal, check.rho_t_req),
+            ("v", mesh.vertical, check.rho_l_min),
+        ):
+            if provided.rho < required and not math.isclose(provided.rho, required, rel_tol=1e-9):
+                values = {"direction": direction, "rho": round(provided.rho, 5), "rho_min": round(required, 5)}
+                found.append(_Raw("mesh_ratio_below_min", values, None, check.label, required - provided.rho))
+        for direction, provided, s_max in (
+            ("h", mesh.horizontal, check.s_h_max),
+            ("v", mesh.vertical, check.s_v_max),
+        ):
+            s_max = s_max.to(provided.s.units)
+            if provided.has_bars and provided.s > s_max and not math.isclose(provided.s.magnitude, s_max.magnitude):
+                values = {"direction": direction, "s": provided.s, "s_max": s_max}
+                found.append(
+                    _Raw("mesh_spacing_exceeds_max", values, None, None, float((provided.s - s_max).magnitude))
+                )
+        if check.V_u > check.V_max:
+            values = {"V": check.V_u, "V_max": check.V_max}
+            severity = float((check.V_u - check.V_max).magnitude)
+            found.append(_Raw("shear_exceeds_section_limit", values, None, check.label, severity))
+    return [_with_units(raw, wall) for raw in found]
 
 
 # ---------------------------------------------------------------------------

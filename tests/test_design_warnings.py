@@ -221,3 +221,80 @@ def test_bars_that_do_not_fit_are_warned_after_a_design() -> None:
     assert "bars_do_not_fit" in found
     assert found["bars_do_not_fit"].face == "bottom"
     assert found["bars_do_not_fit"].values == {}
+
+
+# ---------------------------------------------------------------------------
+# The minimum a face has to meet: ACI 318-19 / CIRSOC 201-25 §9.6.1.3
+# ---------------------------------------------------------------------------
+
+
+def _cirsoc_section(kind: str) -> RectangularBeam:
+    """The two sections the relief was first seen short on, CIRSOC 201-25."""
+    concrete = mento.Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa)
+    steel = SteelBar(name="ADN 420", f_y=420 * MPa)
+    if kind == "slab":
+        return mento.OneWaySlab(
+            label="L1", concrete=concrete, steel_bar=steel, width=100 * cm, height=20 * cm, c_c=25 * mm
+        )
+    return RectangularBeam(label="V1", concrete=concrete, steel_bar=steel, width=20 * cm, height=60 * cm, c_c=25 * mm)
+
+
+@pytest.mark.parametrize("kind, M_u", [("beam", 45), ("slab", 22)])
+@pytest.mark.parametrize("sign", [1, -1], ids=["bottom", "top"])
+def test_designed_face_never_below_the_minimum_it_has_to_meet(kind: str, M_u: float, sign: int) -> None:
+    section = _cirsoc_section(kind)
+    node = Node(section=section, forces=[Forces(label="U", M_y=sign * M_u * kNm)])
+    node.design()
+
+    face = section.flexure_design.bottom if sign > 0 else section.flexure_design.top
+    if kind == "beam":
+        # Light enough that the 4/3 relief governs: the face sits below the
+        # A_s,min of §9.6.1.2 and complies all the same.
+        assert face.A_s < face.A_s_min
+        assert face.A_s_min_eff.to("cm**2").magnitude == pytest.approx((4 * face.A_s_calc / 3).to("cm**2").magnitude)
+    else:
+        # A slab takes 0.0018*b*h of §7.6.1.1, which §9.6.1.3 does not relieve.
+        assert face.A_s_min.to("cm**2").magnitude == pytest.approx(0.0018 * 100 * 20)
+        assert face.A_s_min_eff == face.A_s_min
+        assert face.A_s >= face.A_s_min
+    for f in (section.flexure_design.bottom, section.flexure_design.top):
+        assert f.A_s_min_eff <= f.A_s_min
+        assert f.A_s.to("cm**2").magnitude >= f.A_s_min_eff.to("cm**2").magnitude - 1e-9
+    assert "As_below_min" not in [w.code for w in node.warnings]
+
+
+def test_relieved_minimum_reads_the_detailed_report_as_passing() -> None:
+    beam = _cirsoc_section("beam")
+    node = Node(section=beam, forces=[Forces(label="U", M_y=-45 * kNm)])
+    node.design()
+    node.flexure_results_detailed()
+    assert beam._data_min_max_flexure["Ok?"][0] == "✅ 9.6.1.3"
+
+
+def test_layout_short_of_four_thirds_still_warns() -> None:
+    # The requirement adopts 4/3 A_s_calc, so the old flag was set; the bars
+    # checked by hand carry more than A_s_calc but less than 4/3 of it, which
+    # the relief does not cover.
+    beam = _cirsoc_section("beam")
+    node = Node(section=beam, forces=[Forces(label="U", M_y=-45 * kNm)])
+    beam.set_longitudinal_rebar_top(n1=2, d_b1=12 * mm)  # 2.26 cm²: A_s_calc < 2.26 < 4/3 A_s_calc
+    node.check_flexure()
+    top = beam.flexure_design.top
+    assert top.A_s_calc < top.A_s < top.A_s_min_eff
+    warning = next(w for w in node.warnings if w.code == "As_below_min")
+    assert warning.values["A_s_min"].to("cm**2").magnitude == pytest.approx(top.A_s_min_eff.to("cm**2").magnitude)
+
+
+def test_en_minimum_is_not_relieved() -> None:
+    beam = RectangularBeam(
+        label="V1",
+        concrete=Concrete_EN_1992_2004(name="C25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="B500S", f_y=500 * MPa),
+        width=20 * cm,
+        height=60 * cm,
+        c_c=25 * mm,
+    )
+    node = Node(section=beam, forces=[Forces(label="U", M_y=-45 * kNm)])
+    node.design()
+    top = beam.flexure_design.top
+    assert top.A_s_min_eff == top.A_s_min

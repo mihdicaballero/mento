@@ -254,6 +254,10 @@ def test_all_exports_in_all() -> None:
         "DesignWarning",
         "RebarOption",
         "StirrupOption",
+        "WallMesh",
+        "MeshDirection",
+        "WallShearCheck",
+        "WallShearDesign",
     ]
 
     assert set(mento.__all__) == set(expected_exports)

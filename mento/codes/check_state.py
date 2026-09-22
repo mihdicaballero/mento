@@ -62,19 +62,23 @@ def to_display(value: float, kind: str, imperial: bool) -> Any:
     return (value * CANONICAL[imperial][kind]).to(DISPLAY[imperial][kind])
 
 
-def _face_quantities(state: Any, face: str, capacity: str, imperial: bool) -> tuple[Any, Any, Any, Any, Any]:
-    """``(A_s_req, A_s_min, A_s_max, capacity, A_s_calc)`` of one face of a flexure state.
+def _face_quantities(state: Any, face: str, capacity: str, imperial: bool) -> tuple[Any, Any, Any, Any, Any, Any]:
+    """``(A_s_req, A_s_min, A_s_max, capacity, A_s_calc, A_s_min_eff)`` of one face of a flexure state.
 
     The two flexure states name their capacity differently -- ``phi_M_n`` and
     ``M_Rd`` -- and share everything else, so each names its own field and
-    this does the wrapping.
+    this does the wrapping. A state with no relief of its minimum -- EN
+    1992-1-1 has none -- has no ``A_s_min_eff`` field, and its minimum is the
+    one the face has to meet.
     """
+    A_s_min = getattr(state, f"A_s_min_{face}")
     return (
         to_display(getattr(state, f"A_s_req_{face}"), "area", imperial),
-        to_display(getattr(state, f"A_s_min_{face}"), "area", imperial),
+        to_display(A_s_min, "area", imperial),
         to_display(getattr(state, f"A_s_max_{face}"), "area", imperial),
         to_display(getattr(state, capacity), "moment", imperial),
         to_display(getattr(state, f"A_s_calc_{face}"), "area", imperial),
+        to_display(getattr(state, f"A_s_min_eff_{face}", A_s_min), "area", imperial),
     )
 
 
@@ -379,6 +383,8 @@ FLEXURE_BEAM_ATTRIBUTES = {
     "A_s_tension": ("_A_s_tension", "area"),
     "A_s_min_bot": ("_A_s_min_bot", "area"),
     "A_s_min_top": ("_A_s_min_top", "area"),
+    "A_s_min_eff_bot": ("_A_s_min_eff_bot", "area"),
+    "A_s_min_eff_top": ("_A_s_min_eff_top", "area"),
     "A_s_max_bot": ("_A_s_max_bot", "area"),
     "A_s_max_top": ("_A_s_max_top", "area"),
     "A_s_req_bot": ("_A_s_req_bot", "area"),
@@ -412,6 +418,10 @@ class FlexureCheckState:
     A_s_tension: float
     A_s_min_bot: float
     A_s_min_top: float
+    #: The minimum the face has to meet: A_s_min, or 4/3 of A_s_calc where
+    #: ACI 318-19 / CIRSOC 201-25 §9.6.1.3 relieves it and that is less.
+    A_s_min_eff_bot: float
+    A_s_min_eff_top: float
     A_s_max_bot: float
     A_s_max_top: float
     A_s_req_bot: float
@@ -434,8 +444,8 @@ class FlexureCheckState:
     A_s_bool_top: bool
     doubly_reinforced: bool
 
-    def face_quantities(self, face: str, imperial: bool) -> tuple[Any, Any, Any, Any, Any]:
-        """``(A_s_req, A_s_min, A_s_max, phi_M_n, A_s_calc)`` of one face as quantities.
+    def face_quantities(self, face: str, imperial: bool) -> tuple[Any, Any, Any, Any, Any, Any]:
+        """``(A_s_req, A_s_min, A_s_max, phi_M_n, A_s_calc, A_s_min_eff)`` of one face as quantities.
 
         For the frozen public result; ``face`` is ``"bot"`` or ``"top"``. The
         capacity is the ``phi_M_n`` the face's DCR was divided by.
@@ -453,6 +463,8 @@ def new_flexure_state(section: "RectangularBeam") -> FlexureCheckState:
         A_s_tension=0.0,
         A_s_min_bot=0.0,
         A_s_min_top=0.0,
+        A_s_min_eff_bot=0.0,
+        A_s_min_eff_top=0.0,
         A_s_max_bot=0.0,
         A_s_max_top=0.0,
         A_s_req_bot=0.0,
@@ -546,8 +558,8 @@ class ENFlexureCheckState:
     DCR_bot: float
     DCR_top: float
 
-    def face_quantities(self, face: str, imperial: bool) -> tuple[Any, Any, Any, Any, Any]:
-        """``(A_s_req, A_s_min, A_s_max, M_Rd, A_s_calc)`` of one face as quantities.
+    def face_quantities(self, face: str, imperial: bool) -> tuple[Any, Any, Any, Any, Any, Any]:
+        """``(A_s_req, A_s_min, A_s_max, M_Rd, A_s_calc, A_s_min_eff)`` of one face as quantities.
 
         For the frozen public result; ``face`` is ``"bot"`` or ``"top"``. The
         capacity is the ``M_Rd`` the face's DCR was divided by.

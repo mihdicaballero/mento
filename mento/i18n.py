@@ -229,6 +229,18 @@ ES.update(
         "Shear V = {V} exceeds the most the section can carry, {V_max}: enlarge the section.": (
             "El corte V = {V} supera el máximo que admite la sección, {V_max}: hay que agrandarla."
         ),
+        "Horizontal wall mesh: ρt = {rho} is below the required ρt = {rho_min}.": (
+            "Malla horizontal del muro: ρt = {rho} es menor que la requerida ρt = {rho_min}."
+        ),
+        "Vertical wall mesh: ρl = {rho} is below the minimum ρl,min = {rho_min}.": (
+            "Malla vertical del muro: ρl = {rho} es menor que la mínima ρl,mín = {rho_min}."
+        ),
+        "Horizontal wall mesh spacing: {s} exceeds the maximum {s_max}.": (
+            "Separación de la malla horizontal del muro: {s} supera la máxima {s_max}."
+        ),
+        "Vertical wall mesh spacing: {s} exceeds the maximum {s_max}.": (
+            "Separación de la malla vertical del muro: {s} supera la máxima {s_max}."
+        ),
     }
 )
 
