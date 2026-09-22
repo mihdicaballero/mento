@@ -13,6 +13,29 @@ class BeamSettings:
     Settings for beam design with separate metric and imperial defaults.
     Can optionally be initialized with a `Concrete` material to determine the unit system.
 
+    Detailing preferences, not code provisions, with two exceptions that are
+    printed identically by ACI 318-19 and CIRSOC 201-25:
+
+    * ``clear_spacing`` -- ACI 318-19 §25.2.1 / CIRSOC 201-25 §25.2.1 ask for
+      the greatest of 25 mm (1 in.), d_b and (4/3)*d_agg between parallel bars
+      of one layer. The 25 mm here is the first of those three; the bar
+      diameter is taken into account where the layer is laid out, and the
+      aggregate term is not modelled.
+    * ``layers_spacing`` -- ACI 318-19 §25.2.2 / CIRSOC 201-25 §25.2.2 ask for
+      at least 25 mm (1 in.) of clear distance between layers.
+
+    The rest have no clause behind them. ``vibrator_size`` is site practice.
+    ``stirrup_diameter_ini`` is the stirrup assumed while the effective depth
+    is first computed, before a stirrup has been chosen: neither code states a
+    minimum stirrup diameter for a beam, and the 8 mm is simply a bar of the
+    local catalogue (CIRSOC 201-25 §20.2.1.3, Tabla 20.2.1, which starts at
+    6 mm). It sits between the two diameters a design then settles on -- 10 mm
+    under ACI 318-19 in metric units, 6 mm under CIRSOC 201-25 -- so the
+    effective depth shifts slightly once the stirrup is chosen.
+    ``minimum_longitudinal_diameter``, ``max_longitudinal_diameter``,
+    ``max_diameter_diff`` and ``max_bars_per_layer`` bound the search, and are
+    the engineer's choice.
+
     Available Parameters with Default Values:
     -----------------------------------------
     Unit system: "metric" or "imperial"

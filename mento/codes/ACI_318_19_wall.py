@@ -8,6 +8,7 @@ from mento.units import Quantity
 from mento.codes.aci_318_19.equations import shear as shear_eq
 from mento.codes.aci_318_19.equations import wall as wall_eq
 from mento.codes.check_state import WallShearCheckState, apply_wall_shear_state, new_wall_shear_state
+from mento.codes.registry import design_code
 from mento.material import Concrete_ACI_318_19
 from mento.units import MPa, cm, mm, psi, inch, dimensionless
 from mento.forces import Forces
@@ -21,7 +22,13 @@ if TYPE_CHECKING:
 ##########################################################
 
 # Standard reinforcing bar diameters for wall distributed mesh design.
-# ACI 318-19 uses the same catalogue for both mesh directions.
+# Neither code fixes a minimum bar diameter for a wall mesh: ACI 318-19 §11.6 /
+# CIRSOC 201-25 §11.6 limit the ratios and ACI 318-19 §11.7 / CIRSOC 201-25 §11.7
+# limit the spacing, nothing more. Every catalogue below is therefore a mento
+# design criterion, not a code requirement.
+# ACI 318-19 uses the same catalogue for both mesh directions. In metric these
+# are nominal metric sizes, not the ASTM bars of ACI 318-19 Appendix B
+# (No. 10 = 9.5 mm, No. 13 = 12.7 mm, No. 16 = 15.9 mm...).
 _ACI_WALL_BARS_METRIC = [10 * mm, 12 * mm, 16 * mm, 20 * mm, 25 * mm]
 _ACI_WALL_BARS_IMPERIAL = [
     0.375 * inch,  # #3
@@ -31,14 +38,17 @@ _ACI_WALL_BARS_IMPERIAL = [
     0.875 * inch,  # #7
     1.0 * inch,  # #8
 ]
-# CIRSOC 201-25 (metric only) reuses the ACI shear provisions but allows
-# smaller bars for the design: Ø6 mm minimum for the transverse mesh and
-# Ø10 mm minimum for the vertical mesh.
+# CIRSOC 201-25 (metric only) reuses the ACI shear provisions and takes its
+# sizes from CIRSOC 201-25 Table 20.2.1 (ADN 420: 6-8-10-12-16-20-25-32-40 mm).
+# The Ø6 mm floor for the transverse mesh and the Ø10 mm floor for the vertical
+# one are mento criteria — CIRSOC 201-25 Chapter 11 requires neither.
 _CIRSOC_WALL_BARS_TRANSVERSE = [6 * mm, 8 * mm, 10 * mm, 12 * mm, 16 * mm, 20 * mm, 25 * mm]
 _CIRSOC_WALL_BARS_VERTICAL = [10 * mm, 12 * mm, 16 * mm, 20 * mm, 25 * mm]
 
 # Crack-control cap — the selector scores bars at/below this first; larger
 # bars are used only as a fallback when nothing capped can meet the demand.
+# A mento criterion as well: neither ACI 318-19 §11.7 nor CIRSOC 201-25 §11.7
+# caps the bar diameter of a wall mesh.
 _WALL_BAR_CAP_METRIC = 12 * mm
 _WALL_BAR_CAP_IMPERIAL = 0.5 * inch  # #4
 
@@ -54,7 +64,31 @@ def _wall_units(self: "ShearWall") -> tuple[Quantity, Quantity]:
 
 
 def _calculate_f_yt_wall(self: "ShearWall") -> Quantity:
-    """Cap fyt at 420 MPa (metric) / 60 ksi (imperial) per ACI 318-19 §20.2.2.4."""
+    """Cap fyt at 420 MPa (metric) / 60 ksi (imperial) for the ρt·fyt term of Eq. (11.5.4.3).
+
+    Neither code caps fyt for the distributed mesh of an ordinary wall in
+    Chapter 11 itself; both send the steel properties to Chapter 20
+    (ACI 318-19 §11.2.1.2 / CIRSOC 201-25 §11.2.1.2), and mento borrows the
+    beam's shear cap from there.
+
+    ACI 318-19 §20.2.2.4, Table 20.2.2.4(a), usage "Shear", application
+    "Stirrups, ties, hoops": 420 MPa (60,000 psi) for deformed bars, 550 MPa
+    for welded deformed wire reinforcement. The 690 MPa row of that usage is
+    for special structural walls under Chapter 18, which are out of scope.
+
+    CIRSOC 201-25 differs: it prints no cap table. §20.2.1.3 makes the design
+    value the characteristic yield of Tables 20.2.1 and 20.2.2 — 420 MPa for
+    ADN 420 bars, but 500 MPa for the ATR 500 N wire and AM 500 N welded mesh
+    a wall mesh may be built from, and §20.2.1.4 admits 500 MPa deformed bars
+    once the matching IRAM standard is written.
+
+    420 MPa is therefore a deliberate criterion rather than a clause, and it
+    is conservative under both codes for a welded-wire mesh. It follows the
+    reasoning of ACI R20.2.2.4 / CIRSOC C 22.5.3.3: capping fy and fyt at
+    420 MPa is what keeps the diagonal crack widths under control. Lifting it
+    would have to arrive as a registry datum, never as a design_code
+    comparison.
+    """
     stress_unit, _ = _wall_units(self)
     return (
         shear_eq.max_yield_strength_for_shear(
@@ -65,14 +99,51 @@ def _calculate_f_yt_wall(self: "ShearWall") -> Quantity:
 
 
 def _calculate_alpha_c(self: "ShearWall", st: WallShearCheckState) -> float:
-    """α_c per ACI 318-19 §11.5.4.6. Stores hw/lw as a side effect on st.hw_lw."""
+    """α_c from hw/lw — ACI 318-19 §11.5.4.3 / CIRSOC 201-25 §11.5.4.3.
+
+    α_c is defined under Eq. (11.5.4.3) itself, not in a clause of its own:
+    0.25 for hw/lw ≤ 1.5, 0.17 for hw/lw ≥ 2.0, linear in between. Those are
+    the SI numbers that CIRSOC 201-25 and ACI 318-19 (SI) both print; ACI
+    318-19 (in-lb) prints 3 and 2 for the same ratios, which is what
+    ``wall_eq.alpha_c`` returns when ``is_imperial``.
+
+    §11.5.4.4 replaces that α_c when the wall carries net axial tension:
+
+        ACI 318-19 (SI)     α_c = 0.17(1 + Nu/(3.45·Ag)) ≥ 0.0
+        ACI 318-19 (in-lb)  α_c = 2   (1 + Nu/(500 ·Ag)) ≥ 0.0
+        CIRSOC 201-25       α_c = 0.17(1 + Nu/(3.5 ·Ag)) ≥ 0.0
+
+    with Nu negative in tension. The divisor arrives from the code registry.
+
+    Stores hw/lw as a side effect on st.hw_lw.
+    """
     hw_lw = (self.height / self.length).to("").magnitude
     st.hw_lw = hw_lw
+    if st.N_u.magnitude < 0:
+        stress, length = _wall_units(self)
+        divisor = design_code(self.concrete).requires("wall_axial_tension_divisor")(self.concrete)
+        return wall_eq.alpha_c_in_tension(
+            st.N_u.to(stress * length**2).magnitude,
+            st.Acv.to(length**2).magnitude,
+            divisor.to(stress).magnitude,
+            is_imperial=self.concrete.is_imperial,
+        )
     return wall_eq.alpha_c(hw_lw, is_imperial=self.concrete.is_imperial)
 
 
 def _calculate_wall_Acv(self: "ShearWall", st: WallShearCheckState) -> None:
-    """Acv = lw × t  (ACI 318-19 §11.5.4.6)."""
+    """Acv = lw × t — ACI 318-19 Ch. 2 (notation) / CIRSOC 201-25 Ch. 2.
+
+    The gross concrete area bounded by the web thickness and the length of the
+    section in the direction of the shear considered — h·lw, not h·d.
+
+    That is why the §11.5.4.2 cap reads 0.66 and not 0.83: both commentaries
+    say the coefficient was *reduced* precisely because the effective shear
+    area was enlarged from h·d to h·lw. Taking Acv as h·d with the 0.66 of the
+    current codes would therefore be wrong twice over. The two commentaries
+    differ only in the edition they compare against — ACI R11.5.4.2 against
+    ACI 318M-14, CIRSOC C 11.5.4.2 against CIRSOC 201-2005.
+    """
     st.Acv = self.length * self.thickness
 
 
@@ -82,13 +153,19 @@ def _calculate_wall_shear_strength(
     concrete: Concrete_ACI_318_19,
 ) -> None:
     """
-    ACI 318-19 §11.5.4.6:
+    ACI 318-19 §11.5.4.3 / CIRSOC 201-25 §11.5.4.3, Eq. (11.5.4.3):
         Vc      = α_c × λ × √f'c × Acv
         Vs      = ρt × fyt × Acv
         Vn      = Vc + Vs
-        Vn,max  = 0.66 × λ × √f'c × Acv  (metric)
-                  8   × λ × √f'c × Acv  (imperial)
-    Acv
+
+    ACI 318-19 §11.5.4.2 / CIRSOC 201-25 §11.5.4.2 — the diagonal-compression
+    cap, printed without λ in both codes:
+        Vn,max  = 0.66 × √f'c × Acv  (metric)
+                  8    × √f'c × Acv  (imperial)
+    ``wall_eq.max_shear_stress`` still takes λ; no numeric effect while λ = 1,
+    but the factor is not in the clause and the signature is due a fix.
+
+    φ = 0.75 per ACI 318-19 Table 21.2.1(b) / CIRSOC 201-25 Table 21.2.1(b).
     """
     lam = concrete.lambda_factor
     phi_v = concrete.phi_v
@@ -115,11 +192,11 @@ def _calculate_wall_shear_strength(
 
 def _calculate_rho_min_wall(self: "ShearWall", st: WallShearCheckState) -> None:
     """
-    ACI 318-19 §11.6.1 / §11.6.2:
-        ρt_min = 0.0025 (horizontal, always)
-        ρl_min = max(0.0025, ρl_eq)  (vertical)
+    ACI 318-19 §11.6.2 / CIRSOC 201-25 §11.6.2:
+        ρt_min = 0.0025 (horizontal, always)      — §11.6.2(b)
+        ρl_min = max(0.0025, ρl_eq)  (vertical)   — §11.6.2(a)
 
-    Eq. (11.6.2):
+    Eq. (11.6.2), the same in both codes:
         ρl ≥ 0.0025 + 0.5·(2.5 − hw/lw)·(ρt − 0.0025)
 
     The hw/lw ratio is clamped to [0.5, 2.5]:
@@ -127,6 +204,19 @@ def _calculate_rho_min_wall(self: "ShearWall", st: WallShearCheckState) -> None:
       - hw/lw ≤ 0.5 → ρl_eq = ρt (vertical equals horizontal)
 
     ρl_req need not exceed ρt required for strength (§11.5.4.3).
+
+    The low-shear branch is not implemented: §11.6.2 always governs here,
+    which is conservative. It is ACI 318-19 §11.6.1 with Table 11.6.1 /
+    CIRSOC 201-25 §11.6.1 with Table 11.6.1, and it relaxes both minima where
+
+        in-plane Vu ≤ 0.04·φ·α_c·λ·√f'c·Acv   (ACI SI and CIRSOC)
+        in-plane Vu ≤ 0.5 ·φ·α_c·λ·√f'c·Acv   (ACI in-lb)
+
+    so the threshold coefficient would be a registry datum too. The table
+    itself carries the same ratios in both codes (0.0012/0.0020 and
+    0.0015/0.0025 cast-in-place, 0.0010 precast); only the way it names the
+    bar sizes differs — ACI "No. 16" and "MW200 or MD200" against CIRSOC
+    "16 mm".
     """
     st.rho_t_min = wall_eq.MIN_REINFORCEMENT_RATIO * dimensionless
     st.rho_l_min = wall_eq.min_vertical_reinforcement_ratio(float(st.hw_lw), float(st.rho_t_req)) * dimensionless
@@ -134,9 +224,19 @@ def _calculate_rho_min_wall(self: "ShearWall", st: WallShearCheckState) -> None:
 
 def _calculate_spacing_limits_wall(self: "ShearWall", st: WallShearCheckState) -> None:
     """
-    ACI 318-19 §11.7.3 spacing limits.
-    Horizontal: s_h,max = min(lw/5, 3t, 450 mm / 18 in)
-    Vertical:   s_v,max = min(lw/3, 3t, 450 mm / 18 in)
+    Spacing limits for a cast-in-place wall, the same numbers in both codes.
+
+    Horizontal (transverse reinforcement) — ACI 318-19 §11.7.3.1 /
+    CIRSOC 201-25 §11.7.3.1:
+        s_h,max = min(lw/5, 3t, 450 mm / 18 in)
+    Vertical (longitudinal bars) — ACI 318-19 §11.7.2.1 /
+    CIRSOC 201-25 §11.7.2.1:
+        s_v,max = min(lw/3, 3t, 450 mm / 18 in)
+
+    Both codes impose the lw/5 and lw/3 terms only where shear reinforcement is
+    required for in-plane strength; mento applies them always, which is
+    conservative. The precast limits — §11.7.2.2 and §11.7.3.2 in both — are
+    looser and are not offered here.
     """
     is_imperial = self.concrete.is_imperial
     _, length_unit = _wall_units(self)
@@ -154,7 +254,17 @@ def _calculate_spacing_limits_wall(self: "ShearWall", st: WallShearCheckState) -
 
 def _check_shear_ACI_318_19_wall(self: "ShearWall", force: Forces) -> WallShearCheckState:
     """
-    ACI 318-19 Section 11 shear check for a structural wall.
+    ACI 318-19 Chapter 11 / CIRSOC 201-25 Chapter 11 shear check for a
+    structural wall.
+
+    Scope: ordinary structural walls only. Special structural walls are out of
+    scope and the two codes send them to different places — ACI 318-19 §11.1.2
+    to Chapter 18 (§18.10), CIRSOC 201-25 §11.1.2 (and C 11.5.4.1) to
+    INPRES-CIRSOC 103 Parte II-2026. Out-of-plane shear (§11.5.5.1 → §22.5 in
+    both) is not covered here either, nor is the strut-and-tie alternative
+    that §11.5.4.1 of both codes permits for hw/lw < 2 (Chapter 23): mento
+    always takes the §11.5.4.2-§11.5.4.4 route, which that clause allows for
+    any wall.
 
     Calculation only: the result is returned as a value, and only the reporting
     path copies it back onto the wall. See the beam's shear check for the same
@@ -167,7 +277,7 @@ def _check_shear_ACI_318_19_wall(self: "ShearWall", force: Forces) -> WallShearC
     st = new_wall_shear_state(self)
 
     # 1. Demand
-    st.V_u = force._V_z.to("kN")
+    st.V_u = abs(force._V_z.to("kN"))
     st.N_u = force._N_x.to("kN")
 
     # 2. Geometry: Acv = lw × t
@@ -230,6 +340,11 @@ def _select_wall_mesh(
          cap (Ø12 mm / #4). Return the best-scoring capped candidate.
       2. Only if no capped bar yields a valid candidate, retry on the full
          ``bar_list`` (up to Ø25).
+
+    The cap, the tiering and the spacing grid are mento design criteria: ACI
+    318-19 §11.6/§11.7 and CIRSOC 201-25 §11.6/§11.7 constrain ρ and s, and
+    neither constrains the bar diameter of a wall mesh. The code limits enter
+    through ``rho_req`` and ``s_max``, which the caller has already derived.
 
     Scoring functional (per candidate (d_b, s)):
         rho_provided   = n_curtains · A_b / (t · s)   (mesh on both faces, E.F.)
@@ -304,7 +419,8 @@ def _design_shear_wall_core(
     Worst-case wall mesh design across all force combinations.
 
       1. Run the shear check for every force; track the worst-case ρt,req.
-      2. Derive ρl,min for that worst case per ACI 318-19 §11.6.2.
+      2. Derive ρl,min for that worst case per ACI 318-19 §11.6.2(a) /
+         CIRSOC 201-25 §11.6.2(a), Eq. (11.6.2).
       3. Select the horizontal mesh (ρt,req / s_h,max) and the vertical mesh
          (ρl,min / s_v,max). The vertical mesh is ALWAYS the code minimum —
          no flexure design in Phase 0.
@@ -322,7 +438,10 @@ def _design_shear_wall_core(
     assert state is not None  # the empty-forces case raised above
     apply_wall_shear_state(self, state)
 
-    # ρl,min per §11.6.2 using the worst-case ρt,req (geometry-only hw/lw).
+    # ρl,min per ACI 318-19 §11.6.2(a) / CIRSOC 201-25 §11.6.2(a), Eq. (11.6.2),
+    # using the worst-case ρt,req (geometry-only hw/lw). Both codes write ρt in
+    # Eq. (11.6.2); mento reads it as the ρt required for strength, which is the
+    # same quantity the (a) proviso caps ρl against.
     r_hw = max(0.5, min(state.hw_lw, 2.5))
     rho_l_eq = 0.0025 + 0.5 * (2.5 - r_hw) * (max_rho_t_req - 0.0025)
     max_rho_l_min = max(0.0025, rho_l_eq)
@@ -335,12 +454,29 @@ def _design_shear_wall_core(
 
 
 def _design_shear_ACI_318_19_wall(self: "ShearWall", forces: list) -> None:
-    """Wall mesh design per ACI 318-19 Section 11.
+    """Wall mesh design per ACI 318-19 Chapter 11.
 
-    Also serves CIRSOC 201-25, which reuses the ACI shear provisions verbatim
-    and differs only in the design bar catalogue (Ø6 mm minimum transverse,
-    Ø10 mm minimum vertical). The catalogue is selected here by design code —
-    mirroring how ``rebar.py`` keeps the CIRSOC beam logic in one place.
+    Also serves CIRSOC 201-25, whose in-plane shear clauses carry the same
+    numbers as the ACI ones used here: §11.5.4.2 (0.66√f'c·Acv), Eq. (11.5.4.3)
+    with its α_c, §11.6.2 with Eq. (11.6.2), Table 11.6.1, §11.7.2.1/§11.7.3.1
+    (3h, 450 mm, lw/3 and lw/5), §11.7.2.3 (two curtains above 250 mm) and
+    Table 11.3.1.1 are identical.
+
+    For net axial tension, §11.5.4.4 uses a divisor of 3.5·Ag in CIRSOC
+    against ACI's 3.45·Ag, supplied through the registry. Special structural
+    walls remain outside this check: §11.1.2 sends them to ACI Chapter 18
+    or INPRES-CIRSOC 103 Parte II-2026.
+
+    (Table 11.6.1 and §11.7.5.1 also name bar sizes differently — ACI "No. 16",
+    CIRSOC "16 mm" — but that is designation, not value.) So the design is the
+    same calculation under both codes.
+
+    The only thing selected by design code here is the bar catalogue, and that
+    is a mento criterion rather than a code requirement (see the catalogue
+    comments above) — mirroring how ``rebar.py`` keeps the CIRSOC beam logic in
+    one place. It belongs in the registry, like ``stirrup_spacing_caps``; until
+    it moves there this branch stays, and it is the reason this module is not
+    covered by the design-code-string ban of tests/test_architecture_boundaries.
     """
     if self.concrete.design_code == "CIRSOC 201-25":
         transverse_bars = _CIRSOC_WALL_BARS_TRANSVERSE

@@ -23,6 +23,13 @@ class Concrete(Material):
 
     def __post_init__(self) -> None:
         # Detect the unit system based on f_c
+        # No lower bound is enforced on f_c, and the two codes do not agree on
+        # one: ACI 318-19 Table 19.2.1.1 / CIRSOC 201-25 Tabla 19.2.1.1 put the
+        # general minimum at 17 MPa (2500 psi) and 20 MPa respectively, and
+        # CIRSOC raises it further for special frames and walls (25 MPa) and
+        # piles (30 / 35 MPa). The density below is the unit weight of
+        # reinforced concrete, for self-weight, not the w_c of ACI 318-19
+        # §19.2.2.1(a) / CIRSOC 201-25 §19.2.2.1(a).
         if self.f_c.units == MPa or self.f_c.units == Pa or self.f_c.units == kPa:
             self.unit_system = "metric"
             self.density: Quantity = 2500 * kg / m**3
@@ -77,10 +84,18 @@ class Concrete_ACI_318_19(Concrete):
     Usage:
         Instantiate this class to represent a concrete material with properties and code factors
         compliant with ACI 318-19, suitable for use in structural analysis and design calculations.
+
+    Codes:
+        Every property below is ACI 318-19, and CIRSOC 201-25 reprints the same
+        chapters under the same numbering, so the citations are given as a pair
+        and the few places the two print different numbers are flagged where
+        they arise. ``Concrete_CIRSOC_201_25`` therefore inherits all of this.
     """
 
     _E_c: Quantity = field(init=False)
     _f_r: Quantity = field(init=False)
+    #: Maximum strain at the extreme compression fibre, ACI 318-19 §22.2.2.1 /
+    #: CIRSOC 201-25 §22.2.2.1: 0.003 in both.
     _epsilon_c: float = field(default=0.003, init=False)
     _beta_1: float = field(init=False)
     _lambda: float = field(init=False)
@@ -92,6 +107,19 @@ class Concrete_ACI_318_19(Concrete):
     def __post_init__(self) -> None:
         super().__post_init__()
         # Adjust calculations based on unit system
+        #
+        # E_c: ACI 318-19 §19.2.2.1(a), Eq. (19.2.2.1.a) / CIRSOC 201-25
+        #   §19.2.2.1(a), ec. (19.2.2.1.a). CIRSOC 201-25 §19.2.2.1(a) differs
+        #   in the range it is written for -- w_c from 1400 to 2500 kg/m3
+        #   against ACI's 1440 to 2560 -- so the 2500 kg/m3 this evaluates at
+        #   sits exactly on CIRSOC's upper edge. Both codes also give
+        #   §19.2.2.1(b), E_c = 4700*sqrt(f'c) (57000*sqrt(f'c) in psi), which
+        #   is the expression written for normalweight concrete.
+        # f_r: ACI 318-19 Eq. (19.2.3.1) / CIRSOC 201-25 ec. (19.2.3.1) of
+        #   §19.2.3. Both print f_r = 0.62*lambda*sqrt(f'c) (7.5*lambda in psi);
+        #   the metric 0.625 without lambda below is not that expression -- it
+        #   reads 0.8 % high, and drops lambda, which only agrees while the
+        #   concrete is normalweight.
         if self.unit_system == "metric":
             self._E_c = ((self.density / (kg / m**3)) ** 1.5) * 0.043 * math.sqrt(self.f_c / MPa) * MPa
             self._f_r = 0.625 * math.sqrt(self.f_c / MPa) * MPa
@@ -99,10 +127,22 @@ class Concrete_ACI_318_19(Concrete):
             self._E_c = ((self.density / (lb / ft**3)) ** 1.5) * 33 * math.sqrt(self.f_c / psi) * psi
             self._f_r = 7.5 * math.sqrt(self.f_c / psi) * psi
         self._beta_1 = self.__beta_1()
+        # ACI 318-19 §19.2.4.3 / CIRSOC 201-25 §19.2.4.3: lambda = 1.0 for
+        # normalweight concrete. Lightweight concrete is not offered; it would
+        # read off ACI 318-19 Table 19.2.4.1(a) / CIRSOC 201-25 Tabla 19.2.4.1(a),
+        # which is one of the tables the two codes do not print alike.
         self._lambda = 1  # Normalweight concrete
+        # phi: ACI 318-19 Table 21.2.1 / CIRSOC 201-25 Tabla 21.2.1, identical.
+        # Row (b) gives 0.75 for shear; row (a) sends moment and axial force to
+        # ACI 318-19 Table 21.2.2 / CIRSOC 201-25 Tabla 21.2.2, which is where
+        # the 0.65 of a compression-controlled section and the 0.90 of a
+        # tension-controlled one (eps_t >= eps_ty + 0.003) come from.
         self._phi_v = 0.75  # Shear strength reduction factor
         self._phi_c = 0.65  # Compression controlled strength reduction factor
         self._phi_t = 0.90  # Tension controlled strength reduction factor
+        # ACI 318-19 §9.6.1.3 / CIRSOC 201-25 §9.6.1.3: As,min need not be met
+        # where the steel provided is at least one third greater than the steel
+        # the analysis asks for.
         self._flexural_min_reduction = True  # True selects 4/3 of calculated steel if it's less than minimum
 
     def get_properties(self) -> Dict[str, Any]:
@@ -117,28 +157,34 @@ class Concrete_ACI_318_19(Concrete):
         properties["phi_t"] = self._phi_t
         return properties
 
-    """
     def __beta_1(self) -> float:
-        # Table 22.2.2.4.3—Values of β1 for equivalent rectangular concrete stress distribution
-        # Page 399
-        fc_MPa = self.f_c.to("MPa").magnitude  # Ensure comparison in MPa
-        if 17 <= fc_MPa <= 28:
-            return 0.85
-        elif 28 < fc_MPa <= 55:
-            return 0.85 - 0.05 / 7 * (fc_MPa - 28)
-        elif fc_MPa > 55:
-            return 0.65
-        else:
-            # Handle case where f_c / MPa < 17
-            return 0.85
-    """
+        """beta_1 of the equivalent rectangular stress block.
 
-    def __beta_1(self) -> float:
+        ACI 318-19 Table 22.2.2.4.3 / CIRSOC 201-25 Tabla 22.2.2.4.3, reached
+        from §22.2.2.4.3 in both. The values are the same in the two codes:
+        (a) 0.85, (b) 0.85 - 0.05*(f'c - 28)/7, (c) 0.65; in psi the breaks are
+        at 4000 and 8000. CIRSOC 201-25 Tabla 22.2.2.4.3 differs only in where
+        row (a) starts -- 20 <= f'c against ACI's 17 <= f'c -- which is the
+        lower bound on f'c of each code's Table 19.2.1.1 and not a different
+        value of beta_1; below it both tables simply stop, and this returns
+        0.85, the value of row (a).
+
+        Row (b) is written for the open interval 28 < f'c < 55 (4000 < f'c <
+        8000 psi) and row (c) for f'c >= 55 (>= 8000 psi), so the two break
+        points themselves belong to row (c) and the ``<`` below is what the
+        tables print. In psi row (b) evaluated at 8000 happens to land on 0.65
+        as well, so that edge only reads differently; in MPa row (b) at 55
+        gives 0.6571, 1.1 % above the 0.65 of row (c), and beta_1 feeds
+        rho_max, so the strict comparison is the one that matters.
+
+        The two codes agree on every value here, so there is nothing for the
+        registry to vary.
+        """
         if self.unit_system == "metric":
             fc_MPa = self.f_c.to("MPa").magnitude
             if fc_MPa <= 28:
                 return 0.85
-            elif fc_MPa <= 55:
+            elif fc_MPa < 55:
                 return 0.85 - 0.05 / 7 * (fc_MPa - 28)
             else:
                 return 0.65
@@ -146,7 +192,7 @@ class Concrete_ACI_318_19(Concrete):
             fc_psi = self.f_c.to("psi").magnitude
             if fc_psi <= 4000:
                 return 0.85
-            elif fc_psi <= 8000:
+            elif fc_psi < 8000:
                 return 0.85 - 0.05 / 1000 * (fc_psi - 4000)
             else:
                 return 0.65
@@ -198,7 +244,20 @@ class Concrete_ACI_318_19(Concrete):
 
 @dataclass
 class Concrete_CIRSOC_201_25(Concrete_ACI_318_19):
-    """Concrete class for a CIRSOC 201-25 design code with metric units."""
+    """Concrete class for a CIRSOC 201-25 design code with metric units.
+
+    CIRSOC 201-25 reprints the ACI 318-19 material chapters under the same
+    numbering, so every property is inherited unchanged: eps_cu = 0.003
+    (§22.2.2.1), lambda = 1.0 (§19.2.4.3), phi (Tabla 21.2.1 and Tabla 21.2.2),
+    E_c (§19.2.2.1) and f_r (ec. 19.2.3.1) all read the same in both.
+
+    Where the printed text does differ, the difference is in the domain of a
+    table rather than in the expression, and neither is checked here:
+    CIRSOC 201-25 Tabla 19.2.1.1 puts the general minimum f'c at 20 MPa where
+    ACI 318-19 Table 19.2.1.1 puts it at 17 MPa, and CIRSOC 201-25
+    Tabla 22.2.2.4.3 starts its first row at 20 MPa where ACI 318-19
+    Table 22.2.2.4.3 starts at 17 MPa.
+    """
 
     def __post_init__(self) -> None:
         # Call the parent class's __post_init__ to inherit initializations
@@ -387,6 +446,20 @@ class Concrete_EN_1992_2004(Concrete):
 
 @dataclass
 class Steel(Material):
+    """Reinforcing steel, given by its specified yield strength.
+
+    ``f_y`` is taken as given: no upper bound is enforced, and the two codes
+    state theirs differently. ACI 318-19 §20.2.2.3 sends to Table 20.2.2.4(a),
+    which caps f_y by application: 690 MPa for flexure, axial force and
+    shrinkage and temperature in the general case, against 420 MPa for
+    stirrups, ties and hoops. CIRSOC 201-25 §20.2.2.3 sends instead to
+    §20.2.1.3, Tablas 20.2.1 and 20.2.2, which do not cap a value but list the
+    IRAM steels the code is written for and the characteristic yield strength
+    of each (AL 220: 220 MPa; ADN 420: 420 MPa; ATR 500 N and AM 500 N wires
+    and welded mesh: 500 MPa). The cap that does reach a calculation, on f_yt
+    for shear, is applied in the shear equations, not here.
+    """
+
     _f_y: Quantity = field(init=False)
     _density: Quantity = field(default=7850 * kg / m**3)
 
@@ -412,12 +485,19 @@ class Steel(Material):
 
 @dataclass
 class SteelBar(Steel):
+    #: ACI 318-19 §20.2.2.2 / CIRSOC 201-25 §20.2.2.2: E_s may be taken as
+    #: 200,000 MPa (29,000,000 psi) for nonprestressed bars and wires. Same
+    #: value in both codes.
     _E_s: Quantity = field(default=200 * GPa)
     _epsilon_y: Quantity = field(init=False)
 
     def __init__(self, name: str, f_y: Quantity, density: Quantity = 7850 * kg / m**3):
         super().__init__(name, f_y, density)
-        self._epsilon_y = f_y.to("MPa") / (self._E_s.to("MPa"))  # 21.2.2.1 - Page 392
+        # eps_ty = f_y/E_s — ACI 318-19 §21.2.2.1 / CIRSOC 201-25 §21.2.2.1.
+        # Both also permit 0.002 for Grade 420 (f_y = 420 MPa); the quotient is
+        # kept instead, 0.0021 for that grade, which is the exact value the
+        # clause rounds.
+        self._epsilon_y = f_y.to("MPa") / (self._E_s.to("MPa"))
 
     @property
     def E_s(self) -> Quantity:

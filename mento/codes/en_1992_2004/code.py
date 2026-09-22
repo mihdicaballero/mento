@@ -183,8 +183,11 @@ def _min_bar_spacing_slab(section: "RectangularBeam") -> Any:
 def _min_thickness_on_soil(concrete: Any) -> Any:
     """The thinnest footing EN practice details.
 
-    EN 1992-1-1 states no overall minimum for a footing the way ACI 13.3.1.2
-    does; 250 mm is the thickness below which the anchorage of the bars and the
+    EN 1992-1-1 states no minimum for a footing the way ACI 318-19 §13.3.1.2
+    does -- and that one is written on the effective depth of the bottom
+    reinforcement rather than on the overall thickness, which is why it is
+    registered under a hook of its own. The 250 mm here is an overall
+    thickness: the depth below which the anchorage of the bars and the
     tolerance on a surface cast against the ground stop working out.
     """
     return 250 * mm

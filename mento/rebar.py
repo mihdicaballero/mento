@@ -22,7 +22,22 @@ _CM2 = cm**2
 
 
 def max_stirrup_spacing_ACI_318_19(beam: RectangularBeam, V_s_req: float, A_cv: float) -> Tuple[float, float]:
-    """Stirrup spacing limits of ACI 318-19 Table 9.7.6.2.2, for a beam.
+    """Stirrup spacing limits for a beam — ACI 318-19 Table 9.7.6.2.2 / CIRSOC 201-25 Tabla 9.7.6.2.2.
+
+    Both codes reach the table from §9.7.6.2.2.
+
+    ``V_s_req`` is the nominal shear the stirrups must carry, (Vu − φVc)/φ, as
+    the check computes it in ``_calculate_V_s_req``. The absolute caps come from
+    the code's registry entry: ACI 318-19 and CIRSOC 201-25 share the table --
+    the same threshold 0.33*sqrt(f'c)*bw*d and the same d/2, d, d/4, d/2 -- but
+    CIRSOC 201-25 Tabla 9.7.6.2.2 differs in the two absolute caps, 400/200 mm
+    against ACI's 600/300 mm (24/12 in.).
+
+    Only the rows of the table are applied. Where the beam carries compression
+    reinforcement, ACI 318-19 §9.7.6.4.3 / CIRSOC 201-25 §9.7.6.4.3 -- the same
+    text in both -- also cap the spacing at the least of 16 d_b of the
+    longitudinal bar, 48 d_b of the stirrup and the least dimension of the
+    beam, and that limit is not imposed here.
 
     Floats in the beam's own unit system, in and out: the shear check runs
     entirely in floats, so a pint signature here would put the boundary back in
@@ -34,12 +49,15 @@ def max_stirrup_spacing_ACI_318_19(beam: RectangularBeam, V_s_req: float, A_cv: 
     than the check it serves.
     """
     sec = section_floats(beam)
+    length = CANONICAL[sec.is_imperial]["length"]
+    cap_low, cap_high = design_code(beam.concrete).requires("stirrup_spacing_caps")(beam.concrete)
     return aci_shear_eq.max_stirrup_spacing(
         V_s_req,
         sec.f_c,
-        beam.concrete.lambda_factor,
         A_cv,
         sec.d_shear,
+        cap_low.to(length).magnitude,
+        cap_high.to(length).magnitude,
         is_imperial=sec.is_imperial,
     )
 
@@ -79,7 +97,14 @@ class Rebar:
         self._clear_limit_mm = self.beam.settings.clear_spacing.to("mm").magnitude
         self._vibrator_mm = self.beam.settings.vibrator_size.to("mm").magnitude
         self._clear_spacing = self.beam.settings.clear_spacing.to("mm")
-        # Unit system default rebar
+        # Unit system default rebar.
+        #
+        # The metric list is the bar sizes of CIRSOC 201-25 §20.2.1.3,
+        # Tabla 20.2.1 (ADN 420: 6, 8, 10, 12, 16, 20, 25, 32 and 40 mm), with
+        # the 40 mm left out. It is used for ACI 318-19 in metric units too,
+        # where the bars are not the ASTM sizes ACI is written around: a metric
+        # ACI design therefore details bars of the local catalogue, which is
+        # what a drawing in this region can call for.
         if self.beam.concrete.unit_system == "metric":
             self.rebar_diameters = [
                 6 * mm,
@@ -140,7 +165,7 @@ class Rebar:
         Parameters
         ----------
         V_s_req : float
-            Required shear force for the rebar.
+            Nominal shear the stirrups must carry, (Vu − φVc)/φ.
         A_cv : float
             Effective shear area of the concrete section.
 
@@ -181,6 +206,15 @@ class Rebar:
         return (s_max_l * mm).to(cm), (s_max_w * mm).to(cm)
 
     def transverse_rebar_ACI_318_19(self, V_s_req: Quantity) -> Any:
+        """Stirrup sizes and spacing limits offered to the search, ACI 318-19.
+
+        The floor of 10 mm (a #3 bar) is catalogue practice, not a clause:
+        ACI 318-19 §9.7.6.4.2 / CIRSOC 201-25 §9.7.6.4.2 only fix a minimum
+        stirrup diameter where the stirrups laterally support compression
+        reinforcement (§9.7.6.4.1 in both), and neither code states one for a
+        stirrup placed purely for shear. The spacing limits are those of
+        ACI 318-19 Table 9.7.6.2.2 / CIRSOC 201-25 Tabla 9.7.6.2.2.
+        """
         if self.beam.concrete.unit_system == "metric":
             valid_diameters = self.rebar_diameters[2:5]  # Minimum 10 mm
         else:
@@ -192,6 +226,18 @@ class Rebar:
         return valid_diameters, s_max_l, s_max_w
 
     def transverse_rebar_CIRSOC_201_25(self, V_s_req: Quantity) -> Any:
+        """Stirrup sizes and spacing limits offered to the search, CIRSOC 201-25.
+
+        The sizes are the smallest four of CIRSOC 201-25 §20.2.1.3,
+        Tabla 20.2.1. Both bounds are practice: the 6 mm floor is the bottom of
+        that catalogue -- CIRSOC 201-25 §9.7.6.4.2, Tabla 9.7.6.4.2 grades a
+        minimum from 6 to 12 mm, but only for the stirrups that support
+        compression reinforcement (§9.7.6.4.1) -- and the 12 mm ceiling is a
+        detailing preference, not a limit either code prints. The spacing
+        limits are those of CIRSOC 201-25 Tabla 9.7.6.2.2, which is why the
+        ACI helper is called: the two tables differ only in their absolute
+        caps, and those arrive from the registry.
+        """
         valid_diameters = self.rebar_diameters[0:4]  # Minimum 6 mm, maximum 12 mm
 
         A_cv = self.beam.width * self.beam._d_shear
@@ -212,9 +258,10 @@ class Rebar:
 
         The legs are spread evenly across the section, so the ``n_legs - 1`` gaps between
         them have to cover the distance separating the centres of the outermost pair,
-        ``width - 2 * c_c - d_b``. Both ACI 318-19 Table 9.7.6.2.2 and EN 1992-1-1 9.2.2(8)
-        cap that gap, which is what forces a wide section to carry more than the two legs of
-        a single stirrup regardless of how much area the shear demand asks for.
+        ``width - 2 * c_c - d_b``. ACI 318-19 Table 9.7.6.2.2 (column "Across width") /
+        CIRSOC 201-25 Tabla 9.7.6.2.2 ("A través del ancho") and EN 1992-1-1 9.2.2(8)
+        all cap that gap, which is what forces a wide section to carry more than the two legs
+        of a single stirrup regardless of how much area the shear demand asks for.
 
         Parameters
         ----------
@@ -380,6 +427,12 @@ class Rebar:
     def _transverse_rebar_slab(self, A_v_req: Quantity, V_s_req: Quantity, alpha: float) -> DataFrame:
         """A grid of legs: (d_b, s_l, s_w), with both spacings free.
 
+        The limits a slab strip is held to are the beam ones: ACI 318-19
+        §7.7.5.1 / CIRSOC 201-25 §7.7.5 both send the transverse reinforcement
+        of a one-way slab to §9.7.6.2, so the spacing comes from
+        ACI 318-19 Table 9.7.6.2.2 / CIRSOC 201-25 Tabla 9.7.6.2.2 exactly as
+        it does for a beam.
+
         A slab strip is a metre cut out of a wider member, so its legs are not
         the two faces of a stirrup cage the way a beam's are: the transverse
         spacing is a free variable and the strip catches whatever number of legs
@@ -482,7 +535,15 @@ class Rebar:
         mech_cover: Quantity | None = None,
     ) -> DataFrame:
         """
-        Computes the required longitudinal reinforcement based on ACI 318-19.
+        Computes the required longitudinal reinforcement based on ACI 318-19,
+        and on CIRSOC 201-25 with it: the layout rules the search applies are
+        printed the same way in both codes.
+
+        What it lays out is the flexural reinforcement only. ACI 318-19 §9.7.2.3
+        / CIRSOC 201-25 §9.7.2.3, identical in both, also ask for skin
+        reinforcement on each side face of a beam deeper than 900 mm, within
+        h/2 of the tension face and at the spacing of §24.3.2; that is not
+        generated here.
 
         Args:
             A_s_req: Required longitudinal rebar area.
@@ -524,7 +585,9 @@ class Rebar:
         valid_combinations = []
         best_fallback_combination = None  # To store the best fallback design
         max_fallback_cm2 = 0.0  # To track the maximum area in fallback cases
-        # Create a list of rebar diameters that are equal to or greater than the minimum diameter
+        # Create a list of rebar diameters that are equal to or greater than the minimum diameter.
+        # Practice, not a clause: neither ACI 318-19 nor CIRSOC 201-25 states a
+        # minimum diameter for the longitudinal reinforcement of a beam.
         if self.beam.concrete.unit_system == "metric":
             self.min_long_rebar = 10 * mm
         else:
@@ -733,6 +796,12 @@ class Rebar:
         """
         Clear spacing between the bars of one layer, in mm.
 
+        The clause is ACI 318-19 §25.2.1 / CIRSOC 201-25 §25.2.1, the same text
+        in both: at least the greatest of 25 mm (1 in.), d_b and (4/3)*d_agg.
+        Of those three the aggregate term is missing, because the section does
+        not carry a maximum aggregate size; the vibrator size folded in beside
+        them is site practice and not part of the clause.
+
         Everything is a plain float: this runs inside the innermost loop of the
         longitudinal rebar search, where pint arithmetic dominated the cost.
 
@@ -879,7 +948,11 @@ class Rebar:
         # Diameter size penalty, for very large or very small
         df["diameter_size_penalty"] = [epsilon * (d / min_d - 1) for d in max_d_per_row]
 
-        # Slab penalty for large spacing
+        # Slab penalty for large spacing. A preference, not a limit: the limit
+        # is ACI 318-19 §7.7.2.3 / CIRSOC 201-25 §7.7.2.3 and it is enforced on
+        # the chosen layout, not scored here. This 300 mm is applied to both
+        # codes and coincides with what CIRSOC 201-25 §7.7.2.3 prints only by
+        # chance.
         if getattr(self, "mode", "beam") == "slab":
             max_spacing_allowed = 300  # mm
             df["spacing_penalty"] = [

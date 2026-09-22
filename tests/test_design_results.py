@@ -579,7 +579,9 @@ def test_design_capacity_is_the_one_the_governing_combination_saw() -> None:
         height=60 * cm,
         c_c=25 * mm,
     )
-    forces = _three_combinations()
+    # Axial compression changes V_c; a zero-load combination alone must not
+    # change the concrete equation for the same provided stirrups.
+    forces = [*_two_combinations(), Forces(label="C3", N_x=100 * kN)]
     Node(section=beam, forces=forces).design()
 
     capacities = {c.V_capacity for c in beam.shear_checks}

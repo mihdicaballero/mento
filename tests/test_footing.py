@@ -287,12 +287,18 @@ def test_a_footing_still_carries_its_moment(steel_b500s: SteelBar) -> None:
     "concrete, steel",
     [
         (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), SteelBar(name="ADN 420", f_y=420 * MPa)),
+        (Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa), SteelBar(name="ADN 420", f_y=420 * MPa)),
         (Concrete_EN_1992_2004(name="C25", f_c=25 * MPa), SteelBar(name="B500S", f_y=500 * MPa)),
     ],
-    ids=["aci", "en"],
+    ids=["aci", "cirsoc", "en"],
 )
 def test_footing_bars_are_capped_at_300_mm(concrete, steel) -> None:  # type: ignore[no-untyped-def]
-    """3h stops binding on a section this thick, so the footing cap is what holds."""
+    """3h stops binding on a section this thick, so the footing cap is what holds.
+
+    Under CIRSOC 201-25 the same 300 mm arrives twice over -- as the practice
+    every code is given on the ground and as art. 7.7.2.3 itself -- so the row
+    reads the same as the other two and is here to say that splitting the hook
+    did not move it."""
     footing = _strip(Footing, concrete, steel, "Z1")
 
     assert footing._max_bar_spacing().to("mm").magnitude == pytest.approx(300.0)
@@ -359,7 +365,10 @@ def test_the_spacing_row_of_a_footing_reports_both_bounds(steel_b500s: SteelBar)
 @pytest.mark.parametrize(
     "concrete, steel, height, limit",
     [
-        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), SteelBar(name="ADN 420", f_y=420 * MPa), 18 * cm, "200"),
+        # ACI and CIRSOC state d >= 150 mm: the 180 mm strip is covered 50 mm
+        # and carries the Ø10 mat floor, so d = 180 - 50 - 10/2 = 125 mm.
+        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), SteelBar(name="ADN 420", f_y=420 * MPa), 18 * cm, "150"),
+        # EN states nothing, and its 250 mm is an overall thickness.
         (Concrete_EN_1992_2004(name="C25", f_c=25 * MPa), SteelBar(name="B500S", f_y=500 * MPa), 22 * cm, "250"),
     ],
     ids=["aci", "en"],
@@ -367,6 +376,103 @@ def test_the_spacing_row_of_a_footing_reports_both_bounds(steel_b500s: SteelBar)
 def test_a_thin_footing_warns(concrete, steel, height, limit) -> None:  # type: ignore[no-untyped-def]
     with pytest.warns(UserWarning, match=f"below the {limit} mm"):
         _strip(Footing, concrete, steel, "Z1", height=height)
+
+
+@pytest.mark.parametrize(
+    "concrete, height, cover",
+    [
+        # ACI 318-19 Table 20.5.1.3.1, cast against and permanently in contact
+        # with ground: 75 mm. d = 220 - 75 - 10/2 = 140 mm.
+        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), 220 * mm, 75 * mm),
+        # CIRSOC 201-25 Tabla 20.5.1.3.1, fila (a): 60 mm for a footing not
+        # under control of execution. d = 210 - 60 - 10/2 = 145 mm.
+        (Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa), 210 * mm, 60 * mm),
+    ],
+    ids=["aci", "cirsoc"],
+)
+def test_the_limit_is_on_the_effective_depth_not_on_the_thickness(concrete, height, cover) -> None:  # type: ignore[no-untyped-def]
+    """ACI 318-19 §13.3.1.2 / CIRSOC 201-25 art. 13.3.1.2: d >= 150 mm.
+
+    The clause is written on the effective depth of the bottom reinforcement,
+    and on a footing that sits a long way under the overall thickness, because
+    the cover against the ground is large. Both sections here are over 200 mm
+    thick and both fall short of the 150 mm the clause asks -- so a limit
+    written on the thickness in the 200 mm range passes them in silence.
+    """
+    steel = SteelBar(name="ADN 420", f_y=420 * MPa)
+    with pytest.warns(UserWarning, match="below the 150 mm"):
+        Footing(
+            label="Z1",
+            concrete=concrete,
+            steel_bar=steel,
+            width=_WIDTH,
+            height=height,
+            c_c=cover,
+        )
+
+
+def test_a_thin_section_with_little_cover_meets_the_clause() -> None:
+    """And the other way round: what §13.3.1.2 asks for is depth to the bars.
+
+    190 mm covered 25 mm leaves 190 - 25 - 10/2 = 160 mm to the mat, over the
+    150 mm of the clause, so nothing is said -- where a limit written on the
+    overall thickness would report a section that complies. The cover is the
+    engineer's input; mento does not impose Table 20.5.1.3.1 on it.
+    """
+    concrete = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
+    steel = SteelBar(name="ADN 420", f_y=420 * MPa)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        Footing(
+            label="Z1",
+            concrete=concrete,
+            steel_bar=steel,
+            width=_WIDTH,
+            height=190 * mm,
+            c_c=25 * mm,
+        )
+
+
+def test_the_effective_depth_limit_in_imperial_units() -> None:
+    """The in-lb edition of §13.3.1.2 prints 6 in., and that is what is compared.
+
+    A 9 in. section covered 3 in. and detailed with the 3/8 in. floor of the
+    imperial settings is left with 9 - 3 - 0.375/2 = 5.81 in.
+    """
+    concrete = Concrete_ACI_318_19(name="C4000", f_c=4000 * psi)
+    steel = SteelBar(name="G60", f_y=60000 * psi)
+    with pytest.warns(UserWarning, match="below the 6 in"):
+        Footing(
+            label="Z1",
+            concrete=concrete,
+            steel_bar=steel,
+            width=36 * inch,
+            height=9 * inch,
+            c_c=3 * inch,
+        )
+
+
+@pytest.mark.parametrize(
+    "concrete, expected",
+    [
+        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), 150 * mm),
+        (Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa), 150 * mm),
+        (Concrete_ACI_318_19(name="C4000", f_c=4000 * psi), 6 * inch),
+    ],
+    ids=["aci", "cirsoc", "aci-imperial"],
+)
+def test_both_codes_register_the_same_effective_depth(concrete, expected) -> None:  # type: ignore[no-untyped-def]
+    """CIRSOC 201-25 art. 13.3.1.2 reprints ACI 318-19 §13.3.1.2 unchanged.
+
+    And neither of them states an overall thickness, so the thickness hook is
+    left unset rather than filled with a reading of the clause.
+    """
+    from mento.codes.registry import design_code
+
+    code = design_code(concrete)
+    assert code.min_effective_depth_on_soil is not None
+    assert code.min_effective_depth_on_soil(concrete) == expected
+    assert code.min_thickness_on_soil is None
 
 
 @pytest.mark.parametrize(
@@ -451,8 +557,9 @@ def test_an_unreinforced_face_reports_a_failing_dcr(concrete, steel, face) -> No
 def test_a_code_without_the_footing_rules_imposes_none() -> None:
     """A rule a code does not have is not a rule an element can fail.
 
-    ``min_bar_spacing_slab`` and ``min_thickness_on_soil`` are optional hooks:
-    both registered codes fill them in, so this registers one that does not and
+    ``min_bar_spacing_slab``, ``min_thickness_on_soil`` and
+    ``min_effective_depth_on_soil`` are optional hooks: between them the
+    registered codes fill them in, so this registers one that does not and
     drives a footing through it. Nothing is capped and nothing is warned about
     -- silence, rather than an error about a limit that was never stated.
     """
@@ -469,6 +576,7 @@ def test_a_code_without_the_footing_rules_imposes_none() -> None:
             "max_bar_spacing_slab": None,
             "min_bar_spacing_slab": None,
             "min_thickness_on_soil": None,
+            "min_effective_depth_on_soil": None,
         }
     )
     register(invented)

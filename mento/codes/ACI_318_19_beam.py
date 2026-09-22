@@ -1,3 +1,18 @@
+"""Shear and flexure of a rectangular beam — ACI 318-19, and CIRSOC 201-25 with it.
+
+CIRSOC 201-25 is the Argentine adoption of ACI 318-19 and keeps its article
+numbering, so a clause written here as ``ACI 318-19 §9.6.3.1 / CIRSOC 201-25
+§9.6.3.1`` is the same clause in both books. The registry gives the two codes
+the same hooks, and whatever the two actually print differently arrives as a
+datum of the registry entry — never as a comparison against the code's title
+(see ``mento/codes/registry.py`` and ADR-0002).
+
+Where the printed text does differ, the difference is stated at the point of
+use on a ``CIRSOC 201-25 §x differs`` line. Those lines document the codes, not
+this module's behaviour: reading them next to the code is what shows whether
+the two still agree.
+"""
+
 from mento.units import Quantity
 from typing import TYPE_CHECKING, Dict, Any, cast
 import warnings
@@ -18,6 +33,7 @@ from mento.codes.check_state import (
     new_shear_state,
 )
 from mento.codes.aci_318_19.equations import shear as shear_eq
+from mento.codes.registry import design_code
 from mento.material import Concrete_ACI_318_19
 from mento.precompute import CANONICAL, refresh_section_floats, section_floats
 from mento.rebar import max_stirrup_spacing_ACI_318_19
@@ -36,6 +52,17 @@ _MOMENT_FLOOR = {False: 0.01e6, True: (0.01 * kNm).to(lbf * inch).magnitude}
 
 
 def _initialize_variables_ACI_318_19(self: "RectangularBeam", M_y: Quantity) -> None:
+    """Split the demand by face and pick the steel that is in tension.
+
+    Which face carries tension is a matter of the sign of M_y, not of any
+    clause; what the clauses do fix is what the tension steel is then used
+    for. A_s_tension is the A_s of rho_w = A_s/(b_w*d) in ACI 318-19
+    Table 22.5.5.1 / CIRSOC 201-25 Tabla 22.5.5.1, which R22.5.5.1 / C 22.5.5.1
+    allow to be taken as the bars lying beyond two thirds of the overall depth
+    from the extreme compression fibre — this reads the whole face instead,
+    which is the usual reading for a rectangular beam. f_yt is the shear value
+    of :func:`_calculate_f_yt_aci`.
+    """
     if isinstance(self.concrete, Concrete_ACI_318_19):
         self._M_u = M_y
         if self._M_u > 0 * kNm:
@@ -55,6 +82,12 @@ def _initialize_variables_ACI_318_19(self: "RectangularBeam", M_y: Quantity) -> 
 
 
 def _calculate_shear_reinforcement_aci(self: "RectangularBeam", st: ShearCheckState) -> None:
+    """Shear carried by the stirrups, reduced.
+
+    V_s = A_v*f_yt*d/s — ACI 318-19 §22.5.8.5.3, Eq. (22.5.8.5.3) / CIRSOC
+    201-25 §22.5.8.5.3, ec. (22.5.8.5.3). phi_v = 0.75 for shear, ACI 318-19
+    Table 21.2.1(b) / CIRSOC 201-25 Tabla 21.2.1(b).
+    """
     sec = section_floats(self)
     # Shear contribution of reinforcement. A_v is an area per unit length, so it
     # carries the dimension of a length.
@@ -63,6 +96,13 @@ def _calculate_shear_reinforcement_aci(self: "RectangularBeam", st: ShearCheckSt
 
 
 def _calculate_effective_shear_area_aci(self: "RectangularBeam", st: ShearCheckState) -> None:
+    """Effective shear area, longitudinal ratio and size effect factor.
+
+    A_cv = b_w*d and rho_w = A_s/(b_w*d) are the notation Table 22.5.5.1 uses
+    — ACI 318-19 Ch. 2 and Table 22.5.5.1 / CIRSOC 201-25 Cap. 2 y Tabla
+    22.5.5.1. lambda_s is ACI 318-19 Eq. (22.5.5.1.3) / CIRSOC 201-25
+    ec. (22.5.5.1.3), the same expression in both.
+    """
     sec = section_floats(self)
     st.A_cv = sec.width * sec.d_shear  # Effective shear area
     st.rho_w = st.A_s_tension / st.A_cv  # Longitudinal reinforcement ratio
@@ -70,10 +110,27 @@ def _calculate_effective_shear_area_aci(self: "RectangularBeam", st: ShearCheckS
 
 
 def _calculate_concrete_shear_strength_aci(self: "RectangularBeam", st: ShearCheckState) -> None:
+    """V_c, the shear the concrete carries on its own.
+
+    ACI 318-19 Table 22.5.5.1 / CIRSOC 201-25 Tabla 22.5.5.1 — the same three
+    rows and the same coefficients in both books — together with §22.5.5.1.1
+    (V_c not greater than 0.42*lambda*sqrt(f'c)*b_w*d), §22.5.5.1.2 (the axial
+    term N_u/(6*A_g) capped at 0.05*f'c) and note 2 of the table (V_c never
+    negative). Which row applies is the criteria column, A_v against A_v,min
+    of Table 9.6.3.4 — ACI 318-19 R22.5.5.1 / CIRSOC 201-25 C 22.5.5.1.
+
+    ACI 318-19 §22.5.3.1 /
+    CIRSOC 201-25 art. 22.5.3.1 cap sqrt(f'c) at 8.3 MPa (100 psi) for V_c, and
+    §22.5.3.2 lifts the cap for beams and joists carrying the minimum web
+    reinforcement of Table 9.6.3.4. Slabs retain the cap even with that minimum.
+    Both the table value
+    and the §22.5.5.1.1 ceiling are V_c, so both are capped.
+    """
     sec = section_floats(self)
     # Axial stress influence
     st.sigma_Nu = shear_eq.axial_stress_influence(st.N_u, sec.A_x, sec.f_c)
-    has_min_rebar = not (sec.A_v < st.A_v_min or st.A_v_min == 0.0)
+    # Table 22.5.5.1 uses the defined minimum, even where demand waives it.
+    has_min_rebar = sec.A_v >= _minimum_shear_reinforcement_aci(self)
 
     if not has_min_rebar and not sec.is_imperial and st.A_s_tension == 0.0:
         warnings.warn(
@@ -88,18 +145,32 @@ def _calculate_concrete_shear_strength_aci(self: "RectangularBeam", st: ShearChe
         st.sigma_Nu,
         st.lambda_s,
         has_min_rebar=has_min_rebar,
+        allow_high_strength=not self._stirrups_optional,
         is_imperial=sec.is_imperial,
     )
     # Maximum concrete shear strength
     V_cmax = (
-        shear_eq.max_concrete_shear_stress(sec.f_c, self.concrete.lambda_factor, is_imperial=sec.is_imperial) * st.A_cv
+        shear_eq.max_concrete_shear_stress(
+            sec.f_c,
+            self.concrete.lambda_factor,
+            has_min_rebar=has_min_rebar,
+            allow_high_strength=not self._stirrups_optional,
+            is_imperial=sec.is_imperial,
+        )
+        * st.A_cv
     )
     st.V_c = min(V_cmax, max(0.0, st.k_c_min * st.A_cv))
     st.phi_V_c = self.concrete.phi_v * st.V_c
 
 
 def _calculate_max_shear_capacity_aci(self: "RectangularBeam", st: ShearCheckState) -> None:
-    "Formula for maximum total shear capacity (V_max)"
+    """Maximum total shear capacity (V_max).
+
+    V_u <= phi*(V_c + 0.66*sqrt(f'c)*b_w*d), the section-size limit of
+    ACI 318-19 §22.5.1.2, Eq. (22.5.1.2) / CIRSOC 201-25 §22.5.1.2,
+    ec. (22.5.1.2); 8*sqrt(f'c)*b_w*d in psi. phi_v = 0.75, ACI 318-19
+    Table 21.2.1(b) / CIRSOC 201-25 Tabla 21.2.1(b).
+    """
     sec = section_floats(self)
     V_max = (
         st.V_c
@@ -107,60 +178,93 @@ def _calculate_max_shear_capacity_aci(self: "RectangularBeam", st: ShearCheckSta
         * st.A_cv
     )
     st.phi_V_max = self.concrete.phi_v * V_max
-    st.max_shear_ok = st.V_u < st.phi_V_max
+    st.max_shear_ok = st.V_u <= st.phi_V_max
 
 
-def _calculate_A_v_min_ACI(self: "RectangularBeam", st: ShearCheckState, f_c: float) -> None:
-    """Calculate the minimum shear reinforcement based on unit system."""
-    # 'Minimum reinforcement should be placed if the factored shear Vu
-    # is greater than half the shear capacity of the concrete,
-    # reduced by 0.5phi*Vc. It is assumed that minimum reinforcement is required.
-    if self._stirrups_optional:
-        # 7.6.3.1: a one-way slab carries no minimum shear reinforcement, so the
-        # 9.6.3.1 floor above does not apply. A_v_req then falls out of
-        # _calculate_V_s_req as max(Vu - phi*Vc, 0), which is the threshold the
-        # slab clause actually sets.
-        st.A_v_min = 0.0
-        return
+def _minimum_shear_reinforcement_aci(self: "RectangularBeam") -> float:
+    """Defined A_v,min/s, ACI 318-19 / CIRSOC 201-25 Table 9.6.3.4."""
     sec = section_floats(self)
-    st.A_v_min = shear_eq.min_shear_reinforcement_ratio(
-        f_c, _calculate_f_yt_aci(self), sec.width, is_imperial=sec.is_imperial
+    return shear_eq.min_shear_reinforcement_ratio(
+        sec.f_c, _calculate_f_yt_aci(self), sec.width, is_imperial=sec.is_imperial
     )
 
 
+def _calculate_A_v_min_ACI(self: "RectangularBeam", st: ShearCheckState, f_c: float) -> None:
+    """A_v,min/s for the section.
+
+    The amount is ACI 318-19 Table 9.6.3.4 / CIRSOC 201-25 Tabla 9.6.3.4 — the
+    same expression in both books: the greater of 0.062*sqrt(f'c)*b_w/f_yt and
+    0.35*b_w/f_yt (0.75*sqrt(f'c)*b_w/f_yt and 50*b_w/f_yt in psi). Whether it
+    has to be there at all is a different clause: §9.6.3.1 for a beam,
+    §7.6.3.1 for a one-way slab. See
+    :func:`_check_minimum_reinforcement_requirement_aci`.
+    """
+    st.A_v_min = _minimum_shear_reinforcement_aci(self)
+
+
 def _calculate_f_yt_aci(self: "RectangularBeam") -> float:
-    """Determine the yield strength of steel based on unit system."""
+    """Yield strength usable for shear reinforcement, f_yt.
+
+    ACI 318-19 §22.5.3.3 sends this to Table 20.2.2.4(a): 420 MPa (60,000 psi)
+    for stirrups, ties and hoops. CIRSOC 201-25 §22.5.3.3 differs in where it
+    sends the reader — §20.2.1.3 and Tablas 20.2.1-20.2.2, the characteristic
+    strengths of the steels it admits — but its C 22.5.3.3 gives the same
+    420 MPa, and for the same reason: keeping the diagonal cracks narrow.
+    """
     sec = section_floats(self)
     return shear_eq.max_yield_strength_for_shear(sec.f_y, is_imperial=sec.is_imperial)
 
 
 def _check_minimum_reinforcement_requirement_aci(self: "RectangularBeam", st: ShearCheckState) -> None:
+    """Required minimum, ACI 318-19 / CIRSOC 201-25 §9.6.3.1 and §7.6.3.
+
+    A slab or a shallow beam (Table 9.6.3.1) requires the table minimum only
+    above phi*Vc. Other beam exemptions need inputs Mento does not model.
+    Vc must already have been calculated from the reinforcement provided.
+    """
     sec = section_floats(self)
-    # Demand below which ACI 318-19 SS9.6.3.1 waives shear reinforcement.
+    # Demand below which ACI 318-19 §9.6.3.1 / CIRSOC 201-25 §9.6.3.1 waive
+    # shear reinforcement.
+    coefficient = design_code(self.concrete).requires("min_shear_reinforcement_coefficient")(self.concrete)
     V_threshold = (
         self.concrete.phi_v
         * shear_eq.min_shear_reinforcement_threshold_stress(
-            sec.f_c, self.concrete.lambda_factor, is_imperial=sec.is_imperial
+            sec.f_c, self.concrete.lambda_factor, coefficient=coefficient, is_imperial=sec.is_imperial
         )
         * st.A_cv
     )
 
-    if st.V_u < V_threshold:
+    shallow_limit = 10.0 if sec.is_imperial else 250.0
+    if self._stirrups_optional or sec.height <= shallow_limit:
+        V_threshold = st.phi_V_c
+    if st.V_u <= V_threshold:
         st.A_v_req = 0.0
         st.A_v_min = 0.0
-        st.max_shear_ok = True
     else:
         _calculate_A_v_min_ACI(self, st, sec.f_c)
-        st.max_shear_ok = V_threshold < st.V_u < st.phi_V_max
 
 
 def _calculate_V_s_req(self: "RectangularBeam", st: ShearCheckState) -> None:
+    """Stirrup area the demand asks for.
+
+    V_n = V_c + V_s — ACI 318-19 §22.5.1.1, Eq. (22.5.1.1) / CIRSOC 201-25
+    §22.5.1.1, ec. (22.5.1.1) — with phi*V_n >= V_u of ACI 318-19 §9.5.1.1(b) /
+    CIRSOC 201-25 §9.5.1.1(b), inverted through V_s = A_v*f_yt*d/s of
+    §22.5.8.5.3 in both codes.
+    """
     sec = section_floats(self)
-    st.V_s_req = st.V_u - st.phi_V_c
-    st.A_v_req = max(st.V_s_req / (self.concrete.phi_v * st.f_yt * sec.d_shear), st.A_v_min)
+    # Nominal shear the stirrups must carry: phi*(Vc + Vs) >= Vu -> Vs,req = (Vu - phi*Vc)/phi.
+    st.V_s_req = max((st.V_u - st.phi_V_c) / self.concrete.phi_v, 0.0)
+    st.A_v_req = max(st.V_s_req / (st.f_yt * sec.d_shear), st.A_v_min)
 
 
 def _calculate_total_shear_strength_aci(self: "RectangularBeam", st: ShearCheckState) -> None:
+    """phi*V_n of the section as reinforced, and the demand-capacity ratio.
+
+    phi*V_n = phi*(V_c + V_s) — ACI 318-19 §22.5.1.1 / CIRSOC 201-25 §22.5.1.1
+    — checked against V_u per ACI 318-19 §9.5.1.1(b) / CIRSOC 201-25
+    §9.5.1.1(b), and never above the phi*V_max of §22.5.1.2 in either code.
+    """
     sec = section_floats(self)
     st.phi_V_n = self.concrete.phi_v * (st.V_c + sec.A_v * st.f_yt * sec.d_shear)
     V_d_max = min(st.phi_V_n, st.phi_V_max)
@@ -178,16 +282,33 @@ def _calculate_total_shear_strength_aci(self: "RectangularBeam", st: ShearCheckS
 
 
 def _calculate_rebar_spacing_aci(self: "RectangularBeam", st: ShearCheckState) -> None:
+    """Maximum spacing of the stirrup legs, along the member and across it.
+
+    ACI 318-19 Table 9.7.6.2.2 / CIRSOC 201-25 Tabla 9.7.6.2.2: d/2 and d while
+    the required V_s stays at or under 0.33*sqrt(f'c)*b_w*d, d/4 and d/2 past
+    it (4*sqrt(f'c)*b_w*d in psi; no lambda in the table of either code).
+
+    CIRSOC 201-25 Tabla 9.7.6.2.2 differs in the absolute caps that go with
+    those fractions: 400 mm and 200 mm, where ACI 318-19 prints 600 mm and
+    300 mm (24 in. and 12 in.). They are a datum of each code's registry entry
+    (``stirrup_spacing_caps``), which is what
+    :func:`~mento.rebar.max_stirrup_spacing_ACI_318_19` passes down.
+    """
     sec = section_floats(self)
     st.stirrup_s_w = sec.stirrup_s_w
     (
         st.stirrup_s_max_l,
         st.stirrup_s_max_w,
-    ) = max_stirrup_spacing_ACI_318_19(self, st.V_u - st.phi_V_c, st.A_cv)
+    ) = max_stirrup_spacing_ACI_318_19(self, st.V_s_req, st.A_cv)
 
 
 def _check_shear_ACI_318_19(self: "RectangularBeam", force: Forces) -> ShearCheckState:
     """Run the ACI shear check for one combination and return what it found.
+
+    One-way shear of ACI 318-19 Ch. 22.5 with Table 9.6.3.4 and Table 9.7.6.2.2
+    — and of CIRSOC 201-25, same chapter and same tables, since the dispatcher
+    routes both codes here. Where the two print different numbers, the helper
+    that reads them says so.
 
     Nothing is written to the section: the result is a value. The reporting path
     copies it back through :func:`~mento.codes.check_state.apply_shear_state`,
@@ -203,7 +324,7 @@ def _check_shear_ACI_318_19(self: "RectangularBeam", force: Forces) -> ShearChec
     # Demand, and the two material values the check needs. The moments belong to
     # the flexure check, so they are deliberately not touched here.
     st.N_u = force._N_x.to(canonical["force"]).magnitude
-    st.V_u = force._V_z.to(canonical["force"]).magnitude
+    st.V_u = abs(force._V_z.to(canonical["force"]).magnitude)
     st.f_yt = _calculate_f_yt_aci(self)
     st.A_s_tension = sec.A_s_bot if force._M_y >= 0 * kNm else sec.A_s_top
 
@@ -222,11 +343,11 @@ def _check_shear_ACI_318_19(self: "RectangularBeam", force: Forces) -> ShearChec
     # Effective shear area and longitudinal reinforcement ratio
     _calculate_effective_shear_area_aci(self, st)
 
-    # Check if minimum reinforcement is required
-    _check_minimum_reinforcement_requirement_aci(self, st)
-
     # Concrete shear strength calculation
     _calculate_concrete_shear_strength_aci(self, st)
+
+    # Decide the required minimum using the capacity of the provided section.
+    _check_minimum_reinforcement_requirement_aci(self, st)
 
     # Maximum total shear capacity
     _calculate_max_shear_capacity_aci(self, st)
@@ -256,14 +377,14 @@ def _design_shear_ACI_318_19(self: "RectangularBeam", force: Forces) -> None:
     canonical = CANONICAL[sec.is_imperial]
     st = new_shear_state(self)
     st.N_u = force._N_x.to(canonical["force"]).magnitude
-    st.V_u = force._V_z.to(canonical["force"]).magnitude
+    st.V_u = abs(force._V_z.to(canonical["force"]).magnitude)
     st.f_yt = _calculate_f_yt_aci(self)
     st.A_s_tension = self._A_s_tension.to(canonical["area"]).magnitude
     # Minimum shear reinforcement calculation
     _calculate_A_v_min_ACI(self, st, sec.f_c)
     # Consider that the beam has minimum reinforcement. Designing *is* meant to
     # change the section, so the float view is rebuilt from it.
-    self._A_v = to_display(st.A_v_min, "per_length", sec.is_imperial)
+    self._A_v = to_display(0.0 if self._stirrups_optional else st.A_v_min, "per_length", sec.is_imperial)
     sec = refresh_section_floats(self)
     # Effective shear area and longitudinal reinforcement ratio
     _calculate_effective_shear_area_aci(self, st)
@@ -275,15 +396,17 @@ def _design_shear_ACI_318_19(self: "RectangularBeam", force: Forces) -> None:
     _check_minimum_reinforcement_requirement_aci(self, st)
     # Calculate required shear reinforcement
     _calculate_V_s_req(self, st)
-    # 9.6.3.1 waives A_v,min below its threshold and the check reports that
-    # faithfully, but designing does not follow the waiver down: a beam is built
-    # with stirrups over its whole length, so the cage asked of the designer
-    # never drops below Table 9.6.3.4. Without this floor a lightly loaded beam
+    # ACI 318-19 §9.6.3.1 / CIRSOC 201-25 §9.6.3.1 waive A_v,min below their
+    # threshold and the check reports that faithfully, but designing does not
+    # follow the waiver down: a beam is built with stirrups over its whole
+    # length, so the cage asked of the designer never drops below
+    # Table 9.6.3.4. That floor is this studio's criterion, not a requirement
+    # of either code. Without it a lightly loaded beam
     # came back under the minimum -- 1eO6/28cm = 2.02 cm2/m on a 30x60 against
-    # the 2.50 cm2/m the table asks for. _calculate_A_v_min_ACI returns zero for
-    # a section that may go without stirrups at all, so a slab is unaffected.
-    _calculate_A_v_min_ACI(self, st, sec.f_c)
-    st.A_v_req = max(st.A_v_req, st.A_v_min)
+    # the 2.50 cm2/m the table asks for. Slabs keep the demand-based minimum.
+    if not self._stirrups_optional:
+        _calculate_A_v_min_ACI(self, st, sec.f_c)
+        st.A_v_req = max(st.A_v_req, st.A_v_min)
     apply_shear_state(self, st)
     # Update spacing of longitudinal reinforcement calculation
     self._update_longitudinal_rebar_attributes()
@@ -331,22 +454,27 @@ def _design_shear_ACI_318_19(self: "RectangularBeam", force: Forces) -> None:
 
 def _maximum_flexural_reinforcement_ratio_ACI_318_19(self: "RectangularBeam") -> float:
     """
-    Calculates the maximum flexural reinforcement ratio (ρ_max) according to the
-    ACI 318-19 design code.
+    Calculates the maximum flexural reinforcement ratio (ρ_max) according to
+    ACI 318-19, and to CIRSOC 201-25, which prints the same clauses.
 
     Returns:
-        float: The maximum reinforcement ratio (ρ_max) for the section,
-        or 0 if the design code is not ACI 318-19.
+        float: The maximum reinforcement ratio (ρ_max) for the section.
 
     Description:
-        This function determines the maximum reinforcement ratio (ρ_max)
-        allowed by the ACI 318-19 design code to ensure ductile behavior
-        of reinforced concrete sections. The calculation depends on the
-        properties of the concrete (β1 and ε_c) and steel (ε_y).
+        This function determines the maximum reinforcement ratio (ρ_max) that
+        keeps the section ductile. A beam must be tension-controlled —
+        ACI 318-19 §9.3.3.1 / CIRSOC 201-25 §9.3.3.1 — which Table 21.2.2 of
+        both codes defines as ε_t >= ε_ty + 0.003. With
+        the ε_cu = 0.003 of §22.2.2.1 and the strain compatibility of
+        §22.2.1.2, that limit turns into ρ_max, using β1 of
+        Table 22.2.2.4.3 and the 0.85*f'c block of §22.2.2.4.1 — all of them
+        the same article numbers in both codes.
 
-        Note:
-        - This function only works if the `design_code` of the concrete is
-        set to "ACI 318-19". For other codes, it returns 0.
+        CIRSOC 201-25 §9.3.3.1 differs by one symbol: it applies the rule to a
+        beam with Pu <= 0.10*f'c*Ag, where ACI 318-19 writes the same limit
+        strictly, Pu < 0.10*f'c*Ag. Nothing here reads it — the flexure path
+        carries no axial load, so every section it sees is at Pu = 0 — but the
+        clause is not word for word the same in the two books.
 
     """
     # Cast the concrete object to the specific ACI subclass
@@ -364,10 +492,12 @@ def _maximum_flexural_reinforcement_ratio_ACI_318_19(self: "RectangularBeam") ->
 
 def _c_neutral_axis_at_ductility_limit_ACI_318_19(self: "RectangularBeam", d: float) -> float:
     """
-    Neutral axis depth at the ACI 318-19 tension-controlled boundary.
+    Neutral axis depth at the tension-controlled boundary.
 
-    At the ductility limit, eps_t_min = eps_y + eps_cu. From strain
-    compatibility (c/d = eps_cu / (eps_cu + eps_t)):
+    The boundary is eps_t = eps_ty + 0.003 — ACI 318-19 Table 21.2.2 /
+    CIRSOC 201-25 Tabla 21.2.2, the same table in both. With eps_cu = 0.003
+    (§22.2.2.1) and strain compatibility (§22.2.1.2), c/d = eps_cu /
+    (eps_cu + eps_t) gives:
         c_t = 0.003 * d / (eps_y + 0.006)
 
     Sections with c < c_t are ductile (tension-controlled); with c > c_t are
@@ -380,6 +510,11 @@ def _f_s_prime_net_at_ductility_limit_ACI_318_19(self: "RectangularBeam", d: flo
     """
     Effective compression-steel stress at the ductility limit, corrected for
     displaced concrete.
+
+    Strain compatibility and the equivalent stress block of ACI 318-19
+    §22.2.1.2 and §22.2.2.4.1 / CIRSOC 201-25 §22.2.1.2 and §22.2.2.4.1; the
+    ductility limit itself is Table 21.2.2 of both. Deducting the displaced
+    concrete is standard practice rather than a clause of either code.
 
     Evaluated at c_t (neutral axis at the ductility limit):
         eps_s' = (c_t - d') / c_t * eps_cu
@@ -397,18 +532,28 @@ def _f_s_prime_net_at_ductility_limit_ACI_318_19(self: "RectangularBeam", d: flo
 
 def _minimum_flexural_reinforcement_ratio_ACI_318_19(self: "RectangularBeam", M_u: float) -> float:
     """
-    Calculates the minimum flexural reinforcement ratio according to ACI 318-19
-    provisions based on the factored moment, M_u.
+    Calculates the minimum flexural reinforcement ratio of ACI 318-19 §9.6.1.2
+    / CIRSOC 201-25 §9.6.1.2, based on the factored moment, M_u.
 
     This method determines the minimum amount of tensile reinforcement
     (in terms of a reinforcement ratio) that should be provided in a
-    reinforced concrete section according to ACI 318-19. If the factored
+    reinforced concrete section: the larger of 0.25*sqrt(f'c)/f_y and 1.4/f_y,
+    (a) and (b) of §9.6.1.2 in both codes. If the factored
     moment M_u is zero, it means there is no flexural demand, and hence
-    no minimum flexural reinforcement is required (the ratio is zero).
+    no minimum flexural reinforcement is required (the ratio is zero) —
+    ACI 318-19 §9.6.1.1 / CIRSOC 201-25 §9.6.1.1 ask for A_s,min only where
+    the analysis requires tension reinforcement.
     If M_u is not zero, the method checks the unit system (metric or imperial)
     and computes the required minimum ratio accordingly. These calculations
     depend on the compressive strength of the concrete (f_c) and the yield
     strength of the reinforcing steel (f_y).
+
+    CIRSOC 201-25 §9.6.1.2 differs in one number: the f_y that goes into the
+    formula is capped at 500 MPa, where ACI 318-19 caps it at 550 MPa
+    (80,000 psi). Which of the two applies is a datum of the code's registry
+    entry (``flexural_min_fy_cap``), read here and handed to the equation. The
+    cap raises A_s,min, so it only bites above those values; with the ADN 420
+    of ordinary Argentine practice neither is reached.
 
     Parameters
     ----------
@@ -428,7 +573,7 @@ def _minimum_flexural_reinforcement_ratio_ACI_318_19(self: "RectangularBeam", M_
     reinforcement is required (resulting in a zero ratio).
     - For M_u > 0, the minimum ratio is determined using formulas involving
     the square root of f_c and the value of f_y, in accordance with
-    ACI 318-19.
+    §9.6.1.2 of both codes.
     - The result is a dimensionless ratio representing the minimum area
     of steel to the area of the concrete section.
 
@@ -436,12 +581,20 @@ def _minimum_flexural_reinforcement_ratio_ACI_318_19(self: "RectangularBeam", M_
     ----------
     ACI Committee 318. "Building Code Requirements for Structural Concrete
     (ACI 318-19) and Commentary", American Concrete Institute, 2019.
+    INTI-CIRSOC. "Reglamento Argentino de Estructuras de Hormigón
+    CIRSOC 201-25", 2025.
     """
     if M_u == 0:
         return 0.0
 
     sec = section_floats(self)
-    return flexure_eq.min_reinforcement_ratio(sec.f_c, sec.f_y, is_imperial=sec.is_imperial)
+    f_y_cap = design_code(self.concrete).requires("flexural_min_fy_cap")(self.concrete)
+    return flexure_eq.min_reinforcement_ratio(
+        sec.f_c,
+        sec.f_y,
+        f_y_cap.to(CANONICAL[sec.is_imperial]["stress"]).magnitude,
+        is_imperial=sec.is_imperial,
+    )
 
 
 def _minimum_flexural_reinforcement_area_ACI_318_19(self: "RectangularBeam", M_u: float, d: float) -> float:
@@ -450,14 +603,23 @@ def _minimum_flexural_reinforcement_area_ACI_318_19(self: "RectangularBeam", M_u
     Two different clauses, and which one applies is a property of the element,
     not of the moment:
 
-    * A member spanning between supports gets the flexural minimum of §9.6.1.2,
-      ``rho_min * b * d``, sized so the cracked section can still carry the
-      moment that cracked it.
-    * A member supported on the ground is exempt from that clause by
-      §9.6.1.1(b) — it cannot fail suddenly on cracking, because the soil goes
-      on carrying it — and §13.3.1.2 replaces it with the shrinkage and
-      temperature reinforcement of §24.4.3.2. That one is written on the gross
-      section ``b * h``, so ``d`` does not enter it.
+    * A member spanning between supports gets the flexural minimum of
+      ACI 318-19 §9.6.1.2 / CIRSOC 201-25 §9.6.1.2, ``rho_min * b * d``, sized
+      so the cracked section can still carry the moment that cracked it.
+    * A member supported on the ground is designed under Chapter 13:
+      ACI 318-19 §13.3.2.1 / CIRSOC 201-25 §13.3.2.1 send a one-way shallow
+      foundation to Chapters 7 and 9, and it is Chapter 7's slab minimum that
+      answers there — ACI 318-19 §7.6.1.1 / CIRSOC 201-25 §7.6.1, which the
+      Argentine code prints as an unnumbered paragraph under that heading:
+      A_s,min = 0.0018*Ag in both. That is the same ratio as the shrinkage and
+      temperature reinforcement of §24.4.3.2, which is the equation this branch
+      calls, and it is written on the gross section ``b * h``, so ``d`` does
+      not enter it. A two-way isolated footing goes to Chapter 8 instead
+      (§13.3.3.1 → §8.6.1.1), with the same 0.0018*Ag.
+
+    Neither §9.6.1.1(b) nor §13.3.1.2 is the source of this: §9.6.1.1 is a
+    single sentence with no items in either code, and §13.3.1.2 is the rule
+    that the effective depth of the bottom reinforcement be at least 150 mm.
 
     Args:
         M_u: Factored moment on the face (N·mm, or lb·in). Only its being zero
@@ -478,7 +640,9 @@ def _calculate_flexural_reinforcement_ACI_318_19(
     self: "RectangularBeam", M_u: float, d: float, d_prima: float
 ) -> tuple[float, float, float, float, float, bool, bool, float]:
     """
-    Calculates the flexural reinforcement for a given factored moment according to ACI 318-19.
+    Calculates the flexural reinforcement for a given factored moment according to ACI 318-19,
+    and to CIRSOC 201-25, which prints the same clauses: §9.6.1.1 to §9.6.1.3 for the minimum,
+    §9.3.3.1 with Table 21.2.2 for the ductility cap, Ch. 22.2 for the equilibrium.
 
     This function computes the required reinforcement areas (minimum, maximum, and final) and
     the compression reinforcement (if required) for a given factored moment. The moment M_u must
@@ -545,38 +709,46 @@ def _calculate_flexural_reinforcement_ACI_318_19(
 
     A_s_bool = False
 
-    # 1.8‰ of the gross section (custom geometric minimum rule), same for beams and slabs
+    # 1.8‰ of the gross section: a geometric floor of this studio's own, not a
+    # requirement of either code. ACI 318-19 §9.6.1.1 / CIRSOC 201-25 §9.6.1.1
+    # ask for A_s,min only where the analysis calls for tension steel, and the
+    # 4/3 relief of §9.6.1.3 carries no floor in either book. Same for beams
+    # and slabs.
     A_s_geo_min = (1.8 / (1000)) * sec.width * sec.height
 
     if self.support == "soil":
         # Case S:
-        # A_s_min above is already the shrinkage and temperature reinforcement
-        # of §24.4.3.2, on the gross section -- the only minimum a member on
-        # the ground has to meet. The 4/3 relief of §9.6.1.3 belongs to the
-        # clause it relieves, §9.6.1.2, which §9.6.1.1(b) has exempted this
-        # member from: there is no sudden cracking failure here for extra steel
-        # to buy off, so the minimum stands as written. With M_u = 0, A_s_calc
-        # is zero and this is the minimum itself, which is also what the
-        # section needs for detailing and for rho_w in the shear provisions.
+        # A_s_min above is already the 0.0018*Ag of ACI 318-19 §7.6.1.1 /
+        # CIRSOC 201-25 §7.6.1, the ratio §24.4.3.2 writes for shrinkage and
+        # temperature, on the gross section -- the minimum Chapter 13 sends a
+        # member on the ground to (§13.3.2.1 in both). The 4/3 relief of
+        # §9.6.1.3 belongs to the clause it relieves, §9.6.1.2, which is a
+        # beam clause and not the one governing here, so the minimum stands as
+        # written. With M_u = 0, A_s_calc is zero and this is the minimum
+        # itself, which is also what the section needs for detailing and for
+        # rho_w in the shear provisions.
         A_s_final = max(A_s_calc, A_s_min)
     elif M_u == 0:
         # Case 0:
-        # No flexural demand (e.g. a shear-only load combination). ACI does not
-        # require flexural minimum steel here, so rho_min -- and therefore
-        # A_s_min -- is zero, but leaving A_s = 0 is not a buildable layout: the
+        # No flexural demand (e.g. a shear-only load combination). Neither code
+        # requires flexural minimum steel here -- ACI 318-19 §9.6.1.1 /
+        # CIRSOC 201-25 §9.6.1.1 -- so rho_min, and therefore
+        # A_s_min, is zero, but leaving A_s = 0 is not a buildable layout: the
         # section still needs detailing steel, and rho_w = 0 collapses V_c to
         # zero in the shear provisions (Table 22.5.5.1). Adopt the geometric
-        # minimum.
+        # minimum, which is this studio's criterion.
         A_s_final = A_s_geo_min
     elif A_s_calc >= A_s_min:
         # Case 1:
-        # The required steel already exceeds the ACI minimum.
+        # The required steel already exceeds the §9.6.1.2 minimum.
         # Do not apply the 4/3 rule, as it would increase steel unnecessarily.
         A_s_final = A_s_calc
     else:
         # Case 2:
-        # The required steel is less than the ACI minimum.
-        # Evaluate whether using 4/3 * A_s_calc provides less steel than A_s_min.
+        # The required steel is less than the §9.6.1.2 minimum, so the relief
+        # of ACI 318-19 §9.6.1.3 / CIRSOC 201-25 §9.6.1.3 is on the table:
+        # As one third greater than the analysis asks for excuses §9.6.1.1 and
+        # §9.6.1.2. Evaluate whether 4/3 * A_s_calc is less steel than A_s_min.
         A_s_4_3 = (4 * A_s_calc) / 3
 
         if A_s_4_3 < A_s_min:
@@ -586,11 +758,13 @@ def _calculate_flexural_reinforcement_ACI_318_19(
                 A_s_final = A_s_4_3
                 A_s_bool = True
             else:
-                # 4/3 * A_s_calc is lower than 1.8‰ of (b·h) → enforce geometric minimum
+                # 4/3 * A_s_calc is lower than 1.8‰ of (b·h) → enforce the
+                # geometric minimum. Neither code asks for this: §9.6.1.3 puts
+                # no floor under the 4/3 rule.
                 A_s_final = A_s_geo_min
                 # A_s_bool remains False (4/3 rule not effectively used)
         else:
-            # 4/3 * A_s_calc is not smaller than A_s_min → use the ACI minimum
+            # 4/3 * A_s_calc is not smaller than A_s_min → use the §9.6.1.2 minimum
             A_s_final = A_s_min
 
     A_s_final = clean_zero(A_s_final)
@@ -600,9 +774,12 @@ def _calculate_flexural_reinforcement_ACI_318_19(
         A_s_comp = 0.0
     else:
         doubly = True
-        # Same ductility limit as A_s_max above: with ACI's fixed eps_c = 0.003,
-        # eps_y + 2*eps_c is exactly the eps_y + 0.006 this branch used to spell
-        # out on its own, so one function covers both.
+        # Beyond A_s_max the moment is carried as a couple, at the ductility
+        # limit of ACI 318-19 Table 21.2.2 / CIRSOC 201-25 Tabla 21.2.2 with
+        # the equilibrium of Ch. 22.2 in both. Same limit as A_s_max above:
+        # with the fixed eps_c = 0.003 of §22.2.2.1, eps_y + 2*eps_c is exactly
+        # the eps_y + 0.006 this branch used to spell out on its own, so one
+        # function covers both.
         rho = flexure_eq.max_reinforcement_ratio(
             f_c_mag, f_y_mag, concrete_aci._beta_1, concrete_aci._epsilon_c, self.steel_bar.epsilon_y
         )
@@ -627,9 +804,15 @@ def _calculate_flexural_reinforcement_ACI_318_19(
 
 def _determine_nominal_moment_simple_reinf_ACI_318_19(self: "RectangularBeam", A_s: float, d: float) -> float:
     """
-    Determines the nominal moment for a simply reinforced section according to ACI 318-19.
+    Determines the nominal moment for a simply reinforced section according to ACI 318-19,
+    and to CIRSOC 201-25, which prints the same clauses.
 
     This formula is used ONLY when the provided reinforcement area (A_s) is less than or equal to A_s_max.
+
+    The equivalent rectangular stress block of ACI 318-19 §22.2.2.4.1 and Table 22.2.2.4.3 /
+    CIRSOC 201-25 §22.2.2.4.1 and Tabla 22.2.2.4.3, with the strength requirement of §9.5.1.1(a)
+    in both, the steel taken at f_y once it yields (§20.2.2.1 in both) and the tensile strength
+    of the concrete neglected (§22.2.2.2 in both).
 
     The equilibrium of forces is assumed (compression equals tension):
         0.85 * f_c * a * b = A_s * f_y
@@ -655,10 +838,16 @@ def _determine_nominal_moment_double_reinf_ACI_318_19(
     A_s_prime: float,
 ) -> float:
     """
-    Determines the nominal moment for a doubly reinforced beam section according to ACI 318-19.
+    Determines the nominal moment for a doubly reinforced beam section according to ACI 318-19,
+    and to CIRSOC 201-25, which prints the same clauses.
 
     This method is used only when the beam has reinforcement exceeding the maximum limit
     and includes compression reinforcement.
+
+    Same stress block and strain compatibility as the singly reinforced case — ACI 318-19
+    §22.2.1.2, §22.2.2.4.1 and Table 22.2.2.4.3 / CIRSOC 201-25 §22.2.1.2, §22.2.2.4.1 and
+    Tabla 22.2.2.4.3 — with the compression steel taken at whatever stress its strain gives it,
+    never above f_y (§20.2.2.1 in both).
 
     Equilibrium is assumed (Compression = Tension):
         C_total = Concrete compression (Cc) + Compression reinforcement (Cs)
@@ -702,6 +891,12 @@ def _determine_nominal_moment_ACI_318_19(self: "RectangularBeam", st: FlexureChe
 
     For positive moments, the tension is in the bottom reinforcement.
     For negative moments, the tension is in the top reinforcement.
+
+    Flexural strength of ACI 318-19 Ch. 22.2 / CIRSOC 201-25 Cap. 22.2, reduced by the
+    phi = 0.90 that ACI 318-19 Table 21.2.2 / CIRSOC 201-25 Tabla 21.2.2 give a
+    tension-controlled section, which §9.3.3.1 of both codes requires a beam to be. The
+    A_s_max_total cap below follows from that limit but is a construction of Mento's: neither
+    code writes a capacity formula for a section past it.
 
     Parameters:
         force (Forces): An object containing the forces acting on the section, including the moment M_y.
@@ -776,7 +971,11 @@ def _determine_nominal_moment_ACI_318_19(self: "RectangularBeam", st: FlexureChe
 
 def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> FlexureCheckState:
     """
-    Checks the flexural capacity of the section according to ACI 318-19 guidelines.
+    Checks the flexural capacity of the section according to ACI 318-19 guidelines,
+    and to CIRSOC 201-25, which the dispatcher routes here as well.
+
+    The criterion is phi*M_n >= M_u — ACI 318-19 §9.5.1.1(a) / CIRSOC 201-25
+    §9.5.1.1(a) — reported as the DCR M_u / (phi*M_n) on each face.
 
     Computes the nominal moments for both faces, the required reinforcement
     areas and the design capacity ratios, and returns them. Nothing is written
@@ -857,14 +1056,23 @@ def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> Flexure
     st.d_b_max_bot = max(self._d_b1_b, self._d_b2_b, self._d_b3_b, self._d_b4_b).to(length_unit).magnitude
 
     # Calculate the longitudinal reinforcement ratios for both sides.
+    # rho = A_s / (b*d): ACI 318-19 Ch. 2, 2.2 ("ratio of A_s to bd") and
+    # CIRSOC 201-25 Cap. 2 ("cuantia de la armadura traccionada, no tesa;
+    # relacion entre A_s y el area b.d") define it identically. Each face takes
+    # its OWN steel against its OWN effective depth: the top ratio used to be
+    # fed with A_s_bot, so the top flexure table printed a ratio that did not
+    # belong to the A_s it was printed next to.
     st.rho_l_bot = sec.A_s_bot / (sec.d_bot * sec.width)
-    st.rho_l_top = sec.A_s_bot / (sec.d_top * sec.width)
+    st.rho_l_top = sec.A_s_top / (sec.d_top * sec.width)
 
     return st
 
 
 def _flexure_capacity_ACI_318_19(self: "RectangularBeam", face: str, M_demand: Quantity) -> Quantity:
     """phi*Mn of the layout currently applied to the section, on `face`.
+
+    phi = 0.90, the tension-controlled value of ACI 318-19 Table 21.2.2 /
+    CIRSOC 201-25 Tabla 21.2.2.
 
     Recomputed rather than read from cached state so that the centroid of the
     layout just applied is taken into account.
@@ -887,10 +1095,11 @@ def _flexure_capacity_ACI_318_19(self: "RectangularBeam", face: str, M_demand: Q
 def _required_areas_ACI_318_19(
     self: "RectangularBeam", face: str, M: Quantity, d: Quantity, d_prime: Quantity
 ) -> _FaceDemand:
-    """Steel required by ACI 318-19 on `face` for the moment `M`.
+    """Steel required by ACI 318-19 — or CIRSOC 201-25 — on `face` for the moment `M`.
 
     The code-specific extras that do not belong in `_FaceDemand` (the c/d ratio
-    and the 4/3-rule flag) are stored on the beam for the results tables.
+    and the flag for the 4/3 rule of §9.6.1.3, the same article in both codes)
+    are stored on the beam for the results tables.
     """
     sec = section_floats(self)
     imperial = sec.is_imperial
@@ -944,10 +1153,11 @@ def _select_safe_design(
 
 
 def _design_flexure_ACI_318_19(self: "RectangularBeam", max_M_y_bot: Quantity, max_M_y_top: Quantity) -> None:
-    """Design the longitudinal reinforcement of a beam per ACI 318-19.
+    """Design the longitudinal reinforcement of a beam per ACI 318-19 — or CIRSOC 201-25.
 
     Thin wrapper: everything that is not an ACI equation lives in
-    ``mento.codes.flexure_design``.
+    ``mento.codes.flexure_design``. The two codes share every clause this path
+    reads, so the same wrapper serves both.
     """
 
     def _required(face: str, M: Quantity, d: Quantity, d_prime: Quantity) -> _FaceDemand:

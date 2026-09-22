@@ -9,7 +9,10 @@ of the published documentation.
 #
 # ACI 318-19 and EN 1992-2004 disagree on the equations -- the stress block, the
 # safety format, the minimum reinforcement rules -- but not on the strategy that
-# surrounds them:
+# surrounds them. CIRSOC 201-25, the Argentine adoption of ACI 318-19, keeps its
+# article numbering and reaches this engine through the very same callbacks, so
+# a clause written below as ``ACI 318-19 §9.5.1.1(a) / CIRSOC 201-25 §9.5.1.1(a)``
+# is one clause carrying two names. The strategy:
 #
 #   1. Guess the mechanical covers, hence the effective depths.
 #   2. Ask the design code for the steel required on each face.
@@ -25,6 +28,14 @@ of the published documentation.
 # supplied by the caller as two callbacks -- the only place the design code
 # enters. Each code keeps its own equations in
 # ``_calculate_flexural_reinforcement_*`` and ``_determine_nominal_moment_*``.
+#
+# No design-code equation lives in this module, which is why it cites almost no
+# clause: A_s,min, A_s,max and the stress block all arrive already evaluated
+# through those two callbacks. The one normative rule the engine applies on its
+# own account is the design-strength criterion of step 6 -- ACI 318-19
+# §9.5.1.1(a) / CIRSOC 201-25 §9.5.1.1(a), phi*Mn >= Mu, and M_Rd >= M_Ed under
+# EN 1992-2004 -- which is the comparison in ``_select_safe_design`` and in the
+# final verification of ``_run_flexure_design``.
 #
 # Kept as comments rather than a module docstring on purpose: Sphinx autodoc
 # publishes docstrings, and this is implementation detail, not reference
@@ -53,7 +64,13 @@ class _FaceDemand:
     Attributes
     ----------
     A_s_min, A_s_max:
-        Code limits for the tension face being solved.
+        Code limits for the tension face being solved. Under ACI 318-19 and
+        CIRSOC 201-25 they are the minimum flexural reinforcement of §9.6.1.2
+        — or, for a member the ground supports, the 0.0018*Ag that §13.3.2.1
+        sends to ACI 318-19 §7.6.1.1 / CIRSOC 201-25 §7.6.1 — and the
+        tension-controlled cap that §9.3.3.1 with Table 21.2.2 puts on a beam
+        in both codes. The numbers come from the design code's own hook; this
+        dataclass only carries them.
     A_s_tension:
         Steel required on the tension face itself.
     A_s_compression:
@@ -75,7 +92,9 @@ _RequiredAreas = Callable[..., _FaceDemand]
 
 # Resisting moment of the layout currently applied to the section, on ``face``,
 # under a demand of ``M_demand`` (positive magnitude). Includes the safety
-# format of the code (phi*Mn for ACI, M_Rd for EN).
+# format of the code: phi*Mn for ACI 318-19 and CIRSOC 201-25, with the
+# phi = 0.90 that Table 21.2.2 of both gives a tension-controlled section;
+# M_Rd for EN.
 _Capacity = Callable[..., Quantity]
 
 
@@ -114,6 +133,11 @@ def _select_safe_design(
     """Among a set of candidate rebar designs — those visited during the
     Picard (fixed-point iteration) loop — return the most appropriate one for
     the given face.
+
+    The pass/fail line is the design-strength requirement itself — ACI 318-19
+    §9.5.1.1(a) / CIRSOC 201-25 §9.5.1.1(a), phi*Mn >= Mu, and M_Rd >= M_Ed
+    under EN 1992-2004. It is read through the ``capacity`` callback, so each
+    code applies its own safety format without this function knowing which.
 
     Selection priority:
 
@@ -211,6 +235,13 @@ def _run_flexure_design(
             return None
 
     # --- initial guesses ----------------------------------------------------------
+    # Mechanical cover = clear cover + stirrup diameter + the distance from the
+    # stirrup to the centroid of the bars. ``c_c`` is the clear cover to the
+    # stirrup, which the code in force fixes — ACI 318-19 Table 20.5.1.3.1 /
+    # CIRSOC 201-25 Tabla 20.5.1.3.1 — and which Mento takes as given rather
+    # than checking. The 1 cm is only a starting guess for the centroid,
+    # replaced by the real one at the end of the first iteration; no clause
+    # writes it.
     rec_mec = self.c_c + self._stirrup_d_b + 1 * cm  # bottom mechanical cover to centroid (initial)
     d_prima = self.c_c + self._stirrup_d_b + 1 * cm  # top mechanical cover to centroid (initial)
 
@@ -257,6 +288,13 @@ def _run_flexure_design(
         self._A_s_top = A_req_top
 
         # --- Discrete design for each face (independent first pass) ---------------
+        # The cap handed to the selector is A_s_max, the tension-controlled
+        # limit — ACI 318-19 §9.3.3.1 with Table 21.2.2 / CIRSOC 201-25
+        # §9.3.3.1 with Tabla 21.2.2, the same limit in both. Past it the cap
+        # is dropped (``None``), because the area being asked for came out of
+        # the code hook itself — the tension steel of a doubly reinforced
+        # couple, or the compression the opposite face needs — and capping it
+        # here would only leave the selector with nothing to fit.
         if A_req_bot >= 0 * (cm**2):
             A_cap_bot = self._A_s_max_bot if A_req_bot <= self._A_s_max_bot else None
             self.flexure_design_results_bot = _design_longitudinal_for_area(A_req_bot, A_cap_bot, self._c_mec_bot)
@@ -353,7 +391,10 @@ def _run_flexure_design(
     # Whether the loop converged, cycled, or hit MAX_ITER, the active layout
     # is NOT guaranteed to resist the demand. The Picard (fixed-point
     # iteration) only ensures centroid consistency, not flexural capacity. So
-    # we always run a final check; if the active layout fails, we pick the
+    # we always run a final check against the design-strength requirement —
+    # ACI 318-19 §9.5.1.1(a) / CIRSOC 201-25 §9.5.1.1(a), phi*Mn >= Mu, and
+    # M_Rd >= M_Ed under EN 1992-2004, whichever the ``capacity`` callback
+    # speaks. If the active layout fails, we pick the
     # safest one among the visited layouts (see `_select_safe_design`). If no
     # visited layout passes either, we pick the closest one — the downstream
     # `check_flexure` will surface DCR > 1 to signal that the section is

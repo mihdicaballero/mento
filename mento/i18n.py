@@ -258,11 +258,13 @@ def translate_table(data: Mapping[str, List[Any]], language: Optional[str] = Non
 
 def translate_dataframe(df: "pd.DataFrame", language: Optional[str] = None) -> "pd.DataFrame":
     """Same as :func:`translate_table`, for the DataFrames the Word builder takes."""
+    from pandas import Index
+
     if not len(df.columns):
         return df
 
     out = df.copy()
     label_column = out.columns[0]
     out[label_column] = [translate(v, language) if isinstance(v, str) else v for v in out[label_column]]
-    out.columns = [translate(str(c), language) for c in out.columns]
+    out.columns = Index([translate(str(c), language) for c in out.columns])
     return out

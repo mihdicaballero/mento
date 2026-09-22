@@ -14,6 +14,8 @@ from mento.units import m, mm, cm, inch
 _MM2 = mm**2
 
 if TYPE_CHECKING:
+    from pandas import DataFrame
+    from mento.forces import Forces
     from mento.units import Quantity
 
 
@@ -34,6 +36,17 @@ class OneWaySlab(RectangularBeam):
     """
     One-way slab section. Inherits all flexure and shear checks from RectangularBeam,
     but uses bar diameters + spacing instead of number of bars for longitudinal reinforcement.
+
+    Inheriting the checks is what the codes themselves do: ACI 318-19 §7.5.3.1
+    / CIRSOC 201-25 §7.5.3.1 send the shear strength of a one-way slab to
+    Chapter 22.5, the same chapter a beam is checked against, and ACI 318-19
+    §7.7.5.1 / CIRSOC 201-25 §7.7.5 send its transverse reinforcement to
+    §9.7.6.2. What is particular to a slab is the detailing: the bar spacing of
+    ACI 318-19 §7.7.2.3 / CIRSOC 201-25 §7.7.2.3 (see :meth:`_max_bar_spacing`)
+    and the minimum flexural reinforcement, which ACI 318-19 §7.6.1.1 /
+    CIRSOC 201-25 §7.6.1 put at 0.0018*Ag in both codes. That minimum is sized
+    with the beam rule of §9.6.1.2 instead, which is the conservative side of
+    it; the difference is a known open point and is not settled here.
     """
 
     def __post_init__(self) -> None:
@@ -152,10 +165,18 @@ class OneWaySlab(RectangularBeam):
     def _max_bar_spacing(self) -> Quantity | None:
         """The largest spacing the design code allows between the flexural bars.
 
-        ACI 318-19 7.7.2.3 and EN 1992-1-1 9.3.1.1(3) both cap it as a multiple
-        of the thickness, which is what keeps a slab from being detailed as a
-        handful of widely spaced bars that happen to add up to the area. A code
-        that states no such limit returns ``None``.
+        ACI 318-19 §7.7.2.3 / CIRSOC 201-25 art. 7.7.2.3 and EN 1992-1-1
+        9.3.1.1(3) all cap it as a multiple of the thickness, which is what
+        keeps a slab from being detailed as a handful of widely spaced bars
+        that happen to add up to the area. A code that states no such limit
+        returns ``None``.
+
+        What the three do not share is the absolute term beside that multiple:
+        450 mm (18 in.) in ACI 318-19 §7.7.2.3, 300 mm in CIRSOC 201-25
+        art. 7.7.2.3, 400 mm in EN 1992-1-1 9.3.1.1(3). Each code registers its
+        own hook, so the number is the one the section's code prints; see
+        ``mento.codes.aci_318_19.code._max_bar_spacing_slab`` and
+        ``_max_bar_spacing_slab_cirsoc``.
         """
         limit = design_code(self.concrete).max_bar_spacing_slab
         return None if limit is None else cast("Quantity", limit(self))
@@ -163,10 +184,12 @@ class OneWaySlab(RectangularBeam):
     def _min_bar_spacing(self) -> Quantity | None:
         """The smallest spacing the design code asks for between the flexural bars.
 
-        Distinct from the clear distance in :class:`~mento.settings.BeamSettings`,
+        Distinct from the clear distance of ACI 318-19 §25.2.1 /
+        CIRSOC 201-25 §25.2.1, carried in :class:`~mento.settings.BeamSettings`,
         which every section has and which is about fitting a bar and a vibrator
-        between two others. This is the code's own floor, and only a footing has
-        one; a slab spanning between supports returns ``None``.
+        between two others. This is a detailing floor for a member cast on the
+        ground, which neither code states; only a footing has one, and a slab
+        spanning between supports returns ``None``.
         """
         limit = design_code(self.concrete).min_bar_spacing_slab
         return None if limit is None else cast("Quantity | None", limit(self))
@@ -325,13 +348,17 @@ class Footing(OneWaySlab):
 
     A member spanning between supports is given a minimum sized to keep it from
     failing the instant it cracks. A member on the ground cannot fail that way,
-    because the soil goes on carrying it, so both codes exempt it and put a
-    different rule in place:
+    because the soil goes on carrying it, so the codes send a footing somewhere
+    else for its minimum:
 
-    * ACI 318-19 §9.6.1.1(b) grants the exemption and §13.3.1.2 replaces the
-      flexural minimum with the shrinkage and temperature reinforcement of
-      §24.4.3.2 -- 0.0018*b*h at f_y = 420 MPa, on the gross section. CIRSOC
-      201-25 shares the clause.
+    * ACI 318-19 §13.3.2.1 sends a one-way shallow foundation to Chapters 7
+      and 9, and it is Chapter 7 that applies: §7.6.1.1 asks for
+      As,min = 0.0018*Ag on the gross section, with none of the 4/3 relief
+      §9.6.1.3 gives a beam. That is the same ratio as the shrinkage and
+      temperature reinforcement of §24.4.3.2. A footing spanning two ways goes
+      by §13.3.3.1 to Chapter 8, and §8.6.1.1 repeats the 0.0018*Ag.
+      CIRSOC 201-25 prints the same chain: §13.3.2.1 → §7.6.1 (the ratio sits
+      in an unnumbered paragraph there), §13.3.3.1 → §8.6.1.1, §24.4.3.2.
     * EN 1992-1-1 takes the larger of the halved geometric minimum of a
       foundation and the crack-control minimum of §7.3.2(2). The second governs
       the thin footings, not the thick ones: its ratio goes with k/2, and k
@@ -349,11 +376,16 @@ class Footing(OneWaySlab):
         Node(section=footing, forces=[Forces(M_y=120 * kNm)]).design()
 
     It is also detailed differently, which the same ``support`` tells the codes:
-    the bars are kept between 100 and 300 mm apart, and a footing thinner than
-    its code allows says so when it is built. And because a footing is placed as
-    a single mat rather than as two independently detailed faces, a design ends
-    with both faces set out at one spacing -- see
-    :meth:`_finalize_longitudinal_design`.
+    the bars are kept between 100 and 300 mm apart -- practice under ACI 318-19,
+    while under CIRSOC 201-25 the upper figure is its own art. 7.7.2.3, which
+    caps every slab at 300 mm and not only one on the ground (art. 8.7.2.2
+    repeats it for a footing spanning two ways, reached by art. 13.3.3.1) -- and a
+    footing thinner than its code allows says so when it is built: ACI 318-19
+    §13.3.1.2 / CIRSOC 201-25 art. 13.3.1.2 ask that the bottom reinforcement
+    be left at least 150 mm (6 in.) of effective depth, and EN practice asks
+    250 mm overall. And because a footing is placed as a single mat rather than
+    as two independently detailed faces, a design ends with both faces set out
+    at one spacing -- see :meth:`_finalize_longitudinal_design`.
 
     Note:
         A `Footing` designs the section, not the foundation. It says nothing
@@ -535,22 +567,77 @@ class Footing(OneWaySlab):
         self._calculate_longitudinal_rebars()
         self._update_longitudinal_rebar_attributes()
 
-    def _warn_if_thinner_than_the_code_allows(self) -> None:
+    def _effective_depth_of_the_thinnest_mat(self) -> Quantity:
+        """The most effective depth this section can be given, before it is designed.
+
+        ``_d_bot`` is only known once the bars are placed, and the check below
+        runs when the section is built. The thinnest bar the settings allow is
+        the one whose centroid sits closest to the bottom face, so it leaves the
+        most depth: if even that mat falls short of the code's minimum, every
+        mat the design can reach falls short too, and the section is reported
+        once instead of once per bar the search tries.
+
+        Built the way ``_update_longitudinal_rebar_attributes`` builds
+        ``_d_bot``: the overall depth less the cover, the transverse bar --
+        zero on a mat -- and the distance from the face of the longitudinal bar
+        to its centroid.
+        """
+        return cast(
+            "Quantity",
+            self.height - self.c_c - self._stirrup_d_b - self.settings.minimum_longitudinal_diameter / 2,
+        )
+
+    def check_flexure(self, forces: list[Forces]) -> DataFrame:
+        self._warn_if_thinner_than_the_code_allows(use_actual_depth=True)
+        return super().check_flexure(forces)
+
+    def check_shear(self, forces: list[Forces]) -> DataFrame:
+        self._warn_if_thinner_than_the_code_allows(use_actual_depth=True)
+        return super().check_shear(forces)
+
+    def _warn_if_thinner_than_the_code_allows(self, *, use_actual_depth: bool = False) -> None:
         """Say so when the section is thinner than a footing is built.
+
+        Two limits, and a code states one or the other:
+
+        * ACI 318-19 §13.3.1.2 / CIRSOC 201-25 art. 13.3.1.2, the same in both:
+          the overall depth shall be selected such that the effective depth of
+          the bottom reinforcement is at least 150 mm (6 in.). It is a limit on
+          ``d``, so what is measured against it is the depth the mat will have
+          -- estimated at construction, actual at check/design completion --
+          and not the overall thickness. On a footing the two are far apart, because the
+          cover against the ground is 75 mm under ACI 318-19 Table 20.5.1.3.1
+          and 55 to 60 mm under CIRSOC 201-25 Tabla 20.5.1.3.1.
+        * EN 1992-1-1 states neither, and its hook answers with the overall
+          thickness below which a footing is not detailed in practice. That one
+          is compared against ``h`` directly.
 
         A warning and not an error: the thickness is the engineer's to choose,
         and the design that follows is still the right design for the section
         it was given. Raising would refuse to answer a question that has an
         answer.
         """
-        minimum = design_code(self.concrete).min_thickness_on_soil
-        if minimum is None:
-            return
-        limit = cast("Quantity", minimum(self.concrete))
-        if self.height < limit:
+        code = design_code(self.concrete)
+        if use_actual_depth and code.min_effective_depth_on_soil is None:
+            return  # The overall-thickness advisory was already given at construction.
+        measured = (
+            (code.min_thickness_on_soil, self.height, "is", "thick"),
+            (
+                code.min_effective_depth_on_soil,
+                self._d_bot if use_actual_depth else self._effective_depth_of_the_thinnest_mat(),
+                "leaves",
+                "of effective depth to the bottom bars",
+            ),
+        )
+        for hook, value, verb, what in measured:
+            if hook is None:
+                continue  # a limit this code does not state is not one to warn about
+            limit = cast("Quantity", hook(self.concrete))
+            if value >= limit:
+                continue
             label = f" {self.label}" if self.label else ""
             warnings.warn(
-                f"Footing{label} is {self.height:.4g~P} thick, below the "
+                f"Footing{label} {verb} {value:.4g~P} {what}, below the "
                 f"{limit:.4g~P} {self.concrete.design_code} asks of a footing on soil. "
                 "It is designed as given.",
                 UserWarning,
