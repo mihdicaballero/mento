@@ -9,6 +9,7 @@ from mento.units import Quantity
 
 if TYPE_CHECKING:
     from mento.node import Node
+    from mento.reports.documents import ReportTarget
 
 
 @dataclass
@@ -102,6 +103,9 @@ class Section:
         pass
 
     def flexure_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
+        pass
+
+    def results_detailed_doc(self, path: Optional["ReportTarget"] = None) -> None:
         pass
 
     def _get_units_row_shear(self) -> None:

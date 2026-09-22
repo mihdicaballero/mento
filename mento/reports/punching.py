@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
 
-from IPython.display import Markdown, display
+from mento.reports._notebook import Markdown, display
 from mento.units import Quantity
 
 if TYPE_CHECKING:
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 def _show(markdown: str) -> None:
     """Render Markdown in a notebook; IPython ships no type information."""
-    display(Markdown(markdown))  # type: ignore[no-untyped-call]
+    display(Markdown(markdown))
 
 
 def _length(value: Quantity, imperial: bool) -> str:

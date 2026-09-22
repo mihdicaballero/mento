@@ -146,5 +146,9 @@ def __getattr__(name: str) -> object:
         import importlib
 
         module = importlib.import_module(f".{module_mapping[name]}", __name__)
+        if not hasattr(module, name):
+            # The name is a submodule of that package -- `mento.codes.ACI_318_19_beam`
+            # -- which is only an attribute of it once something has imported it.
+            return importlib.import_module(f".{module_mapping[name]}.{name}", __name__)
         return getattr(module, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

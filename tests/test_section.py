@@ -196,6 +196,12 @@ def test_flexure_results_detailed_doc_placeholder(basic_section: Section, sample
     assert result2 is None
 
 
+def test_results_detailed_doc_placeholder(basic_section: Section) -> None:
+    """Test placeholder for results_detailed_doc."""
+    assert basic_section.results_detailed_doc() is None
+    assert basic_section.results_detailed_doc("report.docx") is None
+
+
 # --- Tests for Helper Methods ---
 
 

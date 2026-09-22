@@ -53,7 +53,7 @@ Read results through the public dataclasses in `mento/design_results.py`; the `b
 
 ```python
 fd = beam.flexure_design          # FlexureDesign: .bottom / .top are FlexureFaceDesign
-fd.bottom.layers                  # tuple of RebarLayer (one per layer)
+fd.bottom.layers                  # tuple of RebarLayer (one per layer); .position 1-4, .row, .corner
 fd.bottom.A_s, fd.bottom.A_s_req  # provided / required steel area (Quantity)
 fd.bottom.A_s_min, fd.bottom.A_s_max, fd.bottom.DCR, fd.bottom.M_capacity
 
@@ -84,5 +84,5 @@ Always set `PYTHONIOENCODING=utf-8` before running to avoid codec errors from â‰
 - Forces belong to the `Node`: pass them to the constructor or call `node.add_forces()`. The beam has no forces of its own.
 - `node.design()` returns `None`; results live on `node` and `beam` attributes.
 - Detailed text output: `node.shear_results_detailed()` / `node.flexure_results_detailed()`.
-- Export to Word: `node.shear_results_detailed_doc()` / `node.flexure_results_detailed_doc()`.
+- Export to Word: `node.shear_results_detailed_doc()` / `node.flexure_results_detailed_doc()`, or both in one file with `node.results_detailed_doc(path_or_buffer)`.
 - `node.check_flexure()` / `node.check_shear()` take no arguments and use the node's forces; the beam-level `beam.check_flexure(forces)` / `beam.check_shear(forces)` require the list.

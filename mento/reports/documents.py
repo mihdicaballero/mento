@@ -10,8 +10,9 @@ and hand them to :class:`~mento.results.DocumentBuilder`.
 
 from __future__ import annotations
 
+import os
 import warnings
-from typing import TYPE_CHECKING, Any, Dict, Optional, cast
+from typing import IO, TYPE_CHECKING, Any, Dict, Optional, Union, cast
 
 import pandas as pd
 
@@ -22,6 +23,10 @@ from mento.results import DocumentBuilder
 if TYPE_CHECKING:
     from mento.beam import RectangularBeam
     from mento.forces import Forces
+
+#: Where a report can be written: a path, or anything open for binary writing
+#: -- a ``BytesIO`` for a caller that serves the file rather than keeping it.
+ReportTarget = Union[str, "os.PathLike[str]", IO[bytes]]
 
 
 def flexure_report_doc(self: "RectangularBeam", force: Optional[Forces] = None) -> None:
@@ -41,6 +46,19 @@ def flexure_report_doc(self: "RectangularBeam", force: Optional[Forces] = None) 
         self._md_flexure_results = "Flexural results are not available."
         return None
 
+    doc_builder = DocumentBuilder(title=self._report_text["flexure_doc_title"], language=get_language())
+    _add_flexure_report(doc_builder, self, force)
+    doc_builder.save(self._report_file_name("flexure_heading"))
+
+
+def _add_flexure_report(
+    doc_builder: DocumentBuilder, self: "RectangularBeam", force: Optional[Forces] = None, credit: bool = True
+) -> None:
+    """Write the flexure report of a checked beam into ``doc_builder``.
+
+    ``credit`` is the "Made with mento" line under the heading; a document that
+    holds both reports carries it once.
+    """
     # Determine which results to display (limiting case by default)
     if force:
         if force.id not in self._flexure_results_detailed_list:
@@ -127,16 +145,14 @@ def flexure_report_doc(self: "RectangularBeam", force: Optional[Forces] = None) 
     df_flexure_capacity_top = pd.DataFrame(top_result_data)
     df_flexure_capacity_bottom = pd.DataFrame(bot_result_data)
 
-    # Create a document builder instance
-    doc_builder = DocumentBuilder(title=self._report_text["flexure_doc_title"], language=get_language())
-
     # Add first section and table
     doc_builder.add_heading(self._report_text["flexure_heading"], level=1, label=self.label)
-    doc_builder.add_text(
-        "Made with mento {version}. Design code: {design_code}",
-        version=MENTO_VERSION,
-        design_code=self.concrete.design_code,
-    )
+    if credit:
+        doc_builder.add_text(
+            "Made with mento {version}. Design code: {design_code}",
+            version=MENTO_VERSION,
+            design_code=self.concrete.design_code,
+        )
     doc_builder.add_heading("Section Data", level=2)
     doc_builder.add_table_data(df_materials)
     doc_builder.add_table_data(df_geometry)
@@ -151,9 +167,6 @@ def flexure_report_doc(self: "RectangularBeam", force: Optional[Forces] = None) 
     doc_builder.add_table_dcr(df_flexure_capacity_top)
     doc_builder.add_heading("Flexural Capacity Bottom", level=2)
     doc_builder.add_table_dcr(df_flexure_capacity_bottom)
-
-    # Save the Word doc
-    doc_builder.save(self._report_file_name("flexure_heading"))
 
 
 def shear_report_doc(self: "RectangularBeam", force: Optional[Forces] = None) -> None:
@@ -172,6 +185,16 @@ def shear_report_doc(self: "RectangularBeam", force: Optional[Forces] = None) ->
         )
         self._md_shear_results = "Shear results are not available."
         return None
+
+    doc_builder = DocumentBuilder(title=self._report_text["shear_doc_title"], language=get_language())
+    _add_shear_report(doc_builder, self, force)
+    doc_builder.save(self._report_file_name("shear_heading"))
+
+
+def _add_shear_report(
+    doc_builder: DocumentBuilder, self: "RectangularBeam", force: Optional[Forces] = None, credit: bool = True
+) -> None:
+    """Write the shear report of a checked beam into ``doc_builder``."""
     # Determine which results to display (limiting case by default)
     if force:
         force_id = force.id
@@ -191,16 +214,14 @@ def shear_report_doc(self: "RectangularBeam", force: Optional[Forces] = None) ->
     df_data_min_max = pd.DataFrame(result_data["min_max"])
     df_shear_concrete = pd.DataFrame(result_data["shear_concrete"])
 
-    # Create a document builder instance
-    doc_builder = DocumentBuilder(title=self._report_text["shear_doc_title"], language=get_language())
-
     # Add first section and table
     doc_builder.add_heading(self._report_text["shear_heading"], level=1, label=self.label)
-    doc_builder.add_text(
-        "Made with mento {version}. Design code: {design_code}",
-        version=MENTO_VERSION,
-        design_code=self.concrete.design_code,
-    )
+    if credit:
+        doc_builder.add_text(
+            "Made with mento {version}. Design code: {design_code}",
+            version=MENTO_VERSION,
+            design_code=self.concrete.design_code,
+        )
     doc_builder.add_heading("Section Data", level=2)
     doc_builder.add_table_data(df_materials)
     doc_builder.add_table_data(df_geometry)
@@ -213,5 +234,36 @@ def shear_report_doc(self: "RectangularBeam", force: Optional[Forces] = None) ->
     doc_builder.add_table_data(df_shear_reinforcement)
     doc_builder.add_table_dcr(df_shear_concrete)
 
-    # Save the Word doc
-    doc_builder.save(self._report_file_name("shear_heading"))
+
+def results_report_doc(self: "RectangularBeam", path: Optional[ReportTarget] = None) -> None:
+    """Write one Word document holding the flexure and the shear report.
+
+    The two single-check reports each write their own file, always into the
+    working directory. This is both of them in one document, written where the
+    caller says.
+
+    Parameters
+    ----------
+    path : str, os.PathLike or binary file object, optional
+        Where to write the document: a file path, or a buffer open for binary
+        writing such as ``io.BytesIO``. ``None`` writes
+        ``"<Beam|Slab> <label> check <design code>.docx"`` into the working
+        directory, as the single-check reports do.
+
+    A check that has not run is left out; with neither there is nothing to
+    write, and the call warns instead.
+    """
+    if not (self._flexure_checked or self._shear_checked):
+        warnings.warn(
+            "No check has been performed yet. Call check() or design() first.",
+            UserWarning,
+        )
+        return None
+
+    doc_builder = DocumentBuilder(title=self._report_text["doc_title"], language=get_language())
+    if self._flexure_checked:
+        _add_flexure_report(doc_builder, self)
+    if self._shear_checked:
+        _add_shear_report(doc_builder, self, credit=not self._flexure_checked)
+
+    doc_builder.save(self._report_file_name("heading") if path is None else path)

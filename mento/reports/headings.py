@@ -33,9 +33,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from docx.oxml import parse_xml
-from docx.oxml.ns import nsdecls, qn
-from docx.shared import RGBColor
+# python-docx is imported inside the functions that use it: this module is on
+# the import path of every element, and a calculation never opens a document.
 
 #: The heading levels that are numbered, and the level of the list each takes
 #: its number from: "1" for a Heading 1 and "1.1" for a Heading 2. Deeper
@@ -69,6 +68,8 @@ def _name_font(style: Any, font_name: str) -> None:
     it is decoration.
     """
     style.font.name = font_name
+    from docx.oxml.ns import qn
+
     fonts = style.element.find(qn("w:rPr")).find(qn("w:rFonts"))
     for attribute in ("asciiTheme", "hAnsiTheme", "eastAsiaTheme", "cstheme"):
         if fonts.get(qn(f"w:{attribute}")) is not None:
@@ -90,6 +91,8 @@ def style_headings(
     the rest inherit from.
     """
     normal = document.styles["Normal"]
+    from docx.shared import RGBColor
+
     normal.font.color.rgb = RGBColor.from_string(text_color)
     _name_font(normal, font_name)
 
@@ -124,6 +127,8 @@ def _abstract_numbering_xml(abstract_id: int, font_name: str) -> str:
         "</w:lvl>"
         for level, ilvl in sorted(NUMBERED_LEVELS.items())
     )
+    from docx.oxml.ns import nsdecls
+
     return (
         f'<w:abstractNum {nsdecls("w")} w:abstractNumId="{abstract_id}">'
         '<w:multiLevelType w:val="multilevel"/>'
@@ -139,6 +144,8 @@ def _next_free_id(numbering: Any, tag: str, attribute: str) -> int:
     -- the bulleted and numbered ones of Word's own gallery -- and taking an id
     that is in use would silently renumber one of them.
     """
+    from docx.oxml.ns import qn
+
     used = [int(element.get(qn(attribute))) for element in numbering.findall(qn(tag))]
     return max(used, default=-1) + 1
 
@@ -151,6 +158,9 @@ def number_headings(document: Any, font_name: str) -> int:
     document would define the list twice, so it is called once, when the
     document is built.
     """
+    from docx.oxml import parse_xml
+    from docx.oxml.ns import nsdecls
+
     numbering = document.part.numbering_part.element
 
     abstract_id = _next_free_id(numbering, "w:abstractNum", "w:abstractNumId")

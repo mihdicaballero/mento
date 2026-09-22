@@ -172,6 +172,23 @@ If you want to save the detailed results as a report in Microsoft Word, just run
     # View detailed flexure results
     node_1.flexure_results_detailed_doc()
 
+Each of those writes its own file into the working directory. ``results_detailed_doc()``
+writes both reports into a single document, and takes where to write it: a path, or a
+buffer open for binary writing when the file is to be served rather than kept.
+
+.. code-block:: python
+
+    from io import BytesIO
+
+    node_1.results_detailed_doc()                       # "Beam 101 check ACI 318-19.docx"
+    node_1.results_detailed_doc("reports/beam_101.docx")
+
+    buffer = BytesIO()
+    node_1.results_detailed_doc(buffer)                 # nothing touches the disk
+
+A label may hold characters a file name cannot (``V1/2``); the default file names replace
+them with ``-``, while the heading inside the document keeps the label as written.
+
 6. Force methods
 ********************
 

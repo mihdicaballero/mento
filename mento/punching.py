@@ -9,7 +9,7 @@ from mento.units import Quantity
 from mento.codes.registry import design_code
 from mento.column import Column
 from mento.material import Concrete, SteelBar
-from mento.plots.punching import plot_punching_node
+from mento.plots import plotting_import_error
 from mento.punching_results import PunchingCheck, PunchingCheckNotRunError, envelope_punching
 from mento.reports import punching as punching_reports
 from mento.units import mm, cm, inch
@@ -480,6 +480,11 @@ class PunchingNode:
 
         The drawing itself lives in :mod:`mento.plots.punching`.
         """
+        try:
+            from mento.plots.punching import plot_punching_node
+        except ImportError as error:
+            raise plotting_import_error(error) from error
+
         plot_punching_node(self)
 
     @property

@@ -151,6 +151,9 @@ tests/
 ├── test_headings.py
 ├── test_table_style.py
 ├── test_i18n.py
+├── test_documents.py               Single-document report, report targets (path / buffer), safe file names
+├── test_lazy_imports.py            Subprocess: import + design must not import matplotlib/seaborn/IPython/docx
+├── test_optional_presentation.py   Fallbacks when a presentation library is missing
 └── test_init.py
 
 scripts/
@@ -184,6 +187,8 @@ PunchingSlab (standalone dataclass); PunchingNode(slab, column, forces) pairs it
 **Design code delegation:** elements never compare `concrete.design_code` against a string; they look the code up in `codes/registry.py` (`DesignCode`) and call its hooks (`check_shear`, `design_flexure`, `check_punching`, ...). Each code's entry lives in `codes/aci_318_19/code.py` / `codes/en_1992_2004/code.py`; the hooks are module-level functions typed as `self: RectangularBeam` in `codes/ACI_318_19_beam.py` and friends, which convert on entry and call the float-only clause functions in `equations/` (ADR-0002, ADR-0005). `tests/test_architecture_boundaries.py` fails the build if these rules are broken. `Concrete_CIRSOC_201_25` subclasses `Concrete_ACI_318_19` (same formulas, metric only, `design_code = "CIRSOC 201-25"`).
 
 **`BeamSettings` sentinel pattern:** Unset fields use `_NOT_SET` so `__post_init__` can apply metric or imperial defaults conditionally based on the detected unit system.
+
+**Lazy presentation imports:** matplotlib, seaborn, IPython and python-docx are imported *inside* the functions that use them (`plot()`, `reports/_notebook.py`, `DocumentBuilder`, the `*_doc` functions), never at module top level outside `mento/plots/`. `tests/test_lazy_imports.py` fails if `import mento` + a design pulls any of them in — mento-web (Pyodide) depends on it.
 
 **`__init__.py` lazy loading:** Public API uses `__getattr__` so submodules are only imported on first attribute access. `TYPE_CHECKING` guards prevent circular imports.
 

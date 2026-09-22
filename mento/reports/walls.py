@@ -11,17 +11,19 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional, cast
 
 import pandas as pd
-from IPython.display import Markdown, display
 from mento.units import Quantity
 
 from mento._version import __version__ as MENTO_VERSION
 from mento.i18n import get_language, translate
 from mento.material import Concrete_ACI_318_19
+from mento.reports._notebook import Markdown, display
+from mento.reports.views import safe_file_name
 from mento.results import DocumentBuilder, Formatter, TablePrinter
 from mento.units import mm
 
 if TYPE_CHECKING:
     from mento.forces import Forces
+    from mento.reports.documents import ReportTarget
     from mento.shear_wall import ShearWall
 
 
@@ -36,7 +38,7 @@ def _aci(self: "ShearWall") -> Concrete_ACI_318_19:
 
 def _show(markdown: str) -> None:
     """Render Markdown in a notebook; IPython ships no type information."""
-    display(Markdown(markdown))  # type: ignore[no-untyped-call]
+    display(Markdown(markdown))
 
 
 def wall_flexure_results_detailed_doc(self: "ShearWall", force: Optional[Forces] = None) -> None:
@@ -124,7 +126,14 @@ def wall_shear_results_detailed(self: "ShearWall", force: Optional[Forces] = Non
     TablePrinter("SHEAR STRENGTH", language).print_table_data(result_data["shear_capacity"], headers="keys")
 
 
-def wall_shear_results_detailed_doc(self: "ShearWall", force: Optional[Forces] = None) -> None:
+def wall_shear_results_detailed_doc(
+    self: "ShearWall", force: Optional[Forces] = None, path: Optional[ReportTarget] = None
+) -> None:
+    """Write the detailed shear report of a wall to Word.
+
+    ``path`` is a file path or a buffer open for binary writing; ``None`` names
+    the file after the wall and writes it to the working directory.
+    """
     if not self._shear_wall_checked:
         self._md_shear_results = "Shear results are not available."
         return None
@@ -156,7 +165,9 @@ def wall_shear_results_detailed_doc(self: "ShearWall", force: Optional[Forces] =
     doc_builder.add_table_min_max(df_min_max)
     doc_builder.add_heading("Strength Checks", level=2)
     doc_builder.add_table_dcr(df_capacity)
-    doc_builder.save(f"Shear Wall {self.label} shear check {self.concrete.design_code}.docx")
+    if path is None:
+        path = safe_file_name(f"Shear Wall {self.label} shear check {self.concrete.design_code}.docx")
+    doc_builder.save(path)
 
 
 def build_wall_shear_report(self: "ShearWall", force: Forces) -> pd.DataFrame:

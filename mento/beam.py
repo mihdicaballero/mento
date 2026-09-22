@@ -18,9 +18,9 @@ from mento.rebar import Rebar
 from mento.units import mm, inch, kN, m, cm, dimensionless
 from mento.forces import Forces
 from mento.settings import BeamSettings
+from mento.plots import plotting_import_error
 from mento.reports import views
-from mento.reports.documents import flexure_report_doc, shear_report_doc
-from mento.plots.sections import plot_beam_section
+from mento.reports.documents import ReportTarget, flexure_report_doc, results_report_doc, shear_report_doc
 from mento.reports.tables import build_flexure_report, build_shear_report
 from mento.design_results import (
     FlexureCheck,
@@ -1103,6 +1103,16 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         """
         shear_report_doc(self, force)
 
+    def results_detailed_doc(self, path: Optional[ReportTarget] = None) -> None:
+        """Write the flexure and the shear report to one Word document.
+
+        ``path`` is a file path or a buffer open for binary writing, such as
+        ``io.BytesIO``; ``None`` names the file after the element and writes it
+        to the working directory. The assembly lives in
+        :mod:`mento.reports.documents`.
+        """
+        results_report_doc(self, path)
+
     def _format_longitudinal_rebar_string(self, n1: int, d_b1: Quantity, n2: int = 0, d_b2: Quantity = 0 * mm) -> str:
         """
         Returns a formatted string representing the rebars and their diameters.
@@ -1143,4 +1153,11 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         The drawing itself lives in :mod:`mento.plots.sections`; keeping it out of this
         class is what stops the element from being part matplotlib.
         """
+        # Imported here, not at the top: matplotlib is for drawing, and a design
+        # that never draws should not pay for importing it.
+        try:
+            from mento.plots.sections import plot_beam_section
+        except ImportError as error:
+            raise plotting_import_error(error) from error
+
         return plot_beam_section(self, show=show)

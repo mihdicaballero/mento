@@ -73,6 +73,8 @@ ES: Dict[str, str] = {
     "Concrete slab flexure check": "Verificación a flexión de losa de hormigón",
     "Concrete slab shear check": "Verificación a corte de losa de hormigón",
     "Concrete shear wall check": "Verificación de tabique de hormigón",
+    "Concrete beam check": "Verificación de viga de hormigón",
+    "Concrete slab check": "Verificación de losa de hormigón",
     "Beam {label} flexure check": "Verificación a flexión de viga {label}",
     "Beam {label} shear check": "Verificación a corte de viga {label}",
     "Slab {label} flexure check": "Verificación a flexión de losa {label}",

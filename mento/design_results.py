@@ -57,11 +57,41 @@ class RebarLayer:
     ``s`` is the centre-to-centre spacing the layer was detailed with, and is
     ``None`` on a section that is detailed by a bar count instead -- a beam.
     The area is the same either way; what changes is how the layer reads.
+
+    ``position`` is which of the section's four bar groups this is -- the ``1``
+    to ``4`` of ``set_longitudinal_rebar_bot(n1, d_b1, n2, d_b2, n3, d_b3, n4,
+    d_b4)``. A face lists only the groups that hold bars, so the place of a
+    layer in that tuple does not say where it sits: ``(n1, n2)`` and
+    ``(n1, n3)`` are both two layers long, and the second is in the first row
+    of one and the second row of the other. ``row`` and ``corner`` read the
+    position out. It is ``None`` on a layer built by hand without one.
     """
 
     n: int
     d_b: Quantity
     s: Optional[Quantity] = None
+    position: Optional[int] = None
+
+    def __post_init__(self) -> None:
+        if self.position is not None and self.position not in (1, 2, 3, 4):
+            raise ValueError(f"position must be 1, 2, 3 or 4, got {self.position!r}")
+
+    @property
+    def row(self) -> Optional[int]:
+        """The row the group sits in, counted from the face: ``1`` for positions
+        1 and 2, ``2`` for positions 3 and 4. ``None`` without a position."""
+        if self.position is None:
+            return None
+        return 1 if self.position <= 2 else 2
+
+    @property
+    def corner(self) -> Optional[bool]:
+        """Whether these are the bars at the ends of their row (positions 1 and
+        3) rather than the ones between them (2 and 4). ``None`` without a
+        position. On a slab, detailed by spacing, only the row means anything."""
+        if self.position is None:
+            return None
+        return self.position in (1, 3)
 
     @property
     def A_s(self) -> Quantity:
@@ -439,7 +469,7 @@ def _layers(beam: RectangularBeam, face: str) -> Tuple[RebarLayer, ...]:
         if s is not None and s.magnitude == 0:
             s = None
         if n and d_b is not None and d_b.magnitude > 0:
-            layers.append(RebarLayer(n=int(n), d_b=d_b, s=s))
+            layers.append(RebarLayer(n=int(n), d_b=d_b, s=s, position=index))
     return tuple(layers)
 
 

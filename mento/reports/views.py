@@ -11,13 +11,14 @@ The properties on ``RectangularBeam`` (``data``, ``results``,
 
 from __future__ import annotations
 
+import re
 import warnings
 from typing import TYPE_CHECKING, Any, Dict, Optional, cast
 
-from IPython.display import Markdown, display
 
 from mento.codes.registry import design_code
 from mento.i18n import get_language, translate
+from mento.reports._notebook import Markdown, display
 from mento.results import Formatter, TablePrinter
 from mento.units import cm
 
@@ -32,7 +33,7 @@ def _show(markdown: str) -> None:
     Wrapped once because IPython ships no type information, so every call site
     would otherwise need the same suppression.
     """
-    display(Markdown(markdown))  # type: ignore[no-untyped-call]
+    display(Markdown(markdown))
 
 
 def _details(value: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -215,6 +216,8 @@ def _report_text(self: "RectangularBeam") -> Dict[str, str]:
             "shear_doc_title": "Concrete slab shear check",
             "flexure_heading": "Slab {label} flexure check",
             "shear_heading": "Slab {label} shear check",
+            "doc_title": "Concrete slab check",
+            "heading": "Slab {label} check",
         }
     return {
         "flexure_banner": "===== BEAM FLEXURE DETAILED RESULTS =====",
@@ -223,17 +226,32 @@ def _report_text(self: "RectangularBeam") -> Dict[str, str]:
         "shear_doc_title": "Concrete beam shear check",
         "flexure_heading": "Beam {label} flexure check",
         "shear_heading": "Beam {label} shear check",
+        "doc_title": "Concrete beam check",
+        "heading": "Beam {label} check",
     }
+
+
+#: The characters Windows refuses in a file name. The two slashes are refused
+#: everywhere, as path separators -- which is how a beam labelled "V1/2" used to
+#: ask for a file inside a directory "V1" that nobody had made.
+_FORBIDDEN_IN_FILE_NAME = re.compile(r'[\\/:*?"<>|]')
+
+
+def safe_file_name(name: str) -> str:
+    """``name`` with every character a file name cannot hold replaced by ``-``."""
+    return _FORBIDDEN_IN_FILE_NAME.sub("-", name)
 
 
 def _report_file_name(self: "RectangularBeam", heading_key: str) -> str:
     """Name of the Word file of a report.
 
     Built from the English heading whatever the report language is, so a
-    project keeps one naming scheme.
+    project keeps one naming scheme. The label is the user's and may hold
+    anything, so the name is made safe for a file system on its way out; the
+    heading inside the document keeps the label as it was written.
     """
     heading = self._report_text[heading_key].format(label=self.label)
-    return f"{heading} {self.concrete.design_code}.docx"
+    return safe_file_name(f"{heading} {self.concrete.design_code}.docx")
 
 
 def flexure_results_detailed(self: "RectangularBeam", force: Optional[Forces] = None) -> None:

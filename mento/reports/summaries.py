@@ -14,12 +14,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Dict, Optional, cast
 
 import pandas as pd
-from docx.shared import Cm
 
 from mento._version import __version__ as MENTO_VERSION
 from mento.codes.registry import design_code
 from mento.i18n import get_language
-from mento.results import DocumentBuilder
+from mento.results import DocumentBuilder, cm_widths
 
 if TYPE_CHECKING:
     from mento.beam import RectangularBeam
@@ -55,7 +54,7 @@ BEAM_DATA_COLUMNS = (
 
 #: The label needs room for a beam name and the dimensions for two digits; the
 #: eleven rebar columns hold a count or a diameter and no more.
-BEAM_DATA_WIDTHS = [Cm(2), Cm(1), Cm(1), Cm(1)] + [Cm(0.9)] * 11
+_BEAM_DATA_WIDTHS_CM = (2, 1, 1, 1) + (0.9,) * 11
 
 #: Widths for the two per-combination summaries, one entry per column, set
 #: against the rendered document rather than computed. Both design codes leave
@@ -63,51 +62,67 @@ BEAM_DATA_WIDTHS = [Cm(2), Cm(1), Cm(1), Cm(1)] + [Cm(0.9)] * 11
 #: shape -- ten columns and twelve -- and one list each serves them. If a code
 #: ever drops a different set, `add_table` warns that its list fell short
 #: rather than quietly repeating the last width.
-FLEXURE_SUMMARY_WIDTHS = [
-    Cm(2),
-    Cm(4),
-    Cm(1.3),
-    Cm(1.2),
-    Cm(1.6),
-    Cm(1.6),
-    Cm(1.2),
-    Cm(1.2),
-    Cm(1.2),
-    Cm(1),
-]
+_FLEXURE_SUMMARY_WIDTHS_CM = (
+    2,
+    4,
+    1.3,
+    1.2,
+    1.6,
+    1.6,
+    1.2,
+    1.2,
+    1.2,
+    1,
+)
 
-SHEAR_SUMMARY_WIDTHS = [
-    Cm(2),
-    Cm(4),
-    Cm(1.2),
-    Cm(1.2),
-    Cm(1.1),
-    Cm(1.2),
-    Cm(1.2),
-    Cm(1.2),
-    Cm(1.2),
-    Cm(1.2),
-    Cm(1.4),
-    Cm(1),
-]
+_SHEAR_SUMMARY_WIDTHS_CM = (
+    2,
+    4,
+    1.2,
+    1.2,
+    1.1,
+    1.2,
+    1.2,
+    1.2,
+    1.2,
+    1.2,
+    1.4,
+    1,
+)
 
 #: The closing table: the section, its bars, the governing demands, the three
 #: DCRs and the verdict.
-CHECK_SUMMARY_WIDTHS = [
-    Cm(2),
-    Cm(1),
-    Cm(1),
-    Cm(1.4),
-    Cm(1.4),
-    Cm(1.4),
-    Cm(1.2),
-    Cm(1.2),
-    Cm(1.2),
-    Cm(1.5),
-    Cm(1.5),
-    Cm(1.1),
-    Cm(1.0),
-]
+_CHECK_SUMMARY_WIDTHS_CM = (
+    2,
+    1,
+    1,
+    1.4,
+    1.4,
+    1.4,
+    1.2,
+    1.2,
+    1.2,
+    1.5,
+    1.5,
+    1.1,
+    1.0,
+)
+
+#: The public names of the widths above. They are lists of python-docx ``Cm``,
+#: and building them at import would import python-docx with them -- so they are
+#: built when asked for, and importing this module stays free of it.
+_LAZY_WIDTHS = {
+    "BEAM_DATA_WIDTHS": _BEAM_DATA_WIDTHS_CM,
+    "FLEXURE_SUMMARY_WIDTHS": _FLEXURE_SUMMARY_WIDTHS_CM,
+    "SHEAR_SUMMARY_WIDTHS": _SHEAR_SUMMARY_WIDTHS_CM,
+    "CHECK_SUMMARY_WIDTHS": _CHECK_SUMMARY_WIDTHS_CM,
+}
+
+
+def __getattr__(name: str) -> Any:
+    if name in _LAZY_WIDTHS:
+        return cm_widths(_LAZY_WIDTHS[name])
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def _without_dropped_columns(self: "BeamSummary", df: pd.DataFrame) -> pd.DataFrame:
@@ -260,7 +275,7 @@ def beam_summary_doc(self: "BeamSummary", index: int = 1) -> None:
     beam_data_out = self.beam_list.fillna("")[list(BEAM_DATA_COLUMNS)]
     doc_builder.add_table_data(
         beam_data_out,
-        column_widths=BEAM_DATA_WIDTHS,
+        column_widths=cm_widths(_BEAM_DATA_WIDTHS_CM),
         font_size=SUMMARY_FONT_SIZE,
     )
 
@@ -273,7 +288,7 @@ def beam_summary_doc(self: "BeamSummary", index: int = 1) -> None:
     df_flex_all = _without_dropped_columns(self, self.flexure_results(capacity_check=False))
     doc_builder.add_table_data(
         df_flex_all,
-        column_widths=FLEXURE_SUMMARY_WIDTHS,
+        column_widths=cm_widths(_FLEXURE_SUMMARY_WIDTHS_CM),
         font_size=SUMMARY_FONT_SIZE,
     )
 
@@ -281,7 +296,7 @@ def beam_summary_doc(self: "BeamSummary", index: int = 1) -> None:
     df_shear_all = _without_dropped_columns(self, self.shear_results(capacity_check=False))
     doc_builder.add_table_data(
         df_shear_all,
-        column_widths=SHEAR_SUMMARY_WIDTHS,
+        column_widths=cm_widths(_SHEAR_SUMMARY_WIDTHS_CM),
         font_size=SUMMARY_FONT_SIZE,
     )
 
@@ -292,7 +307,7 @@ def beam_summary_doc(self: "BeamSummary", index: int = 1) -> None:
     df_check = self.check()
     doc_builder.add_table_status(
         df_check,
-        column_widths=CHECK_SUMMARY_WIDTHS,
+        column_widths=cm_widths(_CHECK_SUMMARY_WIDTHS_CM),
         font_size=SUMMARY_FONT_SIZE,
     )
 

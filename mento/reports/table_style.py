@@ -52,7 +52,8 @@ from dataclasses import dataclass
 from typing import Optional
 from xml.sax.saxutils import escape
 
-from docx.oxml.ns import nsdecls
+# python-docx is imported inside the functions that use it: this module is on
+# the import path of every element, and a calculation never opens a document.
 
 #: A colour in OOXML is six hexadecimal digits, and the ``#`` a stylesheet
 #: would carry is not part of it. An empty string is a colour left unset.
@@ -235,6 +236,8 @@ class TableStyle:
             f"{_border('bottom', self.header_rule_pt, self.border_color)}"
             "</w:tcBorders>"
         ) + (_shading(self.header_fill) if self.header_fill else "")
+
+        from docx.oxml.ns import nsdecls
 
         conditional = (
             '<w:tblStylePr w:type="firstRow">'

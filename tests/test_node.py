@@ -288,6 +288,13 @@ def test_flexure_results_detailed_doc_delegation(mock_section: MagicMock, sample
     mock_section.flexure_results_detailed_doc.assert_called_once_with(None)
 
 
+def test_results_detailed_doc_delegation(mock_section: MagicMock, sample_forces_list: List[Forces]) -> None:
+    """Test results_detailed_doc hands the target to section.results_detailed_doc."""
+    node = Node(mock_section, sample_forces_list)
+    node.results_detailed_doc("report.docx")
+    mock_section.results_detailed_doc.assert_called_once_with("report.docx")
+
+
 # --- Tests for results property ---
 
 

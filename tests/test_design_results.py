@@ -60,6 +60,44 @@ def test_rebar_layer_area_matches_the_circle_formula() -> None:
 # ============================================================================
 
 
+def test_a_layer_built_by_hand_has_no_position() -> None:
+    layer = RebarLayer(n=3, d_b=16 * mm)
+    assert layer.position is None and layer.row is None and layer.corner is None
+
+
+@pytest.mark.parametrize(
+    "position, row, corner",
+    [(1, 1, True), (2, 1, False), (3, 2, True), (4, 2, False)],
+)
+def test_a_position_reads_as_a_row_and_a_place_in_it(position: int, row: int, corner: bool) -> None:
+    layer = RebarLayer(n=2, d_b=16 * mm, position=position)
+    assert (layer.row, layer.corner) == (row, corner)
+
+
+def test_a_position_outside_the_four_groups_is_refused() -> None:
+    with pytest.raises(ValueError, match="position"):
+        RebarLayer(n=2, d_b=16 * mm, position=5)
+
+
+def test_the_position_tells_a_second_row_from_a_second_group(beam: RectangularBeam) -> None:
+    """Two layers either way; only the position says where the second one sits."""
+    beam.set_longitudinal_rebar_bot(n1=2, d_b1=16 * mm, n2=1, d_b2=12 * mm)
+    same_row = beam.reinforcement.bottom
+    beam.set_longitudinal_rebar_bot(n1=2, d_b1=16 * mm, n3=2, d_b3=12 * mm)
+    second_row = beam.reinforcement.bottom
+
+    assert [layer.position for layer in same_row.layers] == [1, 2]
+    assert [layer.row for layer in same_row.layers] == [1, 1]
+    assert [layer.position for layer in second_row.layers] == [1, 3]
+    assert [layer.row for layer in second_row.layers] == [1, 2]
+
+
+def test_designed_layers_carry_their_position(designed_beam: RectangularBeam) -> None:
+    for layer in designed_beam.flexure_design.bottom.layers:
+        assert layer.position in (1, 2, 3, 4)
+        assert getattr(designed_beam, f"_n{layer.position}_b") == layer.n
+
+
 def test_reinforcement_is_readable_before_any_check(beam: RectangularBeam) -> None:
     """The whole point of the view: no check has run, and it still answers.
 

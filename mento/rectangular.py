@@ -1,11 +1,15 @@
+from __future__ import annotations
+
 import math
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 from dataclasses import dataclass, field
 from mento.units import Quantity
-from matplotlib.axes import Axes
-from matplotlib.figure import Figure
 
 from mento.section import Section
+
+if TYPE_CHECKING:
+    from matplotlib.axes import Axes
+    from matplotlib.figure import Figure
 
 
 @dataclass

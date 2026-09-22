@@ -1,8 +1,11 @@
-from typing import Union, Optional, List
+from typing import TYPE_CHECKING, Union, Optional, List
 import pandas as pd
 
 from mento.section import Section
 from mento.forces import Forces
+
+if TYPE_CHECKING:
+    from mento.reports.documents import ReportTarget
 
 
 class Node:
@@ -37,6 +40,8 @@ class Node:
             Provides detailed flexure results for a specific force or all forces.
         flexure_results_detailed_doc(force: Optional[Forces] = None) -> None:
             Provides detailed flexure results documentation for a specific force or all forces.
+        results_detailed_doc(path=None) -> None:
+            Writes the flexure and shear reports to a single Word document, at a path or into a buffer.
         results -> None:
             A property that provides beam results for Jupyter Notebook.
         id -> int:
@@ -117,6 +122,16 @@ class Node:
 
     def flexure_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
         return self.section.flexure_results_detailed_doc(force)
+
+    def results_detailed_doc(self, path: Optional["ReportTarget"] = None) -> None:
+        """Write every detailed report of the section to one Word document.
+
+        For a beam or a slab that is the flexure report followed by the shear
+        report, for the governing combinations. ``path`` is a file path or a
+        buffer open for binary writing (``io.BytesIO``); ``None`` names the
+        file after the section and writes it to the working directory.
+        """
+        return self.section.results_detailed_doc(path)
 
     def __repr__(self) -> str:
         # Get the section label (assuming Section has a `_id` attribute)

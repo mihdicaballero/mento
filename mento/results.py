@@ -1,16 +1,22 @@
+from __future__ import annotations
+
+import os
 import warnings
 
 import pandas as pd
-from typing import Optional, List, Any
+from typing import IO, TYPE_CHECKING, Optional, List, Any, Union
 from tabulate import tabulate
-from docx import Document
-from docx.shared import Pt, Cm, Emu, RGBColor
-import seaborn as sns
-import matplotlib.pyplot as plt
-from docx.oxml import parse_xml
-from docx.oxml.ns import nsdecls, qn
 from io import BytesIO
-from pandas.io.formats.style import Styler
+
+# python-docx, matplotlib and seaborn are imported inside the functions that use
+# them. `import mento` and a whole design()/check() reach this module for
+# `Formatter`, `TablePrinter` and the marks below, and none of those need a Word
+# document or a figure: importing the three at the top cost seconds of start-up
+# and, under Pyodide, megabytes of download for a calculation that never draws.
+if TYPE_CHECKING:
+    from docx.shared import Cm, Emu
+    from matplotlib.figure import Figure
+    from pandas.io.formats.style import Styler
 
 from mento.i18n import DEFAULT_LANGUAGE, translate, translate_dataframe, translate_table
 from mento.reports.headings import number_headings, style_headings
@@ -75,6 +81,9 @@ def _set_mark_size(paragraph: Any, points: float) -> None:
     style's size unless it is told otherwise, and a line is as tall as the
     tallest thing in it. An empty spacer has nothing but the mark.
     """
+    from docx.oxml import parse_xml
+    from docx.oxml.ns import nsdecls, qn
+
     properties = paragraph._p.get_or_add_pPr()
     for existing in properties.findall(qn("w:rPr")):
         properties.remove(existing)
@@ -141,11 +150,34 @@ def round_for_display(df: pd.DataFrame) -> pd.DataFrame:
 #: the page, so a table that describes one beam does not span the line the way
 #: the all-beams summaries do. With the fixed layout `add_table` sets, anything
 #: longer wraps rather than being clipped.
-DETAIL_TABLE_WIDTHS = [Cm(6.1), Cm(2.2), Cm(3.0), Cm(1.4)]
+#:
+#: Kept in plain centimetres so that defining them does not import python-docx;
+#: ``DETAIL_TABLE_WIDTHS`` and ``LIMIT_TABLE_WIDTHS`` are still importable from
+#: this module as lists of ``Cm``, built on access by ``__getattr__``.
+_DETAIL_TABLE_WIDTHS_CM = (6.1, 2.2, 3.0, 1.4)
 
 #: The same, for a limit check: description, unit, value, minimum, maximum and
 #: the verdict.
-LIMIT_TABLE_WIDTHS = [Cm(5.5), Cm(1.5), Cm(1.5), Cm(1.5), Cm(1.5), Cm(1.2)]
+_LIMIT_TABLE_WIDTHS_CM = (5.5, 1.5, 1.5, 1.5, 1.5, 1.2)
+
+_LAZY_WIDTHS = {
+    "DETAIL_TABLE_WIDTHS": _DETAIL_TABLE_WIDTHS_CM,
+    "LIMIT_TABLE_WIDTHS": _LIMIT_TABLE_WIDTHS_CM,
+}
+
+
+def cm_widths(widths_cm: Any) -> List[Cm]:
+    """Column widths given in centimetres, as the ``Cm`` lengths python-docx takes."""
+    from docx.shared import Cm
+
+    return [Cm(width) for width in widths_cm]
+
+
+def __getattr__(name: str) -> Any:
+    if name in _LAZY_WIDTHS:
+        return cm_widths(_LAZY_WIDTHS[name])
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 CUSTOM_COLORS = {
     "blue": "#1f77b4",  # Default Matplotlib blue
@@ -161,6 +193,14 @@ def configure_plot_settings() -> None:
     """
     Configures global settings for Matplotlib and Seaborn plots.
     """
+    try:
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+    except ImportError as error:
+        from mento.plots import plotting_import_error
+
+        raise plotting_import_error(error) from error
+
     # Basic style for the plot
     sns.set_theme(style="whitegrid")
     sns.set_context("paper", rc={"lines.linewidth": 1.8})
@@ -450,6 +490,8 @@ class DocumentBuilder:
             :func:`~mento.reports.table_style.set_table_style` last set, so a
             report configured at the top of a script needs no argument here.
         """
+        from docx import Document
+
         self.doc = Document()
         self.language = language
         self.title = translate(title, language)
@@ -483,6 +525,8 @@ class DocumentBuilder:
         -------
         None
         """
+        from docx.shared import Pt
+
         # Normal text style
         style = self.doc.styles["Normal"]
         style.font.name = self.font_name
@@ -501,6 +545,8 @@ class DocumentBuilder:
         -------
         None
         """
+        from docx.shared import Cm
+
         section = self.doc.sections[0]
         section.page_height = Cm(29.7)
         section.page_width = Cm(21.0)
@@ -514,6 +560,8 @@ class DocumentBuilder:
         top, bottom, left, right : float
             Margins in centimeters. Default is 1 cm for all.
         """
+        from docx.shared import Cm
+
         for section in self.doc.sections:
             section.top_margin = Cm(top)
             section.bottom_margin = Cm(bottom)
@@ -541,6 +589,8 @@ class DocumentBuilder:
         -------
         None
         """
+        from docx.shared import Pt
+
         heading = self.doc.add_heading(translate(text, self.language, **fields), level=level)
         # The title opens the page and takes no space above it; a section
         # heading inside the report takes its own, rather than relying on what
@@ -582,6 +632,10 @@ class DocumentBuilder:
         -------
         None
         """
+        from docx.oxml import parse_xml
+        from docx.oxml.ns import nsdecls, qn
+        from docx.shared import Emu
+
         n_columns = len(table.columns)
         widths = list(column_widths[:n_columns])
         # A caller that gives fewer widths than there are columns used to leave
@@ -639,6 +693,9 @@ class DocumentBuilder:
         is written under the next free one, so two styles in one document
         cannot overwrite each other.
         """
+        from docx.oxml import parse_xml
+        from docx.oxml.ns import qn
+
         style = style or self.table_style
         if style in self._table_style_ids:
             return self._table_style_ids[style]
@@ -666,6 +723,9 @@ class DocumentBuilder:
         flag stays on -- the header is a header -- and vertical banding stays
         off, which is what ``w:val="0420"`` says.
         """
+        from docx.oxml import parse_xml
+        from docx.oxml.ns import nsdecls, qn
+
         tbl_pr = table._tbl.tblPr
         tbl_pr.get_or_add_tblStyle().val = style_id
 
@@ -737,6 +797,8 @@ class DocumentBuilder:
     @property
     def usable_width(self) -> Emu:
         """The text column: page width less both margins."""
+        from docx.shared import Emu
+
         section = self.doc.sections[0]
         return Emu(Emu(section.page_width).emu - Emu(section.left_margin).emu - Emu(section.right_margin).emu)
 
@@ -751,6 +813,8 @@ class DocumentBuilder:
         The result fills the text column exactly, so these tables still span
         the line, which is what distinguishes them from the per-element ones.
         """
+        from docx.shared import Cm
+
         usable_cm = self.usable_width.cm
 
         lengths = [max([len(str(column))] + [len(str(value)) for value in df[column]]) for column in df.columns]
@@ -763,14 +827,17 @@ class DocumentBuilder:
     def add_table_data(
         self,
         df: pd.DataFrame,
-        column_widths=DETAIL_TABLE_WIDTHS,
+        column_widths: Optional[List[Cm]] = None,
         font_size: Optional[float] = None,
     ) -> None:
         """Add a data table. ``font_size`` overrides the document default.
 
         Wide summary tables need a smaller face than the running text to fit
-        the page, so the caller can ask for one.
+        the page, so the caller can ask for one. ``column_widths`` defaults to
+        ``DETAIL_TABLE_WIDTHS``.
         """
+        if column_widths is None:
+            column_widths = cm_widths(_DETAIL_TABLE_WIDTHS_CM)
         self.add_table(df, column_widths, font_size=font_size or self.font_size)
 
     def _verdict_column(self, df: pd.DataFrame, column: str) -> Optional[str]:
@@ -794,6 +861,10 @@ class DocumentBuilder:
         Cells that hold neither mark -- a units row, a blank -- are left alone,
         so the colouring says something wherever it appears.
         """
+        from docx.oxml import parse_xml
+        from docx.oxml.ns import nsdecls
+        from docx.shared import RGBColor
+
         resolved = self._verdict_column(df, column)
         if resolved is None:
             return
@@ -833,7 +904,11 @@ class DocumentBuilder:
         The whole row, not one cell: this table ends on the combination that
         governs, and that row is the answer the reader came for.
         """
-        self.add_table(df, DETAIL_TABLE_WIDTHS, font_size=self.font_size)
+        from docx.oxml import parse_xml
+        from docx.oxml.ns import nsdecls
+        from docx.shared import RGBColor
+
+        self.add_table(df, cm_widths(_DETAIL_TABLE_WIDTHS_CM), font_size=self.font_size)
         table = self.doc.tables[-1]
 
         last_row_idx = df.shape[0]
@@ -860,10 +935,10 @@ class DocumentBuilder:
         pass/fail statement too, and reading a column of ticks for the one
         cross is what the colour saves.
         """
-        self.add_table(df, LIMIT_TABLE_WIDTHS, font_size=self.font_size)
+        self.add_table(df, cm_widths(_LIMIT_TABLE_WIDTHS_CM), font_size=self.font_size)
         self._shade_verdicts(self.doc.tables[-1], df, verdict_column)
 
-    def add_figure(self, fig: "plt.Figure", width: float = 16) -> None:
+    def add_figure(self, fig: Figure, width: float = 16) -> None:
         """
         Inserts a matplotlib Figure into the Word document.
 
@@ -874,6 +949,14 @@ class DocumentBuilder:
         width : float
             Width in centimeters (default 12 cm). Height auto-scales.
         """
+        try:
+            import matplotlib.pyplot as plt
+        except ImportError as error:
+            from mento.plots import plotting_import_error
+
+            raise plotting_import_error(error) from error
+        from docx.shared import Cm, Pt
+
         buf = BytesIO()
         fig.savefig(buf, format="png", dpi=200, bbox_inches="tight")
         plt.close(fig)
@@ -896,6 +979,8 @@ class DocumentBuilder:
         width : docx.shared.Cm, optional
             Target width. Height scales to keep aspect ratio.
         """
+        from docx.shared import Pt
+
         # paragraph container so image is not glued to previous element
         paragraph = self.doc.add_paragraph()
         run = paragraph.add_run()
@@ -909,14 +994,15 @@ class DocumentBuilder:
         spacer = self.doc.add_paragraph()
         spacer.paragraph_format.space_after = Pt(0)
 
-    def save(self, filename: str) -> None:
+    def save(self, filename: Union[str, os.PathLike[str], IO[bytes]]) -> None:
         """
         Saves the document to a specified file.
 
         Parameters
         ----------
-        filename : str
-            The filename (including path) where the document will be saved.
+        filename : str, os.PathLike or binary file object
+            The filename (including path) where the document will be saved, or
+            a buffer open for binary writing such as ``io.BytesIO``.
 
         Returns
         -------

@@ -12,8 +12,36 @@ from the release history and are summaries rather than complete lists.
 
 ## [Unreleased]
 
+### Added
+
+- **`Node.results_detailed_doc(path=None)` writes flexure and shear into one Word
+  document.** The two single-check reports each write their own file, always into the
+  working directory. The new method (also on `RectangularBeam`, `OneWaySlab` and
+  `ShearWall`) writes one document and takes the target: a path, or a buffer open for
+  binary writing such as `io.BytesIO`, so a caller that serves the file never touches the
+  disk. With no argument it writes `"Beam <label> check <design code>.docx"` to the
+  working directory. A check that has not run is left out. `DocumentBuilder.save()` accepts
+  the same targets.
+- **`RebarLayer.position`, with `row` and `corner`.** A face lists only the bar groups that
+  hold bars, so `(n1, n2)` and `(n1, n3)` were both two layers long and the public API
+  could not tell a second group in the first row from a second row. Each layer now carries
+  the `1`–`4` of its group; `row` is `1` for positions 1–2 and `2` for 3–4, `corner` is
+  true for the bars at the ends of a row (1 and 3). A layer built by hand without a
+  position reports `None` for all three, so existing constructions are unchanged.
+
 ### Changed
 
+- **Plotting and report libraries are imported when they are used.** `import mento` and a
+  full `Node.design()` / `check()` no longer import matplotlib, seaborn, IPython or
+  python-docx: they are imported inside `plot()`, the notebook views and
+  `DocumentBuilder` / the `*_doc` functions. On a desktop that takes start-up from about
+  2.7 s to about 1.0 s; under Pyodide it is some 25 MB that a calculation no longer
+  downloads. All four remain dependencies, so nothing changes for an installed mento --
+  but an environment without them now runs every calculation: `plot()` raises an
+  `ImportError` that says what to install, and the Markdown views fall back to `print`
+  when IPython is missing. The column-width constants (`DETAIL_TABLE_WIDTHS`,
+  `BEAM_DATA_WIDTHS`, ...) are still importable and are built on access. A subprocess
+  test (`tests/test_lazy_imports.py`) fails if an early import comes back.
 - **mento runs on pint 0.26.** The cap added after 0.26 broke CI is lifted and the
   dependency is `pint>=0.24` again. pint 0.26 types every arithmetic result as
   `PlainQuantity`, the base class of the registry's `Quantity`, so annotating with
@@ -23,6 +51,17 @@ from the release history and are summaries rather than complete lists.
   unchanged. Under 0.26 the pretty multiplication sign in printed quantities is `⋅`
   (U+22C5) rather than `·`; the test that pinned the old sign now formats the expected
   value with pint itself, as the imperial one already did.
+
+### Fixed
+
+- **A label with a character a file name cannot hold no longer breaks the Word export.**
+  A beam labelled `V1/2` asked for a file inside a directory `V1` and raised
+  `FileNotFoundError`. `\ / : * ? " < > |` are replaced with `-` in the default file
+  names of the beam, slab and wall reports; the heading inside the document keeps the
+  label as written.
+- **`mento.ACI_318_19_beam` and `mento.EN_1992_2004_beam` resolve in a fresh
+  interpreter.** The package's lazy `__getattr__` looked them up as attributes of
+  `mento.codes`, which they only are once something has imported them.
 
 ## [1.2.0] - 2026-09-09
 

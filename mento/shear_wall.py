@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING, Dict, Optional
 if TYPE_CHECKING:
     from matplotlib.figure import Figure
 
+    from mento.reports.documents import ReportTarget
+
 import pandas as pd
 from pandas import DataFrame
 from mento.units import Quantity
@@ -17,7 +19,7 @@ from mento.settings import BeamSettings
 from mento.units import cm, dimensionless, kN, mm
 
 from mento.codes.registry import design_code
-from mento.plots.walls import plot_wall_elevation
+from mento.plots import plotting_import_error
 from mento.reports import walls as wall_reports
 
 
@@ -326,8 +328,21 @@ class ShearWall(RectangularBeam):
         """Write the detailed shear results to a Word document."""
         return wall_reports.wall_shear_results_detailed_doc(self, force)
 
+    def results_detailed_doc(self, path: Optional[ReportTarget] = None) -> None:
+        """Write the wall's detailed report -- shear, the check a wall has -- to Word.
+
+        ``path`` is a file path or a buffer open for binary writing; ``None``
+        writes to the working directory under the wall's own name.
+        """
+        return wall_reports.wall_shear_results_detailed_doc(self, path=path)
+
     def plot(self, show: bool = False) -> "Figure":  # type: ignore[override]
         """Draw the wall elevation with its reinforcement."""
+        try:
+            from mento.plots.walls import plot_wall_elevation
+        except ImportError as error:
+            raise plotting_import_error(error) from error
+
         return plot_wall_elevation(self, show=show)
 
     @property

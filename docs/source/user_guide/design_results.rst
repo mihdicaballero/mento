@@ -55,6 +55,18 @@ Each face carries its layers, in order, and only the layers that hold bars:
 A face with no reinforcement has an empty ``layers`` tuple, which is what
 ``str(flexure.top)`` reports as ``'no reinforcement'``.
 
+Because empty groups are left out, the place of a layer in the tuple does not say where it
+sits in the section: ``(n1, n2)`` and ``(n1, n3)`` are both two layers long. Each layer
+carries the ``position`` of its bar group -- the ``1`` to ``4`` of
+``set_longitudinal_rebar_bot`` -- and reads it out as a ``row`` and a place in that row:
+
+.. code-block:: python
+
+    for layer in flexure.bottom.layers:
+        layer.position      # 1, 2, 3 or 4
+        layer.row           # 1 for positions 1 and 2, 2 for positions 3 and 4
+        layer.corner        # True for the bars at the ends of the row (1 and 3)
+
 ``A_s_req`` and ``A_s_calc`` are the same number on this beam because the moment
 governs. They part on a face governed by its minimum: ``A_s_req`` is the steel to detail,
 ``max(A_s_calc, A_s_min)`` — or the 4/3 rule under ACI — while ``A_s_calc`` is what the
