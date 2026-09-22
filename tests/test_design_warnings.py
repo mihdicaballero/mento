@@ -202,3 +202,22 @@ def test_slab_bar_spacing_limits_are_warned() -> None:
     found = {(w.code, w.face) for w in slab.warnings}
     assert ("bar_spacing_exceeds_max", "bottom") in found
     assert ("bar_spacing_below_min", "top") in found
+
+
+def test_a_warning_prints_as_its_message() -> None:
+    _, node = _poorly_detailed()
+    warning = node.warnings[0]
+
+    assert str(warning) == warning.message
+
+
+def test_bars_that_do_not_fit_are_warned_after_a_design() -> None:
+    """A 10x20 web cannot take what 200 kNm asks for: the search finds no layout at all."""
+    beam = _beam(width=10 * cm, height=20 * cm)
+    node = Node(section=beam, forces=[Forces(label="M", M_y=200 * kNm, V_z=20 * kN)])
+    node.design()
+
+    found = _by_code(node.warnings)
+    assert "bars_do_not_fit" in found
+    assert found["bars_do_not_fit"].face == "bottom"
+    assert found["bars_do_not_fit"].values == {}

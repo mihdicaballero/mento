@@ -130,10 +130,12 @@ _FACES = {"bottom": "bottom face", "top": "top face"}
 
 
 def _format(value: Any) -> str:
-    """A quantity as the messages print it: three significant figures."""
-    if isinstance(value, Quantity):
-        return f"{value:.3g~P}"
-    return f"{value:.3g}" if isinstance(value, float) else str(value)
+    """A value as the messages print it: three significant figures.
+
+    Everything a warning quotes is a quantity -- an area, a spacing, a force --
+    so there is one format, and pint's ``~P`` writes the unit with it.
+    """
+    return f"{value:.3g~P}"
 
 
 def _q(value: float, kind: str, beam: "RectangularBeam") -> Quantity:
