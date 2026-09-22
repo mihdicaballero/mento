@@ -126,6 +126,7 @@ def test_longitudinal_rebar_spacing_updates_counts() -> None:
     assert slab._s_b1_t == previous_spacing
 
 
+@pytest.mark.published_example
 def test_shear_check_ACI_318_19_1(slab_example_ACI_318_19: OneWaySlab) -> None:
     # Example from Two-Way Flat Plate Concrete Floor System Analysis and Design (ACI 318-14) adjusted to ACI 318-19.
     # With guidance from CRSI Design Guide on ACI 318-19
@@ -157,6 +158,7 @@ def test_shear_check_ACI_318_19_1(slab_example_ACI_318_19: OneWaySlab) -> None:
     assert results.iloc[1]["Vu≤ØVn"] is True
 
 
+@pytest.mark.published_example
 def test_check_flexure_ACI_318_19_1(slab_example_ACI_318_19_metric: OneWaySlab) -> None:
     # Testing the check of the reinforced slab with simple reinforcement
     # See calcpad: ACI 318-19 Slab Flexure 01 - Metric.cpd
@@ -178,6 +180,7 @@ def test_check_flexure_ACI_318_19_1(slab_example_ACI_318_19_metric: OneWaySlab) 
     assert results.iloc[1]["DCR"] == pytest.approx(0.573, rel=1e-5)
 
 
+@pytest.mark.published_example
 def test_check_flexure_ACI_318_19_2(slab_example_ACI_318_19_metric: OneWaySlab) -> None:
     # Testing the check of the reinforced slab with simple reinforcement
     # See calcpad: ACI 318-19 Slab Flexure 01 - Metric.cpd

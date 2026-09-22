@@ -12,6 +12,60 @@ from the release history and are summaries rather than complete lists.
 
 ## [Unreleased]
 
+### Added
+
+- **A design keeps its alternatives.** `beam.flexure_design.bottom.options` and
+  `.top.options` are tuples of `RebarOption` — `layers` (the same `RebarLayer` objects the
+  applied bars are read as), `A_s` and the `functional` the search ranks by — and
+  `beam.shear_design.options` a tuple of `StirrupOption` (`n_stirrups`, `d_b`, `s_l`, `s_w`,
+  `A_v`, `functional`). They come best first, and `options[0]` is the layout the section
+  carries: the search's ranked table used to be dropped after its first row, and is now
+  kept with the mechanical cover the design finished on. The stirrup alternatives are the
+  same cage in each heavier bar, in order of diameter — `1eØ10/13`, `1eØ12/13`,
+  `1eØ16/13` — which is the substitution a drawing makes when that is the bar at hand;
+  `functional` says what each one adds in steel, the excess of `A_v` over the requirement
+  plus one per extra stirrup. Which layout is built is unchanged: fewest stirrups first,
+  least steel among those. How many options are kept is `BeamSettings(design_options=3)`.
+  A check reports none, and a face changed by hand after the design drops its own.
+
+- **Detailing limits are reported as data.** `beam.warnings` and `node.warnings` are tuples
+  of `DesignWarning` with a stable `code` (`As_below_min`, `As_above_max`,
+  `clear_spacing_below_min`, `bar_spacing_below_min`, `bar_spacing_exceeds_max`,
+  `bars_do_not_fit`, `stirrups_required`, `Av_below_min`, `stirrup_spacing_exceeds_max`,
+  `stirrup_diameter_below_min`, `shear_exceeds_section_limit`), a `message` in the language
+  of `mento.set_language`, the `values` it quotes as quantities, the `face` and the
+  `combinations` it occurs under. They are the limit rows the detailed reports mark with
+  ❌, which until now were only text. A warning does not change a DCR.
+
+- **The release workflow publishes a test count.** After uploading to PyPI it attaches
+  `stats.json` (`{"tests": N}`) to the GitHub Release and sends a `mento-release`
+  `repository_dispatch` to `mihdicaballero/mento-web`. `N` counts the tests marked
+  `published_example`: the 56 that reproduce a case validated outside mento — the Calcpad
+  sheets of the ACI and EN beam and slab cases, The Concrete Centre's Eurocode 2 guides,
+  and the ETABS and spreadsheet cross-checks of the flexure suite (`Test_Etabs_01` to
+  `_23`). With nothing marked the workflow falls back to the whole suite. The dispatch needs the repository secret
+  `MENTO_WEB_DISPATCH_TOKEN`, a token with `Contents: read and write` on mento-web; without
+  it the step warns and the release goes on.
+
+### Fixed
+
+- **The stirrup spacing limit halves at 0.33√f'c·bw·d, not 0.083.** ACI 318-19 /
+  CIRSOC 201-25 Table 9.7.6.2.2 halves the limits once the nominal `Vs,req = (Vu − φVc)/φ`
+  passes `0.33·√f'c·bw·d` (4·√f'c·bw·d in psi), with no λ. 1.2.0 compared `Vu − φVc`
+  against `0.083·λ·√f'c·bw·d`, the threshold of §9.6.3.1, so an ordinary beam was held to
+  d/4: a 20×60 beam of f'c = 25 MPa under Vu = 120 kN now gets d/2 in the check and the
+  design alike. (#161)
+
+- **`design()` gives the same result every time.** It read the stirrup diameter the
+  previous run had left on the section, so a second run on the same beam could detail
+  1eØ10/27 after 1eØ10/28. A design now starts from the same state however it is called
+  — the stirrup the settings assume and the placeholder bars — and the shear design
+  repeats itself with the diameter it chose until the choice holds, so the demand and the
+  limits are read at the depth the finished beam has. Each stirrup diameter is also tried
+  against the spacing limits of the section it would make: the first design used to pick
+  28 cm at the depth of the 8 mm starter stirrup, past the 27.95 cm limit of the beam
+  once its Ø10 was placed.
+
 ### Changed
 
 - **mento runs on pint 0.26.** The cap added after 0.26 broke CI is lifted and the

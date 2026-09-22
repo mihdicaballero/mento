@@ -148,3 +148,6 @@ addopts = "-ra -q --cov=mento --cov-report=html --cov-report=term-missing -v"
 testpaths = [
     "tests",
 ]
+markers = [
+    "published_example: reproduces a case validated outside mento -- a Calcpad sheet, a published worked example or design guide, or an ETABS/spreadsheet cross-check; the release workflow counts these for the home page of mento-web",
+]

@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any, Dict, TYPE_CHECKING, Tuple
+from typing import Any, Dict, List, TYPE_CHECKING, Tuple
 import math
 import pandas as pd
 import numpy as np
@@ -309,17 +309,29 @@ class Rebar:
         return self._transverse_rebar_beam(A_v_req, V_s_req, alpha)
 
     def _transverse_rebar_beam(self, A_v_req: Quantity, V_s_req: Quantity, alpha: float) -> DataFrame:
-        """Closed stirrups: (d_b, n_legs, s_l), the legs spread across the width."""
+        """Closed stirrups: (d_b, n_legs, s_l), the legs spread across the width.
+
+        Every diameter is tried against the spacing limits of the section it
+        would make: the limits are written on the effective depth, and a
+        heavier stirrup sits the bars deeper. Reading them off whatever
+        diameter the section held before is what let a first design detail
+        28 cm against a limit the finished beam puts at 27.95 cm.
+
+        For each diameter the search keeps the widest spacing, with the fewest
+        legs, that covers ``A_v_req``. The rows are then ranked by
+        :meth:`_rank_stirrup_options`.
+        """
 
         # Prepare the list for valid combinations
         valid_combinations = []
 
         # Get code specific limitations
         code = design_code(self.beam.concrete)
-        valid_diameters, s_max_l, s_max_w = code.transverse_rebar(self, V_s_req, alpha)
+        valid_diameters = code.transverse_rebar(self, V_s_req, alpha)[0]
 
         # Iterate through available diameters
         for d_b in valid_diameters:
+            s_max_l, s_max_w = self._spacing_limits_for(d_b, V_s_req, alpha)
             # Start from the fewest legs that keep the transverse spacing within s_max_w,
             # rather than from a single stirrup: on a wide section two legs never comply.
             n_legs = self.min_legs_along_width(d_b, s_max_w)
@@ -334,9 +346,8 @@ class Rebar:
                 # Calculate spacing based on current legs
                 n_stirrups = math.ceil(n_legs / 2)  # Number of stirrups based on number of legs
                 n_legs_actual = n_stirrups * 2  # Ensure legs are even
-                # n_legs - 1 gaps span the distance between the outermost leg centres.
-                # This uses the candidate diameter: self.beam._stirrup_d_b still holds
-                # whatever the previous pass left behind, which is not what is being tried.
+                # n_legs - 1 gaps span the distance between the outermost leg centres,
+                # with the candidate diameter rather than the one on the section.
                 s_w = (self.beam.width - 2 * self.beam.c_c - d_b) / (n_legs_actual - 1)
 
                 A_db = self.rebar_areas[d_b]  # Area of a stirrup bar
@@ -393,22 +404,56 @@ class Rebar:
                         n_legs += 2
                         s_l = math.floor(s_max_l.to("inch").magnitude) * inch  # Reset s_l to the max allowed spacing
 
-        # Create a DataFrame with all valid combinations
-        df_combinations = pd.DataFrame(valid_combinations)
-
-        # Sort combinations by the total rebar area required (ascending)
-        # Sort by 'A_v' first, then by 'n_stir' to prioritize fewer bars
-        df_combinations.sort_values(by=["n_stir", "A_v"], inplace=True)
-        df_combinations.reset_index(drop=True, inplace=True)
+        df_combinations = self._rank_stirrup_options(valid_combinations, A_v_req)
         self._trans_combos_df = df_combinations
         return df_combinations
 
-    def _slab_spacing_limits(self, d_b: Quantity, V_s_req: Quantity, alpha: float) -> Tuple[Quantity, Quantity]:
+    @staticmethod
+    def _stirrup_excess(A_v: List[Quantity], A_v_req: Quantity) -> List[float]:
+        """How far each ``A_v`` overshoots the requirement, as a fraction of it.
+
+        With nothing required the lightest option is the reference instead, so
+        the numbers still say how much steel each one adds.
+        """
+        reference = A_v_req if A_v_req.magnitude > 0 else min(A_v)
+        return [float((a / reference).to("dimensionless").magnitude) - 1 for a in A_v]
+
+    def _rank_stirrup_options(self, combinations: List[Dict[str, Any]], A_v_req: Quantity) -> DataFrame:
+        """Rank the stirrup layouts, the one to build first.
+
+        One layout per bar diameter -- the widest spacing, with the fewest
+        legs, that covers ``A_v_req`` -- and they are ordered as they always
+        were: fewest stirrups first, least steel among those. The first row is
+        the one the design applies.
+
+        Each row also carries a ``functional``: the excess of ``A_v`` over
+        ``A_v_req`` as a fraction of it, plus one for every stirrup beyond the
+        fewest any layout needs. It says how much steel a layout adds over the
+        one that is built, which is what makes the alternatives comparable; it
+        does not decide the order.
+        """
+        if not combinations:
+            return pd.DataFrame(combinations)
+
+        excess = self._stirrup_excess([row["A_v"] for row in combinations], A_v_req)
+        n_min = min(row["n_stir"] for row in combinations)
+        for row, over in zip(combinations, excess):
+            row["functional"] = over + (row["n_stir"] - n_min)
+
+        df = pd.DataFrame(combinations)
+        # Sort combinations by the total rebar area required (ascending)
+        # Sort by 'A_v' first, then by 'n_stir' to prioritize fewer bars
+        df.sort_values(by=["n_stir", "A_v"], inplace=True)
+        df.reset_index(drop=True, inplace=True)
+        return df
+
+    def _spacing_limits_for(self, d_b: Quantity, V_s_req: Quantity, alpha: float) -> Tuple[Quantity, Quantity]:
         """The code's spacing limits for a section carrying stirrups of diameter ``d_b``.
 
         Both limits are written on the effective depth, and the effective depth
         moves with the stirrup diameter. A beam starts from the diameter its
-        settings assume, so the shift is small; a slab starts from no stirrup at
+        settings assume, 2 mm off the 10 mm it usually settles on -- enough to
+        put a spacing past the limit; a slab starts from no stirrup at
         all, so assigning a 10 mm bar takes a whole centimetre off ``d`` and with
         it off ``s_max_l``. Evaluating the limits against the diameter actually
         being tried is what keeps the chosen spacing inside the limit the
@@ -463,7 +508,7 @@ class Rebar:
 
         valid_combinations = []
         for d_b in valid_diameters:
-            s_max_l, s_max_w = self._slab_spacing_limits(d_b, V_s_req, alpha)
+            s_max_l, s_max_w = self._spacing_limits_for(d_b, V_s_req, alpha)
             # Whole units, so the spacing is one a drawing can carry. The strip
             # caps the transverse spacing as well: a leg spacing wider than the
             # strip would put less than one leg in it.
@@ -519,6 +564,8 @@ class Rebar:
         if not df_combinations.empty:
             # Least steel first. Unlike a beam, a slab gains nothing from a
             # heavier bar: the spacing limits already fix how close the legs go.
+            # The functional is the excess alone, which ranks the same way.
+            df_combinations["functional"] = self._stirrup_excess(list(df_combinations["A_v"]), A_v_req)
             df_combinations.sort_values(by=["A_v", "s_l"], ascending=[True, False], inplace=True)
             df_combinations.reset_index(drop=True, inplace=True)
         self._trans_combos_df = df_combinations
