@@ -6,6 +6,7 @@ also has to be a function of its inputs: running it again, or after the bars
 were changed by hand, gives the same reinforcement.
 """
 
+import pandas as pd
 import pytest
 
 from mento import (
@@ -280,3 +281,17 @@ def test_options_read_like_the_reinforcement() -> None:
     assert str(stirrups) == str(beam.shear_design)
     assert stirrups.n_legs == beam.shear_design.n_legs
     assert str(RebarOption(layers=(), A_s=0 * cm**2)) == "no reinforcement"
+
+
+def test_an_empty_stirrup_table_leaves_no_options() -> None:
+    """The search hands back nothing when no bar fits at any spacing; the design then raises."""
+    beam = _aci_beam()
+    beam._record_transverse_options(pd.DataFrame())
+
+    assert beam._shear_options == ()
+
+
+def test_ranking_an_empty_search_gives_an_empty_table() -> None:
+    table = Rebar(_aci_beam())._rank_stirrup_options([], 5 * cm**2 / m)
+
+    assert table.empty
