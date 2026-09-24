@@ -869,7 +869,13 @@ class Rebar:
         # precomputed in __init__.
         max_clear_spacing_mm = max(self._clear_limit_mm, self._vibrator_mm, d1_mm, d2_mm)
 
-        return clear_mm if clear_mm >= max_clear_spacing_mm else None
+        # The effective width arrives through unit conversions, so a spacing
+        # that meets the limit exactly can come out a hair short of it:
+        # 12 cm - 2*(25 mm + 8 mm) is 53.99999999999999 mm, which left two
+        # Ø12 bars 29.999999999999993 mm apart against a 30 mm limit.
+        if clear_mm < max_clear_spacing_mm and not math.isclose(clear_mm, max_clear_spacing_mm):
+            return None
+        return clear_mm
 
     def _long_combo(
         self,
