@@ -503,6 +503,40 @@ def test_layer_spacing_equal_to_the_limit_is_accepted() -> None:
     assert best["clear_spacing"].to("mm").magnitude == pytest.approx(30.0)
 
 
+def test_vibrator_size_only_spaces_the_top_bars() -> None:
+    """The vibrator goes in from the top: below, the clear spacing is 25 mm.
+
+    15 cm web, Ø8 stirrups: 84 mm between the stirrups, so 2Ø12 + 1Ø10 sit
+    (84 - 24 - 10)/2 = 25 mm apart -- enough on the bottom, not under a 30 mm
+    vibrator. The bottom reaches 5.06 cm² with three bars a layer; the top, and
+    a caller that names no face, stay at two.
+    """
+    beam = RectangularBeam(
+        label="V15",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=15 * cm,
+        height=30 * cm,
+        c_c=25 * mm,
+        settings=BeamSettings(stirrup_diameter_ini=8 * mm),
+    )
+
+    def best(face: str | None) -> pd.Series:
+        rebar = Rebar(beam)
+        rebar.longitudinal_rebar(5.06 * cm**2, 5.79 * cm**2, 5 * cm, face)
+        return rebar.longitudinal_rebar_design
+
+    bottom = best("bot")
+    assert (bottom["n_1"], bottom["n_2"]) == (2, 1)
+    assert bottom["total_as"].to("cm**2").magnitude == pytest.approx(5.40, rel=1e-3)
+    assert bottom["clear_spacing"].to("mm").magnitude == pytest.approx(25.0)
+
+    for face in ("top", None):
+        row = best(face)
+        assert (row["n_1"], row["n_2"]) == (2, 0)
+        assert row["clear_spacing"].to("mm").magnitude >= 30.0
+
+
 # Test 9: Fallback combination tracking
 def test_fallback_combination_when_no_valid_solution() -> None:
     """Test that fallback combination is returned when no valid solution meets A_s_req"""

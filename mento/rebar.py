@@ -847,7 +847,8 @@ class Rebar:
         in both: at least the greatest of 25 mm (1 in.), d_b and (4/3)*d_agg.
         Of those three the aggregate term is missing, because the section does
         not carry a maximum aggregate size; the vibrator size folded in beside
-        them is site practice and not part of the clause.
+        them is site practice and not part of the clause, and it is zero on the
+        bottom face (see :meth:`longitudinal_rebar`).
 
         Everything is a plain float: this runs inside the innermost loop of the
         longitudinal rebar search, where pint arithmetic dominated the cost.
@@ -1036,6 +1037,7 @@ class Rebar:
         A_s_req: Quantity,
         A_s_max: Quantity | None = None,
         mech_cover: Quantity | None = None,
+        face: str | None = None,
     ) -> Dict[str, Any]:
         """
         Selects the appropriate longitudinal rebar method based on the design
@@ -1046,5 +1048,12 @@ class Rebar:
             A_s_max: Optional maximum allowable longitudinal rebar area.
             mech_cover: Optional mechanical cover to the bar centroid, used as
                 the starting geometry for the layer layout.
+            face: ``"bot"`` or ``"top"``, the face being laid out. The vibrator
+                goes in from the top, so its size only sets the clear spacing
+                of the top bars -- the rule the check and the warnings apply.
+                ``None`` keeps it on whatever face this is, the safe side for a
+                caller that does not say.
         """
+        vibrator = self.beam.settings.vibrator_size.to("mm").magnitude
+        self._vibrator_mm = 0.0 if face == "bot" else vibrator
         return design_code(self.beam.concrete).longitudinal_rebar(self, A_s_req, A_s_max, mech_cover)
