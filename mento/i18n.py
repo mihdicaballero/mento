@@ -211,6 +211,13 @@ ES.update(
         "The bars on the {face} do not fit in the width of the section.": (
             "Las barras de la {face} no entran en el ancho de la sección."
         ),
+        (
+            "Steel on the {face}: A_s = {A_s} is below the A_s,req = {A_s_req} the moment needs, "
+            "and no layout that reaches it fits the section: enlarge the section."
+        ): (
+            "Armadura en la {face}: A_s = {A_s} es menor que la A_s,req = {A_s_req} que pide el momento, "
+            "y ninguna disposición que la alcance entra en la sección: hay que agrandar la sección."
+        ),
         "The section has no stirrups and requires shear reinforcement A_v = {A_v_req}.": (
             "La sección no tiene estribos y requiere armadura de corte A_v = {A_v_req}."
         ),

@@ -35,6 +35,11 @@ Codes
 ``bars_do_not_fit``
     The bars on a face leave no clear space between them, or a design found no
     layout that fits the width.
+``As_below_required``
+    A design could not reach the steel the moment asks for on a face: no
+    layout that fits the width carries it, so the design placed the most that
+    fits and the section has to grow. It stays while the bars on the face are
+    short of that area, and goes once enough are set by hand.
 ``stirrups_required``
     The section has no stirrups, and a combination asks for shear
     reinforcement -- beyond what the concrete carries, or the code minimum.
@@ -127,6 +132,10 @@ _MESSAGES: Dict[str, str] = {
     "bar_spacing_below_min": "Bar spacing on the {face}: {s} is below the minimum {s_min}.",
     "bar_spacing_exceeds_max": "Bar spacing on the {face}: {s} exceeds the maximum {s_max}.",
     "bars_do_not_fit": "The bars on the {face} do not fit in the width of the section.",
+    "As_below_required": (
+        "Steel on the {face}: A_s = {A_s} is below the A_s,req = {A_s_req} the moment needs, "
+        "and no layout that reaches it fits the section: enlarge the section."
+    ),
     "stirrups_required": "The section has no stirrups and requires shear reinforcement A_v = {A_v_req}.",
     "Av_below_min": "The stirrups provide A_v = {A_v}, below the minimum A_v,min = {A_v_min}.",
     "stirrup_spacing_exceeds_max_l": "Stirrup spacing along the member: {s} exceeds the maximum {s_max}.",
@@ -202,9 +211,16 @@ def flexure_warnings(beam: "RectangularBeam", label: str, state: Any) -> List[_R
     warns unless the 4/3 relief of ACI 318-19 §9.6.1.3 covers it, and a face
     above its maximum warns unless the section is doubly reinforced, where
     that limit does not apply as written.
+
+    The maximum is a limit on tension steel, so it is only read on the face the
+    combination puts in tension: the bars a negative moment asks for on the
+    bottom are compression steel, and a combination with no moment puts
+    neither face in tension.
     """
     found: List[_Raw] = []
     doubly = bool(getattr(state, "doubly_reinforced", False))
+    M = getattr(state, "M_u", getattr(state, "M_Ed", 0.0))
+    tension_face = "bot" if M > 0 else "top" if M < 0 else None
     for suffix in ("bot", "top"):
         A_s: Quantity = getattr(beam, f"_A_s_{suffix}")
         # The minimum the face has to meet, relief of §9.6.1.3 included; a
@@ -222,7 +238,7 @@ def flexure_warnings(beam: "RectangularBeam", label: str, state: Any) -> List[_R
                     severity=float((A_s_min - A_s).magnitude),
                 )
             )
-        if A_s_max.magnitude > 0 and A_s > A_s_max and not doubly:
+        if suffix == tension_face and A_s_max.magnitude > 0 and A_s > A_s_max and not doubly:
             found.append(
                 _Raw(
                     "As_above_max",
@@ -271,6 +287,22 @@ def spacing_warnings(beam: "RectangularBeam") -> List[_Raw]:
         name = _face_name(face)
         if not any(raw.code == "bars_do_not_fit" and raw.face == name for raw in found):
             found.append(_Raw("bars_do_not_fit", {}, name))
+    return [_with_units(raw, beam) for raw in found]
+
+
+def shortfall_warnings(beam: "RectangularBeam") -> List[_Raw]:
+    """The faces the last design could not bring up to the steel they need.
+
+    The design records the area it needed on each such face; the warning is
+    read against the bars on the face now, so setting enough by hand after the
+    design clears it.
+    """
+    found: List[_Raw] = []
+    for suffix, needed in sorted(getattr(beam, "_short_faces", {}).items()):
+        A_s: Quantity = getattr(beam, f"_A_s_{suffix}")
+        A_s_req = needed.to(A_s.units)
+        if A_s < A_s_req and not math.isclose(A_s.magnitude, A_s_req.magnitude):
+            found.append(_Raw("As_below_required", {"A_s": A_s, "A_s_req": A_s_req}, _face_name(suffix)))
     return [_with_units(raw, beam) for raw in found]
 
 

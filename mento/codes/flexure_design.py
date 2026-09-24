@@ -517,6 +517,20 @@ def _run_flexure_design(
 
     self._finalize_longitudinal_design(A_req_bot, A_req_top, _layout_resists)
 
+    # A layout that still does not carry the moment is the most that fits, not
+    # a design: no bars that fit the width reach the steel asked for. The area
+    # asked for is kept per face so the section can say so -- the warning
+    # ``As_below_required`` -- for as long as the bars on it stay short of it.
+    self._short_faces = {}
+    if not _layout_resists():
+        for face, needed, row in (
+            ("bot", max(A_req_bot, A_s_comp_bot), self.flexure_design_results_bot),
+            ("top", max(A_req_top, A_s_comp_top), self.flexure_design_results_top),
+        ):
+            provided = row.get("total_as", 0 * (cm**2)) if row is not None else 0 * (cm**2)
+            if provided < needed:
+                self._short_faces[face] = needed
+
     # The alternatives of each face, headed by what it carries now.
     for face, suffix, row in (
         ("bot", "b", self.flexure_design_results_bot),
