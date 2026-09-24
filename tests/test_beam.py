@@ -2810,6 +2810,36 @@ def test_design_flexure_ACI_318_19_gap_past_cap_adds_compression_steel() -> None
     assert "As_above_max" not in [warning.code for warning in node.warnings]
 
 
+def test_design_flexure_ACI_318_19_gap_past_cap_negative_moment_upgrades_bottom() -> None:
+    """
+    El mismo caso con Mu = -40 kN·m: la traccion arriba pasa el tope (2Ø20)
+    y pide abajo 2.28 cm² de compresion, mas que las 2Ø10 = 1.57 cm² que la
+    cara inferior tomo en su primer pase (el 1.8‰ de b·h, sin momento
+    positivo). La conciliacion rediseña la cara inferior: 2Ø16, y la
+    capacidad es la del caso positivo reflejado, ØMn = 50.0 kN·m.
+    """
+    beam = RectangularBeam(
+        label="picard_gap_top",
+        concrete=Concrete_ACI_318_19(name="C35", f_c=35 * MPa),
+        steel_bar=SteelBar(name="ADN 500", f_y=500 * MPa),
+        width=15 * cm,
+        height=25 * cm,
+        c_c=2.5 * cm,
+    )
+    beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=20 * cm)
+    node = Node(section=beam, forces=Forces(label="Mu-40", M_y=-40 * kNm))
+    node.design_flexure()
+
+    flexure = beam.flexure_design
+    assert [(layer.n, layer.d_b.to("mm").magnitude) for layer in flexure.top.layers] == [(2, 20)]
+    assert [(layer.n, layer.d_b.to("mm").magnitude) for layer in flexure.bottom.layers] == [(2, 16)]
+
+    check_results = node.check_flexure()
+    assert check_results.iloc[1]["Position"] == "Top"
+    assert check_results.iloc[1]["ØMn"] == pytest.approx(50.04, rel=1e-3)
+    assert node.warnings == ()
+
+
 def test_design_flexure_CIRSOC_201_25_narrow_web_gives_the_most_that_fits() -> None:
     """
     Viga 12x30 cm, H25, ADN 420, c_c = 2.5 cm, Mu = +40 kN·m.
@@ -2837,6 +2867,7 @@ def test_design_flexure_CIRSOC_201_25_narrow_web_gives_the_most_that_fits() -> N
     assert [(layer.n, layer.d_b.to("mm").magnitude) for layer in bottom.layers] == [(2, 12), (2, 12)]
     assert bottom.A_s.to("cm**2").magnitude == pytest.approx(4.52, rel=1e-3)
     assert bottom.DCR == pytest.approx(1.129, rel=1e-3)
+    assert [w.face for w in node.warnings if w.code == "As_below_required"] == ["bottom"]
 
 
 def test_design_flexure_ACI_318_19_compression_bottom_exceeds_provided_bottom() -> None:
@@ -3266,10 +3297,16 @@ def test_low_concrete_strength_negative_sqrt() -> None:
     # Design should not crash, but DCR should be > 1
     node.design_flexure()
 
-    # The designed reinforcement should equal A_s_max due to negative sqrt_value
-    # Check that beam has bottom rebar set
+    # No tension steel alone reaches the moment, so the face is doubly
+    # reinforced: the requirement is the tension steel of the couple, past
+    # A_s_max, with compression steel on top. It used to stop at A_s_max and
+    # ask for no compression steel at all.
     bottom = beam.flexure_design.bottom
-    assert bottom.A_s_req == bottom.A_s_max
+    top = beam.flexure_design.top
+    assert bottom.A_s_req > bottom.A_s_max
+    assert top.A_s_req.to("cm**2").magnitude > 0
+    # Nothing that fits a 20 cm web carries it, and the section says so.
+    assert {(w.code, w.face) for w in node.warnings} >= {("As_below_required", "bottom")}
 
 
 def test_doubly_reinforced_ignores_max_limits() -> None:

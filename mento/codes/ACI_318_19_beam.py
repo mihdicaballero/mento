@@ -718,9 +718,13 @@ def _calculate_flexural_reinforcement_ACI_318_19(
     # Calculate required reinforcement based on the nominal moment capacity
     R_n = flexure_eq.flexural_resistance_factor(M_u, concrete_aci._phi_t, b, d)
     # Verify if the value under the square root is negative
-    if flexure_eq.singly_reinforced_discriminant(R_n, f_c_mag) < 0:
-        # Here we assign A_s_max so that the calculation does not break,
-        # resulting in a DCR greater than 1.
+    # A negative discriminant means no tension steel alone reaches the moment,
+    # however much of it: the section needs compression steel. A_s_max stands
+    # in for A_s_calc until the couple below replaces it -- it used to stay,
+    # and since it is not greater than A_s_max the couple never ran, so the
+    # face reported A_s_max as its requirement and no compression steel.
+    beyond_singly = flexure_eq.singly_reinforced_discriminant(R_n, f_c_mag) < 0
+    if beyond_singly:
         A_s_calc = A_s_max
     else:
         A_s_calc = flexure_eq.tension_steel_for_moment(R_n, f_c_mag, f_y_mag, b, d)
@@ -801,7 +805,7 @@ def _calculate_flexural_reinforcement_ACI_318_19(
     A_s_final = clean_zero(A_s_final)
 
     # Determine if compression reinforcement is required
-    if A_s_final <= A_s_max:
+    if A_s_final <= A_s_max and not beyond_singly:
         A_s_comp = 0.0
     else:
         doubly = True

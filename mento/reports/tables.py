@@ -14,7 +14,7 @@ confining it to this layer is the step that makes removing it possible.
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Any, Dict, cast
+from typing import TYPE_CHECKING, Any, Dict, List, cast
 
 import pandas as pd
 from mento.units import Quantity
@@ -462,6 +462,21 @@ def _initialize_dicts_ACI_318_19_shear(self: "RectangularBeam") -> None:
     self._shear_all_checks = self._all_shear_checks_passed and (check_max == "✅") and (check_FU == "✅")
 
 
+def _drop_max_off_tension_face(max_values: List[Any], M: Quantity) -> None:
+    """Stop holding to A_s_max a face the combination does not put in tension.
+
+    ``max_values`` is the list of the flexure min/max rows, top steel at 0 and
+    bottom steel at 2. A_s_max limits tension steel: the bars a negative moment
+    asks for on the bottom are compression steel, and a combination with no
+    moment pulls neither face. The limit is still printed; only the check skips
+    it. :func:`mento.design_warnings.flexure_warnings` reads it the same way.
+    """
+    if M.magnitude <= 0:
+        max_values[2] = None
+    if M.magnitude >= 0:
+        max_values[0] = None
+
+
 def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
     # Update longitudinal rebar attributes
     self._update_longitudinal_rebar_attributes()
@@ -528,6 +543,7 @@ def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
         self._A_s_max_bot,
         s_bot_max,
     ]  # Use None for items without a maximum constraint
+    _drop_max_off_tension_face(max_values, self._M_u)
     current_values = [
         self._A_s_top,
         s_top,
@@ -960,6 +976,7 @@ def _initialize_dicts_EN_1992_2004_flexure(self: "RectangularBeam") -> None:
         self._A_s_max_bot,
         s_bot_max,
     ]  # Use None for items without a maximum constraint
+    _drop_max_off_tension_face(max_values, self._M_Ed)
     current_values = [
         self._A_s_top,
         s_top,

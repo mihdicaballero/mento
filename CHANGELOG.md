@@ -31,8 +31,9 @@ from the release history and are summaries rather than complete lists.
 - **Detailing limits are reported as data.** `beam.warnings` and `node.warnings` are tuples
   of `DesignWarning` with a stable `code` (`As_below_min`, `As_above_max`,
   `clear_spacing_below_min`, `bar_spacing_below_min`, `bar_spacing_exceeds_max`,
-  `bars_do_not_fit`, `stirrups_required`, `Av_below_min`, `stirrup_spacing_exceeds_max`,
-  `stirrup_diameter_below_min`, `shear_exceeds_section_limit`), a `message` in the language
+  `bars_do_not_fit`, `As_below_required`, `stirrups_required`, `Av_below_min`,
+  `stirrup_spacing_exceeds_max`, `stirrup_diameter_below_min`,
+  `shear_exceeds_section_limit`), a `message` in the language
   of `mento.set_language`, the `values` it quotes as quantities, the `face` and the
   `combinations` it occurs under. They are the limit rows the detailed reports mark with
   ❌, which until now were only text. A warning does not change a DCR.
@@ -85,6 +86,23 @@ from the release history and are summaries rather than complete lists.
   compression steel, so a face past A_s,max whose compression steel covered the excess was
   marked ❌ and warned `As_above_max`. It now also counts when the steel provided extends
   the cap.
+
+- **A design that cannot reach the steel it needs says so.** When no layout that fits the
+  width carries the moment, the design leaves the most that fits — 4Ø12 in a 12 cm web
+  asked for 5.18 cm² — and only the DCR used to show it. It now warns `As_below_required`
+  on that face, quoting `A_s` and `A_s_req`, for as long as the bars on the face stay short
+  of it.
+
+- **A moment no tension steel alone can carry is designed doubly reinforced.** Under ACI
+  318-19 / CIRSOC 201-25, when the equation for singly reinforced steel had no solution
+  (a negative discriminant) the requirement was set to A_s,max and the compression-steel
+  branch never ran: a 15×30 beam at −80 kN·m reported A_s,req = 5.6 cm² on top and none
+  below. It now reports the couple, 10.94 cm² above and 8.48 cm² below.
+
+- **`As_above_max` is only read on the face the combination puts in tension.** The bars a
+  negative moment asks for on the bottom are compression steel, and a combination with no
+  moment pulls neither face, yet both were held to A_s,max and warned. The detailed report
+  skips the same check; it still prints the limit.
 
 - **The flexure design loop no longer stops when only one face has settled.** It took a
   repeated layout on either face as a limit cycle, which is also what a face that has
