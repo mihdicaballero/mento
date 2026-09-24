@@ -2750,37 +2750,35 @@ def test_select_safe_design_prefers_smallest_passing_layout() -> None:
     assert fallback["total_as"].to("cm**2").magnitude == pytest.approx(9.82, rel=1e-3)
 
 
-def test_design_flexure_ACI_318_19_cycle_adopts_passing_visited_layout() -> None:
+def test_design_flexure_ACI_318_19_gap_past_cap_adds_compression_steel() -> None:
     """
-    Rama `if passing:` de _select_safe_design alcanzada desde design_flexure:
-    el lazo de Picard cicla y el armado activo al salir NO cumple, pero uno de
-    los visitados si → se adopta ese.
+    Ninguna combinacion discreta cae entre As,req y As,max: el diseño pasa el
+    tope con la menor que cubre As,req y arma la cara opuesta con la compresion
+    que la mantiene controlada por traccion, en vez de quedarse con el fallback
+    que no alcanza.
 
     Seccion 15x25 cm, fc=35 MPa, fy=500 MPa, c_c=2.5 cm, estribo Ø8, Mu=+40 kN·m.
     Ancho libre = 15 - 2·(2.5 + 0.8) = 8.4 cm; con la separacion libre minima
     (max(25 mm, vibrador 30 mm, d_b)) solo entran 2 barras por capa.
 
-    Recorrido del lazo (verificado con traza sobre design_flexure):
-      it.1  d = 25 - 4.3 = 20.7 cm → As,req = 4.96 cm², As,max = 5.22 cm².
-            Ninguna combinacion discreta cae en [4.96, 5.22] (2Ø20 y 2Ø16+2Ø12
-            dan 6.28 cm²; 3Ø12 no entra por separacion), asi que el diseñador
-            devuelve el fallback 4Ø12 = 4.52 cm² en dos capas.
-      it.2  el centroide de las dos capas baja d → As,req = 5.43 cm² > As,max
-            = 4.85 cm² → sin tope superior el diseñador elige 2Ø20 = 6.28 cm².
-      it.3  con 2Ø20 en una capa el centroide vuelve a subir d y se repite el
-            armado 4Ø12 → se detecta el ciclo y se sale del lazo.
+    d = 25 - 4.3 = 20.7 cm → As,req = 4.96 cm², As,max = 5.22 cm². Ninguna
+    combinacion cae en [4.96, 5.22] (2Ø20 y 2Ø16+2Ø12 dan 6.28 cm²; 3Ø12 no
+    entra), y el tope dejaba el fallback 4Ø12 = 4.52 cm² (ØMn = 34.0 kN·m).
+    Antes se terminaba en 2Ø20 sin compresion: sobre-armada, capacidad
+    capeada en As,max (ØMn = 41.7 kN·m) y aviso As_above_max.
 
-    El armado activo a la salida es 4Ø12 (ØMn = 34.0 kN·m < 40) por lo que la
-    verificacion final llama a _select_safe_design sobre {4Ø12, 2Ø20}.
+    Ahora 2Ø20 abajo pide compresion arriba por el exceso sobre As,max:
+      β1 = 0.80 ; εy = 0.0025 ; c_t = 0.003·207/0.0085 = 73.1 mm
+      d' = 2.5 + 0.8 + 0.8 = 4.1 cm (2Ø16)
+      f's = (73.1 - 41)/73.1·0.003·200000 = 263.3 MPa ; f's,net = 233.5 MPa
+      A's = (6.28 - 5.22)·500/233.5 = 2.28 cm² → 2Ø12 = 2.26 no alcanza → 2Ø16
+      As,max_total = 5.22 + 4.02·233.5/500 = 7.10 cm² >= 6.28 → sin tope
 
-    Capacidad del candidato que cumple (2Ø20, As = 6.28 cm², d = 20.7 cm):
-      β1 = 0.85 - 0.05·(35-28)/7 = 0.80 ; εy = 500/200000 = 0.0025
-      ρmax = 0.85·0.80·35/500·(0.003/0.0085) = 0.01680
-      As,max = 0.01680·207·150 = 5.22 cm² < 6.28 cm² → seccion sobre-armada:
-      sin acero de compresion (As,top = 0) la capacidad se capea en As,max
-        a  = 521.6·500/(0.85·35·150) = 58.4 mm
-        Mn = 521.6·500·(207 - 29.2) = 46.4 kN·m
-        ØMn = 0.9·46.4 = 41.7 kN·m >= 40 kN·m  → DCR = 0.96
+    Equilibrio (acero comprimido sin fluir), c = 65.8 mm, a = 52.6 mm:
+      Cc = 0.85·35·150·52.6 = 234.9 kN ; f's = 600·(65.8 - 41)/65.8 = 226 MPa
+      Cs = 402·(226 - 29.75) = 79.0 kN ; T = 628·500 = 314 kN ✓
+      Mn = 234.9·(207 - 26.3) + 79.0·(207 - 41) = 55.6 kN·m
+      ØMn = 0.9·55.6 = 50.0 kN·m ; εt = 0.003·(207 - 65.8)/65.8 = 0.0064
     """
     beam = RectangularBeam(
         label="picard_cycle_bot",
@@ -2795,18 +2793,50 @@ def test_design_flexure_ACI_318_19_cycle_adopts_passing_visited_layout() -> None
     results = node.design_flexure()
 
     assert isinstance(results, pd.DataFrame)
-    # Se adopta el candidato visitado que cumple (2Ø20), no el activo al salir
-    # del lazo (4Ø12 = 4.52 cm², ØMn = 34.0 kN·m).
     bottom = beam.flexure_design.bottom
     assert (bottom.layers[0].n, bottom.layers[0].d_b.to("mm").magnitude) == (2, 20)
     # A single layer: the public API only lists layers that carry bars.
     assert len(bottom.layers) == 1
     assert bottom.A_s.to("cm**2").magnitude == pytest.approx(6.28, rel=1e-3)
+    top = beam.flexure_design.top
+    assert [(layer.n, layer.d_b.to("mm").magnitude) for layer in top.layers] == [(2, 16)]
 
     check_results = node.check_flexure()
     assert check_results.iloc[1]["Position"] == "Bottom"
-    assert check_results.iloc[1]["ØMn"] == pytest.approx(41.73, rel=1e-3)
+    assert check_results.iloc[1]["ØMn"] == pytest.approx(50.04, rel=1e-3)
     assert check_results.iloc[1]["DCR"] <= 1.0
+    # Past A_s_max but inside the cap the top steel extends: doubly reinforced,
+    # not over-reinforced.
+    assert "As_above_max" not in [warning.code for warning in node.warnings]
+
+
+def test_design_flexure_CIRSOC_201_25_narrow_web_gives_the_most_that_fits() -> None:
+    """
+    Viga 12x30 cm, H25, ADN 420, c_c = 2.5 cm, Mu = +40 kN·m.
+
+    Ancho libre = 12 - 2·(2.5 + 0.8) = 5.4 cm: dos barras por capa, y como
+    mucho Ø12 (54 - 2·16 = 22 mm < 30 mm del vibrador descarta el Ø16). Lo
+    mas que entra es 2Ø12 + 2Ø12 = 4.52 cm², por debajo de lo que pide el
+    momento (5.13 cm² de traccion, con compresion). Ni pasando el tope hay
+    una combinacion que alcance, asi que el diseño deja el maximo que entra
+    -- antes de corregir el redondeo de la separacion eran 4Ø10 = 3.14 cm²,
+    DCR 1.53 -- y el DCR > 1 dice que la seccion no alcanza.
+    """
+    beam = RectangularBeam(
+        label="101",
+        concrete=Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=12 * cm,
+        height=30 * cm,
+        c_c=25 * mm,
+    )
+    node = Node(section=beam, forces=[Forces(label="1.4D", V_z=50 * kN, M_y=40 * kNm)])
+    node.design()
+
+    bottom = beam.flexure_design.bottom
+    assert [(layer.n, layer.d_b.to("mm").magnitude) for layer in bottom.layers] == [(2, 12), (2, 12)]
+    assert bottom.A_s.to("cm**2").magnitude == pytest.approx(4.52, rel=1e-3)
+    assert bottom.DCR == pytest.approx(1.129, rel=1e-3)
 
 
 def test_design_flexure_ACI_318_19_compression_bottom_exceeds_provided_bottom() -> None:

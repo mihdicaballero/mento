@@ -43,7 +43,7 @@ of the published documentation.
 # ---------------------------------------------------------------------------
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, Dict
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
 
 from mento.units import Quantity
 
@@ -77,12 +77,20 @@ class _FaceDemand:
         Steel this face's moment requires on the OPPOSITE face, i.e. the
         compression reinforcement of a doubly reinforced section. Zero when the
         section does not need it.
+    compression_per_excess:
+        Compression steel on the opposite face that each unit of tension steel
+        above ``A_s_max`` calls for to keep the section at its ductility limit
+        -- ``f_y / f_s'`` under ACI 318-19 / CIRSOC 201-25. ``None`` when
+        ``A_s_max`` is not a ductility limit that compression steel extends
+        (EN 1992-2004, where it is the 4 % of 9.2.1.1(3)), and then the selector
+        never goes past it.
     """
 
     A_s_min: Quantity
     A_s_max: Quantity
     A_s_tension: Quantity
     A_s_compression: Quantity
+    compression_per_excess: Optional[float] = None
 
 
 # Ask the design code for the areas required on ``face`` ("bot"/"top") by a
@@ -245,6 +253,56 @@ def _run_flexure_design(
         tables[face][_rebar_design_fingerprint(best)] = getattr(rebar, "_long_combos_df", None)
         return best
 
+    def _design_tension_face(A_req: Quantity, demand: _FaceDemand, mech_cover: Quantity, face: str) -> Any:
+        """Discrete design of a tension face, capped at ``A_s_max`` while that
+        is enough.
+
+        The cap is ``A_s_max`` only while the request is under it. The
+        catalogue can leave no layout between the two: in a 15 cm web the bars
+        that fit go from 4Ø12 = 4.52 cm² straight to 2Ø16 + 2Ø12 = 6.28 cm², so
+        a face asking for 5.06 cm² under a 5.79 cm² cap fell back to the 4.52
+        and missed the moment. Where the code lets compression steel extend the
+        cap, the smallest layout that covers the request is taken instead, and
+        :func:`_compression_for` asks the opposite face for the steel that
+        keeps it tension-controlled.
+        """
+        A_cap = demand.A_s_max if A_req <= demand.A_s_max else None
+        row = _design_longitudinal_for_area(A_req, A_cap, mech_cover, face)
+        short = row is not None and row.get("total_as", 0 * (cm**2)) < A_req
+        if short and A_cap is not None and demand.compression_per_excess is not None:
+            infeasible_before, tables_before = infeasible[face], dict(tables[face])
+            uncapped = _design_longitudinal_for_area(A_req, None, mech_cover, face)
+            if uncapped is not None and uncapped.get("total_as", 0 * (cm**2)) >= A_req:
+                return uncapped
+            # Nothing fits past the cap either: keep the capped layout and the
+            # table its options are read from.
+            infeasible[face], tables[face] = infeasible_before, tables_before
+        return row
+
+    def _compression_for(row: Any, demand: _FaceDemand) -> Quantity:
+        """Compression steel the tension steel of ``row`` needs on the opposite
+        face to stay within the ductility limit -- zero up to ``A_s_max``.
+
+        ACI 318-19 §9.3.3.1 / CIRSOC 201-25 §9.3.3.1 with Table 21.2.2: past
+        A_s_max the section stays tension-controlled only while
+        A_s <= A_s_max + A_s' * f_s' / f_y.
+
+        Only for a face the moment alone keeps under A_s_max. Once the moment
+        itself asks for more, the code hook has already sized the compression
+        steel for the area it asked for, and the check caps whatever the bars
+        add on top of it without losing capacity; asking for compression for
+        that surplus too only fed the next iteration a heavier opposite face,
+        a deeper centroid and a larger demand, and the loop ran away.
+        """
+        if row is None or demand.compression_per_excess is None:
+            return 0 * (cm**2)
+        if demand.A_s_tension > demand.A_s_max:
+            return 0 * (cm**2)
+        excess = row.get("total_as", 0 * (cm**2)) - demand.A_s_max
+        if excess <= 0 * (cm**2):
+            return 0 * (cm**2)
+        return (excess * demand.compression_per_excess).to(demand.A_s_max.units)
+
     # --- initial guesses ----------------------------------------------------------
     # Mechanical cover = clear cover + stirrup diameter + the distance from the
     # stirrup to the centroid of the bars. ``c_c`` is the clear cover to the
@@ -264,6 +322,7 @@ def _run_flexure_design(
     # cycle later if needed for diagnostics.
     bot_visited: Dict[tuple, dict] = {}
     top_visited: Dict[tuple, dict] = {}
+    pairs_visited: set = set()
     cycled = False
 
     for _iteration_count in range(1, _MAX_FLEXURE_ITERATIONS + 1):
@@ -279,6 +338,7 @@ def _run_flexure_design(
         A_s_comp_bot = 0 * (cm**2)
         A_s_final_top_Negative_M = 0 * (cm**2)
         self._A_s_top = A_s_comp_top
+        demand_top: Optional[_FaceDemand] = None
 
         # --- top tension case (negative moment on top face) ----------------------
         if max_M_y_top < 0:
@@ -307,17 +367,17 @@ def _run_flexure_design(
         # couple, or the compression the opposite face needs — and capping it
         # here would only leave the selector with nothing to fit.
         if A_req_bot >= 0 * (cm**2):
-            A_cap_bot = self._A_s_max_bot if A_req_bot <= self._A_s_max_bot else None
-            self.flexure_design_results_bot = _design_longitudinal_for_area(
-                A_req_bot, A_cap_bot, self._c_mec_bot, "bot"
-            )
+            self.flexure_design_results_bot = _design_tension_face(A_req_bot, demand_bot, self._c_mec_bot, "bot")
 
         self.flexure_design_results_top = None
         if A_req_top >= 0 * (cm**2):
-            A_cap_top = self._A_s_max_top if A_req_top <= self._A_s_max_top else None
-            self.flexure_design_results_top = _design_longitudinal_for_area(
-                A_req_top, A_cap_top, self._c_mec_top, "top"
-            )
+            if demand_top is not None:
+                self.flexure_design_results_top = _design_tension_face(A_req_top, demand_top, self._c_mec_top, "top")
+            else:
+                A_cap_top = self._A_s_max_top if A_req_top <= self._A_s_max_top else None
+                self.flexure_design_results_top = _design_longitudinal_for_area(
+                    A_req_top, A_cap_top, self._c_mec_top, "top"
+                )
 
         # --- Apply both faces (hard overwrite) -----------------------------------
         if self.flexure_design_results_bot is not None:
@@ -338,6 +398,14 @@ def _run_flexure_design(
             if self.flexure_design_results_top is not None
             else 0 * (cm**2)
         )
+
+        # A tension face detailed past A_s_max -- the bars it can take rarely
+        # land on the area asked for -- needs compression steel for all of it,
+        # not only for the area the moment asked for.
+        if max_M_y_bot > 0 * kNm:
+            A_s_comp_top = max(A_s_comp_top, _compression_for(self.flexure_design_results_bot, demand_bot))
+        if demand_top is not None:
+            A_s_comp_bot = max(A_s_comp_bot, _compression_for(self.flexure_design_results_top, demand_top))
 
         # If compression from top (A_s_comp_bot) exceeds what bottom provides, re-upgrade bottom
         if A_s_comp_bot > A_prov_bot:
@@ -374,27 +442,25 @@ def _run_flexure_design(
         d_prima_calc = self.c_c + self._stirrup_d_b + self._top_rebar_centroid if has_top else d_prima
 
         # --- Cycle detection ------------------------------------------------------
-        # A single `cycled` flag covers both faces on purpose. Bottom and top are
-        # coupled: bottom's layout drives `rec_mec`, which is fed back as the
-        # compression-side depth of the top design (and vice-versa). If one face
-        # repeats a layout it already visited, its centroid is oscillating
-        # periodically, so `rec_mec`/`d_prima` are too — and that periodic input
-        # forces the OTHER face into a limit cycle as well. Detecting recurrence
-        # on either face is enough evidence that the whole system is in a limit
-        # cycle; continuing would only waste iterations. We exit and let
+        # Bottom and top are coupled: bottom's layout drives `rec_mec`, which is
+        # fed back as the compression-side depth of the top design (and
+        # vice-versa), so the state of the loop is the PAIR of layouts. Only a
+        # pair seen before is a limit cycle. One face repeating its layout is
+        # not: it is what a face that has settled does while the other is still
+        # moving -- a top face going from 2Ø25 to 2Ø20 + 2Ø16 over a bottom
+        # that stays at 2Ø20 -- and stopping there left the top on a layout
+        # designed for a depth it no longer had. On a real cycle we exit and let
         # `_select_safe_design` pick the best layout among those visited.
+        fp_bot = fp_top = None
         if self.flexure_design_results_bot is not None:
             fp_bot = _rebar_design_fingerprint(self.flexure_design_results_bot)
-            if fp_bot in bot_visited:
-                cycled = True
-            else:
-                bot_visited[fp_bot] = dict(self.flexure_design_results_bot)
+            bot_visited.setdefault(fp_bot, dict(self.flexure_design_results_bot))
         if self.flexure_design_results_top is not None:
             fp_top = _rebar_design_fingerprint(self.flexure_design_results_top)
-            if fp_top in top_visited:
-                cycled = True
-            else:
-                top_visited[fp_top] = dict(self.flexure_design_results_top)
+            top_visited.setdefault(fp_top, dict(self.flexure_design_results_top))
+        if (fp_bot, fp_top) in pairs_visited:
+            cycled = True
+        pairs_visited.add((fp_bot, fp_top))
 
         # --- Convergence update ---------------------------------------------------
         Err = max(abs(c_mec_calc - rec_mec), abs(d_prima_calc - d_prima))

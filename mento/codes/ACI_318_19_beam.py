@@ -530,6 +530,21 @@ def _f_s_prime_net_at_ductility_limit_ACI_318_19(self: "RectangularBeam", d: flo
     return flexure_eq.compression_steel_net_stress(d_prime, c_t, sec.E_s, sec.f_y, sec.f_c)
 
 
+def _extended_tension_cap_ACI_318_19(
+    self: "RectangularBeam", A_s_max: float, A_s_comp: float, d: float, d_prime: float
+) -> float:
+    """Tension steel a face can carry and stay tension-controlled, given the
+    compression steel on the opposite face.
+
+    ACI 318-19 §9.3.3.1 with Table 21.2.2 / CIRSOC 201-25 §9.3.3.1 with
+    Tabla 21.2.2: past A_s_max the excess tension is balanced by the
+    compression steel, at the stress it reaches at the ductility limit,
+        A_s_max_total = A_s_max + A_s' * f_s'_net / f_y
+    """
+    f_s_prima_net = _f_s_prime_net_at_ductility_limit_ACI_318_19(self, d, d_prime)
+    return A_s_max + A_s_comp * f_s_prima_net / section_floats(self).f_y
+
+
 def _minimum_flexural_reinforcement_ratio_ACI_318_19(self: "RectangularBeam", M_u: float) -> float:
     """
     Calculates the minimum flexural reinforcement ratio of ACI 318-19 §9.6.1.2
@@ -951,8 +966,7 @@ def _determine_nominal_moment_ACI_318_19(self: "RectangularBeam", st: FlexureChe
         # Compression steel contribution at the ductility limit determines how
         # much the tension-steel cap can be extended:
         #     A_s_max_total = A_s_max_bot + A_s_top * f_s'_net / f_y
-        f_s_prima_net = _f_s_prime_net_at_ductility_limit_ACI_318_19(self, sec.d_bot, sec.c_mec_top)
-        A_s_max_total = st.A_s_max_bot + sec.A_s_top * f_s_prima_net / sec.f_y
+        A_s_max_total = _extended_tension_cap_ACI_318_19(self, st.A_s_max_bot, sec.A_s_top, sec.d_bot, sec.c_mec_top)
         A_s_eff = min(sec.A_s_bot, A_s_max_total)
         M_n_positive = _determine_nominal_moment_double_reinf_ACI_318_19(
             self, A_s_eff, sec.d_bot, sec.c_mec_top, sec.A_s_top
@@ -970,8 +984,7 @@ def _determine_nominal_moment_ACI_318_19(self: "RectangularBeam", st: FlexureChe
     elif sec.A_s_top <= st.A_s_max_top:
         M_n_negative = _determine_nominal_moment_simple_reinf_ACI_318_19(self, sec.A_s_top, sec.d_top)
     else:
-        f_s_prima_net = _f_s_prime_net_at_ductility_limit_ACI_318_19(self, sec.d_top, sec.c_mec_bot)
-        A_s_max_total = st.A_s_max_top + sec.A_s_bot * f_s_prima_net / sec.f_y
+        A_s_max_total = _extended_tension_cap_ACI_318_19(self, st.A_s_max_top, sec.A_s_bot, sec.d_top, sec.c_mec_bot)
         A_s_eff = min(sec.A_s_top, A_s_max_total)
         M_n_negative = _determine_nominal_moment_double_reinf_ACI_318_19(
             self, A_s_eff, sec.d_top, sec.c_mec_bot, sec.A_s_bot
@@ -1088,6 +1101,21 @@ def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> Flexure
         st.DCR_top = -st.M_u_top / st.phi_M_n_top
         st.DCR_bot = 0
 
+    # A face detailed past A_s_max is doubly reinforced when the steel on the
+    # opposite face carries the excess -- which is how a design that could not
+    # land on the area asked for is built -- whether or not the moment itself
+    # asked for compression steel. Both faces are read: the section is the same
+    # under every combination, including one that puts neither in tension.
+    faces = (
+        (sec.A_s_bot, st.A_s_max_bot, sec.A_s_top, sec.d_bot, sec.c_mec_top),
+        (sec.A_s_top, st.A_s_max_top, sec.A_s_bot, sec.d_top, sec.c_mec_bot),
+    )
+    over = [
+        (A_s, _extended_tension_cap_ACI_318_19(self, cap, A_c, d, d_p)) for A_s, cap, A_c, d, d_p in faces if A_s > cap
+    ]
+    if over and all(A_s <= extended for A_s, extended in over):
+        st.doubly_reinforced = True
+
     st.A_s_min_eff_bot = _effective_minimum_ACI_318_19(self, st.A_s_min_bot, st.A_s_calc_bot)
     st.A_s_min_eff_top = _effective_minimum_ACI_318_19(self, st.A_s_min_top, st.A_s_calc_top)
 
@@ -1175,7 +1203,14 @@ def _required_areas_ACI_318_19(
     else:
         self._A_s_min_top, self._A_s_max_top = A_s_min, A_s_max
         self._c_d_top, self._A_s_bool_top = c_d, A_s_bool
-    return _FaceDemand(A_s_min, A_s_max, A_s_tension, A_s_compression)
+    # Past A_s_max each unit of tension steel needs f_y / f_s' of compression
+    # steel to keep the section tension-controlled. A compression bar too close
+    # to the neutral axis to carry stress extends nothing.
+    f_s_prime_net = _f_s_prime_net_at_ductility_limit_ACI_318_19(
+        self, d.to(canonical["length"]).magnitude, d_prime.to(canonical["length"]).magnitude
+    )
+    ratio = sec.f_y / f_s_prime_net if f_s_prime_net > 0 else None
+    return _FaceDemand(A_s_min, A_s_max, A_s_tension, A_s_compression, ratio)
 
 
 def _select_safe_design(
