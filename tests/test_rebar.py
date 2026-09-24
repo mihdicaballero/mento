@@ -475,6 +475,34 @@ def test_beam_layer2_spacing_check() -> None:
         assert row["clear_spacing"].magnitude >= 50
 
 
+def test_layer_spacing_equal_to_the_limit_is_accepted() -> None:
+    """A clear spacing that meets its limit exactly is not lost to rounding.
+
+    12 cm - 2*(25 mm + 8 mm) comes out of pint as 53.99999999999999 mm, so two
+    Ø12 bars sat 29.999999999999993 mm apart against the 30 mm vibrator limit
+    and were rejected: the design fell back to 4Ø10 for a face asking for 4.9 cm².
+    """
+    concrete = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
+    steelBar = SteelBar(name="ADN 420", f_y=420 * MPa)
+    beam = RectangularBeam(
+        label="101",
+        concrete=concrete,
+        steel_bar=steelBar,
+        width=12 * cm,
+        height=30 * cm,
+        c_c=25 * mm,
+        settings=BeamSettings(stirrup_diameter_ini=8 * mm),
+    )
+
+    beam_rebar = Rebar(beam)
+    beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=4.88 * cm**2, A_s_max=4.91 * cm**2)
+    best = beam_rebar.longitudinal_rebar_design
+
+    assert best["d_b1"] == 12 * mm
+    assert best["total_as"].to("cm**2").magnitude == pytest.approx(4.524, abs=1e-3)
+    assert best["clear_spacing"].to("mm").magnitude == pytest.approx(30.0)
+
+
 # Test 9: Fallback combination tracking
 def test_fallback_combination_when_no_valid_solution() -> None:
     """Test that fallback combination is returned when no valid solution meets A_s_req"""
