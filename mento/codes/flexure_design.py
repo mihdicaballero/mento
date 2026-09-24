@@ -243,7 +243,7 @@ def _run_flexure_design(
         crashes, delegating the "insufficient section" report to check_flexure
         via DCR>1, and to the ``bars_do_not_fit`` warning."""
         rebar = self._create_rebar_designer()
-        _ = rebar.longitudinal_rebar(A_req, A_max, mech_cover)
+        _ = rebar.longitudinal_rebar(A_req, A_max, mech_cover, face)
         try:
             best = rebar.longitudinal_rebar_design
         except RebarDesignInfeasibleError:

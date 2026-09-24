@@ -74,12 +74,21 @@ from the release history and are summaries rather than complete lists.
 
 - **A flexure design no longer settles for less steel than it needs when no bars land between
   A_s,req and A_s,max.** In a narrow web the catalogue jumps — 4Ø12 = 4.52 cm² to 2Ø20 =
-  6.28 cm² in 15 cm — and a face asking for 5.06 cm² under a 5.79 cm² cap fell back to the
-  4.52 and failed (DCR 1.10). Under ACI 318-19 / CIRSOC 201-25 the design now takes the
-  smallest layout that covers A_s,req and puts on the opposite face the compression steel
-  that keeps it tension-controlled, A_s ≤ A_s,max + A_s'·f_s'/f_y (§9.3.3.1, Table 21.2.2):
-  2Ø20 with 2Ø10 on top, DCR 0.75. EN 1992-2004 is unchanged — its A_s,max is the 4 % of
-  9.2.1.1(3), not a ductility limit compression steel extends.
+  6.28 cm² in a 15×25 beam of fc = 35 MPa, fy = 500 MPa — and a face asking for 4.96 cm²
+  under a 5.22 cm² cap fell back to the 4.52 (ØMn = 34.0 kN·m for 40). Under ACI 318-19 /
+  CIRSOC 201-25 the design now takes the smallest layout that covers A_s,req and puts on the
+  opposite face the compression steel that keeps it tension-controlled,
+  A_s ≤ A_s,max + A_s'·f_s'/f_y (§9.3.3.1, Table 21.2.2): 2Ø20 with 2Ø16 on top,
+  ØMn = 50.0 kN·m. EN 1992-2004 is unchanged — its A_s,max is the 4 % of 9.2.1.1(3), not a
+  ductility limit compression steel extends.
+
+- **The vibrator size only spaces the top bars in a design.** The check and the warnings
+  already held the bottom face to 25 mm (1 in.) and the bar diameter, but the bar search
+  applied the 30 mm of `vibrator_size` to both faces, so it discarded bottom layouts the
+  check would pass: a 15 cm web could not take three bars a layer. The bottom of a 15×30
+  beam at 40 kN·m is now 2Ø12 + 1Ø10 over 2Ø10 + 1Ø10 = 5.40 cm² (DCR 0.92). The stirrup
+  the flexure design assumes stays the `stirrup_diameter_ini` of the settings, even when
+  the shear design later settles on a thinner one.
 
 - **A section doubly reinforced by its bars is no longer reported over its maximum.** The
   flexure check only treated a section as doubly reinforced when the moment asked for

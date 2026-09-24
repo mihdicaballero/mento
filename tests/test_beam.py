@@ -2813,10 +2813,12 @@ def test_design_flexure_ACI_318_19_gap_past_cap_adds_compression_steel() -> None
 def test_design_flexure_ACI_318_19_gap_past_cap_negative_moment_upgrades_bottom() -> None:
     """
     El mismo caso con Mu = -40 kN·m: la traccion arriba pasa el tope (2Ø20)
-    y pide abajo 2.28 cm² de compresion, mas que las 2Ø10 = 1.57 cm² que la
-    cara inferior tomo en su primer pase (el 1.8‰ de b·h, sin momento
-    positivo). La conciliacion rediseña la cara inferior: 2Ø16, y la
-    capacidad es la del caso positivo reflejado, ØMn = 50.0 kN·m.
+    y pide abajo compresion, mas que las 2Ø10 = 1.57 cm² que la cara inferior
+    tomo en su primer pase (el 1.8‰ de b·h, sin momento positivo). La
+    conciliacion rediseña la cara inferior: 2Ø12. Abajo no rige el vibrador,
+    y con barras mas finas d' = 2.5 + 0.8 + 0.6 = 3.9 cm, f's sube y la
+    compresion requerida baja a ~2.1 cm², que 2Ø12 = 2.26 cm² cubre.
+    ØMn = 49.8 kN·m.
     """
     beam = RectangularBeam(
         label="picard_gap_top",
@@ -2832,11 +2834,11 @@ def test_design_flexure_ACI_318_19_gap_past_cap_negative_moment_upgrades_bottom(
 
     flexure = beam.flexure_design
     assert [(layer.n, layer.d_b.to("mm").magnitude) for layer in flexure.top.layers] == [(2, 20)]
-    assert [(layer.n, layer.d_b.to("mm").magnitude) for layer in flexure.bottom.layers] == [(2, 16)]
+    assert [(layer.n, layer.d_b.to("mm").magnitude) for layer in flexure.bottom.layers] == [(2, 12)]
 
     check_results = node.check_flexure()
     assert check_results.iloc[1]["Position"] == "Top"
-    assert check_results.iloc[1]["ØMn"] == pytest.approx(50.04, rel=1e-3)
+    assert check_results.iloc[1]["ØMn"] == pytest.approx(49.84, rel=1e-3)
     assert node.warnings == ()
 
 
