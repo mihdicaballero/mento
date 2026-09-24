@@ -65,6 +65,32 @@ from the release history and are summaries rather than complete lists.
 
 ### Fixed
 
+- **A clear spacing equal to its limit is no longer lost to rounding.** The effective width
+  came out of the unit conversions a hair short (12 cm − 2·(25 + 8) mm = 53.99999999999999
+  mm), so two Ø12 bars sat 29.999999999999993 mm apart against the 30 mm vibrator limit and
+  the selector dropped them: a 12×30 beam with 40 kN·m was designed with 4Ø10 = 3.14 cm²
+  (DCR 1.53) instead of the 4Ø12 = 4.52 cm² that fit (DCR 1.13).
+
+- **A flexure design no longer settles for less steel than it needs when no bars land between
+  A_s,req and A_s,max.** In a narrow web the catalogue jumps — 4Ø12 = 4.52 cm² to 2Ø20 =
+  6.28 cm² in 15 cm — and a face asking for 5.06 cm² under a 5.79 cm² cap fell back to the
+  4.52 and failed (DCR 1.10). Under ACI 318-19 / CIRSOC 201-25 the design now takes the
+  smallest layout that covers A_s,req and puts on the opposite face the compression steel
+  that keeps it tension-controlled, A_s ≤ A_s,max + A_s'·f_s'/f_y (§9.3.3.1, Table 21.2.2):
+  2Ø20 with 2Ø10 on top, DCR 0.75. EN 1992-2004 is unchanged — its A_s,max is the 4 % of
+  9.2.1.1(3), not a ductility limit compression steel extends.
+
+- **A section doubly reinforced by its bars is no longer reported over its maximum.** The
+  flexure check only treated a section as doubly reinforced when the moment asked for
+  compression steel, so a face past A_s,max whose compression steel covered the excess was
+  marked ❌ and warned `As_above_max`. It now also counts when the steel provided extends
+  the cap.
+
+- **The flexure design loop no longer stops when only one face has settled.** It took a
+  repeated layout on either face as a limit cycle, which is also what a face that has
+  converged does while the other is still moving; it now waits for the pair of layouts to
+  repeat.
+
 - **`As_below_min` no longer fires on a face the 4/3 relief covers, and fires when it does
   not.** The warning read the flag that says the *requirement* adopted 4/3·A_s_calc, so it
   stayed silent on bars checked by hand between A_s_calc and 4/3·A_s_calc. It now compares
