@@ -207,17 +207,52 @@ class TestMinReinforcement:
         assert wall_high_hw._rho_l_min.to("").magnitude == pytest.approx(0.0025, rel=1e-4)
 
     def test_rho_l_min_interpolated_per_11_6_2(self, wall_metric: ShearWall) -> None:
-        # ACI 318-19 §11.6.2 Eq.(11.6.2):
-        #   ρl,min = max(0.0025, 0.0025 + 0.5·(2.5 − r_hw)·(ρt,req − 0.0025))
-        # High Vu so ρt,req exceeds the 0.0025 minimum and the interpolation bites.
+        """ACI 318-19 / CIRSOC 201-25 §11.6.2(a): Eq. (11.6.2) with the ρt provided, capped by ρt,req.
+
+        Ø16/10 E.F. gives ρt = 2·201.06/(250·100) = 0.016085; Vu = 2000 kN
+        needs ρt,req = (2000/0.75/1.0 − 0.25·5)/420 = 0.0033730 > 0.0025, so
+        the interpolation bites: 0.0025 + 0.5·(2.5 − 0.875)·(0.016085 − 0.0025)
+        = 0.013538, and ρl need not exceed the 0.0033730 required for strength.
+        """
         wall_metric.set_horizontal_rebar(d_b=16 * mm, s=100 * mm)
         wall_metric.set_vertical_rebar(d_b=12 * mm, s=200 * mm)
         wall_metric.check_shear([Forces(V_z=2000 * kN)])
+        rho_t = wall_metric._rho_t.to("").magnitude
         rho_t_req = wall_metric._rho_t_req.to("").magnitude
-        assert rho_t_req > 0.0025  # interpolation is non-trivial
+        assert rho_t_req == pytest.approx(0.0033730, abs=1e-6)
         r_hw = max(0.5, min(wall_metric._hw_lw, 2.5))
-        expected = max(0.0025, 0.0025 + 0.5 * (2.5 - r_hw) * (rho_t_req - 0.0025))
-        assert wall_metric._rho_l_min.to("").magnitude == pytest.approx(expected, rel=1e-4)
+        equation = 0.0025 + 0.5 * (2.5 - r_hw) * (rho_t - 0.0025)
+        assert equation == pytest.approx(0.013538, abs=1e-5)
+        assert wall_metric._rho_l_min.to("").magnitude == pytest.approx(min(equation, rho_t_req), rel=1e-6)
+        assert wall_metric._rho_l_min.to("").magnitude == pytest.approx(0.0033730, abs=1e-6)
+
+    def test_rho_l_min_reads_the_horizontal_mesh_provided(self, wall_metric: ShearWall) -> None:
+        """A heavier horizontal mesh than the shear needs asks for more vertical steel.
+
+        ACI 318-19 / CIRSOC 201-25 §11.6.2(a), by hand for the reference wall
+        (hw/lw = 0.875, αc = 0.25, Acv = 1.0 m²) under Vu = 2000 kN:
+            ρt,req = (2000/0.75/1.0 − 1.25)/420 = 0.0033730
+            Ø12/15 E.F.: ρt = 2·113.10/(250·150) = 0.0060319
+            Eq. (11.6.2) = 0.0025 + 0.8125·(0.0060319 − 0.0025) = 0.0053697
+            ρl,min = max(0.0025, min(0.0053697, 0.0033730)) = 0.0033730
+            Ø10/19 E.F.: ρl = 2·78.54/(250·190) = 0.0033069 < ρl,min
+        Fed the required ratio instead, the equation gave 0.0032093 and the
+        mesh passed.
+        """
+        wall_metric.set_horizontal_rebar(d_b=12 * mm, s=15 * cm)
+        wall_metric.set_vertical_rebar(d_b=10 * mm, s=19 * cm)
+        check = wall_metric.shear_check_results([Forces(label="U1", V_z=2000 * kN)])[0]
+        assert check.rho_t == pytest.approx(0.0060319, abs=1e-6)
+        assert check.rho_t_req == pytest.approx(0.0033730, abs=1e-6)
+        assert check.rho_l == pytest.approx(0.0033069, abs=1e-6)
+        assert check.rho_l_min == pytest.approx(0.0033730, abs=1e-6)
+
+        vertical = [w for w in wall_metric.warnings if w.code == "mesh_ratio_below_min"]
+        assert len(vertical) == 1 and "Vertical" in vertical[0].message
+        assert vertical[0].values["rho_min"] == pytest.approx(0.00337, abs=1e-5)
+
+        wall_metric.check_shear([Forces(label="U1", V_z=2000 * kN)])
+        assert wall_metric._data_min_max_wall["Ok?"][1] == "❌"
 
     def test_rho_t_below_min_flagged(self, wall_metric: ShearWall) -> None:
         # Ø12@400 E.F. → ρt = 2×113.097/(250×400) = 0.002262 < 0.0025 → ❌
@@ -396,6 +431,29 @@ class TestDesignShear:
         """The designed mesh must satisfy the most demanding combination."""
         result = wall_metric.design_shear([Forces(label="c1", V_z=400 * kN), Forces(label="c2", V_z=1300 * kN)])
         assert result["DCR"].iloc[1:].astype(float).max() <= 1.0
+
+    def test_design_sizes_the_vertical_mesh_to_the_horizontal_one_applied(self, wall_metric: ShearWall) -> None:
+        """The design reads ρl,min of §11.6.2(a) off the horizontal mesh it just chose.
+
+        Reference wall, Vu = 2000 kN, by hand:
+            ρt,req = 0.0033730 → Ø10/17 E.F. (ρt = 2·78.54/(250·170) = 0.0036960;
+            the 80/20 functional scores it 0.930 against 0.912 for Ø12/25)
+            Eq. (11.6.2) = 0.0025 + 0.8125·(0.0036960 − 0.0025) = 0.0034718
+            ρl,min = max(0.0025, min(0.0034718, 0.0033730)) = 0.0033730 → Ø10/17 E.F.
+            ØVn = 0.75·(1250 + 0.0036960·420·1000) = 2101.7 kN, DCR = 0.952
+        With the required ratio in the equation, ρl,min was 0.0032093 and the
+        vertical mesh came out Ø12/27 E.F. (ρl = 0.0033510), short of the
+        clause by 2.6 %.
+        """
+        wall_metric.design_shear([Forces(label="U1", V_z=2000 * kN)])
+        design = wall_metric.shear_design
+        assert str(design.mesh) == "horizontal: 2×Ø10 mm/17 cm / vertical: 2×Ø10 mm/17 cm"
+        assert design.rho_t_req == pytest.approx(0.0033730, abs=1e-6)
+        assert design.rho_l_min == pytest.approx(0.0033730, abs=1e-6)
+        assert design.mesh.vertical.rho == pytest.approx(0.0036960, abs=1e-6)
+        assert design.V_capacity.to("kN").magnitude == pytest.approx(2101.7, abs=0.1)
+        assert design.DCR == pytest.approx(0.952, abs=1e-3)
+        assert wall_metric.warnings == ()
 
     def test_design_cirsoc_allows_6mm_transverse(self) -> None:
         """CIRSOC vertical mesh stays ≥ Ø10 mm; transverse may use Ø6 mm."""

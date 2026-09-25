@@ -193,17 +193,21 @@ def _calculate_wall_shear_strength(
 def _calculate_rho_min_wall(self: "ShearWall", st: WallShearCheckState) -> None:
     """
     ACI 318-19 §11.6.2 / CIRSOC 201-25 §11.6.2:
-        ρt_min = 0.0025 (horizontal, always)      — §11.6.2(b)
-        ρl_min = max(0.0025, ρl_eq)  (vertical)   — §11.6.2(a)
+        ρt_min = 0.0025 (horizontal, always)                  — §11.6.2(b)
+        ρl_min = max(0.0025, min(ρl_eq, ρt,req))  (vertical)  — §11.6.2(a)
 
-    Eq. (11.6.2), the same in both codes:
+    Eq. (11.6.2), the same in both codes, with the ρt the wall PROVIDES:
         ρl ≥ 0.0025 + 0.5·(2.5 − hw/lw)·(ρt − 0.0025)
 
     The hw/lw ratio is clamped to [0.5, 2.5]:
       - hw/lw ≥ 2.5 → ρl_eq = 0.0025 (only minimum vertical)
       - hw/lw ≤ 0.5 → ρl_eq = ρt (vertical equals horizontal)
 
-    ρl_req need not exceed ρt required for strength (§11.5.4.3).
+    and ρl need not exceed the ρt required for strength by §11.5.4.3, which
+    is why the equation takes the provided ratio: with the required one the
+    ceiling could never bind. See ``wall_eq.min_vertical_reinforcement_ratio``
+    for the reading. A wall whose horizontal mesh is heavier than its shear
+    needs therefore asks for a heavier vertical mesh as well.
 
     The low-shear branch is not implemented: §11.6.2 always governs here,
     which is conservative. It is ACI 318-19 §11.6.1 with Table 11.6.1 /
@@ -219,7 +223,10 @@ def _calculate_rho_min_wall(self: "ShearWall", st: WallShearCheckState) -> None:
     "16 mm".
     """
     st.rho_t_min = wall_eq.MIN_REINFORCEMENT_RATIO * dimensionless
-    st.rho_l_min = wall_eq.min_vertical_reinforcement_ratio(float(st.hw_lw), float(st.rho_t_req)) * dimensionless
+    st.rho_l_min = (
+        wall_eq.min_vertical_reinforcement_ratio(float(st.hw_lw), float(self._rho_t), float(st.rho_t_req))
+        * dimensionless
+    )
 
 
 def _calculate_spacing_limits_wall(self: "ShearWall", st: WallShearCheckState) -> None:
@@ -308,7 +315,7 @@ def _check_shear_ACI_318_19_wall(self: "ShearWall", force: Forces) -> WallShearC
     rho_t_req_raw = rho_t_req_raw.to("")
     st.rho_t_req = max(rho_t_req_raw, st.rho_t_min)
 
-    # 8. Minimum reinforcement ratios (ρl,min depends on ρt,req per §11.6.2)
+    # 8. Minimum reinforcement ratios (ρl,min reads the ρt provided, capped by ρt,req — §11.6.2(a))
     _calculate_rho_min_wall(self, st)
 
     # 9. DCR
@@ -419,12 +426,13 @@ def _design_shear_wall_core(
     Worst-case wall mesh design across all force combinations.
 
       1. Run the shear check for every force; track the worst-case ρt,req.
-      2. Derive ρl,min for that worst case per ACI 318-19 §11.6.2(a) /
-         CIRSOC 201-25 §11.6.2(a), Eq. (11.6.2).
-      3. Select the horizontal mesh (ρt,req / s_h,max) and the vertical mesh
-         (ρl,min / s_v,max). The vertical mesh is ALWAYS the code minimum —
-         no flexure design in Phase 0.
-      4. Apply both meshes via set_horizontal_rebar / set_vertical_rebar.
+      2. Select and apply the horizontal mesh (ρt,req / s_h,max).
+      3. Derive ρl,min per ACI 318-19 §11.6.2(a) / CIRSOC 201-25 §11.6.2(a):
+         Eq. (11.6.2) with the ρt that mesh provides, capped by the worst-case
+         ρt,req. The mesh has to be chosen first because the equation reads
+         the ratio provided, not the one required.
+      4. Select and apply the vertical mesh (ρl,min / s_v,max). The vertical
+         mesh is ALWAYS the code minimum — no flexure design in Phase 0.
     """
     if not forces:
         raise ValueError("Wall shear design requires at least one Forces object.")
@@ -438,18 +446,15 @@ def _design_shear_wall_core(
     assert state is not None  # the empty-forces case raised above
     apply_wall_shear_state(self, state)
 
-    # ρl,min per ACI 318-19 §11.6.2(a) / CIRSOC 201-25 §11.6.2(a), Eq. (11.6.2),
-    # using the worst-case ρt,req (geometry-only hw/lw). Both codes write ρt in
-    # Eq. (11.6.2); mento reads it as the ρt required for strength, which is the
-    # same quantity the (a) proviso caps ρl against.
-    r_hw = max(0.5, min(state.hw_lw, 2.5))
-    rho_l_eq = 0.0025 + 0.5 * (2.5 - r_hw) * (max_rho_t_req - 0.0025)
-    max_rho_l_min = max(0.0025, rho_l_eq)
-
     d_b_h, s_h = _select_wall_mesh(self, max_rho_t_req, self._s_h_max, transverse_bars)
-    d_b_v, s_v = _select_wall_mesh(self, max_rho_l_min, self._s_v_max, vertical_bars)
-
     self.set_horizontal_rebar(d_b_h, s_h)
+
+    # ρl,min of §11.6.2(a) with the ρt the mesh just applied provides. The
+    # ceiling min(·, ρt,req) is monotonic in ρt,req, so the envelope over the
+    # combinations is the value at the worst-case ρt,req; hw/lw is geometry only.
+    max_rho_l_min = wall_eq.min_vertical_reinforcement_ratio(state.hw_lw, float(self._rho_t), max_rho_t_req)
+
+    d_b_v, s_v = _select_wall_mesh(self, max_rho_l_min, self._s_v_max, vertical_bars)
     self.set_vertical_rebar(d_b_v, s_v)
 
 

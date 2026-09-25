@@ -84,9 +84,10 @@ class WallShearCheck:
     from, already capped by ``ØVn,max`` (``V_max``), the most the section can
     carry however it is reinforced. ``rho_t_req`` is the horizontal ratio the
     combination needs, never below ``rho_t_min``; ``rho_l_min`` the vertical
-    minimum it leads to (ACI 318-19 / CIRSOC 201-25 §11.6.2). ``rho_t`` and
-    ``rho_l`` are the ratios the mesh provides, and ``s_h_max`` / ``s_v_max``
-    the spacing limits of §11.7.
+    minimum of ACI 318-19 / CIRSOC 201-25 §11.6.2(a) -- Eq. (11.6.2) with the
+    ``rho_t`` provided, capped by ``rho_t_req``, so it depends on the mesh as
+    much as on the combination. ``rho_t`` and ``rho_l`` are the ratios the mesh
+    provides, and ``s_h_max`` / ``s_v_max`` the spacing limits of §11.7.
     """
 
     label: str

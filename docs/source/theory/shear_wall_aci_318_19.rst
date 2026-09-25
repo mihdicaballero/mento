@@ -132,25 +132,30 @@ Horizontal, §11.6.1 — a flat minimum:
 
    \rho_{t,min} = 0.0025
 
-Vertical, §11.6.2 — the minimum depends on how much horizontal steel the strength
-check demanded, and on the aspect ratio:
+Vertical, §11.6.2(a) — the minimum depends on how much horizontal steel the wall
+carries, on how much the strength check demanded, and on the aspect ratio:
 
 .. math::
 
    \rho_{l,min} = \max\Big(0.0025,\
-       0.0025 + 0.5\,(2.5 - h_w/l_w)\,(\rho_{t,req} - 0.0025)\Big)
+       \min\big(0.0025 + 0.5\,(2.5 - h_w/l_w)\,(\rho_t - 0.0025),\ \rho_{t,req}\big)\Big)
 
 with :math:`h_w/l_w` clamped to :math:`[0.5,\ 2.5]`. The two ends of that clamp are
 the physically meaningful cases:
 
 - :math:`h_w/l_w \ge 2.5` — slender wall, the interpolation term vanishes and only
   the flat minimum applies.
-- :math:`h_w/l_w \le 0.5` — very squat wall, and :math:`\rho_{l,min}` rises to match
-  :math:`\rho_{t,req}`. A squat wall carries shear through a diagonal strut that
+- :math:`h_w/l_w \le 0.5` — very squat wall, and the equation returns
+  :math:`\rho_t` itself. A squat wall carries shear through a diagonal strut that
   needs vertical steel to anchor it.
 
-Per §11.5.4.3, :math:`\rho_{l,req}` need not exceed the :math:`\rho_t` required for
-strength.
+The :math:`\rho_t` of Eq. (11.6.2) is the ratio the wall **provides**; the clause
+adds that :math:`\rho_l` need not exceed the :math:`\rho_t` required for strength by
+§11.5.4.3, which is the :math:`\min` above. That ceiling can only bind if the
+equation reads the provided ratio — fed the required one it could never return
+more than it — so mento takes the literal reading, which is also the conservative
+one for a wall whose mesh meets its shear. A horizontal mesh heavier than the shear
+needs therefore asks for a heavier vertical mesh, up to :math:`\rho_{t,req}`.
 
 Spacing limits
 --------------

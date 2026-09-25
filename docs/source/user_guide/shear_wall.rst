@@ -9,10 +9,13 @@ shear analysis and design** per ACI 318-19 Chapter 11.
 - Reinforcement is **distributed mesh** in two orthogonal directions
   (``ρt`` horizontal, ``ρl`` vertical), placed on **both faces** of the wall
   (E.F. — each face), not stirrups.
-- The minimum horizontal ratio is ``ρt,min = 0.0025`` (§11.6.1). The minimum
-  vertical ratio follows the §11.6.2 interpolation
-  ``ρl,min = max(0.0025, 0.0025 + 0.5·(2.5 − hw/lw)·(ρt,req − 0.0025))``,
-  with ``hw/lw`` clamped to ``[0.5, 2.5]``.
+- The minimum horizontal ratio is ``ρt,min = 0.0025`` (§11.6.2(b)). The minimum
+  vertical ratio follows §11.6.2(a): Eq. (11.6.2) with the horizontal ratio the
+  wall **provides**, never below 0.0025 and never above the ``ρt`` the shear
+  requires —
+  ``ρl,min = max(0.0025, min(0.0025 + 0.5·(2.5 − hw/lw)·(ρt − 0.0025), ρt,req))``,
+  with ``hw/lw`` clamped to ``[0.5, 2.5]``. A horizontal mesh heavier than the
+  shear needs therefore asks for a heavier vertical mesh, up to ``ρt,req``.
 
 The same shear provisions serve both **ACI 318-19** and **CIRSOC 201-25**;
 CIRSOC differs only in the reinforcing-bar catalogue used for design (it
@@ -159,11 +162,12 @@ re-evaluated check DataFrame.
 What it does:
 
 1. Runs the check for every force and tracks the worst-case ``ρt,req``.
-2. Derives the worst-case ``ρl,min`` from §11.6.2.
-3. Selects a bar diameter and spacing for the **horizontal mesh** (against
-   ``ρt,req``) and the **vertical mesh** (against ``ρl,min``).
-4. Applies both via ``set_horizontal_rebar`` / ``set_vertical_rebar`` and
-   re-runs the check.
+2. Selects a bar diameter and spacing for the **horizontal mesh** (against
+   ``ρt,req``) and applies it via ``set_horizontal_rebar``.
+3. Derives the worst-case ``ρl,min`` from §11.6.2(a) with the ``ρt`` that mesh
+   provides, capped by ``ρt,req``.
+4. Selects the **vertical mesh** (against ``ρl,min``), applies it via
+   ``set_vertical_rebar`` and re-runs the check.
 
 
 **Vertical mesh.** Because for now *mento* does not check flexure, the vertical mesh
