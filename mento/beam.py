@@ -528,8 +528,14 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         applied layout is first whatever its verdict, with its own. Then the
         face is put back. Run after a flexure design, and again once the shear
         design has settled the stirrups the section is built with.
+
+        The rows go on through the public setters, which clear the face's
+        ``bars_do_not_fit`` -- right for bars set by hand, wrong for a layout
+        the design only tries -- so the faces the search gave up on are put
+        back with the bars.
         """
         limit = int(self.settings.design_options)
+        infeasible = set(self._infeasible_faces)
         for face, suffix in (("bot", "b"), ("top", "t")):
             # A design records at least the layout each face carries, so there
             # is always a first option to judge.
@@ -549,6 +555,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
                         kept.append(replace(option, DCR=worst))
                 self._restore_longitudinal(snapshot)
             setattr(self, f"_flexure_options_{suffix}", tuple(kept))
+        self._infeasible_faces = infeasible
 
     def _section_verdict(self, forces: list[Forces]) -> Tuple[float, bool]:
         """``(worst DCR, passes)`` of the section as it stands, under ``forces``.

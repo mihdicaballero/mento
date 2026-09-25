@@ -204,6 +204,38 @@ def test_a_compression_face_alternative_that_fails_the_other_face_is_dropped() -
     assert beam.flexure_design.bottom.DCR == pytest.approx(1.001, abs=0.0005)
 
 
+def test_trying_the_alternatives_leaves_the_faces_flagged_as_they_were() -> None:
+    """Verifying the alternatives is the design trying layouts, not bars set by hand.
+
+    Each pooled row is put on the face through the public setters, and those
+    drop the face's ``bars_do_not_fit`` (the search's verdict on the width no
+    longer describes bars set by hand). Putting the applied bars back did not
+    put the flag back, so a face the search gave up on and that still kept
+    alternatives lost its warning to the verification. Through ``design()``
+    the two do not meet today -- a face the search cannot fit keeps no table
+    -- so the state is set by hand: 25x50 H25 under 120 kNm keeps two
+    alternatives on the bottom, and the flag is planted on that face.
+    """
+    beam = RectangularBeam(
+        label="V",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=25 * cm,
+        height=50 * cm,
+        c_c=25 * mm,
+    )
+    forces = [Forces(label="ELU", M_y=120 * kNm, V_z=100 * kN)]
+    Node(section=beam, forces=forces).design()
+    assert len(beam.flexure_design.bottom.options) > 1
+    beam._infeasible_faces = {"bot"}
+    assert "bars_do_not_fit" in [w.code for w in beam.warnings]
+
+    beam._verify_longitudinal_options(forces)
+
+    assert beam._infeasible_faces == {"bot"}
+    assert "bars_do_not_fit" in [w.code for w in beam.warnings]
+
+
 def test_a_footing_offers_no_alternatives() -> None:
     """A footing mat is chosen as a whole; the per-face rows it replaced are not alternatives to it."""
     footing = Footing(
