@@ -44,7 +44,7 @@ def wall_flexure_results_detailed_doc(self: "ShearWall", force: Optional[Forces]
 
 
 def wall_data(self: "ShearWall") -> None:
-    """Wall basic info as Markdown (length, thickness, story height, materials)."""
+    """Wall basic info as Markdown (length, thickness, wall height hw, materials)."""
     level_str = f"Level {self.level}, " if self.level else ""
     markdown_content = (
         f"{level_str}Shear Wall {self.label}, "
@@ -249,10 +249,10 @@ def _compile_wall_shear_dicts(self: "ShearWall", force: Forces) -> None:
         ],
         "Variable": ["ØVc", "ØVs", "ØVn", "ØVn,max", "DCR"],
         "Value": [
-            round((phi_v * self._V_c_wall).to("kN").magnitude, 2),
-            round((phi_v * self._V_s_wall).to("kN").magnitude, 2),
-            round(self._phi_V_n_wall.to("kN").magnitude, 2),
-            round(self._phi_V_n_max_wall.to("kN").magnitude, 2),
+            _v(phi_v * self._V_c_wall),
+            _v(phi_v * self._V_s_wall),
+            _v(self._phi_V_n_wall),
+            _v(self._phi_V_n_max_wall),
             round(self._DCRv_wall, 3),
         ],
         "Unit": [unit, unit, unit, unit, ""],

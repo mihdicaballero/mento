@@ -15,6 +15,17 @@ from mento.node import Node
 from mento.reports.summaries import wall_summary_doc
 
 
+def _wall_passes(wall: ShearWall) -> bool:
+    """Whether the wall carries every combination of its last check and misses no limit.
+
+    Read off the public results rather than the report's flag, which holds the
+    combination that ran last. The warnings cover the mesh ratios of §11.6.2,
+    the spacing of §11.7 and the section limit of §11.5.4.2, each over every
+    combination; the DCR covers the strength of each one.
+    """
+    return all(check.DCR <= 1 for check in wall.shear_checks) and not wall.warnings
+
+
 class ShearWallSummary:
     def __init__(self, concrete: Concrete, steel_bar: SteelBar, wall_list: DataFrame) -> None:
         self.concrete: Concrete = concrete
@@ -176,8 +187,12 @@ class ShearWallSummary:
             rebar_h = f"Ø{wall._d_b_h.to('mm').magnitude:.0f}/{wall._s_h.to('cm').magnitude:.0f}"
             rebar_v = f"Ø{wall._d_b_v.to('mm').magnitude:.0f}/{wall._s_v.to('cm').magnitude:.0f}"
 
-            all_checks_pass = wall._all_wall_shear_checks_passed
-            status = "✅" if dcr <= 1 and all_checks_pass else "❌"
+            # The status is the AND over every combination: the strength of each
+            # one and no limit missed under any of them. `wall.warnings` already
+            # spans the combinations -- ρl,min in particular changes with the
+            # shear, so a wall can miss it under the governing combination and
+            # meet it under the last one checked.
+            status = "✅" if _wall_passes(wall) else "❌"
 
             results_dict = OrderedDict(
                 {

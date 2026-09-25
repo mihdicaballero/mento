@@ -207,17 +207,52 @@ class TestMinReinforcement:
         assert wall_high_hw._rho_l_min.to("").magnitude == pytest.approx(0.0025, rel=1e-4)
 
     def test_rho_l_min_interpolated_per_11_6_2(self, wall_metric: ShearWall) -> None:
-        # ACI 318-19 §11.6.2 Eq.(11.6.2):
-        #   ρl,min = max(0.0025, 0.0025 + 0.5·(2.5 − r_hw)·(ρt,req − 0.0025))
-        # High Vu so ρt,req exceeds the 0.0025 minimum and the interpolation bites.
+        """ACI 318-19 / CIRSOC 201-25 §11.6.2(a): Eq. (11.6.2) with the ρt provided, capped by ρt,req.
+
+        Ø16/10 E.F. gives ρt = 2·201.06/(250·100) = 0.016085; Vu = 2000 kN
+        needs ρt,req = (2000/0.75/1.0 − 0.25·5)/420 = 0.0033730 > 0.0025, so
+        the interpolation bites: 0.0025 + 0.5·(2.5 − 0.875)·(0.016085 − 0.0025)
+        = 0.013538, and ρl need not exceed the 0.0033730 required for strength.
+        """
         wall_metric.set_horizontal_rebar(d_b=16 * mm, s=100 * mm)
         wall_metric.set_vertical_rebar(d_b=12 * mm, s=200 * mm)
         wall_metric.check_shear([Forces(V_z=2000 * kN)])
+        rho_t = wall_metric._rho_t.to("").magnitude
         rho_t_req = wall_metric._rho_t_req.to("").magnitude
-        assert rho_t_req > 0.0025  # interpolation is non-trivial
+        assert rho_t_req == pytest.approx(0.0033730, abs=1e-6)
         r_hw = max(0.5, min(wall_metric._hw_lw, 2.5))
-        expected = max(0.0025, 0.0025 + 0.5 * (2.5 - r_hw) * (rho_t_req - 0.0025))
-        assert wall_metric._rho_l_min.to("").magnitude == pytest.approx(expected, rel=1e-4)
+        equation = 0.0025 + 0.5 * (2.5 - r_hw) * (rho_t - 0.0025)
+        assert equation == pytest.approx(0.013538, abs=1e-5)
+        assert wall_metric._rho_l_min.to("").magnitude == pytest.approx(min(equation, rho_t_req), rel=1e-6)
+        assert wall_metric._rho_l_min.to("").magnitude == pytest.approx(0.0033730, abs=1e-6)
+
+    def test_rho_l_min_reads_the_horizontal_mesh_provided(self, wall_metric: ShearWall) -> None:
+        """A heavier horizontal mesh than the shear needs asks for more vertical steel.
+
+        ACI 318-19 / CIRSOC 201-25 §11.6.2(a), by hand for the reference wall
+        (hw/lw = 0.875, αc = 0.25, Acv = 1.0 m²) under Vu = 2000 kN:
+            ρt,req = (2000/0.75/1.0 − 1.25)/420 = 0.0033730
+            Ø12/15 E.F.: ρt = 2·113.10/(250·150) = 0.0060319
+            Eq. (11.6.2) = 0.0025 + 0.8125·(0.0060319 − 0.0025) = 0.0053697
+            ρl,min = max(0.0025, min(0.0053697, 0.0033730)) = 0.0033730
+            Ø10/19 E.F.: ρl = 2·78.54/(250·190) = 0.0033069 < ρl,min
+        Fed the required ratio instead, the equation gave 0.0032093 and the
+        mesh passed.
+        """
+        wall_metric.set_horizontal_rebar(d_b=12 * mm, s=15 * cm)
+        wall_metric.set_vertical_rebar(d_b=10 * mm, s=19 * cm)
+        check = wall_metric.shear_check_results([Forces(label="U1", V_z=2000 * kN)])[0]
+        assert check.rho_t == pytest.approx(0.0060319, abs=1e-6)
+        assert check.rho_t_req == pytest.approx(0.0033730, abs=1e-6)
+        assert check.rho_l == pytest.approx(0.0033069, abs=1e-6)
+        assert check.rho_l_min == pytest.approx(0.0033730, abs=1e-6)
+
+        vertical = [w for w in wall_metric.warnings if w.code == "mesh_ratio_below_min"]
+        assert len(vertical) == 1 and "Vertical" in vertical[0].message
+        assert vertical[0].values["rho_min"] == pytest.approx(0.00337, abs=1e-5)
+
+        wall_metric.check_shear([Forces(label="U1", V_z=2000 * kN)])
+        assert wall_metric._data_min_max_wall["Ok?"][1] == "❌"
 
     def test_rho_t_below_min_flagged(self, wall_metric: ShearWall) -> None:
         # Ø12@400 E.F. → ρt = 2×113.097/(250×400) = 0.002262 < 0.0025 → ❌
@@ -397,6 +432,29 @@ class TestDesignShear:
         result = wall_metric.design_shear([Forces(label="c1", V_z=400 * kN), Forces(label="c2", V_z=1300 * kN)])
         assert result["DCR"].iloc[1:].astype(float).max() <= 1.0
 
+    def test_design_sizes_the_vertical_mesh_to_the_horizontal_one_applied(self, wall_metric: ShearWall) -> None:
+        """The design reads ρl,min of §11.6.2(a) off the horizontal mesh it just chose.
+
+        Reference wall, Vu = 2000 kN, by hand:
+            ρt,req = 0.0033730 → Ø10/17 E.F. (ρt = 2·78.54/(250·170) = 0.0036960;
+            the 80/20 functional scores it 0.930 against 0.912 for Ø12/25)
+            Eq. (11.6.2) = 0.0025 + 0.8125·(0.0036960 − 0.0025) = 0.0034718
+            ρl,min = max(0.0025, min(0.0034718, 0.0033730)) = 0.0033730 → Ø10/17 E.F.
+            ØVn = 0.75·(1250 + 0.0036960·420·1000) = 2101.7 kN, DCR = 0.952
+        With the required ratio in the equation, ρl,min was 0.0032093 and the
+        vertical mesh came out Ø12/27 E.F. (ρl = 0.0033510), short of the
+        clause by 2.6 %.
+        """
+        wall_metric.design_shear([Forces(label="U1", V_z=2000 * kN)])
+        design = wall_metric.shear_design
+        assert str(design.mesh) == "horizontal: 2×Ø10 mm/17 cm / vertical: 2×Ø10 mm/17 cm"
+        assert design.rho_t_req == pytest.approx(0.0033730, abs=1e-6)
+        assert design.rho_l_min == pytest.approx(0.0033730, abs=1e-6)
+        assert design.mesh.vertical.rho == pytest.approx(0.0036960, abs=1e-6)
+        assert design.V_capacity.to("kN").magnitude == pytest.approx(2101.7, abs=0.1)
+        assert design.DCR == pytest.approx(0.952, abs=1e-3)
+        assert wall_metric.warnings == ()
+
     def test_design_cirsoc_allows_6mm_transverse(self) -> None:
         """CIRSOC vertical mesh stays ≥ Ø10 mm; transverse may use Ø6 mm."""
         from mento.material import Concrete_CIRSOC_201_25
@@ -497,6 +555,37 @@ class TestImperialWall:
         assert wall_imperial._s_h.magnitude > 0
         assert wall_imperial._s_v.magnitude > 0
         assert wall_imperial._rho_t.to("").magnitude >= wall_imperial._rho_t_req.to("").magnitude - 1e-9
+
+    def test_imperial_results_are_in_kip(self, wall_imperial: ShearWall) -> None:
+        """The public results and the detail table read in the wall's own unit system.
+
+        ACI 318-19 §11.5.4.2 and Eq. (11.5.4.3) in in-lb, by hand:
+            Acv = 10·160 = 1600 in², hw/lw = 0.75 → αc = 3
+            Vc = 3·√4000·1600 = 303 579 lb = 303.58 kip
+            #4 @ 12 in E.F.: ρt = 2·0.19635/(10·12) = 0.0032725
+            Vs = 0.0032725·60 000·1600 = 314 159 lb = 314.16 kip
+            Vn,max = 8·√4000·1600 = 809 543 lb = 809.54 kip
+            ØVn = 0.75·(303.58 + 314.16) = 463.30 kip, ØVn,max = 607.16 kip
+            Vu = 100 kip → DCR = 0.2158
+        The check used to store every force in kN, so V_capacity read 2060.8 kN
+        and the detail table printed 2060.8 under a "kip" label.
+        """
+        wall_imperial.set_horizontal_rebar(d_b=0.5 * inch, s=12 * inch)
+        wall_imperial.set_vertical_rebar(d_b=0.5 * inch, s=12 * inch)
+        check = wall_imperial.shear_check_results([Forces(label="U1", V_z=100 * kip)])[0]
+        assert check.V_u.units == kip and check.V_capacity.units == kip and check.V_max.units == kip
+        assert check.V_u.magnitude == pytest.approx(100.0)
+        assert check.V_capacity.magnitude == pytest.approx(463.30, abs=0.01)
+        assert check.V_max.magnitude == pytest.approx(607.16, abs=0.01)
+        assert check.DCR == pytest.approx(0.2158, abs=1e-4)
+        assert check.s_h_max.units == inch
+
+        wall_imperial.check_shear([Forces(label="U1", V_z=100 * kip)])
+        assert wall_imperial._V_c_wall.units == kip
+        strength = wall_imperial._shear_capacity_wall
+        assert strength["Unit"][:4] == ["kip"] * 4
+        assert strength["Value"][:4] == pytest.approx([227.68, 235.62, 463.30, 607.16], abs=0.01)
+        assert wall_imperial.shear_design.V_capacity.units == kip
 
 
 # ---------------------------------------------------------------------------
@@ -769,6 +858,61 @@ def test_shear_design_before_a_check_raises(wall_metric: ShearWall) -> None:
         wall_metric.shear_design
 
 
+def test_shear_results_carry_the_mesh_they_were_checked_with(wall_metric: ShearWall) -> None:
+    """A design never pairs the mesh the wall carries now with the DCR of another.
+
+    Reference wall under Vu = 2200 kN, by hand:
+        ρt,req = (2200/0.75 − 1250)/(420·1000) = 0.0040079 → Ø10/15 E.F.
+        (ρt = 2·78.54/(250·150) = 0.0041888; scores 0.965 against 0.946 for Ø12/22)
+        ØVn = 0.75·(1250 + 0.0041888·420·1000) = 2257.0 kN, DCR = 2200/2257.0 = 0.975
+    Ø6/45 E.F. set by hand afterwards: ρt = 2·28.27/(250·450) = 0.00050265,
+        ØVn = 0.75·(1250 + 211.1) = 1095.8 kN, DCR = 2.008.
+    The design read before the change used to print the new mesh next to the
+    old 0.975.
+    """
+    from mento.design_results import DesignNotRunError
+
+    forces = [Forces(label="U1", V_z=2200 * kN)]
+    wall_metric.design_shear(forces)
+    designed = wall_metric.shear_design
+    assert str(designed.mesh.horizontal) == "2×Ø10 mm/15 cm"
+    assert designed.DCR == pytest.approx(0.975, abs=1e-3)
+    assert designed.V_capacity.to("kN").magnitude == pytest.approx(2257.0, abs=0.1)
+    assert wall_metric.shear_checks[0].mesh == designed.mesh == wall_metric.mesh
+
+    wall_metric.set_horizontal_rebar(d_b=6 * mm, s=45 * cm)
+    assert wall_metric.mesh != designed.mesh
+    assert wall_metric.shear_checks == ()
+    assert wall_metric.warnings == ()
+    with pytest.raises(DesignNotRunError, match="mesh the wall carries"):
+        wall_metric.shear_design
+    # The result read earlier is a value: it still describes the mesh it was formed with.
+    assert str(designed.mesh.horizontal) == "2×Ø10 mm/15 cm" and designed.DCR == pytest.approx(0.975, abs=1e-3)
+
+    wall_metric.check_shear(forces)
+    rechecked = wall_metric.shear_design
+    assert rechecked.mesh == wall_metric.mesh
+    assert str(rechecked.mesh.horizontal) == "2×Ø6 mm/45 cm"
+    assert rechecked.DCR == pytest.approx(2.008, abs=1e-3)
+    assert rechecked.V_capacity.to("kN").magnitude == pytest.approx(1095.8, abs=0.1)
+    assert {w.code for w in wall_metric.warnings} == {"mesh_ratio_below_min"}
+
+
+@pytest.mark.parametrize("setter", ["set_horizontal_rebar", "set_vertical_rebar"])
+def test_a_mesh_set_by_hand_drops_the_results_of_the_previous_one(wall_metric: ShearWall, setter: str) -> None:
+    from mento.design_results import DesignNotRunError
+
+    wall_metric.set_horizontal_rebar(d_b=12 * mm, s=20 * cm)
+    wall_metric.set_vertical_rebar(d_b=12 * mm, s=20 * cm)
+    wall_metric.shear_check_results([Forces(label="U1", V_z=1200 * kN)])
+    assert len(wall_metric.shear_checks) == 1
+
+    getattr(wall_metric, setter)(d_b=10 * mm, s=25 * cm)
+    assert wall_metric.shear_checks == ()
+    with pytest.raises(DesignNotRunError):
+        wall_metric.shear_design
+
+
 def test_the_mesh_prints_both_directions(wall_metric: ShearWall) -> None:
     wall_metric.set_horizontal_rebar(d_b=12 * mm, s=20 * cm)
     wall_metric.set_vertical_rebar(d_b=10 * mm, s=25 * cm)
@@ -787,14 +931,51 @@ def test_the_shear_design_prints_its_mesh(wall_metric: ShearWall) -> None:
 
 @pytest.mark.parametrize("name", ["reinforcement", "flexure_design", "flexure_checks"])
 def test_beam_results_are_not_offered_on_a_wall(wall_metric: ShearWall, name: str) -> None:
-    with pytest.raises(NotImplementedError, match="mesh"):
+    """The member is missing the way an attribute is, and still a NotImplementedError.
+
+    ``hasattr`` used to raise on a wall, which broke any loop over mixed beams
+    and walls that asked for the member before reading it.
+    """
+    from mento.shear_wall import NotABeamError
+
+    with pytest.raises(NotABeamError, match="mesh") as excinfo:
         getattr(wall_metric, name)
+    assert isinstance(excinfo.value, AttributeError)
+    assert isinstance(excinfo.value, NotImplementedError)
+    assert not hasattr(wall_metric, name)
+    assert getattr(wall_metric, name, None) is None
 
 
 def test_flexure_check_results_is_not_offered_on_a_wall(wall_metric: ShearWall) -> None:
     """The values-only flexure entry point is a method, so the guard needs a call."""
-    with pytest.raises(NotImplementedError, match="mesh"):
+    from mento.shear_wall import NotABeamError
+
+    with pytest.raises(NotABeamError, match="mesh"):
         wall_metric.flexure_check_results([Forces(label="U1", V_z=1200 * kN)])
+    with pytest.raises(NotImplementedError):
+        wall_metric.flexure_check_results([Forces(label="U1", V_z=1200 * kN)])
+
+
+def test_a_loop_over_beams_and_walls_can_ask_for_the_member(wall_metric: ShearWall) -> None:
+    """What a generic caller does: read the beam result where there is one, the mesh where there is not."""
+    from mento.beam import RectangularBeam
+
+    beam = RectangularBeam(
+        label="B1",
+        concrete=wall_metric.concrete,
+        steel_bar=wall_metric.steel_bar,
+        width=20 * cm,
+        height=50 * cm,
+        c_c=25 * mm,
+    )
+    described = [
+        str(reinforcement)
+        if (reinforcement := getattr(section, "reinforcement", None)) is not None
+        else str(section.mesh)
+        for section in (beam, wall_metric)
+    ]
+    assert described[0].startswith("bottom: ")
+    assert described[1] == "horizontal: no reinforcement / vertical: no reinforcement"
 
 
 def test_wall_warnings(wall_metric: ShearWall) -> None:

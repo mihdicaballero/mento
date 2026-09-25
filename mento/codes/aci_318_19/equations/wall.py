@@ -136,18 +136,29 @@ def reinforcement_shear_stress(rho_t: float, f_yt: float) -> float:
     return rho_t * f_yt
 
 
-def min_vertical_reinforcement_ratio(hw_lw: float, rho_t_req: float) -> float:
-    """Minimum vertical reinforcement ratio — ACI 318-19 Eq. (11.6.2) / CIRSOC 201-25 ec. (11.6.2).
+def min_vertical_reinforcement_ratio(hw_lw: float, rho_t: float, rho_t_req: float) -> float:
+    """Minimum vertical reinforcement ratio — ACI 318-19 §11.6.2(a) / CIRSOC 201-25 §11.6.2(a).
 
-        rho_l >= 0.0025 + 0.5*(2.5 - hw/lw)*(rho_t - 0.0025)
+        rho_l >= 0.0025 + 0.5*(2.5 - hw/lw)*(rho_t - 0.0025)        Eq. (11.6.2)
 
-    §11.6.2(a) of both codes: rho_l is the greater of this and 0.0025, and it
-    need not exceed the rho_t required for strength by §11.5.4.3. That ceiling
-    is not written below because it cannot bind here — the factor
-    0.5*(2.5 - hw/lw) is at most 1 over the clamped range, so with the required
-    rho_t as the argument the equation never returns more than it. The 0.0025 of
-    §11.6.2(b) is the separate floor on rho_t, applied by the caller. Same
-    numbers in both codes.
+    §11.6.2(a) of both codes, in three parts: rho_l shall be at least the
+    greater of Eq. (11.6.2) and 0.0025, but need not exceed the rho_t required
+    for strength by §11.5.4.3. The rho_t of the equation is the plain ratio of
+    Chapter 2 — the one the wall provides. The clause names the required one
+    apart, as a ceiling, and that ceiling can only bind if the equation is fed
+    the provided ratio: 0.5*(2.5 - hw/lw) is at most 1 over the clamped range,
+    so with the required ratio as its argument the equation could never return
+    more than it, and the "need not exceed" would be dead text. Read literally,
+    then, a wall that carries more horizontal steel than its shear needs has
+    to carry more vertical steel too, up to what the shear needed:
+
+        rho_l,min = max(0.0025, min(eq(rho_t), rho_t_req))
+
+    That is the literal reading and, for a wall whose mesh meets its shear, the
+    conservative one — eq(rho_t) >= eq(rho_t_req) whenever rho_t >= rho_t_req.
+    It is a reading of the clause and not a printed formula, and the wall
+    docstrings say so. The 0.0025 floor is never lifted: a ceiling below it
+    leaves the floor.
 
     Not implemented, in either code: the §11.6.1 branch with Table 11.6.1, which
     a wall whose in-plane V_u stays below 0.04*phi*alpha_c*lambda*sqrt(f_c)*A_cv
@@ -156,18 +167,22 @@ def min_vertical_reinforcement_ratio(hw_lw: float, rho_t_req: float) -> float:
 
     Args:
         hw_lw: Wall height-to-length ratio, clamped to [0.5, 2.5] by the clause.
-            Above 2.5 only the floor applies; at or below 0.5 the vertical ratio
-            matches the horizontal one.
-        rho_t_req: Transverse reinforcement ratio required for strength. Both
-            codes write plain rho_t in the equation; mento reads it as the
-            required one.
+            Above 2.5 only the floor applies; at or below 0.5 the equation
+            returns the horizontal ratio itself.
+        rho_t: Transverse (horizontal) reinforcement ratio the wall provides —
+            the rho_t printed in Eq. (11.6.2).
+        rho_t_req: Transverse reinforcement ratio required for strength by
+            §11.5.4.3, the ceiling of §11.6.2(a). The caller passes it already
+            floored at the 0.0025 of §11.6.2(b); an unfloored one changes
+            nothing, since the floor below wins.
 
     Returns:
-        rho_l,min, never below the 0.0025 floor of §11.6.2(a) in both codes.
+        rho_l,min: the equation with the provided rho_t, capped by rho_t_req,
+        never below the 0.0025 floor of §11.6.2(a) in both codes.
     """
     r = max(0.5, min(hw_lw, 2.5))
-    rho_l_eq = MIN_REINFORCEMENT_RATIO + 0.5 * (2.5 - r) * (rho_t_req - MIN_REINFORCEMENT_RATIO)
-    return max(MIN_REINFORCEMENT_RATIO, rho_l_eq)
+    rho_l_eq = MIN_REINFORCEMENT_RATIO + 0.5 * (2.5 - r) * (rho_t - MIN_REINFORCEMENT_RATIO)
+    return max(MIN_REINFORCEMENT_RATIO, min(rho_l_eq, rho_t_req))
 
 
 def max_horizontal_spacing(l_w: float, thickness: float, *, is_imperial: bool = False) -> float:

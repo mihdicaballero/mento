@@ -30,6 +30,21 @@ from mento.plots.walls import plot_wall_elevation
 from mento.reports import walls as wall_reports
 
 
+class NotABeamError(AttributeError, NotImplementedError):
+    """A beam result read on a wall, which is reinforced with a mesh instead.
+
+    Raised by ``wall.reinforcement``, ``wall.flexure_design``,
+    ``wall.flexure_checks`` and ``wall.flexure_check_results()``. It is an
+    ``AttributeError`` so that the member is missing the way an attribute is:
+    ``hasattr(wall, "reinforcement")`` is False and
+    ``getattr(wall, "reinforcement", None)`` takes its default, which lets a
+    loop over mixed beams and walls ask for the member instead of the class.
+    It is a ``NotImplementedError`` too, for the callers that already catch
+    that. The message points to ``wall.mesh``, ``wall.shear_design`` and
+    ``wall.shear_checks``.
+    """
+
+
 class ShearWall(RectangularBeam):
     """
     Reinforced concrete structural wall — shear check and design.
@@ -40,7 +55,14 @@ class ShearWall(RectangularBeam):
     Geometry:
         thickness — wall thickness  (t)         [maps to parent's ``width``]
         length    — wall in-plane length  (lw)  [maps to parent's ``height``]
-        height    — wall story height  (hw)     [exposed via property; replaces ``hw``]
+        height    — wall height  (hw)           [exposed via property; replaces ``hw``]
+
+    ``height`` is the hw of ACI 318-19 / CIRSOC 201-25 Chapter 2: the height
+    of the entire wall from base to top, or the clear height of the wall
+    segment or wall pier considered -- not the storey height of a
+    multi-storey wall. It enters only through hw/lw, which sets αc of
+    Eq. (11.5.4.3) and ρl,min of Eq. (11.6.2); a storey height in its place
+    makes a slender wall look squat and overstates ØVn.
 
     Reinforcement:
         Horizontal distributed bars resist in-plane shear (ρt).
@@ -80,7 +102,7 @@ class ShearWall(RectangularBeam):
             settings=settings,
         )
 
-        # Replace bootstrap with the actual wall story height.
+        # Replace bootstrap with the actual wall height hw.
         self._wall_height = height
         # _initialize_wall_attributes was already called via __post_init__ above.
 
@@ -100,7 +122,7 @@ class ShearWall(RectangularBeam):
 
     @property
     def height(self) -> Quantity:  # type: ignore[override]
-        """Wall story height — replaces the legacy ``hw`` field."""
+        """Wall height hw — the whole wall, or the segment considered (Chapter 2); replaces the legacy ``hw`` field."""
         return self._wall_height
 
     @height.setter
@@ -108,7 +130,7 @@ class ShearWall(RectangularBeam):
         # Parent's dataclass-generated ``__init__`` assigns ``self.height = length``;
         # we accept that without complaint because ``_wall_height`` is bootstrapped to
         # the same value by our ``__init__``. Subsequent user assignments update the
-        # wall story height directly.
+        # wall height hw directly.
         self._wall_height = value
 
     def __post_init__(self) -> None:
@@ -182,6 +204,10 @@ class ShearWall(RectangularBeam):
 
         Bars are placed on each face (E.F.):  ρt = n_curtains · Ab / (t × s_h)
         A zero spacing means no rebar, which clears the horizontal reinforcement.
+
+        The shear results of the last check belong to the mesh they were
+        checked with, so they are dropped: ``shear_checks`` and ``warnings``
+        are empty and ``shear_design`` raises until the next check or design.
         """
         self._d_b_h = d_b
         self._s_h = s
@@ -190,12 +216,16 @@ class ShearWall(RectangularBeam):
         else:
             A_b = math.pi / 4 * d_b**2
             self._rho_t = (self._n_curtains * A_b / (self.thickness * s)).to("")
+        self._wall_shear_checks = []
 
     def set_vertical_rebar(self, d_b: Quantity, s: Quantity) -> None:
         """Set distributed vertical reinforcement.
 
         Bars are placed on each face (E.F.):  ρl = n_curtains · Ab / (t × s_v)
         A zero spacing means no rebar, which clears the vertical reinforcement.
+
+        Drops the shear results of the last check, as
+        :meth:`set_horizontal_rebar` does.
         """
         self._d_b_v = d_b
         self._s_v = s
@@ -204,6 +234,7 @@ class ShearWall(RectangularBeam):
         else:
             A_b = math.pi / 4 * d_b**2
             self._rho_l = (self._n_curtains * A_b / (self.thickness * s)).to("")
+        self._wall_shear_checks = []
 
     # ------------------------------------------------------------------
     # Shear check and design (override RectangularBeam)
@@ -336,15 +367,20 @@ class ShearWall(RectangularBeam):
 
     @property
     def shear_checks(self) -> Tuple[WallShearCheck, ...]:  # type: ignore[override]
-        """One immutable shear result per combination of the last check."""
+        """One immutable shear result per combination of the last check.
+
+        Each carries the mesh it was checked with. Empty until a check or
+        design has run, and again once the mesh is changed by hand.
+        """
         return tuple(self._wall_shear_checks)
 
     @property
     def shear_design(self) -> WallShearDesign:  # type: ignore[override]
-        """The mesh and the envelope of the last shear check or design.
+        """The checked mesh and the envelope of the last shear check or design.
 
         Raises:
-            DesignNotRunError: if no shear check or design has been run.
+            DesignNotRunError: if no shear check or design has been run, or
+                the mesh was changed by hand since the last one.
         """
         return build_wall_shear_design(self)
 
@@ -352,32 +388,37 @@ class ShearWall(RectangularBeam):
     def warnings(self) -> Tuple[DesignWarning, ...]:  # type: ignore[override]
         """The mesh limits the wall misses under the last check, as data.
 
-        Empty until a check or design has run. See :mod:`mento.design_warnings`.
+        Empty until a check or design has run, and again once the mesh is
+        changed by hand: the limits are those of the mesh that was checked.
+        See :mod:`mento.design_warnings`.
         """
-        return collect(wall_warnings(self, self.mesh, tuple(self._wall_shear_checks)))
+        checks = tuple(self._wall_shear_checks)
+        mesh = checks[0].mesh if checks else self.mesh
+        return collect(wall_warnings(self, mesh, checks))
 
     def _not_a_beam(self, name: str) -> NoReturn:
-        raise NotImplementedError(
+        raise NotABeamError(
             f"ShearWall has no {name}: it is reinforced with a distributed mesh. "
             "Read wall.mesh, wall.shear_design and wall.shear_checks instead."
         )
 
     @property
     def reinforcement(self) -> NoReturn:  # type: ignore[override]
-        """Not available on a wall: see :attr:`mesh`."""
+        """Not available on a wall: see :attr:`mesh`. Raises :class:`NotABeamError`."""
         self._not_a_beam("beam reinforcement")
 
     @property
     def flexure_design(self) -> NoReturn:  # type: ignore[override]
-        """Not available on a wall: flexure is not implemented (Phase 0)."""
+        """Not available on a wall: flexure is not implemented (Phase 0). Raises :class:`NotABeamError`."""
         self._not_a_beam("flexure design")
 
     @property
     def flexure_checks(self) -> NoReturn:  # type: ignore[override]
-        """Not available on a wall: flexure is not implemented (Phase 0)."""
+        """Not available on a wall: flexure is not implemented (Phase 0). Raises :class:`NotABeamError`."""
         self._not_a_beam("flexure checks")
 
     def flexure_check_results(self, forces: list[Forces]) -> NoReturn:  # type: ignore[override]
+        """Not available on a wall: flexure is not implemented (Phase 0). Raises :class:`NotABeamError`."""
         self._not_a_beam("flexure check")
 
     def check_flexure(self, forces: list[Forces]) -> DataFrame:  # type: ignore[override]
