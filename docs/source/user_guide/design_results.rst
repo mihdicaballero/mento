@@ -164,7 +164,7 @@ finished section passes with. Each longitudinal alternative is built on the beam
 design left it, with the stirrups it ended with and the other face as applied, and kept
 if the beam carries both moments with it within the code's limits on its reinforcement
 (tension-controlled under ACI 318-19 / CIRSOC 201-25, the 4 % of EN 1992-1-1); its
-``DCR`` says at what ratio.
+``DCR`` says at what ratio. A footing offers none, because its mat is chosen as a whole.
 
 .. code-block:: python
 

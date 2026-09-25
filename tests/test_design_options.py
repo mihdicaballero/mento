@@ -14,6 +14,7 @@ from mento import (
     Concrete_ACI_318_19,
     Concrete_CIRSOC_201_25,
     Concrete_EN_1992_2004,
+    Footing,
     Forces,
     Node,
     OneWaySlab,
@@ -201,6 +202,26 @@ def test_a_compression_face_alternative_that_fails_the_other_face_is_dropped() -
     beam.set_longitudinal_rebar_top(n1=2, d_b1=32 * mm)
     Node(section=beam, forces=forces).check()
     assert beam.flexure_design.bottom.DCR == pytest.approx(1.001, abs=0.0005)
+
+
+def test_a_footing_offers_no_alternatives() -> None:
+    """A footing mat is chosen as a whole; the per-face rows it replaced are not alternatives to it."""
+    footing = Footing(
+        label="Z1",
+        concrete=Concrete_EN_1992_2004(name="C25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="B500S", f_y=500 * MPa),
+        width=1 * m,
+        height=40 * cm,
+        c_c=50 * mm,
+    )
+    Node(section=footing, forces=[Forces(label="ELU", M_y=100 * kNm), Forces(label="ELU2", M_y=-20 * kNm)]).design()
+    flexure = footing.flexure_design
+
+    for face in (flexure.bottom, flexure.top):
+        assert len(face.options) == 1
+        assert face.options[0].layers == face.layers
+        assert face.options[0].functional is None
+        assert face.options[0].DCR == pytest.approx(flexure.DCR)
 
 
 def test_slab_options_read_as_spacings() -> None:

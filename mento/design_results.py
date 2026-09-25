@@ -424,8 +424,10 @@ class FlexureFaceDesign:
     the finished section -- the stirrups the design ended with, the other
     face as applied -- and kept only if the section carries both moments
     with it, within the code's limits on its reinforcement; each carries the
-    ``DCR`` it was kept at. Empty when the face was not designed, or when its
-    bars were changed by hand after the design.
+    ``DCR`` it was kept at. A footing offers none: its mat is chosen as a
+    whole, module and both bars together, and no row of the per-face search
+    is that mat with one thing changed. Empty when the face was not
+    designed, or when its bars were changed by hand after the design.
 
     ``M_capacity`` is the design moment resistance of the face as reinforced
     -- ``ØMn`` under ACI 318-19 and CIRSOC 201-25, ``MRd`` under EN 1992-1-1
