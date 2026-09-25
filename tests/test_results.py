@@ -282,6 +282,18 @@ def test_document_builder_add_table(document_builder: DocumentBuilder) -> None:
     assert len(table.columns) == 2
 
 
+def test_document_builder_add_table_fills_every_cell(document_builder: DocumentBuilder) -> None:
+    """A tall table is filled cell by cell, header included, in row order."""
+    df = pd.DataFrame({f"C{j}": [f"r{i}c{j}" for i in range(200)] for j in range(8)})
+    document_builder.add_table(df, [Cm(2)] * 8)
+
+    rows = list(document_builder.doc.tables[0].rows)
+    assert len(rows) == 201
+    assert [cell.text for cell in rows[0].cells] == list(df.columns)
+    for i, row in enumerate(rows[1:]):
+        assert [cell.text for cell in row.cells] == list(df.iloc[i])
+
+
 def test_document_builder_add_table_with_custom_font_size(document_builder: DocumentBuilder) -> None:
     """Test adding table with custom font size."""
     df = pd.DataFrame({"Col1": [1, 2], "Col2": [3, 4]})
