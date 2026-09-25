@@ -19,6 +19,7 @@ from mento.units import mm, inch, kN, m, cm, dimensionless
 from mento.design_warnings import (
     DesignWarning,
     collect,
+    combination_label,
     flexure_warnings,
     shear_warnings,
     shortfall_warnings,
@@ -555,7 +556,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
             self._stirrup_d_b = d_b
             self._stirrup_s_l = s_l
             self._A_v = 0 * cm**2 / m
-            self._update_effective_heights()
+            self._update_stirrup_dependents()
             return
 
         # Every non-empty reinforcement configuration must be strictly positive.
@@ -579,7 +580,21 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         # Calculate the transverse reinforcement area per unit length.
         self._A_v = A_vs / s_l
 
-        # Recalculate effective depths using the new stirrup diameter.
+        self._update_stirrup_dependents()
+
+    def _update_stirrup_dependents(self) -> None:
+        """Recompute what the stirrup diameter enters into.
+
+        The legs sit between the cover and the longitudinal bars, so a
+        thicker stirrup narrows the clear space those bars have across the
+        width as well as lowering the effective depths. The clear space used
+        to be recomputed only when the bars were set, so stirrups set after
+        them -- or changed later -- left ``clear_spacing_below_min`` reading a
+        stale value until a reporting check happened to refresh it, and the
+        answer depended on the order of the calls. Everything that follows
+        from the stirrup goes through here.
+        """
+        self._calculate_min_clear_spacing()
         self._update_effective_heights()
 
     def _leg_spacing_across_width(self) -> Quantity:
@@ -640,6 +655,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         self._d_b3_b = d_b3 if d_b3 is not None else 0 * L
         self._n4_b = n4
         self._d_b4_b = d_b4 if d_b4 is not None else 0 * L
+        self._face_set_by_hand("bot")
         self._update_longitudinal_rebar_attributes()
 
     def set_longitudinal_rebar_top(
@@ -662,7 +678,22 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         self._d_b3_t = d_b3 if d_b3 is not None else 0 * L
         self._n4_t = n4
         self._d_b4_t = d_b4 if d_b4 is not None else 0 * L
+        self._face_set_by_hand("top")
         self._update_longitudinal_rebar_attributes()
+
+    def _face_set_by_hand(self, face: str) -> None:
+        """A face given bars is no longer the face the search gave up on.
+
+        ``bars_do_not_fit`` records, per face, that the last design found no
+        layout that fits the width. That is the search's verdict on the
+        width, not a property of whatever bars the face carries: bars set by
+        hand afterwards are a different section, which the spacing check
+        judges on its own. The design itself sets the flag after it has
+        applied its layout -- through these same setters -- so it survives
+        the design and goes with the first hand-set bars. ``face`` is
+        ``"bot"`` or ``"top"``.
+        """
+        self._infeasible_faces.discard(face)
 
     def _calculate_longitudinal_rebar_area(self) -> None:
         """Calculate total rebar area (robust to None or zero diameters)."""
@@ -871,10 +902,10 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         """
         self._flexure_checks = []
         self._flexure_warnings = []
-        for force in forces:
+        for position, force in enumerate(forces, 1):
             state = self._run_flexure_check(force, report=False)
             self._flexure_checks.append(capture_flexure_check(self, force.label, state))
-            self._flexure_warnings.extend(flexure_warnings(self, force.label, state))
+            self._flexure_warnings.extend(flexure_warnings(self, combination_label(force.label, position), state))
         self._flexure_checked = True
         return tuple(self._flexure_checks)
 
@@ -888,10 +919,10 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         """
         self._shear_checks = []
         self._shear_warnings = []
-        for force in forces:
+        for position, force in enumerate(forces, 1):
             state = self._run_shear_check(force, report=False)
             self._shear_checks.append(capture_shear_check(self, force.label, state))
-            self._shear_warnings.extend(shear_warnings(self, force.label, state))
+            self._shear_warnings.extend(shear_warnings(self, combination_label(force.label, position), state))
         self._shear_checked = True
         return tuple(self._shear_checks)
 
@@ -941,7 +972,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         self._flexure_checks = []
         self._flexure_warnings = []
 
-        for force in forces:
+        for position, force in enumerate(forces, 1):
             state = self._run_flexure_check(force, report=True)
             result = self._flexure_report_row
             self._flexure_results_list.append(result)
@@ -959,7 +990,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
             # attributes it left on the beam -- those describe the last
             # combination only, and are on their way out with them.
             self._flexure_checks.append(capture_flexure_check(self, force.label, state))
-            self._flexure_warnings.extend(flexure_warnings(self, force.label, state))
+            self._flexure_warnings.extend(flexure_warnings(self, combination_label(force.label, position), state))
 
             # Extract the DCR values for top and bottom from the results
             current_dcr_top = self._DCRb_top
@@ -1121,7 +1152,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         self._shear_checks = []
         self._shear_warnings = []
 
-        for force in forces:
+        for position, force in enumerate(forces, 1):
             state = self._run_shear_check(force, report=True)
             result = self._shear_report_row
             self._shear_results_list.append(result)
@@ -1137,7 +1168,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
             # As in check_flexure: the value of the check, not the beam's
             # attributes afterwards.
             self._shear_checks.append(capture_shear_check(self, force.label, state))
-            self._shear_warnings.extend(shear_warnings(self, force.label, state))
+            self._shear_warnings.extend(shear_warnings(self, combination_label(force.label, position), state))
 
             # Check if this result is the limiting case
             current_dcr = result["DCR"][0]

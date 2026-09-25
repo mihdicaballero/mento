@@ -21,8 +21,12 @@ Codes
 -----
 ``As_below_min``
     A face carries less steel than its minimum, and the 4/3 relief of
-    ACI 318-19 §9.6.1.3 / CIRSOC 201-25 §9.6.1.3 does not cover it. The
-    minimum it quotes is the one left after that relief, ``A_s_min_eff``.
+    ACI 318-19 §9.6.1.3 / CIRSOC 201-25 §9.6.1.3 does not cover it. Its
+    ``values`` carry ``A_s_min`` as the clause writes it -- the number
+    ``flexure_design.<face>.A_s_min`` and the report's As,min column also
+    carry -- and ``A_s_min_eff``, the one left after that relief, which is
+    the one the face is short of and the one the message quotes. Where
+    there is no relief (EN 1992-1-1, a slab, a footing) the two are equal.
 ``As_above_max``
     A face carries more steel than its maximum. Under ACI 318-19 and CIRSOC
     201-25 that is the tension face past the tension-controlled limit of
@@ -41,7 +45,8 @@ Codes
     cap of ACI 318-19 / CIRSOC 201-25 §24.3.2 that §9.7.2.2 sends them to.
 ``bars_do_not_fit``
     The bars on a face leave no clear space between them, or a design found no
-    layout that fits the width.
+    layout that fits the width -- which holds until the face is given bars by
+    hand, since those are the spacing check's to judge.
 ``As_below_required``
     A design found no layout that fits the section and carries the moment --
     or, under ACI 318-19 / CIRSOC 201-25, carries it tension-controlled -- so
@@ -57,19 +62,33 @@ Codes
 ``stirrup_spacing_exceeds_max``
     The stirrups are further apart than the code allows, along the member or
     across its width.
-``stirrup_diameter_below_min``
-    The stirrup bar is thinner than the code's minimum.
+
+    There is no code for the stirrup diameter: neither ACI 318-19, CIRSOC
+    201-25 nor EN 1992-1-1 states a minimum for a stirrup placed for shear
+    alone, and the 10 mm (6 mm under CIRSOC) the design starts from is the
+    bottom of the catalogue, a preference. The minimum §9.7.6.4.2 does state
+    is for the stirrups laterally supporting compression bars, a limit of
+    its own.
 ``shear_exceeds_section_limit``
     The shear exceeds the most the section can carry however it is
-    reinforced (ACI 318-19 §22.5.1.2, EN 1992-1-1 V_Rd,max): the section has
-    to grow. A wall reports it against ØVn,max of §11.5.4.3.
+    reinforced: under ACI 318-19 / CIRSOC 201-25 the Eq. (22.5.1.2) limit
+    with the V_c of Table 22.5.5.1 for a section carrying A_v,min, under
+    EN 1992-1-1 V_Rd,max of Eq. (6.9) at θ = 45°. Both are read the same with
+    or without stirrups, so the warning means the section has to grow; a
+    section that is only short of stirrups gets ``stirrups_required`` or
+    ``Av_below_min`` instead. A wall reports it against ØVn,max of §11.5.4.3.
 ``mesh_ratio_below_min``
     A wall mesh gives less than its direction asks for: the horizontal one
     below the ρt the shear needs (never below its minimum), the vertical one
     below ρl,min of ACI 318-19 / CIRSOC 201-25 §11.6.2. ``values`` carries
     ``direction``, ``"h"`` or ``"v"``.
 ``mesh_spacing_exceeds_max``
-    The bars of a wall mesh are further apart than §11.7 allows.
+    The bars of a wall mesh are further apart than the limit mento applies:
+    the lesser of 3h and 450 mm (18 in.) of ACI 318-19 / CIRSOC 201-25
+    §11.7.2.1 (vertical) and §11.7.3.1 (horizontal), and the lw/3 and lw/5
+    those clauses add only where shear reinforcement is required for
+    in-plane strength -- which mento takes always, a conservative choice,
+    so the spacing may exceed the limit and still be what the clause allows.
 """
 
 from __future__ import annotations
@@ -135,7 +154,9 @@ class _Raw:
 #: The English wording of each code; the text is also the key of the Spanish
 #: catalog in :mod:`mento.i18n`. ``{face}`` is filled with the translated face.
 _MESSAGES: Dict[str, str] = {
-    "As_below_min": "Steel on the {face}: A_s = {A_s} is below the minimum A_s,min = {A_s_min}.",
+    "As_below_min": (
+        "Steel on the {face}: A_s = {A_s} is below the minimum it has to meet, A_s,min,eff = {A_s_min_eff}."
+    ),
     "As_above_max": "Steel on the {face}: A_s = {A_s} exceeds the maximum A_s,max = {A_s_max}.",
     "clear_spacing_below_min": "Clear spacing between the bars on the {face}: {s} is below the minimum {s_min}.",
     "bar_spacing_below_min": "Bar spacing on the {face}: {s} is below the minimum {s_min}.",
@@ -149,27 +170,56 @@ _MESSAGES: Dict[str, str] = {
     "Av_below_min": "The stirrups provide A_v = {A_v}, below the minimum A_v,min = {A_v_min}.",
     "stirrup_spacing_exceeds_max_l": "Stirrup spacing along the member: {s} exceeds the maximum {s_max}.",
     "stirrup_spacing_exceeds_max_w": "Stirrup leg spacing across the width: {s} exceeds the maximum {s_max}.",
-    "stirrup_diameter_below_min": "Stirrup diameter {d_b} is below the minimum {d_b_min}.",
     "shear_exceeds_section_limit": "Shear V = {V} exceeds the most the section can carry, {V_max}: enlarge the section.",
     "mesh_ratio_below_min_h": "Horizontal wall mesh: ρt = {rho} is below the required ρt = {rho_min}.",
     "mesh_ratio_below_min_v": "Vertical wall mesh: ρl = {rho} is below the minimum ρl,min = {rho_min}.",
-    "mesh_spacing_exceeds_max_h": "Horizontal wall mesh spacing: {s} exceeds the maximum {s_max}.",
-    "mesh_spacing_exceeds_max_v": "Vertical wall mesh spacing: {s} exceeds the maximum {s_max}.",
+    "mesh_spacing_exceeds_max_h": (
+        "Horizontal wall mesh spacing: {s} exceeds the limit mento applies, {s_max} "
+        "(§11.7.3.1 with lw/5 taken always: conservative)."
+    ),
+    "mesh_spacing_exceeds_max_v": (
+        "Vertical wall mesh spacing: {s} exceeds the limit mento applies, {s_max} "
+        "(§11.7.2.1 with lw/3 taken always: conservative)."
+    ),
 }
 
 _FACES = {"bottom": "bottom face", "top": "top face"}
 
 
-def _format(value: Any) -> str:
-    """A value as the messages print it: three significant figures.
+def _format(value: Any, digits: int = 3) -> str:
+    """A value as the messages print it, to ``digits`` significant figures.
 
     Everything a warning quotes is a quantity -- an area, a spacing, a force --
     so there is one format, and pint's ``~P`` writes the unit with it. A
     reinforcement ratio is the exception, a bare number.
     """
     if not isinstance(value, Quantity):
-        return f"{value:.3g}"
-    return f"{value:.3g~P}"
+        return f"{value:.{digits}g}"
+    return f"{value:.{digits}g~P}"
+
+
+def _fields(values: Mapping[str, Any]) -> Dict[str, str]:
+    """The values of one message, printed so that the message reads true.
+
+    Three significant figures, or as many more as it takes for two values
+    that differ to print differently: a spacing of 13.00 cm against a limit
+    of 12.95 cm printed as "13 cm exceeds the maximum 13 cm" at three. The
+    triggers already leave out a value equal to its limit, so a message
+    always has a difference to show.
+    """
+    items = list(values.items())
+    for digits in range(3, 10):
+        fields = {name: _format(value, digits) for name, value in items}
+        # pint answers ``!=`` across units, and against a bare number, with
+        # True rather than an error, so the pairs need no sorting by kind.
+        if all(
+            fields[a] != fields[b]
+            for i, (a, first) in enumerate(items)
+            for b, second in items[i + 1 :]
+            if first != second
+        ):
+            break
+    return fields
 
 
 def _q(value: float, kind: str, beam: "RectangularBeam") -> Quantity:
@@ -208,6 +258,19 @@ def _face_name(suffix: str) -> str:
     return "bottom" if suffix in ("bot", "b") else "top"
 
 
+def combination_label(label: Optional[str], position: int) -> str:
+    """The name a warning files a combination under.
+
+    The force's own label where it has one; ``#n``, its position among the
+    forces checked, where it has none (``Forces.label`` defaults to
+    ``None``). A limit missed under a combination then always names it, so
+    that an empty ``combinations`` means what it says -- a limit of the
+    section alone -- and not "a combination with no label", which it also
+    used to mean.
+    """
+    return label if label is not None else f"#{position}"
+
+
 # ---------------------------------------------------------------------------
 # What a flexure check leaves
 # ---------------------------------------------------------------------------
@@ -236,10 +299,15 @@ def flexure_warnings(beam: "RectangularBeam", label: str, state: Any) -> List[_R
     tension_face = "bot" if M > 0 else "top" if M < 0 else None
     for suffix in ("bot", "top"):
         A_s: Quantity = getattr(beam, f"_A_s_{suffix}")
-        # The minimum the face has to meet, relief of §9.6.1.3 included; a
-        # code with no relief (EN 1992-1-1) leaves it at A_s_min.
-        A_s_min_raw = getattr(state, f"A_s_min_{suffix}")
-        A_s_min = _q(getattr(state, f"A_s_min_eff_{suffix}", A_s_min_raw), "area", beam).to(A_s.units)
+        # The minimum as the clause writes it, and the one the face has to
+        # meet, relief of §9.6.1.3 included; a code with no relief
+        # (EN 1992-1-1) has no second number and leaves it at A_s_min. The
+        # two go out under their own names: ``flexure_design.<face>.A_s_min``
+        # and the report's As,min column carry the clause value, so the
+        # warning cannot file the relieved one under the same name.
+        A_s_min = _q(getattr(state, f"A_s_min_{suffix}"), "area", beam).to(A_s.units)
+        A_s_min_eff = _q(getattr(state, f"A_s_min_eff_{suffix}", getattr(state, f"A_s_min_{suffix}")), "area", beam)
+        A_s_min_eff = A_s_min_eff.to(A_s.units)
         if ductility_limit:
             limit = getattr(state, f"A_s_max_eff_{suffix}")
             applies = suffix == tension_face
@@ -247,14 +315,14 @@ def flexure_warnings(beam: "RectangularBeam", label: str, state: Any) -> List[_R
             limit = getattr(state, f"A_s_max_{suffix}")
             applies = not doubly
         A_s_max = _q(limit, "area", beam).to(A_s.units)
-        if A_s < A_s_min and not math.isclose(A_s.magnitude, A_s_min.magnitude):
+        if A_s < A_s_min_eff and not math.isclose(A_s.magnitude, A_s_min_eff.magnitude):
             found.append(
                 _Raw(
                     "As_below_min",
-                    {"A_s": A_s, "A_s_min": A_s_min},
+                    {"A_s": A_s, "A_s_min": A_s_min, "A_s_min_eff": A_s_min_eff},
                     _face_name(suffix),
                     label,
-                    severity=float((A_s_min - A_s).magnitude),
+                    severity=float((A_s_min_eff - A_s).magnitude),
                 )
             )
         if applies and A_s_max.magnitude > 0 and A_s > A_s_max and not math.isclose(A_s.magnitude, A_s_max.magnitude):
@@ -319,7 +387,16 @@ def spacing_warnings(beam: "RectangularBeam") -> List[_Raw]:
         if not is_slab and value.magnitude <= 0 and sum(layer.n for layer in layers) > 1:
             found.append(_Raw("bars_do_not_fit", {"s": value}, name))
             continue
-        if s_min is not None and value < s_min and not math.isclose(value.magnitude, s_min.to(value.units).magnitude):
+        # A beam layer with one bar has no pair to measure: what the row
+        # carries for it is the room beside the bar, not a distance between
+        # bars, and there is no minimum for it to miss.
+        measurable = is_slab or _bars_side_by_side(beam, face)
+        if (
+            measurable
+            and s_min is not None
+            and value < s_min
+            and not math.isclose(value.magnitude, s_min.to(value.units).magnitude)
+        ):
             code = "bar_spacing_below_min" if is_slab else "clear_spacing_below_min"
             found.append(_Raw(code, {"s": value, "s_min": s_min}, name))
         if s_max is not None and value > s_max and not math.isclose(value.magnitude, s_max.to(value.units).magnitude):
@@ -329,6 +406,18 @@ def spacing_warnings(beam: "RectangularBeam") -> List[_Raw]:
         if not any(raw.code == "bars_do_not_fit" and raw.face == name for raw in found):
             found.append(_Raw("bars_do_not_fit", {}, name))
     return [_with_units(raw, beam) for raw in found]
+
+
+def _bars_side_by_side(beam: "RectangularBeam", face: str) -> bool:
+    """Whether some layer of the face holds two bars, so a clear spacing exists.
+
+    Groups 1 and 2 share the layer nearest the face, groups 3 and 4 the one
+    behind it; one bar in each layer sits above the other, not beside it.
+    ``face`` is ``"b"`` or ``"t"``.
+    """
+    nearest = getattr(beam, f"_n1_{face}") + getattr(beam, f"_n2_{face}")
+    behind = getattr(beam, f"_n3_{face}") + getattr(beam, f"_n4_{face}")
+    return max(nearest, behind) >= 2
 
 
 def shortfall_warnings(beam: "RectangularBeam") -> List[_Raw]:
@@ -365,16 +454,23 @@ def shear_warnings(beam: "RectangularBeam", label: str, state: Any) -> List[_Raw
     A_v_min = _q(state.A_v_min, "per_length", beam).to(A_v.units)
     A_v_req = _q(state.A_v_req, "per_length", beam).to(A_v.units)
 
-    if not state.max_shear_ok:
-        V = _q(state.V_u if hasattr(state, "V_u") else state.V_Ed_1, "force", beam)
-        V_max = _q(state.phi_V_max if hasattr(state, "phi_V_max") else state.V_Rd_max, "force", beam)
+    # Against the limit of the section itself, not the ``max_shear_ok`` of the
+    # report row: that row reads the section as it is, and both codes give a
+    # section short of stirrups a lower ceiling than the same section with
+    # them -- ACI 318-19 Table 22.5.5.1 raises V_c once A_v >= A_v,min, and a
+    # bare EN section is checked against V_Rd,c. Only past the limit with
+    # stirrups in is "enlarge the section" the advice; short of it the advice
+    # is the stirrups, which ``stirrups_required`` and ``Av_below_min`` give.
+    V = _q(state.V_u if hasattr(state, "V_u") else state.V_Ed_1, "force", beam)
+    V_limit = _q(state.section_shear_limit, "force", beam).to(V.units)
+    if V > V_limit and not math.isclose(V.magnitude, V_limit.magnitude):
         found.append(
             _Raw(
                 "shear_exceeds_section_limit",
-                {"V": V, "V_max": V_max},
+                {"V": V, "V_max": V_limit},
                 None,
                 label,
-                severity=float((V - V_max).magnitude),
+                severity=float((V - V_limit).magnitude),
             )
         )
 
@@ -418,12 +514,12 @@ def shear_warnings(beam: "RectangularBeam", label: str, state: Any) -> List[_Raw
                 )
             )
 
-    minimum = design_code(beam.concrete).min_stirrup_diameter
-    if minimum is not None:
-        d_b_min: Quantity = minimum(beam.concrete)
-        d_b: Quantity = beam._stirrup_d_b
-        if d_b < d_b_min:
-            found.append(_Raw("stirrup_diameter_below_min", {"d_b": d_b, "d_b_min": d_b_min.to(d_b.units)}, None))
+    # No minimum diameter: neither code states one for a stirrup placed for
+    # shear alone. The registry's ``min_stirrup_diameter`` is the bottom of
+    # the code's catalogue -- a design preference the report row quotes --
+    # and ACI 318-19 §9.7.6.4.2 / CIRSOC 201-25 §9.7.6.4.2 size only the
+    # stirrups of §9.7.6.4.1, those laterally supporting compression bars,
+    # which is a limit of its own and not this one.
     return [_with_units(raw, beam) for raw in found]
 
 
@@ -441,14 +537,15 @@ def wall_warnings(wall: "RectangularBeam", mesh: "WallMesh", checks: Tuple["Wall
     bars, so its spacing is not a limit it misses; its ratio is.
     """
     found: List[_Raw] = []
-    for check in checks:
+    for position, check in enumerate(checks, 1):
+        label = combination_label(check.label, position)
         for direction, provided, required in (
             ("h", mesh.horizontal, check.rho_t_req),
             ("v", mesh.vertical, check.rho_l_min),
         ):
             if provided.rho < required and not math.isclose(provided.rho, required, rel_tol=1e-9):
                 values = {"direction": direction, "rho": round(provided.rho, 5), "rho_min": round(required, 5)}
-                found.append(_Raw("mesh_ratio_below_min", values, None, check.label, required - provided.rho))
+                found.append(_Raw("mesh_ratio_below_min", values, None, label, required - provided.rho))
         for direction, provided, s_max in (
             ("h", mesh.horizontal, check.s_h_max),
             ("v", mesh.vertical, check.s_v_max),
@@ -462,7 +559,7 @@ def wall_warnings(wall: "RectangularBeam", mesh: "WallMesh", checks: Tuple["Wall
         if check.V_u > check.V_max:
             values = {"V": check.V_u, "V_max": check.V_max}
             severity = float((check.V_u - check.V_max).magnitude)
-            found.append(_Raw("shear_exceeds_section_limit", values, None, check.label, severity))
+            found.append(_Raw("shear_exceeds_section_limit", values, None, label, severity))
     return [_with_units(raw, wall) for raw in found]
 
 
@@ -489,7 +586,7 @@ def collect(raws: List[_Raw]) -> Tuple[DesignWarning, ...]:
         labels = tuple(dict.fromkeys(raw.combination for raw in group if raw.combination is not None))
         values = {name: value for name, value in worst.values.items() if name != "direction"}
         template = _MESSAGES[f"{code}_{direction}" if direction else code]
-        fields = {name: _format(value) for name, value in values.items()}
+        fields = _fields(values)
         if face is not None:
             fields["face"] = translate(_FACES[face])
         warnings.append(

@@ -1,4 +1,5 @@
 import math
+from dataclasses import replace
 from mento.units import Quantity
 from typing import TYPE_CHECKING, Tuple, cast
 
@@ -141,6 +142,13 @@ def _calculate_max_shear_strength_EN_1992_2004(self: "RectangularBeam", st: ENSh
         theta_min: float = math.radians(21.8)
         cot_theta_min: float = 1 / math.tan(theta_min)
         V_Rd_max_min_angle = shear_eq.max_shear_resistance(alpha_cw, b_w, z, nu_1, f_cd, theta_min)
+        # The maximum strut angle θ = 45° (cot(θ) = 1.0), where cot θ + tan θ
+        # is least and Eq. (6.9) is largest: the most the section can carry
+        # however it is reinforced, §6.2.1(6). Kept apart from V_Rd_max,
+        # which is the strut at the angle the demand fixes.
+        theta_max: float = math.radians(45)
+        V_Rd_max_max_angle = shear_eq.max_shear_resistance(alpha_cw, b_w, z, nu_1, f_cd, theta_max)
+        st.section_shear_limit = V_Rd_max_max_angle
 
         if st.V_Ed_1 <= V_Rd_max_min_angle:
             # If within the minimum angle
@@ -149,10 +157,6 @@ def _calculate_max_shear_strength_EN_1992_2004(self: "RectangularBeam", st: ENSh
             st.V_Rd_max = V_Rd_max_min_angle
             st.max_shear_ok = True
         else:
-            # Check the maximum strut angle θ = 45° (cot(θ) = 1.0)
-            theta_max: float = math.radians(45)
-            V_Rd_max_max_angle = shear_eq.max_shear_resistance(alpha_cw, b_w, z, nu_1, f_cd, theta_max)
-
             if st.V_Ed_1 > V_Rd_max_max_angle:
                 st.theta = theta_max
                 st.cot_theta = 1 / math.tan(st.theta)
@@ -185,6 +189,40 @@ def _calculate_required_shear_reinforcement_EN_1992_2004(self: "RectangularBeam"
     st.V_Rd = min(st.V_Rd_s, st.V_Rd_max)
 
 
+def _stirrups_a_bare_section_needs_EN_1992_2004(self: "RectangularBeam", st: ENShearCheckState) -> None:
+    """A_v,req, and the section limit, of a section that carries no stirrups.
+
+    EN 1992-1-1 §6.2.1(3): where V_Ed <= V_Rd,c no calculated shear
+    reinforcement is necessary, and (4) asks for the minimum of §9.2.2 all
+    the same -- zero where the member may omit it, which the initialisation
+    already settled in ``A_v_min``. §6.2.1(5): where V_Ed > V_Rd,c, enough
+    that V_Ed <= V_Rd, which is the truss of §6.2.3 at the angle the demand
+    asks for -- what the section will be checked with once it has stirrups,
+    and what ``stirrups_required`` has to quote. The check used to quote the
+    minimum whatever the shear, so a bare section under 300 kN was asked for
+    the same 2.4 cm²/m as one under 30 kN.
+
+    The strut limit of §6.2.1(6) does not depend on the stirrups either:
+    a bare section that stays under V_Rd,max at 45° is short of stirrups,
+    not of concrete, so ``shear_exceeds_section_limit`` reads that limit and
+    not V_Rd,c, which is what it used to be handed.
+
+    The truss is read on a copy of the state: what the report prints for a
+    bare section -- no strut angle, V_Rd = V_Rd,c -- describes the section as
+    it is and stays as it is.
+    """
+    truss = replace(st)
+    _calculate_max_shear_strength_EN_1992_2004(self, truss)
+    st.section_shear_limit = truss.section_shear_limit
+    if st.V_Ed_2 <= st.V_Rd_c:
+        st.A_v_req = st.A_v_min
+        return
+    st.A_v_req = max(
+        shear_eq.required_shear_reinforcement(st.V_Ed_2, truss.z, st.f_ywd, truss.cot_theta),
+        st.A_v_min,
+    )
+
+
 def _check_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> ENShearCheckState:
     """Run the EN shear check for one combination and return what it found.
 
@@ -207,12 +245,10 @@ def _check_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> ENShear
     if self._stirrup_n == 0:
         # The assumed stirrup diameter stays: see the note in the ACI check.
         st.V_Rd_c = _shear_without_rebar_EN_1992_2004(self, st)
-        # According to EN1992-1-1 §6.2.1(4) minimum shear reinforcement should nevertheless be provided
-        # according to EN1992-1-1 §9.2.2. The minimum shear reinforcement may be omitted in members where
-        # transverse redistribution of loads is possible (such as slabs) and members of minor importance
-        # which do not contribute significantly to the overall resistance and stability of the structure.
-        st.A_v_req = st.A_v_min
-        # Maximum shear capacity is the same as the concrete capacity
+        # The stirrups the demand needs: the minimum of §9.2.2 under V_Rd,c
+        # (§6.2.1(3)-(4)), the truss of §6.2.3 past it (§6.2.1(5)).
+        _stirrups_a_bare_section_needs_EN_1992_2004(self, st)
+        # The capacity of the section as it is: the concrete alone.
         st.V_Rd = st.V_Rd_c
         st.V_Rd_max = st.V_Rd
         st.max_shear_ok = st.V_Ed_1 <= st.V_Rd_max

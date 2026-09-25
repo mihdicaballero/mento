@@ -193,8 +193,9 @@ ES.update(
     {
         "bottom face": "cara inferior",
         "top face": "cara superior",
-        "Steel on the {face}: A_s = {A_s} is below the minimum A_s,min = {A_s_min}.": (
-            "Armadura en la {face}: A_s = {A_s} es menor que la mínima A_s,mín = {A_s_min}."
+        "Steel on the {face}: A_s = {A_s} is below the minimum it has to meet, A_s,min,eff = {A_s_min_eff}.": (
+            "Armadura en la {face}: A_s = {A_s} es menor que la mínima que tiene que cumplir, "
+            "A_s,mín,ef = {A_s_min_eff}."
         ),
         "Steel on the {face}: A_s = {A_s} exceeds the maximum A_s,max = {A_s_max}.": (
             "Armadura en la {face}: A_s = {A_s} supera la máxima A_s,máx = {A_s_max}."
@@ -230,9 +231,6 @@ ES.update(
         "Stirrup leg spacing across the width: {s} exceeds the maximum {s_max}.": (
             "Separación de las ramas de estribo en el ancho: {s} supera la máxima {s_max}."
         ),
-        "Stirrup diameter {d_b} is below the minimum {d_b_min}.": (
-            "Diámetro de estribo {d_b} menor que el mínimo {d_b_min}."
-        ),
         "Shear V = {V} exceeds the most the section can carry, {V_max}: enlarge the section.": (
             "El corte V = {V} supera el máximo que admite la sección, {V_max}: hay que agrandarla."
         ),
@@ -242,11 +240,19 @@ ES.update(
         "Vertical wall mesh: ρl = {rho} is below the minimum ρl,min = {rho_min}.": (
             "Malla vertical del muro: ρl = {rho} es menor que la mínima ρl,mín = {rho_min}."
         ),
-        "Horizontal wall mesh spacing: {s} exceeds the maximum {s_max}.": (
-            "Separación de la malla horizontal del muro: {s} supera la máxima {s_max}."
+        (
+            "Horizontal wall mesh spacing: {s} exceeds the limit mento applies, {s_max} "
+            "(§11.7.3.1 with lw/5 taken always: conservative)."
+        ): (
+            "Separación de la malla horizontal del muro: {s} supera el límite que aplica mento, {s_max} "
+            "(§11.7.3.1 con lw/5 siempre: conservador)."
         ),
-        "Vertical wall mesh spacing: {s} exceeds the maximum {s_max}.": (
-            "Separación de la malla vertical del muro: {s} supera la máxima {s_max}."
+        (
+            "Vertical wall mesh spacing: {s} exceeds the limit mento applies, {s_max} "
+            "(§11.7.2.1 with lw/3 taken always: conservative)."
+        ): (
+            "Separación de la malla vertical del muro: {s} supera el límite que aplica mento, {s_max} "
+            "(§11.7.2.1 con lw/3 siempre: conservador)."
         ),
     }
 )
