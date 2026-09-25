@@ -52,9 +52,10 @@ class OneWaySlab(RectangularBeam):
     §9.7.6.2. What is particular to a slab is the detailing: the bar spacing of
     ACI 318-19 §7.7.2.3 / CIRSOC 201-25 §7.7.2.3 (see :meth:`_max_bar_spacing`)
     and the minimum flexural reinforcement, which ACI 318-19 §7.6.1.1 /
-    CIRSOC 201-25 §7.6.1 put at 0.0018*Ag in both codes. That minimum is sized
-    with the beam rule of §9.6.1.2 instead, which is the conservative side of
-    it; the difference is a known open point and is not settled here.
+    CIRSOC 201-25 §7.6.1 put at 0.0018*Ag on the gross section in both codes,
+    with none of the 4/3 relief of §9.6.1.3, which relieves the beam minimum of
+    §9.6.1.2 and no other (see ``_minimum_flexural_reinforcement_area_ACI_318_19``
+    in ``codes/ACI_318_19_beam.py`` and the theory page *One-way slab*).
     """
 
     def __post_init__(self) -> None:
@@ -404,7 +405,10 @@ class Footing(OneWaySlab):
       As,min = 0.0018*Ag on the gross section, with none of the 4/3 relief
       §9.6.1.3 gives a beam. That is the same ratio as the shrinkage and
       temperature reinforcement of §24.4.3.2. A footing spanning two ways goes
-      by §13.3.3.1 to Chapter 8, and §8.6.1.1 repeats the 0.0018*Ag.
+      by §13.3.3.1 to Chapter 8, and §8.6.1.1 reads "0.0018*Ag, or as defined
+      in 8.6.1.2": the second is the minimum over the two-way shear critical
+      section around a column, Eq. (8.6.1.2), which is not implemented here --
+      a two-way footing gets the flat 0.0018*Ag.
       CIRSOC 201-25 prints the same chain: §13.3.2.1 → §7.6.1 (the ratio sits
       in an unnumbered paragraph there), §13.3.3.1 → §8.6.1.1, §24.4.3.2.
     * EN 1992-1-1 takes the larger of the halved geometric minimum of a

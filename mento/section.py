@@ -39,8 +39,9 @@ class Section:
     #: How the element reaches the ground, in the terms the minimum
     #: reinforcement clauses distinguish. ``"free"`` is anything spanning
     #: between supports; ``"soil"`` is an element bearing directly on the
-    #: ground, which ACI 318-19 §9.6.1.1(b) exempts from the flexural minimum
-    #: written for a beam and EN 1992-1-1 reinforces to the halved geometric
+    #: ground, which ACI 318-19 §13.3.2.1 / CIRSOC 201-25 §13.3.2.1 send to
+    #: the slab minimum of §7.6.1.1 (0.0018*Ag) instead of the beam minimum of
+    #: §9.6.1.2, and EN 1992-1-1 §9.8.1 reinforces to the halved geometric
     #: minimum of a foundation instead.
     #:
     #: A ClassVar and not a field on purpose: it says what kind of element this

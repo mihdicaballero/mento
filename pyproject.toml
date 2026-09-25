@@ -149,5 +149,5 @@ testpaths = [
     "tests",
 ]
 markers = [
-    "published_example: reproduces a case validated outside mento -- a Calcpad sheet, a published worked example or design guide, or an ETABS/spreadsheet cross-check; the release workflow counts these for the home page of mento-web",
+    "published_example: reproduces a case validated outside mento -- a Calcpad sheet, a published worked example or design guide, or an ETABS/spreadsheet cross-check; the docstring says where in that document the number is, in a paragraph that starts with 'Source:' (tests/test_published_examples.py checks it); the release workflow counts these for the home page of mento-web",
 ]

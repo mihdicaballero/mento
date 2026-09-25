@@ -114,6 +114,12 @@ This is what makes Mento trustworthy.
 3. Include the CalcPad file with your pull request.
 4. Reference the validation source in your test module, so the next reader can trace where
    the expected numbers came from.
+5. Mark the test ``@pytest.mark.published_example`` when its expected numbers come from that
+   source and not from mento: the release counts these tests for the home page of mento-web,
+   so the mark is a public claim. A marked test says where the number is, in a docstring
+   paragraph that starts with ``Source:`` (the sheet, the row and column or cell, the page or
+   table); ``tests/test_published_examples.py`` checks it. A test that pins mento's own
+   output, or a reading of the code the reference does not share, is not marked.
 
 If no published example exists for what you are implementing, say so in the pull request and
 we will work out an acceptable validation path together.
