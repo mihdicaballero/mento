@@ -275,6 +275,28 @@ def test_the_maximum_is_only_read_on_the_face_in_tension() -> None:
     assert beam._data_min_max_flexure["Ok?"][2] == "❌"
 
 
+def test_en_holds_both_faces_to_its_maximum() -> None:
+    """EN 1992-1-1 §9.2.1.1(3) caps tension OR compression steel, so the face a
+    moment compresses is read against its 4 % too -- unlike ACI 318-19, whose
+    maximum is the ductility limit of the face in tension."""
+    beam = RectangularBeam(
+        label="E",
+        concrete=Concrete_EN_1992_2004(name="C25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="B500S", f_y=500 * MPa),
+        width=20 * cm,
+        height=40 * cm,
+        c_c=25 * mm,
+    )
+    beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=20 * cm)
+    beam.set_longitudinal_rebar_bot(2, 32 * mm, 1, 32 * mm, 2, 32 * mm, 1, 32 * mm)  # 48.3 cm² > 4 %
+    beam.set_longitudinal_rebar_top(2, 16 * mm)
+    node = Node(section=beam, forces=[Forces(label="neg", M_y=-40 * kNm)])
+    node.check_flexure()
+    over = [w for w in node.warnings if w.code == "As_above_max"]
+    assert [w.face for w in over] == ["bottom"]
+    assert over[0].combinations == ("neg",)
+
+
 # ---------------------------------------------------------------------------
 # The minimum a face has to meet: ACI 318-19 / CIRSOC 201-25 §9.6.1.3
 # ---------------------------------------------------------------------------

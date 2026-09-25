@@ -353,6 +353,8 @@ def _initialize_attributes(section: "RectangularBeam") -> None:
     section._A_s_min_eff_top = 0 * cm**2
     section._A_s_max_bot = 0 * cm**2
     section._A_s_max_top = 0 * cm**2
+    section._A_s_max_eff_bot = 0 * cm**2
+    section._A_s_max_eff_top = 0 * cm**2
     section._phi_M_n_bot = 0 * kNm
     section._phi_M_n_top = 0 * kNm
     section._d_b_max_bot = 0 * mm
@@ -404,6 +406,8 @@ _COMMON = dict(
     # §13.3.1.2 is written on d, not on h, so there is no overall-thickness
     # hook for these two codes; ``min_thickness_on_soil`` stays unset.
     min_effective_depth_on_soil=_min_effective_depth_on_soil,
+    # A_s,max is the tension-controlled limit of §9.3.3.1 (Table 21.2.2).
+    max_steel_is_ductility_limit=True,
 )
 
 ACI_318_19 = register(

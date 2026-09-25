@@ -130,6 +130,8 @@ class _DesignCodeAttributes:
         _A_s_min_eff_top: Quantity
         _A_s_max_bot: Quantity
         _A_s_max_top: Quantity
+        _A_s_max_eff_bot: Quantity
+        _A_s_max_eff_top: Quantity
         flexure_design_results_bot: Any
         flexure_design_results_top: Any
 
@@ -240,9 +242,9 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         self._flexure_options_t: Tuple[RebarOption, ...] = ()
         self._shear_options: Tuple[StirrupOption, ...] = ()
         self._infeasible_faces: set[str] = set()
-        # The area the last design needed on a face it could not reach with
-        # bars that fit, by face ("bot"/"top"). See design_warnings.
-        self._short_faces: Dict[str, Quantity] = {}
+        # The faces the last design could not bring up to what they need, as
+        # (area asked for, area left), by face ("bot"/"top"). See design_warnings.
+        self._short_faces: Dict[str, Tuple[Quantity, Quantity]] = {}
         # The detailing limits each combination of the last checks missed,
         # before they are worded; `warnings` collapses and words them.
         self._flexure_warnings: list[Any] = []

@@ -132,6 +132,14 @@ class DesignCode:
     #: ``min_thickness_on_soil``. ``None`` where the code states none. Advice
     #: on the same terms as the hook above.
     min_effective_depth_on_soil: Callable[..., Any] | None = None
+    #: What the flexural A_s,max of this code limits. ``True`` where it is the
+    #: ductility limit of the tension steel -- ACI 318-19 / CIRSOC 201-25
+    #: §9.3.3.1, a beam tension-controlled per Table 21.2.2 -- which only the
+    #: face in tension is held to and which compression steel on the other
+    #: face extends. ``False`` where it caps the bars of either face whatever
+    #: they do -- EN 1992-1-1 §9.2.1.1(3), "tension or compression
+    #: reinforcement". Read by the warnings and the report tables.
+    max_steel_is_ductility_limit: bool = False
 
     def requires(self, hook: str) -> Callable[..., Any]:
         """The hook, or a clear error naming the code that lacks it."""

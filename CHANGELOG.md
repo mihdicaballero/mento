@@ -54,10 +54,18 @@ from the release history and are summaries rather than complete lists.
   and on a member on the ground, it is `A_s_min` itself. A designed face can sit below
   `A_s_min` and comply; it cannot sit below `A_s_min_eff`.
 
+- **The maximum a face has to meet, `A_s_max_eff`.** `FlexureFaceCheck` and
+  `FlexureFaceDesign` carry it next to `A_s_max`: under ACI 318-19 and CIRSOC 201-25 it is
+  the tension steel the face can take and stay tension-controlled with the compression
+  steel of the other face, `A_s_max + A_s'·f_s'/f_y` (§9.3.3.1, Table 21.2.2); under
+  EN 1992-1-1 it is `A_s_max` itself. The detailed report's *Max.* column prints it, and a
+  doubly reinforced face is checked against it instead of being excused (`✅ D.R.` now
+  means "past `A_s_max`, within `A_s_max_eff`").
+
 - **The release workflow publishes a test count.** After uploading to PyPI it attaches
   `stats.json` (`{"tests": N}`) to the GitHub Release and sends a `mento-release`
   `repository_dispatch` to `mihdicaballero/mento-web`. `N` counts the tests marked
-  `published_example`: the 56 that reproduce a case validated outside mento — the Calcpad
+  `published_example`: the 52 that reproduce a case validated outside mento — the Calcpad
   sheets of the ACI and EN beam and slab cases, The Concrete Centre's Eurocode 2 guides,
   and the ETABS and spreadsheet cross-checks of the flexure suite (`Test_Etabs_01` to
   `_23`). With nothing marked the workflow falls back to the whole suite. The dispatch needs the repository secret
@@ -72,15 +80,40 @@ from the release history and are summaries rather than complete lists.
   the selector dropped them: a 12×30 beam with 40 kN·m was designed with 4Ø10 = 3.14 cm²
   (DCR 1.53) instead of the 4Ø12 = 4.52 cm² that fit (DCR 1.13).
 
-- **A flexure design no longer settles for less steel than it needs when no bars land between
-  A_s,req and A_s,max.** In a narrow web the catalogue jumps — 4Ø12 = 4.52 cm² to 2Ø20 =
-  6.28 cm² in a 15×25 beam of fc = 35 MPa, fy = 500 MPa — and a face asking for 4.96 cm²
-  under a 5.22 cm² cap fell back to the 4.52 (ØMn = 34.0 kN·m for 40). Under ACI 318-19 /
-  CIRSOC 201-25 the design now takes the smallest layout that covers A_s,req and puts on the
-  opposite face the compression steel that keeps it tension-controlled,
-  A_s ≤ A_s,max + A_s'·f_s'/f_y (§9.3.3.1, Table 21.2.2): 2Ø20 with 2Ø16 on top,
-  ØMn = 50.0 kN·m. EN 1992-2004 is unchanged — its A_s,max is the 4 % of 9.2.1.1(3), not a
-  ductility limit compression steel extends.
+- **An over-reinforced section is no longer credited with strength it does not have.**
+  Under ACI 318-19 and CIRSOC 201-25, a face past `A_s_max` had its tension steel cut back
+  to `A_s_max + A_s'·f_s'/f_y` and kept at φ = 0.90, whatever the strain it reached. That
+  overstated every section that is not tension-controlled: a CIRSOC 25×40 with 3Ø32 over
+  4Ø16 at −206.90 kN·m read φMn = 213.4 kN·m (DCR 0.97) against the 196.2 it has
+  (ε_t = 0.00252, φ = 0.685, DCR 1.055). The capacity now comes from strain
+  compatibility with every bar at the stress its strain gives it and φ from ε_t
+  (Table 21.2.2); nothing is capped. A tension-controlled doubly reinforced section reads
+  exactly what it did. In a sweep of 960 ACI designs the old check had passed 32 whose real
+  DCR reached 1.07.
+
+- **A section that is not tension-controlled is reported as such.** §9.3.3.1 does not
+  allow it in a beam, but a doubly reinforced section was excused from the maximum
+  altogether. The check now holds the face in tension to `A_s_max_eff` and warns
+  `As_above_max` past it; 195 of the 960 designs of that sweep had passed without it.
+
+- **A flexure design passes its own check.** The design accepts a layout only if it
+  carries the moment and keeps within the code's limits — tension-controlled under
+  ACI 318-19 / CIRSOC 201-25, within the 4 % of §9.2.1.1(3) on both faces under
+  EN 1992-1-1 — and otherwise says it found none. To get there:
+  - where no bars land between A_s,req and A_s,max (a narrow web jumps from 4Ø12 to 2Ø20)
+    it takes the smallest layout past A_s,req instead of one below it;
+  - it sizes the compression steel for the tension steel **placed**, not the area asked
+    for, which the bars round up;
+  - it chooses compression steel by the depth each candidate sits at, not by area alone:
+    two layers of thin bars sit deeper, reach less stress and need more — a 15×30 section
+    at 83 kN·m ran away to 2Ø25 + 2Ø25 on top and failed, where 2Ø25 in one layer works;
+  - when its iteration ends on a layout that fails, it tries every pair of the layouts
+    visited on the two faces, the faces being coupled, instead of repairing one face
+    against whatever the other held.
+
+  In the 960-design sweep every ACI design now either passes its check or warns
+  `As_below_required`, and a brute-force search finds no valid layout for any of the
+  ones that warn. `tests/test_flexure_design_properties.py` holds the property.
 
 - **The vibrator size only spaces the top bars in a design.** The check and the warnings
   already held the bottom face to 25 mm (1 in.) and the bar diameter, but the bar search
@@ -90,28 +123,27 @@ from the release history and are summaries rather than complete lists.
   the flexure design assumes stays the `stirrup_diameter_ini` of the settings, even when
   the shear design later settles on a thinner one.
 
-- **A section doubly reinforced by its bars is no longer reported over its maximum.** The
-  flexure check only treated a section as doubly reinforced when the moment asked for
-  compression steel, so a face past A_s,max whose compression steel covered the excess was
-  marked ❌ and warned `As_above_max`. It now also counts when the steel provided extends
-  the cap.
-
 - **A design that cannot reach the steel it needs says so.** When no layout that fits the
-  width carries the moment, the design leaves the most that fits — 4Ø12 in a 12 cm web
-  asked for 5.18 cm² — and only the DCR used to show it. It now warns `As_below_required`
-  on that face, quoting `A_s` and `A_s_req`, for as long as the bars on the face stay short
-  of it.
+  width carries the moment (tension-controlled, under ACI 318-19 / CIRSOC 201-25), the
+  design leaves the closest it found — 4Ø12 in a 12 cm web asked for 5.18 cm² — and only
+  the DCR used to show it. It now warns `As_below_required` on the face that fell short,
+  quoting `A_s` and `A_s_req`, for as long as the face carries what the design left.
 
 - **A moment no tension steel alone can carry is designed doubly reinforced.** Under ACI
   318-19 / CIRSOC 201-25, when the equation for singly reinforced steel had no solution
   (a negative discriminant) the requirement was set to A_s,max and the compression-steel
   branch never ran: a 15×30 beam at −80 kN·m reported A_s,req = 5.6 cm² on top and none
-  below. It now reports the couple, 10.94 cm² above and 8.48 cm² below.
+  below. It now reports the couple, 10.94 cm² above and 8.48 cm² below, and A_s,req no
+  longer drops as the moment grows. Where the compression bars sit too close to the
+  neutral axis to help (f_s' − 0.85·f'c ≤ 0, a shallow section) it no longer asks for a
+  negative area of them — −39 cm² — but for none.
 
-- **`As_above_max` is only read on the face the combination puts in tension.** The bars a
-  negative moment asks for on the bottom are compression steel, and a combination with no
-  moment pulls neither face, yet both were held to A_s,max and warned. The detailed report
-  skips the same check; it still prints the limit.
+- **Under ACI 318-19 / CIRSOC 201-25, `As_above_max` is only read on the face the
+  combination puts in tension.** The bars a negative moment asks for on the bottom are
+  compression steel, and a combination with no moment pulls neither face, yet both were
+  held to A_s,max and warned. The detailed report skips the same check; it still prints the
+  limit. EN 1992-1-1 keeps both faces: its 4 % caps "tension or compression
+  reinforcement".
 
 - **The flexure design loop no longer stops when only one face has settled.** It took a
   repeated layout on either face as a limit cycle, which is also what a face that has
