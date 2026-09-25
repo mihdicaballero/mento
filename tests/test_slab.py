@@ -741,6 +741,91 @@ def test_a_designed_slab_carries_its_moment_with_the_steel_of_a_metre() -> None:
     assert slab.flexure_design.bottom.DCR <= 1
 
 
+##########################################################
+# THE SLAB MINIMUM BELONGS TO THE TENSION FACE
+##########################################################
+
+
+def test_a_face_nothing_puts_in_tension_has_no_minimum() -> None:
+    """ACI 318-19 §7.6.1.1 / CIRSOC 201-25 §7.6.1 is a flexural minimum, and
+    R7.6.1.1 / C 7.6.1 place it at the face in tension due to the loads.
+
+    A cantilever strip, 100x20 with c_c 25 mm, carries top bars only. Under
+    the hogging combination the top face owes 0.0018*100*20 = 3.60 cm² and
+    the bottom face, in compression, nothing. Under a combination of shear
+    alone no face is in tension, so neither owes anything -- the bottom used
+    to be asked for the 3.60 cm² all the same, and warned for carrying none.
+    """
+    slab = OneWaySlab(
+        label="Cantilever",
+        concrete=Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=20 * cm,
+        c_c=25 * mm,
+    )
+    slab.set_slab_longitudinal_rebar_top(d_b1=10 * mm, s_b1=15 * cm)
+    node = Node(section=slab, forces=[Forces(label="M-", M_y=-20 * kNm, V_z=30 * kN), Forces(label="V", V_z=30 * kN)])
+    node.check_flexure()
+
+    hogging, shear_only = slab._flexure_checks
+    assert hogging.top.A_s_min.to("cm**2").magnitude == pytest.approx(3.60, rel=1e-3)
+    assert hogging.bottom.A_s_min.magnitude == 0
+    assert shear_only.top.A_s_min.magnitude == 0
+    assert shear_only.bottom.A_s_min.magnitude == 0
+    assert "As_below_min" not in {w.code for w in node.warnings}
+    # The minimum is kept where a moment does put a face in tension.
+    assert Node(section=slab, forces=[Forces(label="M-", M_y=-20 * kNm)]).check_flexure().iloc[1][
+        "As,min"
+    ] == pytest.approx(3.60, rel=1e-3)
+
+
+def test_a_slab_designed_for_span_and_shear_alone_is_not_warned_on_its_bare_top() -> None:
+    """The design leaves the top of a sagging strip empty, as nothing pulls it;
+    the shear-only combination used to ask that same face for 3.60 cm²."""
+    slab = OneWaySlab(
+        label="Sagging",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=20 * cm,
+        c_c=25 * mm,
+    )
+    node = Node(section=slab, forces=[Forces(label="span", M_y=20 * kNm), Forces(label="shear only", V_z=30 * kN)])
+    node.design()
+
+    assert slab.reinforcement.top.layers == ()
+    assert node.warnings == ()
+    assert slab.flexure_design.top.A_s_min.magnitude == 0
+    assert slab.flexure_design.bottom.A_s_min.to("cm**2").magnitude == pytest.approx(3.60, rel=1e-3)
+
+
+def test_a_slab_designed_for_shear_alone_still_gets_its_detailing_steel() -> None:
+    """With no moment the code asks nothing, and the check says so: A_s,min = 0.
+
+    The design still places the 1.8 permille of the gross section it gives a
+    beam in the same case -- the studio's floor, not a clause, and on a slab
+    the same 3.60 cm² as §7.6.1.1 -- because a strip with no bars has no
+    shear strength either: V_c goes with rho_w**(1/3) in Table 22.5.5.1.
+    """
+    slab = OneWaySlab(
+        label="Shear only",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=20 * cm,
+        c_c=25 * mm,
+    )
+    node = Node(section=slab, forces=[Forces(label="shear only", V_z=30 * kN)])
+    node.design()
+
+    bottom = slab.flexure_design.bottom
+    assert bottom.A_s_min.magnitude == 0
+    assert bottom.A_s_req.to("cm**2").magnitude == pytest.approx(3.60, rel=1e-3)
+    assert slab.reinforcement.bottom.A_s >= bottom.A_s_req
+    assert node.warnings == ()
+
+
 def test_a_slab_is_drawn_with_the_whole_bars_that_cover_the_strip() -> None:
     """A metre of Ø10/12 carries 8.33 bars and is drawn with 9."""
     from matplotlib.patches import Circle
