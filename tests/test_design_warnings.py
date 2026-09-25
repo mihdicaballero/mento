@@ -389,6 +389,65 @@ def test_wall_mesh_spacing_names_the_limit_as_mentos_own() -> None:
     assert "el límite que aplica mento" in wall.warnings[0].message
 
 
+def test_an_unlabelled_combination_is_named_by_its_position() -> None:
+    """The same poorly detailed beam under the same two forces without labels.
+
+    ``Forces.label`` defaults to ``None``, and bd94d2f dropped it, so every
+    per-combination warning came out with ``combinations == ()`` -- the value
+    the docstring reserves for a limit of the section alone. Now the first
+    force is ``#1`` and the second ``#2``, and only the spacing warning, which
+    is the section's, stays empty.
+    """
+    beam = _beam()
+    beam.set_longitudinal_rebar_bot(n1=2, d_b1=10 * mm)
+    beam.set_longitudinal_rebar_top(n1=6, d_b1=25 * mm)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=6 * mm, s_l=35 * cm)
+    forces = [Forces(V_z=250 * kN, M_y=150 * kNm), Forces(V_z=120 * kN, M_y=-40 * kNm)]
+    node = Node(section=beam, forces=forces)
+    node.check()
+
+    found = _by_code(node.warnings)
+    assert found["As_below_min"].combinations == ("#1",)
+    assert found["stirrup_spacing_exceeds_max"].combinations == ("#1", "#2")
+    assert found["bars_do_not_fit"].combinations == ()
+
+    # The values-only entry points name them the same way.
+    beam.flexure_check_results(forces)
+    beam.shear_check_results(forces)
+    found = _by_code(beam.warnings)
+    assert found["As_below_min"].combinations == ("#1",)
+    assert found["stirrup_spacing_exceeds_max"].combinations == ("#1", "#2")
+
+    # A label given is kept, and a missing one still counts its position.
+    node = Node(
+        section=beam, forces=[Forces(label="D", V_z=250 * kN, M_y=150 * kNm), Forces(V_z=120 * kN, M_y=-40 * kNm)]
+    )
+    node.check()
+    assert _by_code(node.warnings)["stirrup_spacing_exceeds_max"].combinations == ("D", "#2")
+
+
+def test_an_unlabelled_wall_combination_is_named_by_its_position() -> None:
+    from mento import ShearWall
+    from mento.units import m
+
+    wall = ShearWall(
+        label="W",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        thickness=25 * cm,
+        length=1.5 * m,
+        height=3.0 * m,
+        c_c=20 * mm,
+    )
+    wall.set_horizontal_rebar(d_b=6 * mm, s=40 * cm)
+    wall.set_vertical_rebar(d_b=6 * mm, s=40 * cm)
+    wall.shear_check_results([Forces(V_z=100 * kN), Forces(V_z=3000 * kN)])
+
+    found = _by_code(wall.warnings)
+    assert found["shear_exceeds_section_limit"].combinations == ("#2",)
+    assert found["mesh_ratio_below_min"].combinations[0] in ("#1", "#2")
+
+
 def test_a_warning_prints_as_its_message() -> None:
     _, node = _poorly_detailed()
     warning = node.warnings[0]

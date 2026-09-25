@@ -19,6 +19,7 @@ from mento.units import mm, inch, kN, m, cm, dimensionless
 from mento.design_warnings import (
     DesignWarning,
     collect,
+    combination_label,
     flexure_warnings,
     shear_warnings,
     shortfall_warnings,
@@ -890,10 +891,10 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         """
         self._flexure_checks = []
         self._flexure_warnings = []
-        for force in forces:
+        for position, force in enumerate(forces, 1):
             state = self._run_flexure_check(force, report=False)
             self._flexure_checks.append(capture_flexure_check(self, force.label, state))
-            self._flexure_warnings.extend(flexure_warnings(self, force.label, state))
+            self._flexure_warnings.extend(flexure_warnings(self, combination_label(force.label, position), state))
         self._flexure_checked = True
         return tuple(self._flexure_checks)
 
@@ -907,10 +908,10 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         """
         self._shear_checks = []
         self._shear_warnings = []
-        for force in forces:
+        for position, force in enumerate(forces, 1):
             state = self._run_shear_check(force, report=False)
             self._shear_checks.append(capture_shear_check(self, force.label, state))
-            self._shear_warnings.extend(shear_warnings(self, force.label, state))
+            self._shear_warnings.extend(shear_warnings(self, combination_label(force.label, position), state))
         self._shear_checked = True
         return tuple(self._shear_checks)
 
@@ -960,7 +961,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         self._flexure_checks = []
         self._flexure_warnings = []
 
-        for force in forces:
+        for position, force in enumerate(forces, 1):
             state = self._run_flexure_check(force, report=True)
             result = self._flexure_report_row
             self._flexure_results_list.append(result)
@@ -978,7 +979,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
             # attributes it left on the beam -- those describe the last
             # combination only, and are on their way out with them.
             self._flexure_checks.append(capture_flexure_check(self, force.label, state))
-            self._flexure_warnings.extend(flexure_warnings(self, force.label, state))
+            self._flexure_warnings.extend(flexure_warnings(self, combination_label(force.label, position), state))
 
             # Extract the DCR values for top and bottom from the results
             current_dcr_top = self._DCRb_top
@@ -1140,7 +1141,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         self._shear_checks = []
         self._shear_warnings = []
 
-        for force in forces:
+        for position, force in enumerate(forces, 1):
             state = self._run_shear_check(force, report=True)
             result = self._shear_report_row
             self._shear_results_list.append(result)
@@ -1156,7 +1157,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
             # As in check_flexure: the value of the check, not the beam's
             # attributes afterwards.
             self._shear_checks.append(capture_shear_check(self, force.label, state))
-            self._shear_warnings.extend(shear_warnings(self, force.label, state))
+            self._shear_warnings.extend(shear_warnings(self, combination_label(force.label, position), state))
 
             # Check if this result is the limiting case
             current_dcr = result["DCR"][0]

@@ -231,6 +231,19 @@ def _face_name(suffix: str) -> str:
     return "bottom" if suffix in ("bot", "b") else "top"
 
 
+def combination_label(label: Optional[str], position: int) -> str:
+    """The name a warning files a combination under.
+
+    The force's own label where it has one; ``#n``, its position among the
+    forces checked, where it has none (``Forces.label`` defaults to
+    ``None``). A limit missed under a combination then always names it, so
+    that an empty ``combinations`` means what it says -- a limit of the
+    section alone -- and not "a combination with no label", which it also
+    used to mean.
+    """
+    return label if label is not None else f"#{position}"
+
+
 # ---------------------------------------------------------------------------
 # What a flexure check leaves
 # ---------------------------------------------------------------------------
@@ -475,14 +488,15 @@ def wall_warnings(wall: "RectangularBeam", mesh: "WallMesh", checks: Tuple["Wall
     bars, so its spacing is not a limit it misses; its ratio is.
     """
     found: List[_Raw] = []
-    for check in checks:
+    for position, check in enumerate(checks, 1):
+        label = combination_label(check.label, position)
         for direction, provided, required in (
             ("h", mesh.horizontal, check.rho_t_req),
             ("v", mesh.vertical, check.rho_l_min),
         ):
             if provided.rho < required and not math.isclose(provided.rho, required, rel_tol=1e-9):
                 values = {"direction": direction, "rho": round(provided.rho, 5), "rho_min": round(required, 5)}
-                found.append(_Raw("mesh_ratio_below_min", values, None, check.label, required - provided.rho))
+                found.append(_Raw("mesh_ratio_below_min", values, None, label, required - provided.rho))
         for direction, provided, s_max in (
             ("h", mesh.horizontal, check.s_h_max),
             ("v", mesh.vertical, check.s_v_max),
@@ -496,7 +510,7 @@ def wall_warnings(wall: "RectangularBeam", mesh: "WallMesh", checks: Tuple["Wall
         if check.V_u > check.V_max:
             values = {"V": check.V_u, "V_max": check.V_max}
             severity = float((check.V_u - check.V_max).magnitude)
-            found.append(_Raw("shear_exceeds_section_limit", values, None, check.label, severity))
+            found.append(_Raw("shear_exceeds_section_limit", values, None, label, severity))
     return [_with_units(raw, wall) for raw in found]
 
 
