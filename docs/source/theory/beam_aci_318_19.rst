@@ -271,6 +271,32 @@ compression bars sit too close to the neutral axis to help: no compression steel
 asked for, the face is asked for :math:`A_{s,max}`, and the moment it cannot reach is
 the check's to report.
 
+Maximum bar spacing (crack control)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+§9.7.2.2 sends the bars closest to the tension face to Table 24.3.2:
+
+.. math::
+
+   s \le \min\left(380\,\frac{280}{f_s} - 2.5\,c_c,\ 300\,\frac{280}{f_s}\right)
+   \quad\text{(mm, MPa)}
+   \qquad
+   \min\left(15\,\frac{40000}{f_s} - 2.5\,c_c,\ 12\,\frac{40000}{f_s}\right)
+   \quad\text{(in, psi)}
+
+with :math:`f_s = \tfrac{2}{3} f_y`, which §24.3.2.1 permits in place of a service-load
+calculation, and :math:`c_c` the distance from the surface of those bars to the tension
+face — the clear cover plus the stirrup. With Grade 420 and 25 mm of cover to the
+stirrup that is 292.5 mm (Ø10 stirrup) to 297.5 mm (Ø8). The check reads the spacing
+off the layer nearest each face, centre to centre, as the section spreads it between
+the stirrup legs, and holds the face the combination puts in tension to it; a wide
+beam detailed with two bars — 60 cm with 2Ø25, 505 mm apart — fails it. With a single
+bar nearest the face, §24.3.3 compares the width of the face instead. The detailed
+report adds a *Maximum spacing* row per face, and the warning is
+``bar_spacing_exceeds_max``. The design does not yet apply the cap when it selects the
+bars: a beam whose design comes out with two bars in a wide web is reported by the
+check that follows.
+
 Shear
 -----
 

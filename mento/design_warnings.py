@@ -35,7 +35,10 @@ Codes
     its settings ask for (bar diameter, 25 mm / 1 in., vibrator on top).
 ``bar_spacing_below_min`` / ``bar_spacing_exceeds_max``
     The same for a slab, which is detailed centre to centre: the spacing of
-    the layer nearest the face against the code's limits.
+    the layer nearest the face against the code's limits. A beam raises
+    ``bar_spacing_exceeds_max`` too, on the face a combination puts in
+    tension: the bars nearest it, centre to centre, against the crack-control
+    cap of ACI 318-19 / CIRSOC 201-25 §24.3.2 that §9.7.2.2 sends them to.
 ``bars_do_not_fit``
     The bars on a face leave no clear space between them, or a design found no
     layout that fits the width.
@@ -264,6 +267,28 @@ def flexure_warnings(beam: "RectangularBeam", label: str, state: Any) -> List[_R
                     severity=float((A_s - A_s_max).magnitude),
                 )
             )
+    # The bars nearest the tension face of a beam against the crack-control
+    # cap of ACI 318-19 / CIRSOC 201-25 §24.3.2, which §9.7.2.2 sends them to:
+    # the row the report prints (:func:`mento.reports.tables._max_bar_spacing_row`),
+    # on the face this combination pulls. A slab carries that cap inside the
+    # spacing limit :func:`spacing_warnings` reads, and a code without it
+    # (EN 1992-1-1) has no row.
+    if tension_face is not None:
+        from mento.reports.tables import _max_bar_spacing_row
+
+        row = _max_bar_spacing_row(beam, "b" if tension_face == "bot" else "t")
+        if row is not None:
+            s, s_max = row[0], row[1].to(row[0].units)
+            if s > s_max and not math.isclose(s.magnitude, s_max.magnitude):
+                found.append(
+                    _Raw(
+                        "bar_spacing_exceeds_max",
+                        {"s": s, "s_max": s_max},
+                        _face_name(tension_face),
+                        label,
+                        severity=float((s - s_max).magnitude),
+                    )
+                )
     return [_with_units(raw, beam) for raw in found]
 
 

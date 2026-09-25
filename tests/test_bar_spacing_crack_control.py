@@ -9,6 +9,7 @@ worked by hand in its docstring.
 
 import pytest
 
+import mento
 from mento import (
     Concrete_ACI_318_19,
     Concrete_CIRSOC_201_25,
@@ -16,16 +17,21 @@ from mento import (
     Forces,
     Node,
     OneWaySlab,
+    RectangularBeam,
     SteelBar,
 )
 from mento.slab import Footing
-from mento.units import MPa, cm, kNm, mm
+from mento.units import MPa, cm, inch, kNm, kip, ksi, mm
 
 ADN_420 = SteelBar(name="ADN 420", f_y=420 * MPa)
 
 
 def _slab(concrete, height, steel=ADN_420, c_c=25 * mm):  # type: ignore[no-untyped-def]
     return OneWaySlab(label="L1", concrete=concrete, steel_bar=steel, width=100 * cm, height=height, c_c=c_c)
+
+
+def _beam(concrete, width, steel=ADN_420, c_c=25 * mm):  # type: ignore[no-untyped-def]
+    return RectangularBeam(label="V1", concrete=concrete, steel_bar=steel, width=width, height=50 * cm, c_c=c_c)
 
 
 # ---------------------------------------------------------------------------
@@ -131,3 +137,174 @@ def test_a_footing_takes_the_cap_with_its_own_cover() -> None:
 
     assert aci._max_bar_spacing().to("mm").magnitude == pytest.approx(255.0)
     assert en._max_bar_spacing().to("mm").magnitude == pytest.approx(300.0)
+
+
+# ---------------------------------------------------------------------------
+# Beams: the tension face is checked, and the report gets the rows
+# ---------------------------------------------------------------------------
+
+
+def _wide_beam() -> RectangularBeam:
+    """60x50 ACI beam, c_c 25 mm, Ø10 stirrups, 2Ø25 bottom and 2Ø12 top.
+
+    Between the stirrup legs there are 600 - 2*(25 + 10) = 530 mm. Bottom:
+    530 - 2*25 = 480 mm clear, 505 mm centre to centre. Top: 530 - 24 = 506
+    clear, 518 centre to centre. The cap, with 35 mm from the bars to either
+    face: 380*(280/280) - 2.5*35 = 292.5 mm against 300, so 292.5 mm.
+    """
+    beam = _beam(Concrete_ACI_318_19(name="H25", f_c=25 * MPa), 60 * cm)
+    beam.set_longitudinal_rebar_bot(n1=2, d_b1=25 * mm)
+    beam.set_longitudinal_rebar_top(n1=2, d_b1=12 * mm)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=10 * mm, s_l=20 * cm)
+    return beam
+
+
+def test_a_beam_face_in_tension_is_held_to_table_24_3_2() -> None:
+    beam = _wide_beam()
+    node = Node(section=beam, forces=[Forces(label="pos", M_y=150 * kNm)])
+    node.check_flexure()
+
+    found = {w.code: w for w in node.warnings}
+    assert set(found) == {"bar_spacing_exceeds_max"}
+    warning = found["bar_spacing_exceeds_max"]
+    assert warning.face == "bottom"
+    assert warning.combinations == ("pos",)
+    assert warning.values["s"].to("mm").magnitude == pytest.approx(505.0)
+    assert warning.values["s_max"].to("mm").magnitude == pytest.approx(292.5)
+    assert warning.message == "Bar spacing on the bottom face: 50.5 cm exceeds the maximum 29.2 cm."
+
+
+def test_the_cap_is_checked_on_the_face_the_combination_pulls() -> None:
+    """The top bars of the same beam are compression steel under the positive
+    moment and tension steel under the negative one; only the second holds
+    them to §24.3.2. (The 2Ø12 are also below the top minimum there.)"""
+    beam = _wide_beam()
+    node = Node(section=beam, forces=[Forces(label="pos", M_y=150 * kNm), Forces(label="neg", M_y=-40 * kNm)])
+    node.check_flexure()
+
+    spacing = [(w.face, w.combinations) for w in node.warnings if w.code == "bar_spacing_exceeds_max"]
+    assert spacing == [("bottom", ("pos",)), ("top", ("neg",))]
+
+
+def test_the_report_of_a_beam_gets_the_two_rows() -> None:
+    """Printed on both faces, checked on the tension face, like A_s,max."""
+    beam = _wide_beam()
+    Node(section=beam, forces=[Forces(label="pos", M_y=150 * kNm)]).check_flexure()
+
+    rows = beam._data_min_max_flexure
+    assert rows["Check"][4:] == ["Maximum spacing top", "Maximum spacing bottom"]
+    assert rows["Unit"][4:] == ["mm", "mm"]
+    assert rows["Value"][4:] == [pytest.approx(518.0), pytest.approx(505.0)]
+    assert rows["Min."][4:] == ["", ""]
+    assert rows["Max."][4:] == [pytest.approx(292.5), pytest.approx(292.5)]
+    assert rows["Ok?"][4:] == ["✅", "❌"]
+    assert beam._all_flexure_checks_passed is False
+    # The other rows are what they were.
+    assert rows["Check"][:4] == [
+        "Min/Max As rebar top",
+        "Minimum spacing top",
+        "Min/Max As rebar bottom",
+        "Minimum spacing bottom",
+    ]
+
+
+def test_the_rows_read_in_spanish() -> None:
+    from mento.i18n import translate_table
+
+    beam = _wide_beam()
+    Node(section=beam, forces=[Forces(label="pos", M_y=150 * kNm)]).check_flexure()
+    mento.set_language("es")
+    try:
+        table = translate_table(beam._data_min_max_flexure)
+    finally:
+        mento.set_language("en")
+
+    assert table["Verificación"][4:] == ["Separación máxima superior", "Separación máxima inferior"]
+
+
+def test_a_beam_narrow_enough_passes_and_gets_no_warning() -> None:
+    """20x50 with 2Ø16: 200 - 2*(25 + 10) - 2*16 = 98 mm clear, 114 mm centre
+    to centre, well inside 292.5 mm."""
+    beam = _beam(Concrete_ACI_318_19(name="H25", f_c=25 * MPa), 20 * cm)
+    beam.set_longitudinal_rebar_bot(n1=2, d_b1=16 * mm)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=10 * mm, s_l=20 * cm)
+    Node(section=beam, forces=[Forces(label="pos", M_y=60 * kNm)]).check_flexure()
+
+    rows = beam._data_min_max_flexure
+    assert rows["Value"][5] == pytest.approx(114.0)
+    assert rows["Ok?"][5] == "✅"
+    assert "bar_spacing_exceeds_max" not in {w.code for w in beam.warnings}
+
+
+def test_a_single_bar_is_measured_by_the_width_of_the_face() -> None:
+    """§24.3.3: with one bar nearest the tension face, the width of that face
+    shall not exceed s. A 40 cm beam with 1Ø25 and a Ø8 stirrup: 400 mm
+    against 380 - 2.5*33 = 297.5 mm; a 25 cm beam, 250 mm, passes."""
+    for width, expected in ((40 * cm, ("bottom",)), (25 * cm, ())):
+        beam = _beam(Concrete_ACI_318_19(name="H25", f_c=25 * MPa), width)
+        beam.set_longitudinal_rebar_bot(n1=1, d_b1=25 * mm)
+        beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=20 * cm)
+        Node(section=beam, forces=[Forces(label="pos", M_y=50 * kNm)]).check_flexure()
+
+        found = [w for w in beam.warnings if w.code == "bar_spacing_exceeds_max"]
+        assert tuple(w.face for w in found) == expected
+        if found:
+            assert found[0].values["s"] == width
+            assert found[0].values["s_max"].to("mm").magnitude == pytest.approx(297.5)
+
+
+def test_a_mixed_layer_is_read_at_its_larger_bar() -> None:
+    """50x50, Ø10 stirrups, 2Ø20 + 1Ø16 in one layer: 430 - 40 - 16 = 374 mm
+    over two gaps, 187 mm clear; the centres of a Ø20 and the Ø16 sit
+    187 + 18 = 205 mm apart, and the row takes 187 + 20 = 207 mm, the safe
+    side of the pair. Inside 292.5 either way."""
+    beam = _beam(Concrete_ACI_318_19(name="H25", f_c=25 * MPa), 50 * cm)
+    beam.set_longitudinal_rebar_bot(n1=2, d_b1=20 * mm, n2=1, d_b2=16 * mm)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=10 * mm, s_l=20 * cm)
+    Node(section=beam, forces=[Forces(label="pos", M_y=100 * kNm)]).check_flexure()
+
+    assert beam._data_min_max_flexure["Value"][5] == pytest.approx(207.0)
+    assert "bar_spacing_exceeds_max" not in {w.code for w in beam.warnings}
+
+
+def test_an_imperial_beam_reads_the_in_lb_table() -> None:
+    """24x24 in, 1.5 in cover, #3 stirrups, 2 No. 8: between the legs
+    24 - 2*(1.5 + 0.375) = 20.25 in, 18.25 in clear, 19.25 in centre to
+    centre. Grade 60, f_s = 40 ksi, 1.875 in to the face: min(15 - 4.69, 12)
+    = 10.31 in."""
+    beam = RectangularBeam(
+        label="V1",
+        concrete=Concrete_ACI_318_19(name="C4", f_c=4 * ksi),
+        steel_bar=SteelBar(name="G60", f_y=60 * ksi),
+        width=24 * inch,
+        height=24 * inch,
+        c_c=1.5 * inch,
+    )
+    beam.set_longitudinal_rebar_bot(n1=2, d_b1=1 * inch)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=0.375 * inch, s_l=8 * inch)
+    Node(section=beam, forces=[Forces(label="pos", M_y=100 * kip * inch * 12)]).check_flexure()
+
+    found = {w.code: w for w in beam.warnings}
+    assert found["bar_spacing_exceeds_max"].values["s"].to("inch").magnitude == pytest.approx(19.25)
+    assert found["bar_spacing_exceeds_max"].values["s_max"].to("inch").magnitude == pytest.approx(10.3125)
+
+
+def test_an_en_beam_has_no_such_row() -> None:
+    """EN 1992-1-1 controls cracking through §7.3.3; mento holds it to no
+    §24.3.2, so the same 60 cm beam adds no rows and no warning."""
+    beam = _beam(Concrete_EN_1992_2004(name="C25", f_c=25 * MPa), 60 * cm, SteelBar(name="B500S", f_y=500 * MPa))
+    beam.set_longitudinal_rebar_bot(n1=2, d_b1=25 * mm)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=10 * mm, s_l=20 * cm)
+    Node(section=beam, forces=[Forces(label="pos", M_y=150 * kNm)]).check_flexure()
+
+    assert len(beam._data_min_max_flexure["Check"]) == 4
+    assert "bar_spacing_exceeds_max" not in {w.code for w in beam.warnings}
+
+
+def test_a_bare_face_has_no_row() -> None:
+    """A beam whose top was cleared has nothing nearest that face to measure."""
+    beam = _wide_beam()
+    beam.set_longitudinal_rebar_top(n1=0, d_b1=0 * mm)
+    Node(section=beam, forces=[Forces(label="pos", M_y=150 * kNm)]).check_flexure()
+
+    assert beam._data_min_max_flexure["Check"][4:] == ["Maximum spacing bottom"]
