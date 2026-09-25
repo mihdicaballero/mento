@@ -150,8 +150,14 @@ def test_the_first_stirrup_option_is_the_one_applied() -> None:
     assert first.A_v.to("cm**2/m").magnitude == pytest.approx(design.A_v.to("cm**2/m").magnitude)
 
 
-def test_the_alternatives_are_the_same_cage_in_a_heavier_bar() -> None:
-    """Where s_max governs, every diameter lands on the same spacing: the options are the bars."""
+def test_the_alternatives_are_the_other_bars_each_at_its_own_spacing() -> None:
+    """Where s_max governs, every diameter lands on the same spacing: the options are the bars.
+
+    20x60 H25, Vu 250 kN: d/2 = 27.9 cm is far off, and the threshold of Table
+    9.7.6.2.2 is crossed (Vs,req = (250 - 71.3)/0.75 = 238 kN > 184 kN), so
+    s_max,l = d/4 = 13.97 cm -> 13 cm for every bar. All three carry the
+    section: the worst ratio is the flexure's, 0.93 on 2Ø20 + 1Ø16.
+    """
     options = _designed(HIGH_SHEAR).shear_design.options
     diameters = [option.d_b.to("mm").magnitude for option in options]
 
@@ -162,14 +168,79 @@ def test_the_alternatives_are_the_same_cage_in_a_heavier_bar() -> None:
     # The functional says what each heavier bar costs in steel, over the demand
     # read at that bar's own depth: 2 mm deeper per size, so a little more.
     assert [round(option.functional, 2) for option in options] == [0.18, 0.69, 1.98]
+    assert all(option.DCR is not None and option.DCR <= 1.0 for option in options)
+    assert [round(option.DCR, 2) for option in options] == [0.93, 0.93, 0.94]  # type: ignore[arg-type]
 
 
-def test_the_alternatives_are_ordered_by_diameter_when_the_demand_governs() -> None:
-    """A heavier bar buys a wider spacing there, so the options are not all the same cage."""
+def test_an_alternative_past_the_shear_limit_of_its_own_section_is_dropped() -> None:
+    """ACI 25x50 H25, Mu 150 kNm, Vu 350 kN: 2Ø25 at the bottom, 1eØ10/8 applied.
+
+    With the Ø10 stirrup d = 500 - 25 - 10 - 12.5 = 452.5 mm and the section
+    limit of §22.5.1.2 is phi*(Vc + 0.66*sqrt(25)*250*452.5) = 0.75*(96.2 +
+    373.3) = 352.1 kN: DCR 0.994. The Ø16 row, 1eØ16/11, sits the bars 6 mm
+    deeper, d = 446.5 mm, and the same limit falls to 347.4 kN: DCR 1.007 and
+    ``shear_exceeds_section_limit``. The Ø12 row, d = 450.5 mm, still passes
+    at 0.998. The search offers all three; the section is only built with two.
+    """
+    beam = RectangularBeam(
+        label="V",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=25 * cm,
+        height=50 * cm,
+        c_c=25 * mm,
+    )
+    Node(section=beam, forces=[Forces(label="ELU", V_z=350 * kN, M_y=150 * kNm)]).design()
+    options = beam.shear_design.options
+
+    assert [str(o) for o in options] == ["1eØ10 mm/8 cm", "1eØ12 mm/11 cm"]
+    assert [round(o.DCR, 3) for o in options] == [0.994, 0.998]  # type: ignore[arg-type]
+    assert [row.d_b.to("mm").magnitude for row in beam.shear_design_results.itertuples()] == [10, 12, 16]
+
+
+def test_an_alternative_that_lowers_the_flexural_capacity_past_the_moment_is_dropped() -> None:
+    """ACI 20x50 H25, Mu 100 kNm, Vu 120 kN: 2Ø20 at the bottom, 1eØ10/22 applied.
+
+    The stirrup sets the depth of the bars: d = 500 - 25 - d_b,stirrup - 10.
+    With a = A_s*f_y/(0.85*f'c*b) = 628.3*420/(0.85*25*200) = 62.1 mm,
+    phi*Mn = 0.9*628.3*420*(d - 31.0): 100.6 kNm at the Ø10 depth (455 mm),
+    DCR 0.993; 100.2 at Ø12 (453 mm), DCR 0.998; 99.2 at Ø16 (449 mm), DCR
+    1.008. The shear itself is far from governing (DCR 0.74), so the Ø16 row
+    fails only through the moment -- and is dropped for it.
+    """
+    beam = RectangularBeam(
+        label="V",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=20 * cm,
+        height=50 * cm,
+        c_c=25 * mm,
+    )
+    Node(section=beam, forces=[Forces(label="ELU", V_z=120 * kN, M_y=100 * kNm)]).design()
+    options = beam.shear_design.options
+
+    assert str(beam.reinforcement.bottom) == "2Ø20 mm"
+    assert [str(o) for o in options] == ["1eØ10 mm/22 cm", "1eØ12 mm/22 cm"]
+    assert [round(o.DCR, 3) for o in options] == [0.993, 0.998]  # type: ignore[arg-type]
+    assert options[0].DCR == pytest.approx(beam.flexure_design.DCR)
+
+
+def test_the_applied_stirrups_keep_their_dcr_when_nothing_passes() -> None:
+    """20x60 H25 with Vu 450 kN is past the section limit of §22.5.1.2 however it is stirruped.
+
+    Designed with 2Ø20 + 1Ø16 (centroid 9.4 mm in) and a Ø10 stirrup, d =
+    600 - 25 - 10 - 9.4 = 555.6 mm and phi*Vmax = 0.75*(0.17 + 0.66)*sqrt(25)
+    *200*555.6 = 346 kN. No alternative can carry 450 kN, so none is offered;
+    the applied layout stays first, with the 450/346 = 1.30 that says why.
+    """
     beam = _designed([Forces(label="1.2D+1.6L", V_z=450 * kN, M_y=150 * kNm)])
     options = beam.shear_design.options
 
-    assert [(o.d_b.to("mm").magnitude, o.s_l.to("cm").magnitude) for o in options] == [(10, 7), (12, 10), (16, 13)]
+    assert len(options) == 1
+    assert (options[0].d_b, options[0].s_l) == (beam.shear_design.d_b, beam.shear_design.s_l)
+    assert options[0].DCR == pytest.approx(beam.shear_design.DCR)
+    assert options[0].DCR == pytest.approx(1.30, abs=0.005)
+    assert "shear_exceeds_section_limit" in [w.code for w in beam.warnings]
 
 
 def test_the_stirrup_table_offers_one_layout_per_diameter() -> None:
@@ -336,7 +407,7 @@ def test_options_read_like_the_reinforcement() -> None:
 def test_an_empty_stirrup_table_leaves_no_options() -> None:
     """The search hands back nothing when no bar fits at any spacing; the design then raises."""
     beam = _aci_beam()
-    beam._record_transverse_options(pd.DataFrame())
+    beam._record_transverse_options(pd.DataFrame(), HIGH_SHEAR)
 
     assert beam._shear_options == ()
 

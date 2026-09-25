@@ -439,15 +439,44 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
                 options.append(RebarOption(layers=layers, A_s=A_s.to(area_unit), functional=functional(row)))
         setattr(self, f"_flexure_options_{face}", tuple(options))
 
-    def _record_transverse_options(self, table: DataFrame) -> None:
+    def _section_verdict(self, forces: list[Forces]) -> Tuple[float, bool]:
+        """``(worst DCR, passes)`` of the section as it stands, under ``forces``.
+
+        The worst of shear and flexure, both faces, over every combination;
+        it passes when that ratio is at most 1 and neither check leaves a
+        warning. Values-only checks, so nothing is written to the section and
+        the results of the last reporting check stay what they were -- which
+        is what lets a design try a layout on the section and take it off
+        again.
+        """
+        worst = 0.0
+        clean = True
+        for force in forces:
+            shear_state = self._run_shear_check(force, report=False)
+            worst = max(worst, capture_shear_check(self, force.label, shear_state).DCR)
+            clean = clean and not shear_warnings(self, force.label, shear_state)
+            flexure_state = self._run_flexure_check(force, report=False)
+            flexure = capture_flexure_check(self, force.label, flexure_state)
+            worst = max(worst, flexure.bottom.DCR, flexure.top.DCR)
+            clean = clean and not flexure_warnings(self, force.label, flexure_state)
+        return worst, clean and worst <= 1.0
+
+    def _record_transverse_options(self, table: DataFrame, forces: list[Forces]) -> None:
         """Keep the stirrup layouts the search found, the applied one first.
 
         The applied layout is the first row of the ranked table. The
-        alternatives after it are the same cage in a heavier bar, in order of
-        diameter: that is the substitution a drawing actually makes -- the bar
-        the yard has -- and it is why an option carrying the same stirrups at
-        the same spacing with a thicker bar is kept rather than passed over for
-        adding steel.
+        alternatives are the other rows -- one per bar diameter the code
+        offers, lighter and heavier alike -- in order of diameter, and each is
+        built on the finished section and checked there before it is kept:
+        shear and flexure, under every combination of the design. A stirrup
+        is not only shear. A heavier one sits the longitudinal bars deeper,
+        which raises the ``A_v`` the section needs, lowers its shear limit
+        (ACI 318-19 / CIRSOC 201-25 §22.5.1.2, EN 1992-1-1 V_Rd,max) and
+        lowers its moment capacity, so a row sized for the shear alone could
+        be offered and fail when built: 1eØ16/11 on a 25x50 whose Ø10 cage
+        passes, past the section limit by 0.7 %. The rows the section does
+        not pass with are dropped; the applied one is kept whatever its
+        verdict, with its ``DCR`` saying so.
         """
         rows = [row for _, row in table.iterrows()]
         if not rows:
@@ -457,7 +486,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         alternatives.sort(key=lambda row: row["d_b"].to("mm").magnitude)
         layout = self.reinforcement.transverse.layout
 
-        def option(row: Any) -> StirrupOption:
+        def option(row: Any, DCR: float) -> StirrupOption:
             return StirrupOption(
                 n_stirrups=int(row["n_stir"]),
                 d_b=row["d_b"],
@@ -466,10 +495,18 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
                 A_v=row["A_v"],
                 functional=float(row["functional"]),
                 layout=layout,
+                DCR=DCR,
             )
 
-        chosen = [applied] + alternatives
-        self._shear_options = tuple(option(row) for row in chosen[: int(self.settings.design_options)])
+        options = []
+        for row in [applied] + alternatives:
+            self._apply_transverse_design(row)
+            worst, passes = self._section_verdict(forces)
+            if row is applied or passes:
+                options.append(option(row, worst))
+        # Back to the layout the design applied, whatever was tried last.
+        self._apply_transverse_design(applied)
+        self._shear_options = tuple(options[: int(self.settings.design_options)])
 
     def _design_start_stirrup(self) -> Quantity:
         """The stirrup diameter a design starts from, whatever ran before it.
@@ -1087,7 +1124,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         self._stirrup_s_max_l = self._best_rebar_design["s_max_l"]
         self._stirrup_s_max_w = self._best_rebar_design["s_max_w"]
         self._apply_transverse_design(self._best_rebar_design)
-        self._record_transverse_options(self.shear_design_results)
+        self._record_transverse_options(self.shear_design_results, forces)
 
         # Update longitudinal rebar attributes
         self._update_longitudinal_rebar_attributes()

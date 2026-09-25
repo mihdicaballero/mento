@@ -464,9 +464,17 @@ class StirrupOption:
     """One transverse layout a shear design found.
 
     The fields read as those of :class:`ShearDesign`. ``functional`` says how
-    much steel the option adds: the excess of ``A_v`` over what the design
-    asked for, ``A_v / A_v_req - 1``, plus one for every stirrup beyond the
-    fewest any option needs.
+    much steel the option adds: the excess of ``A_v`` over what the section
+    asks for with this stirrup on it, ``A_v / A_v_req - 1``, plus one for
+    every stirrup beyond the fewest any option needs.
+
+    ``DCR`` is the worst demand-capacity ratio of the finished section built
+    with this option -- shear and flexure, both faces, every combination the
+    design was run for. A stirrup is not only shear: a heavier one sits the
+    bars deeper, which lowers the effective depth and with it the section's
+    shear limit and its moment capacity. An alternative is only offered when
+    that ratio is at most 1 and the section misses no limit with it; the
+    applied layout carries its own, whatever it is.
     """
 
     n_stirrups: int
@@ -476,6 +484,7 @@ class StirrupOption:
     A_v: Quantity
     functional: float
     layout: str = STIRRUPS
+    DCR: Optional[float] = None
 
     @property
     def n_legs(self) -> int:
@@ -510,10 +519,13 @@ class ShearDesign:
     tension. The per-combination results carry each one's own.
 
     ``options`` are the stirrup layouts the last design found: ``options[0]``
-    is the one applied, and the rest follow in order of bar diameter -- the
-    same cage in a heavier bar, which is the substitution a drawing makes when
-    that is the bar at hand. Empty when the stirrups were not designed, or were
-    changed by hand afterwards.
+    is the one applied, and the rest are one layout per other bar diameter
+    the code offers, lighter and heavier alike, in order of diameter -- each
+    the widest spacing with the fewest legs that covers the demand read at
+    the depth that bar gives the section. Only the ones the finished section
+    passes with are kept, shear and flexure, so a drawing can take any of
+    them for the bar at hand; each carries its ``DCR``. Empty when the
+    stirrups were not designed, or were changed by hand afterwards.
     """
 
     n_stirrups: int

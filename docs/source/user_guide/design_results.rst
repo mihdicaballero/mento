@@ -175,12 +175,16 @@ A longitudinal option (``RebarOption``) carries its ``layers`` — the same ``Re
 objects the applied reinforcement is read as — its area and the ``functional`` the search
 ranked it by.
 
-The stirrup alternatives are the same cage in each heavier bar, in order of diameter. Where
-the spacing limit governs they share one spacing (``1eØ10/13``, ``1eØ12/13``, ``1eØ16/13``);
-where the demand governs, the heavier bar buys a wider spacing (``1eØ10/7``, ``1eØ12/10``,
-``1eØ16/13``). Either way the list answers "what if I use the bar I have", and each option's
-``functional`` says what it adds in steel: the excess of ``A_v`` over what the design asked
-for, plus one per extra closed stirrup.
+The stirrup alternatives are one layout per other bar diameter the code offers, lighter and
+heavier alike, in order of diameter: each is the widest spacing with the fewest legs that
+covers the demand read at the depth that bar gives the section. Where the spacing limit
+governs they share one spacing (``1eØ10/13``, ``1eØ12/13``, ``1eØ16/13``); where the demand
+governs, a lighter bar sits closer and a heavier one further apart. Every alternative is
+built on the finished section and checked there -- shear and flexure, since a heavier
+stirrup lowers the effective depth -- and only the ones the section passes with are kept, so
+the list answers "what if I use the bar I have". Each option carries its ``DCR``, the worst
+ratio of the section built with it, and its ``functional``, what it adds in steel: the excess
+of ``A_v`` over what the section asks for with that bar, plus one per extra closed stirrup.
 
 How many are kept is a setting, three by default:
 
