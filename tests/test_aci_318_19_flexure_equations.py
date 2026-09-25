@@ -276,3 +276,47 @@ def test_doubly_reinforced_handles_equal_top_and_bottom_steel():
     equation must send it to the elastic branch instead of dividing by zero."""
     got = eq.nominal_moment_doubly_reinforced(2000.0, 2000.0, F_Y, F_C, B, D, 50.0, BETA_1, EPS_C, EPS_Y, E_S)
     assert got > 0
+
+
+# ---------------------------------------------------------------------------
+# Maximum bar spacing for crack control — Table 24.3.2
+# ---------------------------------------------------------------------------
+
+
+def test_max_bar_spacing_crack_control_grade_420():
+    """Table 24.3.2, deformed bars, with f_s = (2/3)*420 = 280 MPa (§24.3.2.1).
+
+    380*(280/280) - 2.5*c_c against 300*(280/280): with 33 mm from the bars to
+    the face (25 mm cover plus a Ø8 stirrup) the first term is 297.5 mm and
+    governs; with 25 mm (a slab, no stirrup) it is 317.5 mm and the flat
+    300 mm governs.
+    """
+    assert eq.max_bar_spacing_crack_control(280.0, 33.0) == pytest.approx(297.5)
+    assert eq.max_bar_spacing_crack_control(280.0, 25.0) == pytest.approx(300.0)
+
+
+def test_max_bar_spacing_crack_control_commentary_example():
+    """R24.3.2: Grade 420, 50 mm clear cover to the main bars, f_s = 280 MPa:
+    380 - 125 = 255 mm, which the commentary prints as 250 mm -- the SI
+    rounding of the in-lb edition's 15 - 2.5*2 = 10 in."""
+    assert eq.max_bar_spacing_crack_control(280.0, 50.0) == pytest.approx(255.0)
+    assert eq.max_bar_spacing_crack_control(40_000.0, 2.0, is_imperial=True) == pytest.approx(10.0)
+
+
+def test_max_bar_spacing_crack_control_stronger_steel():
+    """A stronger steel tightens both terms: f_s = (2/3)*500 = 333.3 MPa, c_c 33 mm.
+
+    380*0.84 - 82.5 = 236.7 mm against 300*0.84 = 252 mm.
+    """
+    f_s = 2 * 500.0 / 3
+    assert eq.max_bar_spacing_crack_control(f_s, 33.0) == pytest.approx(380 * 280 / f_s - 82.5)
+    assert eq.max_bar_spacing_crack_control(f_s, 33.0) == pytest.approx(236.7, abs=0.05)
+
+
+def test_max_bar_spacing_crack_control_imperial():
+    """The in-lb table: 15*(40,000/f_s) - 2.5*c_c against 12*(40,000/f_s).
+
+    Grade 60, f_s = 40 ksi, 1.125 in from the bars to the face (0.75 in cover
+    plus a #3 stirrup): 15 - 2.81 = 12.19 in, and the flat 12 in governs.
+    """
+    assert eq.max_bar_spacing_crack_control(40_000.0, 1.125, is_imperial=True) == pytest.approx(12.0)

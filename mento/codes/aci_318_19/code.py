@@ -13,7 +13,10 @@ different number. What actually differs, with the clause on each side, is:
   bar size. Hook ``min_stirrup_diameter``.
 * ACI 318-19 §7.7.2.3 / CIRSOC 201-25 art. 7.7.2.3 -- largest spacing of the
   flexural bars of a one-way slab: the lesser of 3h and 450 mm (18 in.)
-  against the lesser of 3h and 300 mm. Hook ``max_bar_spacing_slab``.
+  against the lesser of 3h and 300 mm. Hook ``max_bar_spacing_slab``. Beside
+  it, and the same in both codes, the crack-control cap of Table 24.3.2 on
+  the bars nearest the tension face of a slab (§7.7.2.2) or a beam
+  (§9.7.2.2): hook ``max_bar_spacing_tension``, shared through ``_COMMON``.
 * The bar sizes the transverse selection draws from, which are those of
   CIRSOC 201-25 §20.2.1.3, Tabla 20.2.1. Hook ``transverse_rebar``.
 * §9.6.1.2 -- the f_y cap for minimum flexural reinforcement: 550 MPa
@@ -48,6 +51,7 @@ from mento.codes.ACI_318_19_beam import (
 )
 from mento.codes.ACI_318_19_punching import check_punching_ACI_318_19
 from mento.codes.ACI_318_19_wall import _check_shear_ACI_318_19_wall, _design_shear_ACI_318_19_wall
+from mento.codes.aci_318_19.equations import flexure as flexure_eq
 from mento.codes.check_state import (
     apply_flexure_state,
     apply_shear_state,
@@ -192,6 +196,39 @@ def _max_bar_spacing_slab(section: "RectangularBeam") -> Any:
         _MAX_BAR_SPACING_SLAB_ACI if section.concrete.unit_system == "metric" else _MAX_BAR_SPACING_SLAB_ACI_IMPERIAL
     )
     return _max_bar_spacing_slab_under(section, limit)
+
+
+def _max_bar_spacing_tension(section: "RectangularBeam") -> Any:
+    """ACI 318-19 §24.3.2 / CIRSOC 201-25 art. 24.3.2: the crack-control cap on the bars nearest the tension face.
+
+    Both codes send the bars closest to the tension face of a one-way slab
+    (§7.7.2.2) and of a beam (§9.7.2.2) to Table 24.3.2, the same table in
+    both: the lesser of 380*(280/f_s) - 2.5*c_c and 300*(280/f_s) in mm, of
+    15*(40,000/f_s) - 2.5*c_c and 12*(40,000/f_s) in inches. The equation is
+    :func:`mento.codes.aci_318_19.equations.flexure.max_bar_spacing_crack_control`;
+    what this hook supplies is the two inputs the section fixes:
+
+    * f_s, the stress in those bars at service loads. §24.3.2.1 permits
+      (2/3)*f_y in place of a calculation from the unfactored moment, and a
+      section that only knows its factored loads takes that: 280 MPa for
+      ADN 420 or Grade 60, which is the stress the table is written around.
+    * c_c, the least distance from the surface of those bars to the tension
+      face: the clear cover the section carries, which is to the stirrup,
+      plus the stirrup itself -- nothing on a slab strip with none.
+
+    With Grade 420 and 25 mm of cover to the bars that is min(317.5, 300)
+    = 300 mm, so under ACI 318-19 the 450 mm of §7.7.2.3 never governs a slab
+    of that grade; a metre-wide face detailed as two bars, or a beam 40 cm and
+    wider with two bars in the layer, is past it. On the tension face only:
+    the clause is written on the bars closest to the face in tension, and a
+    combination pulls one face or the other.
+    """
+    imperial = section.concrete.is_imperial
+    stress = psi if imperial else MPa
+    length = inch if imperial else mm
+    f_s = (2 / 3) * section.steel_bar.f_y.to(stress).magnitude
+    c_c = (section.c_c + section._stirrup_d_b).to(length).magnitude
+    return flexure_eq.max_bar_spacing_crack_control(f_s, c_c, is_imperial=imperial) * length
 
 
 def _min_bar_spacing_slab(section: "RectangularBeam") -> Any:
@@ -403,6 +440,8 @@ _COMMON = dict(
     # ``max_bar_spacing_slab`` is deliberately absent: the two codes print a
     # different absolute term in their 7.7.2.3, so each registers its own.
     min_bar_spacing_slab=_min_bar_spacing_slab,
+    # Table 24.3.2 is the same in both, reached through §7.7.2.2 and §9.7.2.2.
+    max_bar_spacing_tension=_max_bar_spacing_tension,
     # §13.3.1.2 is written on d, not on h, so there is no overall-thickness
     # hook for these two codes; ``min_thickness_on_soil`` stays unset.
     min_effective_depth_on_soil=_min_effective_depth_on_soil,

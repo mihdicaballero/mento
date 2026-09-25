@@ -676,8 +676,16 @@ def _minimum_flexural_reinforcement_area_ACI_318_19(self: "RectangularBeam", M_u
       can still carry the moment that cracked it.
     * A one-way slab is designed under Chapter 7, whose minimum is the same
       ACI 318-19 §7.6.1.1 / CIRSOC 201-25 §7.6.1 described next: 0.0018*Ag on
-      the gross section, with or without a moment, since it is also the
-      shrinkage and temperature steel of §24.4.3.2 the slab carries anyway.
+      the gross section. It is a flexural minimum, and it belongs to the
+      tension face: R7.6.1.1 / C 7.6.1 place it "as close as practicable to
+      the face of the concrete in tension due to applied loads", against the
+      shrinkage and temperature steel of §24.4.3.2, which shares its ratio
+      but runs perpendicular to the flexural bars (§24.4.1) and may be split
+      between the faces. So a face nothing puts in tension has no minimum:
+      with no moment the answer is zero on both faces, as it is for a beam,
+      and not 0.0018*Ag on each of them (0.0036*Ag on a slab whose one
+      combination is shear alone, and a warning on a face the design left
+      bare because nothing pulled it).
     * A member supported on the ground is designed under Chapter 13:
       ACI 318-19 §13.3.2.1 / CIRSOC 201-25 §13.3.2.1 send a one-way shallow
       foundation to Chapters 7 and 9, and it is Chapter 7's slab minimum that
@@ -695,7 +703,8 @@ def _minimum_flexural_reinforcement_area_ACI_318_19(self: "RectangularBeam", M_u
 
     Args:
         M_u: Factored moment on the face (N·mm, or lb·in). Only its being zero
-            matters: with no moment there is no flexural minimum to satisfy.
+            matters: with no moment there is no flexural minimum to satisfy,
+            on a slab as on a beam.
         d: Effective depth of the tension reinforcement (mm, or in).
 
     Returns:
@@ -703,6 +712,8 @@ def _minimum_flexural_reinforcement_area_ACI_318_19(self: "RectangularBeam", M_u
     """
     sec = section_floats(self)
     if _slab_minimum_applies(self):
+        if M_u == 0:
+            return 0.0
         rho_st = flexure_eq.shrinkage_and_temperature_ratio()
         return rho_st * sec.width * sec.height
     return _minimum_flexural_reinforcement_ratio_ACI_318_19(self, M_u) * d * sec.width
@@ -788,11 +799,26 @@ def _calculate_flexural_reinforcement_ACI_318_19(
     # 1.8‰ of the gross section: a geometric floor of this studio's own, not a
     # requirement of either code. ACI 318-19 §9.6.1.1 / CIRSOC 201-25 §9.6.1.1
     # ask for A_s,min only where the analysis calls for tension steel, and the
-    # 4/3 relief of §9.6.1.3 carries no floor in either book. Beams only: a
-    # slab goes by Case S below.
+    # 4/3 relief of §9.6.1.3 carries no floor in either book. On a beam it
+    # only ever enters through the 4/3 rule or with no moment (Case 0); on a
+    # slab it is the same number as the minimum of §7.6.1.1, and only enters
+    # with no moment.
     A_s_geo_min = (1.8 / (1000)) * sec.width * sec.height
 
-    if _slab_minimum_applies(self):
+    if M_u == 0:
+        # Case 0:
+        # No flexural demand (e.g. a shear-only load combination). Neither code
+        # requires flexural minimum steel here -- ACI 318-19 §9.6.1.1 /
+        # CIRSOC 201-25 §9.6.1.1 for a beam, and §7.6.1.1 / §7.6.1 for a slab,
+        # whose minimum belongs to the face in tension (R7.6.1.1 / C 7.6.1) --
+        # so A_s_min is zero, but leaving A_s = 0 is not a buildable layout:
+        # the section still needs detailing steel, and rho_w = 0 collapses V_c
+        # to zero in the shear provisions (Table 22.5.5.1). Adopt the
+        # geometric minimum, which is this studio's criterion. Slabs included:
+        # a strip designed for shear alone is still given its 1.8‰, and the
+        # check reports a zero minimum against it.
+        A_s_final = A_s_geo_min
+    elif _slab_minimum_applies(self):
         # Case S:
         # A_s_min above is already the 0.0018*Ag of ACI 318-19 §7.6.1.1 /
         # CIRSOC 201-25 §7.6.1, the ratio §24.4.3.2 writes for shrinkage and
@@ -801,20 +827,8 @@ def _calculate_flexural_reinforcement_ACI_318_19(
         # both). The 4/3 relief of
         # §9.6.1.3 belongs to the clause it relieves, §9.6.1.2, which is a
         # beam clause and not the one governing here, so the minimum stands as
-        # written. With M_u = 0, A_s_calc is zero and this is the minimum
-        # itself, which is also what the section needs for detailing and for
-        # rho_w in the shear provisions.
+        # written.
         A_s_final = max(A_s_calc, A_s_min)
-    elif M_u == 0:
-        # Case 0:
-        # No flexural demand (e.g. a shear-only load combination). Neither code
-        # requires flexural minimum steel here -- ACI 318-19 §9.6.1.1 /
-        # CIRSOC 201-25 §9.6.1.1 -- so rho_min, and therefore
-        # A_s_min, is zero, but leaving A_s = 0 is not a buildable layout: the
-        # section still needs detailing steel, and rho_w = 0 collapses V_c to
-        # zero in the shear provisions (Table 22.5.5.1). Adopt the geometric
-        # minimum, which is this studio's criterion.
-        A_s_final = A_s_geo_min
     elif A_s_calc >= A_s_min:
         # Case 1:
         # The required steel already exceeds the §9.6.1.2 minimum.

@@ -296,6 +296,17 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
 
     def _initialize_longitudinal_rebar_attributes(self) -> None:
         """Initialize all rebar-related attributes with default values."""
+        # The bar counts are typed as floats: a beam's is a whole number of
+        # bars, a slab strip's is width / s, the bars per strip its spacing
+        # gives, which need not be (see mento.slab._bars_at_spacing).
+        self._n1_b: float
+        self._n2_b: float
+        self._n3_b: float
+        self._n4_b: float
+        self._n1_t: float
+        self._n2_t: float
+        self._n3_t: float
+        self._n4_t: float
         # Bottom rebar defaults
         self._n2_b, self._d_b2_b = 0, 0 * mm
         self._n3_b, self._d_b3_b = 0, 0 * mm

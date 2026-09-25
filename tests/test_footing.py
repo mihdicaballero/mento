@@ -7,6 +7,7 @@ motivated the class: the design returns the largest applicable minimum already
 applied, so a consumer never has to correct the engine's answer.
 """
 
+import math
 import warnings
 
 import pytest
@@ -270,24 +271,26 @@ def test_a_footing_still_carries_its_moment(steel_b500s: SteelBar) -> None:
 
 
 @pytest.mark.parametrize(
-    "concrete, steel",
+    "concrete, steel, expected_mm",
     [
-        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), SteelBar(name="ADN 420", f_y=420 * MPa)),
-        (Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa), SteelBar(name="ADN 420", f_y=420 * MPa)),
-        (Concrete_EN_1992_2004(name="C25", f_c=25 * MPa), SteelBar(name="B500S", f_y=500 * MPa)),
+        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), SteelBar(name="ADN 420", f_y=420 * MPa), 255.0),
+        (Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa), SteelBar(name="ADN 420", f_y=420 * MPa), 255.0),
+        (Concrete_EN_1992_2004(name="C25", f_c=25 * MPa), SteelBar(name="B500S", f_y=500 * MPa), 300.0),
     ],
     ids=["aci", "cirsoc", "en"],
 )
-def test_footing_bars_are_capped_at_300_mm(concrete, steel) -> None:  # type: ignore[no-untyped-def]
+def test_footing_bars_are_capped_by_the_ground_practice_and_table_24_3_2(concrete, steel, expected_mm) -> None:  # type: ignore[no-untyped-def]
     """3h stops binding on a section this thick, so the footing cap is what holds.
 
     Under CIRSOC 201-25 the same 300 mm arrives twice over -- as the practice
-    every code is given on the ground and as art. 7.7.2.3 itself -- so the row
-    reads the same as the other two and is here to say that splitting the hook
-    did not move it."""
+    every code is given on the ground and as art. 7.7.2.3 itself. Under both
+    ACI 318-19 and CIRSOC 201-25 the crack-control cap of Table 24.3.2 then
+    takes over, reached through §13.3.2.1 → §7.7.2.2, with the footing's own
+    cover: f_s = (2/3)*420 = 280 MPa and 50 mm to the bars give
+    380 - 2.5*50 = 255 mm. EN 1992-1-1 has no such table and keeps the 300."""
     footing = _strip(Footing, concrete, steel, "Z1")
 
-    assert footing._max_bar_spacing().to("mm").magnitude == pytest.approx(300.0)
+    assert footing._max_bar_spacing().to("mm").magnitude == pytest.approx(expected_mm)
 
 
 @pytest.mark.parametrize(
@@ -543,11 +546,12 @@ def test_an_unreinforced_face_reports_a_failing_dcr(concrete, steel, face) -> No
 def test_a_code_without_the_footing_rules_imposes_none() -> None:
     """A rule a code does not have is not a rule an element can fail.
 
-    ``min_bar_spacing_slab``, ``min_thickness_on_soil`` and
-    ``min_effective_depth_on_soil`` are optional hooks: between them the
-    registered codes fill them in, so this registers one that does not and
-    drives a footing through it. Nothing is capped and nothing is warned about
-    -- silence, rather than an error about a limit that was never stated.
+    ``min_bar_spacing_slab``, ``max_bar_spacing_tension``,
+    ``min_thickness_on_soil`` and ``min_effective_depth_on_soil`` are optional
+    hooks: between them the registered codes fill them in, so this registers
+    one that does not and drives a footing through it. Nothing is capped and
+    nothing is warned about -- silence, rather than an error about a limit
+    that was never stated.
     """
     import dataclasses
 
@@ -560,6 +564,7 @@ def test_a_code_without_the_footing_rules_imposes_none() -> None:
             "title": "NBR 6118-2023",
             "year": 2023,
             "max_bar_spacing_slab": None,
+            "max_bar_spacing_tension": None,
             "min_bar_spacing_slab": None,
             "min_thickness_on_soil": None,
             "min_effective_depth_on_soil": None,
@@ -665,6 +670,30 @@ def test_matching_the_mat_never_undoes_the_design(steel_b500s: SteelBar) -> None
     assert max(r.top.DCR for r in results) <= 1.0
     assert footing._A_s_bot >= footing._A_s_min_bot
     assert footing._A_s_top >= footing._A_s_min_top
+
+
+def test_the_mat_covers_each_face_in_every_metre(steel_b500s: SteelBar) -> None:
+    """The mat search reads a candidate as the strip does: width / s bars.
+
+    An EN 1 m x 0.40 m footing with c_c 50 mm under +100 / -20 kN·m used to
+    come out as Ø12/150 mm, counted as ceil(1000/150) = 7 bars, 7.92 cm²,
+    against 6.90 cm² required. In a metre Ø12/150 is 6.67 bars, 7.54 cm²,
+    which still covers it -- but the count the search chose the mat by was
+    not the steel the mat has. Whatever mat it chooses now, the steel it is
+    credited with is the bar area times the bars per metre, and it covers
+    what each face requires.
+    """
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    footing, _ = _design_envelope(_strip(Footing, concrete, steel_b500s, "Z1", height=40 * cm), 100 * kNm, 20 * kNm)
+
+    for face, spacing, d_b in (
+        (footing.reinforcement.bottom, footing._s_b1_b, footing._d_b1_b),
+        (footing.reinforcement.top, footing._s_b1_t, footing._d_b1_t),
+    ):
+        per_metre = (math.pi * d_b**2 / 4) * (footing.width / spacing)
+        assert face.A_s.to("cm**2").magnitude == pytest.approx(per_metre.to("cm**2").magnitude)
+    assert footing.reinforcement.bottom.A_s >= footing.flexure_design.bottom.A_s_req
+    assert footing.reinforcement.top.A_s >= footing.flexure_design.top.A_s_req
 
 
 def test_the_mat_keeps_each_face_within_the_spacing_range(steel_b500s: SteelBar) -> None:
