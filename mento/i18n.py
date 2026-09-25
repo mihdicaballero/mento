@@ -240,11 +240,19 @@ ES.update(
         "Vertical wall mesh: ρl = {rho} is below the minimum ρl,min = {rho_min}.": (
             "Malla vertical del muro: ρl = {rho} es menor que la mínima ρl,mín = {rho_min}."
         ),
-        "Horizontal wall mesh spacing: {s} exceeds the maximum {s_max}.": (
-            "Separación de la malla horizontal del muro: {s} supera la máxima {s_max}."
+        (
+            "Horizontal wall mesh spacing: {s} exceeds the limit mento applies, {s_max} "
+            "(§11.7.3.1 with lw/5 taken always: conservative)."
+        ): (
+            "Separación de la malla horizontal del muro: {s} supera el límite que aplica mento, {s_max} "
+            "(§11.7.3.1 con lw/5 siempre: conservador)."
         ),
-        "Vertical wall mesh spacing: {s} exceeds the maximum {s_max}.": (
-            "Separación de la malla vertical del muro: {s} supera la máxima {s_max}."
+        (
+            "Vertical wall mesh spacing: {s} exceeds the limit mento applies, {s_max} "
+            "(§11.7.2.1 with lw/3 taken always: conservative)."
+        ): (
+            "Separación de la malla vertical del muro: {s} supera el límite que aplica mento, {s_max} "
+            "(§11.7.2.1 con lw/3 siempre: conservador)."
         ),
     }
 )

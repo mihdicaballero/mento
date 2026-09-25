@@ -80,7 +80,12 @@ Codes
     below ρl,min of ACI 318-19 / CIRSOC 201-25 §11.6.2. ``values`` carries
     ``direction``, ``"h"`` or ``"v"``.
 ``mesh_spacing_exceeds_max``
-    The bars of a wall mesh are further apart than §11.7 allows.
+    The bars of a wall mesh are further apart than the limit mento applies:
+    the lesser of 3h and 450 mm (18 in.) of ACI 318-19 / CIRSOC 201-25
+    §11.7.2.1 (vertical) and §11.7.3.1 (horizontal), and the lw/3 and lw/5
+    those clauses add only where shear reinforcement is required for
+    in-plane strength -- which mento takes always, a conservative choice,
+    so the spacing may exceed the limit and still be what the clause allows.
 """
 
 from __future__ import annotations
@@ -165,8 +170,14 @@ _MESSAGES: Dict[str, str] = {
     "shear_exceeds_section_limit": "Shear V = {V} exceeds the most the section can carry, {V_max}: enlarge the section.",
     "mesh_ratio_below_min_h": "Horizontal wall mesh: ρt = {rho} is below the required ρt = {rho_min}.",
     "mesh_ratio_below_min_v": "Vertical wall mesh: ρl = {rho} is below the minimum ρl,min = {rho_min}.",
-    "mesh_spacing_exceeds_max_h": "Horizontal wall mesh spacing: {s} exceeds the maximum {s_max}.",
-    "mesh_spacing_exceeds_max_v": "Vertical wall mesh spacing: {s} exceeds the maximum {s_max}.",
+    "mesh_spacing_exceeds_max_h": (
+        "Horizontal wall mesh spacing: {s} exceeds the limit mento applies, {s_max} "
+        "(§11.7.3.1 with lw/5 taken always: conservative)."
+    ),
+    "mesh_spacing_exceeds_max_v": (
+        "Vertical wall mesh spacing: {s} exceeds the limit mento applies, {s_max} "
+        "(§11.7.2.1 with lw/3 taken always: conservative)."
+    ),
 }
 
 _FACES = {"bottom": "bottom face", "top": "top face"}
