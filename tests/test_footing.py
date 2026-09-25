@@ -271,24 +271,26 @@ def test_a_footing_still_carries_its_moment(steel_b500s: SteelBar) -> None:
 
 
 @pytest.mark.parametrize(
-    "concrete, steel",
+    "concrete, steel, expected_mm",
     [
-        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), SteelBar(name="ADN 420", f_y=420 * MPa)),
-        (Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa), SteelBar(name="ADN 420", f_y=420 * MPa)),
-        (Concrete_EN_1992_2004(name="C25", f_c=25 * MPa), SteelBar(name="B500S", f_y=500 * MPa)),
+        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), SteelBar(name="ADN 420", f_y=420 * MPa), 255.0),
+        (Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa), SteelBar(name="ADN 420", f_y=420 * MPa), 255.0),
+        (Concrete_EN_1992_2004(name="C25", f_c=25 * MPa), SteelBar(name="B500S", f_y=500 * MPa), 300.0),
     ],
     ids=["aci", "cirsoc", "en"],
 )
-def test_footing_bars_are_capped_at_300_mm(concrete, steel) -> None:  # type: ignore[no-untyped-def]
+def test_footing_bars_are_capped_by_the_ground_practice_and_table_24_3_2(concrete, steel, expected_mm) -> None:  # type: ignore[no-untyped-def]
     """3h stops binding on a section this thick, so the footing cap is what holds.
 
     Under CIRSOC 201-25 the same 300 mm arrives twice over -- as the practice
-    every code is given on the ground and as art. 7.7.2.3 itself -- so the row
-    reads the same as the other two and is here to say that splitting the hook
-    did not move it."""
+    every code is given on the ground and as art. 7.7.2.3 itself. Under both
+    ACI 318-19 and CIRSOC 201-25 the crack-control cap of Table 24.3.2 then
+    takes over, reached through §13.3.2.1 → §7.7.2.2, with the footing's own
+    cover: f_s = (2/3)*420 = 280 MPa and 50 mm to the bars give
+    380 - 2.5*50 = 255 mm. EN 1992-1-1 has no such table and keeps the 300."""
     footing = _strip(Footing, concrete, steel, "Z1")
 
-    assert footing._max_bar_spacing().to("mm").magnitude == pytest.approx(300.0)
+    assert footing._max_bar_spacing().to("mm").magnitude == pytest.approx(expected_mm)
 
 
 @pytest.mark.parametrize(
@@ -544,11 +546,12 @@ def test_an_unreinforced_face_reports_a_failing_dcr(concrete, steel, face) -> No
 def test_a_code_without_the_footing_rules_imposes_none() -> None:
     """A rule a code does not have is not a rule an element can fail.
 
-    ``min_bar_spacing_slab``, ``min_thickness_on_soil`` and
-    ``min_effective_depth_on_soil`` are optional hooks: between them the
-    registered codes fill them in, so this registers one that does not and
-    drives a footing through it. Nothing is capped and nothing is warned about
-    -- silence, rather than an error about a limit that was never stated.
+    ``min_bar_spacing_slab``, ``max_bar_spacing_tension``,
+    ``min_thickness_on_soil`` and ``min_effective_depth_on_soil`` are optional
+    hooks: between them the registered codes fill them in, so this registers
+    one that does not and drives a footing through it. Nothing is capped and
+    nothing is warned about -- silence, rather than an error about a limit
+    that was never stated.
     """
     import dataclasses
 
@@ -561,6 +564,7 @@ def test_a_code_without_the_footing_rules_imposes_none() -> None:
             "title": "NBR 6118-2023",
             "year": 2023,
             "max_bar_spacing_slab": None,
+            "max_bar_spacing_tension": None,
             "min_bar_spacing_slab": None,
             "min_thickness_on_soil": None,
             "min_effective_depth_on_soil": None,

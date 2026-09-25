@@ -923,15 +923,25 @@ def test_a_hogging_slab_is_designed_on_its_top_face_by_a_spacing() -> None:
 @pytest.mark.parametrize(
     ("concrete", "height", "expected_cm"),
     [
-        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), 12 * cm, 36),  # 3h governs
-        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), 25 * cm, 45),  # 450 mm governs
+        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), 8 * cm, 24),  # 3h governs
+        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), 12 * cm, 30),  # §24.3.2 governs, not 3h = 36
+        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), 25 * cm, 30),  # §24.3.2 governs, not 450 mm
         (Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa), 8 * cm, 24),  # 3h governs
         (Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa), 12 * cm, 30),  # 300 mm governs
         (Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa), 25 * cm, 30),  # 300 mm governs
         (Concrete_EN_1992_2004(name="C25", f_c=25 * MPa), 12 * cm, 36),  # 3h governs
         (Concrete_EN_1992_2004(name="C25", f_c=25 * MPa), 25 * cm, 40),  # 400 mm governs
     ],
-    ids=["ACI_3h", "ACI_450mm", "CIRSOC_3h", "CIRSOC_300mm_12cm", "CIRSOC_300mm_25cm", "EN_3h", "EN_400mm"],
+    ids=[
+        "ACI_3h",
+        "ACI_24_3_2_12cm",
+        "ACI_24_3_2_25cm",
+        "CIRSOC_3h",
+        "CIRSOC_300mm_12cm",
+        "CIRSOC_300mm_25cm",
+        "EN_3h",
+        "EN_400mm",
+    ],
 )
 def test_the_code_caps_how_far_apart_the_bars_of_a_slab_may_sit(
     concrete: Concrete_ACI_318_19 | Concrete_EN_1992_2004, height: Quantity, expected_cm: float
@@ -939,9 +949,12 @@ def test_the_code_caps_how_far_apart_the_bars_of_a_slab_may_sit(
     """ACI 318-19 7.7.2.3 is 3h or 450 mm, CIRSOC 201-25 art. 7.7.2.3 is 3h or
     300 mm, EN 1992-1-1 9.3.1.1(3) is 3h or 400 mm.
 
-    The 300 mm of CIRSOC bites from 100 mm of thickness up, so the two codes
-    that share every other clause of Chapter 7 part company on the ordinary
-    slab: 36 cm against 30 cm at h = 12 cm."""
+    Under ACI 318-19 and CIRSOC 201-25 a second cap sits beside that one:
+    §7.7.2.2 sends the bars nearest the tension face to Table 24.3.2, which
+    with ADN 420, f_s = (2/3)*f_y = 280 MPa and 20 mm of cover gives
+    min(380 - 50, 300) = 300 mm. So the 450 mm of ACI never governs a slab of
+    that grade, and the two codes agree from 10 cm of thickness up; only EN,
+    which controls cracking through §7.3.3 instead, keeps 36 cm at h = 12."""
     slab = OneWaySlab(
         label="Slab s_max",
         concrete=concrete,
@@ -1021,7 +1034,9 @@ def test_a_slab_spaced_beyond_the_code_maximum_fails_the_check() -> None:
     rows = slab._data_min_max_flexure
     assert rows["Check"][3] == "Bar spacing bottom"
     assert rows["Value"][3] == pytest.approx(600)
-    assert rows["Max."][3] == pytest.approx(450)
+    # min(3h = 750, 450) of §7.7.2.3, and then the 300 mm of §24.3.2 through
+    # §7.7.2.2: min(380 - 2.5*25, 300) with f_s = 280 MPa.
+    assert rows["Max."][3] == pytest.approx(300)
     assert rows["Ok?"][3] == "❌"
     assert slab._all_flexure_checks_passed is False
 

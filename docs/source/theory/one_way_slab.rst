@@ -91,9 +91,26 @@ the flexural reinforcement, and the design applies the cap, which only ever adds
    * - ACI 318-19
      - :math:`\min(3h,\ 450\ \text{mm})` — 18 in. in imperial
      - §7.7.2.3
+   * - ACI 318-19 / CIRSOC 201-25
+     - :math:`\min\left(380\,\tfrac{280}{f_s} - 2.5\,c_c,\ 300\,\tfrac{280}{f_s}\right)`,
+       with :math:`f_s = \tfrac{2}{3} f_y` and :math:`c_c` the cover to the bars
+       (in-lb: :math:`15\,\tfrac{40000}{f_s} - 2.5\,c_c` and :math:`12\,\tfrac{40000}{f_s}`)
+     - §7.7.2.2 → Table 24.3.2, with §24.3.2.1 for :math:`f_s`
+   * - CIRSOC 201-25
+     - :math:`\min(3h,\ 300\ \text{mm})`
+     - art. 7.7.2.3
    * - EN 1992-1-1
      - :math:`\min(3h,\ 400\ \text{mm})`
      - §9.3.1.1(3), principal reinforcement
+
+The two ACI / CIRSOC limits are taken together, and the second is the one that governs
+the ordinary slab: with ADN 420 or Grade 60 and 25 mm of cover it is
+:math:`\min(317.5,\ 300) = 300` mm, so the 450 mm of ACI 318-19 §7.7.2.3 never binds a
+slab of that grade, a deeper cover or a stronger steel tightens it further, and the two
+codes agree from 10 cm of thickness up. It is written on the bars closest to the tension
+face; a slab applies it on both faces, because which face is in tension changes with the
+combination and the strip is detailed once. EN 1992-1-1 controls cracking through
+§7.3.3 instead, and mento does not add a cap of this kind to it.
 
 The check reports it as well: the row that gives a beam the clear distance between its
 bars gives a slab the spacing it is detailed at, with this maximum beside the minimum.
@@ -204,8 +221,16 @@ Validation
      - Internal consistency
    * - Design written back as a spacing
      - ``test_a_designed_slab_is_detailed_by_a_spacing_not_by_a_bar_count``,
-       ``test_a_spacing_is_never_rounded_into_fewer_bars_than_the_design_chose``
+       ``test_a_spacing_is_never_rounded_into_less_steel_than_the_design_chose``
      - Internal consistency
+   * - Steel of a strip is bars per metre
+     - ``test_the_steel_of_a_strip_is_the_bar_area_times_the_bars_per_metre``,
+       ``test_a_slab_designed_to_its_minimum_reaches_it_in_every_metre``
+     - Internal consistency; CIRSOC 201-25 §7.6.1
+   * - Crack-control spacing cap
+     - ``test_an_aci_slab_is_held_to_300_mm_by_table_24_3_2``,
+       ``test_a_slab_spread_past_table_24_3_2_is_warned``
+     - ACI 318-19 §7.7.2.2, Table 24.3.2, §24.3.2.1
    * - Maximum bar spacing
      - ``test_the_code_caps_how_far_apart_the_bars_of_a_slab_may_sit``,
        ``test_a_design_is_never_spaced_beyond_the_code_maximum``

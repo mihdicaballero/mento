@@ -204,10 +204,15 @@ registry:
      - Reason
    * - Maximum
      - 300 mm, in place of the slab's
-       :math:`\min(3h,\ 450\,/\,400\ \text{mm})`
+       :math:`\min(3h,\ 450\,/\,400\ \text{mm})`; under ACI 318-19 and CIRSOC 201-25
+       also the crack-control cap of Table 24.3.2 with the footing's own cover,
+       :math:`380 - 2.5\,c_c` mm with ADN 420 (255 mm at 50 mm of cover)
      - A footing is thick, so :math:`3h` stops binding long before the bars are close
        enough to spread the bearing pressure into them. ACI §7.7.2.3 and
-       EN §9.3.1.1(3) still apply; the 300 mm cap is simply always the smaller.
+       EN §9.3.1.1(3) still apply; the 300 mm cap is simply always the smaller. And
+       §13.3.2.1 sends a one-way footing to Chapter 7, whose §7.7.2.2 sends the bars
+       nearest the tension face to Table 24.3.2 (see :doc:`one_way_slab`); with the
+       deep cover of a member cast against the ground that cap is the tightest of all.
    * - Minimum
      - 100 mm
      - EN detailing practice for foundations, applied under both codes: nothing about

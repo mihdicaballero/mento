@@ -118,6 +118,16 @@ class DesignCode:
     #: ACI 318-19 §25.2.1 / CIRSOC 201-25 §25.2.1 the settings already impose.
     #: ``None`` where the code states none.
     min_bar_spacing_slab: Callable[..., Any] | None = None
+    #: Largest centre-to-centre spacing this code allows between the bars
+    #: nearest the tension face of a beam or a one-way slab, for crack
+    #: control: ACI 318-19 §24.3.2 / CIRSOC 201-25 art. 24.3.2, reached
+    #: through §9.7.2.2 and §7.7.2.2 of both. Takes the section, since the
+    #: limit depends on its steel grade and on the cover to those bars. A slab
+    #: folds it into its own spacing limit beside §7.7.2.3; a beam is held to
+    #: it on the face a combination puts in tension. ``None`` for a code that
+    #: controls cracking some other way (EN 1992-1-1 §7.3.3), which is read as
+    #: no limit of this kind rather than as an error.
+    max_bar_spacing_tension: Callable[..., Any] | None = None
     #: Thinnest *overall* section this code allows for a member bearing on the
     #: ground. ``None`` for a code that instead writes its limit on the
     #: effective depth, which is a different quantity and has its own hook

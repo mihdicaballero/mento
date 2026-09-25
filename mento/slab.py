@@ -204,9 +204,23 @@ class OneWaySlab(RectangularBeam):
         own hook, so the number is the one the section's code prints; see
         ``mento.codes.aci_318_19.code._max_bar_spacing_slab`` and
         ``_max_bar_spacing_slab_cirsoc``.
+
+        ACI 318-19 and CIRSOC 201-25 put a second cap beside that one, and it
+        is the one that governs the ordinary slab: §7.7.2.2 sends the bars
+        nearest the tension face to Table 24.3.2, the crack-control limit of
+        §24.3.2 -- 300 mm with ADN 420 or Grade 60 and (2/3)*f_y, less with a
+        stronger steel or a deeper cover (hook ``max_bar_spacing_tension``).
+        Without it a 12 cm ACI slab under 7.5 kN·m was detailed Ø10/34: inside
+        the 3h = 36 cm of §7.7.2.3 and past the 300 mm of §24.3.2. The two are
+        taken together here, and on both faces: §24.3.2 is written on the
+        tension face, but which face that is changes with the combination,
+        and a slab is detailed once. Where a face is never in tension the
+        cap costs nothing on the strips it decides -- a face that light is
+        governed by its minimum area, which asks closer bars anyway.
         """
-        limit = design_code(self.concrete).max_bar_spacing_slab
-        return None if limit is None else cast("Quantity", limit(self))
+        code = design_code(self.concrete)
+        limits = [hook(self) for hook in (code.max_bar_spacing_slab, code.max_bar_spacing_tension) if hook is not None]
+        return None if not limits else cast("Quantity", min(limits))
 
     def _min_bar_spacing(self) -> Quantity | None:
         """The smallest spacing the design code asks for between the flexural bars.
