@@ -108,23 +108,35 @@ jobs:
       # The number on the home page of mento-web. It counts the tests marked
       # `published_example` -- the ones that reproduce a case validated outside
       # mento: a Calcpad sheet, a published example or design guide, an ETABS
-      # or spreadsheet cross-check -- and the whole suite while none is marked.
-      # Collecting imports every test module, which is why mento is installed.
+      # or spreadsheet cross-check, each citing its source in its docstring
+      # (tests/test_published_examples.py). It is only ever that count: with
+      # nothing marked it publishes 0 and warns, never the size of the whole
+      # suite, which is not what the number means. Collecting imports every
+      # test module, which is why mento is installed.
       - name: Count the tests
         id: count
         run: |
-          # The full collection runs unguarded, so a module that fails to
-          # import fails the release instead of shrinking the count.
-          python -m pytest --collect-only -q --override-ini="addopts=" > collected.txt
-          # With nothing marked pytest exits 5 and grep finds no test id; both
-          # are the "none marked" case, not an error.
-          tests=$( (python -m pytest --collect-only -q --override-ini="addopts=" -m published_example || true) | grep -c '::' || true)
-          scope="published_example"
+          # pytest exits 0 with the marked ids on stdout and 5 when nothing is
+          # marked; anything else (2: a module fails to import, 4: a bad -m
+          # expression) is an error, and it fails the release instead of
+          # shrinking or inflating the count.
+          set +e
+          python -m pytest --collect-only -q --override-ini="addopts=" -m published_example > marked.txt
+          status=$?
+          set -e
+          case "$status" in
+            0) tests=$(grep -c '::' marked.txt || true) ;;
+            5) tests=0 ;;
+            *)
+              cat marked.txt
+              echo "::error::pytest --collect-only -m published_example exited with status $status"
+              exit "$status"
+              ;;
+          esac
           if [ "$tests" -eq 0 ]; then
-            tests=$(grep -c '::' collected.txt)
-            scope="all"
+            echo "::warning::No test is marked published_example; publishing a count of 0."
           fi
-          echo "Counted $tests tests ($scope)"
+          echo "Counted $tests tests (published_example)"
           printf '{"tests": %d}\n' "$tests" > stats.json
           cat stats.json
           echo "tests=$tests" >> "$GITHUB_OUTPUT"
