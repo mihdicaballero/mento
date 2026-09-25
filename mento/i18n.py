@@ -251,6 +251,14 @@ ES.update(
     }
 )
 
+# The §24.3.2 rows of a beam's flexure limits table (mento.reports.tables).
+ES.update(
+    {
+        "Maximum spacing top": "Separación máxima superior",
+        "Maximum spacing bottom": "Separación máxima inferior",
+    }
+)
+
 # English is the source language, so its catalog is empty: every lookup falls
 # through to the key itself.
 _CATALOGS: Dict[str, Dict[str, str]] = {
