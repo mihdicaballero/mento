@@ -621,8 +621,9 @@ class DocumentBuilder:
         tbl_pr.append(parse_xml(f'<w:tblLayout {nsdecls("w")} w:type="fixed"/>'))
 
         for row in table.rows:
+            cells = row.cells  # rebuilt on every access, so read once per row
             for idx, width in enumerate(widths):
-                row.cells[idx].width = width
+                cells[idx].width = width
 
     def table_style_id(self, style: Optional[TableStyle] = None) -> str:
         """The id to tag a table with, defining ``style`` first if need be.
@@ -709,15 +710,21 @@ class DocumentBuilder:
         self._apply_table_style(table, self.table_style_id())
         self.set_col_widths(table, column_widths)
 
+        # Cells are read once per row: python-docx's table.cell(i, j) rebuilds the
+        # whole cell grid on every call, which made filling a table O(cells²).
+        # table.rows[k] likewise lists every row, hence the single list here.
+        rows = list(table.rows)
+
         # --- Header row ---
-        for j in range(df.shape[1]):
-            table.cell(0, j).text = str(df.columns[j])
+        header = rows[0].cells
+        for j, name in enumerate(df.columns):
+            header[j].text = str(name)
 
         # --- Data rows ---
         for i in range(df.shape[0]):
+            cells = rows[i + 1].cells
             for j in range(df.shape[1]):
-                value = df.iat[i, j]
-                table.cell(i + 1, j).text = str(value)
+                cells[j].text = str(df.iat[i, j])
 
         # --- Format all text ---
         if font_size is not None:
@@ -798,12 +805,13 @@ class DocumentBuilder:
         if resolved is None:
             return
         column_idx = df.columns.get_loc(resolved)
+        rows = list(table.rows)
         for row_offset in range(df.shape[0]):
             verdict = str(df.iat[row_offset, column_idx])
             if verdict not in (PASS_MARK, FAIL_MARK):
                 continue
             passed = verdict == PASS_MARK
-            cell = table.rows[row_offset + 1].cells[column_idx]
+            cell = rows[row_offset + 1].cells[column_idx]
             fill = "C6EFCE" if passed else "FFC7CE"
             font_color = "006100" if passed else "9C0006"
             cell._element.get_or_add_tcPr().append(parse_xml(f'<w:shd {nsdecls("w")} w:fill="{fill}"/>'))

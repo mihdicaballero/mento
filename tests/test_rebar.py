@@ -1,4 +1,5 @@
 import math
+from typing import Any
 
 import pytest
 from mento.rebar import Rebar, RebarDesignInfeasibleError
@@ -317,6 +318,25 @@ def test_beam_transverse_rebar_CIRSOC_201_25(
     assert shear.d_b == 6 * mm
     assert shear.s_l == 22 * cm
     assert shear.A_v.to("cm**2/m").magnitude == pytest.approx(2.57, rel=1e-3)
+
+
+_LAYOUT = ["n_1", "d_b1", "n_2", "d_b2", "n_3", "d_b3", "n_4", "d_b4"]
+
+
+@pytest.mark.parametrize("A_s_req", [1 * cm**2, 6 * cm**2, 20 * cm**2])
+@pytest.mark.parametrize("fixture", ["beam_example_metric", "slab_example_metric"])
+def test_longitudinal_combinations_hold_each_layout_once(
+    fixture: str, A_s_req: Any, request: pytest.FixtureRequest
+) -> None:
+    """Every layout appears once, and a group with no bars carries no diameter."""
+    beam_rebar = Rebar(request.getfixturevalue(fixture))
+    beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=A_s_req)
+    table = beam_rebar._long_combos_df
+
+    keys = table[_LAYOUT].map(lambda v: None if v is None else getattr(v, "magnitude", v))
+    assert not keys.duplicated().any()
+    for n, d in (("n_2", "d_b2"), ("n_3", "d_b3"), ("n_4", "d_b4")):
+        assert ((table[n] == 0) == table[d].isna()).all()
 
 
 # Test 1: Slab mode - spacing penalty
