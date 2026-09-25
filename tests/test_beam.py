@@ -335,7 +335,7 @@ def test_set_transverse_rebar_defaults_clear_stirrups_imperial(
     assert stirrups.A_v.to("inch**2/ft").magnitude == 0
 
 
-@pytest.mark.published_example
+# Not published_example: no source is cited for these numbers (the sibling tests cite a Calcpad sheet).
 def test_shear_check_EN_1992_2004_rebar_1(
     beam_example_EN_1992_2004_01: RectangularBeam,
 ) -> None:
@@ -362,7 +362,7 @@ def test_shear_check_EN_1992_2004_rebar_1(
     assert results.iloc[1]["VEd,2≤VRd"] is True
 
 
-@pytest.mark.published_example
+# Not published_example: no source is cited for these numbers (the sibling tests cite a Calcpad sheet).
 def test_shear_check_EN_1992_2004_rebar_2(
     beam_example_EN_1992_2004_01: RectangularBeam,
 ) -> None:
@@ -389,7 +389,7 @@ def test_shear_check_EN_1992_2004_rebar_2(
     assert results.iloc[1]["VEd,2≤VRd"] is False
 
 
-@pytest.mark.published_example
+# Not published_example: no source is cited for these numbers (the sibling tests cite a Calcpad sheet).
 def test_shear_check_EN_1992_2004_rebar_3(
     beam_example_EN_1992_2004_01: RectangularBeam,
 ) -> None:
@@ -449,7 +449,7 @@ def test_shear_check_EN_1992_2004_no_rebar_1(
     assert results.iloc[1]["VEd,2≤VRd"] is True
 
 
-@pytest.mark.published_example
+# Not published_example: no source is cited for these numbers (the sibling tests cite a Calcpad sheet).
 def test_shear_check_EN_1992_2004_no_rebar_2(
     beam_example_EN_1992_2004_01: RectangularBeam,
 ) -> None:
@@ -480,7 +480,7 @@ def test_shear_check_EN_1992_2004_no_rebar_2(
     assert results.iloc[1]["VEd,2≤VRd"] is True
 
 
-@pytest.mark.published_example
+# Not published_example: no source is cited for these numbers (the sibling tests cite a Calcpad sheet).
 def test_shear_check_EN_1992_2004_no_rebar_3(
     beam_example_EN_1992_2004_01: RectangularBeam,
 ) -> None:
@@ -512,7 +512,7 @@ def test_shear_check_EN_1992_2004_no_rebar_3(
     assert results.iloc[1]["VEd,2≤VRd"] is True
 
 
-@pytest.mark.published_example
+# Not published_example: no source is cited for these numbers (the sibling tests cite a Calcpad sheet).
 def test_shear_design_EN_1992_2004_1(
     beam_example_EN_1992_2004_01: RectangularBeam,
 ) -> None:
@@ -538,7 +538,7 @@ def test_shear_design_EN_1992_2004_1(
     assert results.iloc[1]["VEd,2≤VRd"] is True
 
 
-@pytest.mark.published_example
+# Not published_example: no source is cited for these numbers (the sibling tests cite a Calcpad sheet).
 def test_shear_check_ACI_318_19_1(beam_example_imperial: RectangularBeam) -> None:
     f = Forces(V_z=37.727 * kip, N_x=0 * kip)
     beam_example_imperial.set_transverse_rebar(n_stirrups=1, d_b=0.5 * inch, s_l=6 * inch)
@@ -560,7 +560,7 @@ def test_shear_check_ACI_318_19_1(beam_example_imperial: RectangularBeam) -> Non
     assert results.iloc[1]["Vu≤ØVn"] is True
 
 
-@pytest.mark.published_example
+# Not published_example: no source is cited for these numbers (the sibling tests cite a Calcpad sheet).
 def test_shear_check_ACI_318_19_2(beam_example_imperial: RectangularBeam) -> None:
     f = Forces(V_z=37.727 * kip, N_x=20 * kip)
     beam_example_imperial.set_transverse_rebar(n_stirrups=1, d_b=0.5 * inch, s_l=6 * inch)
@@ -1187,7 +1187,8 @@ def test_flexure_check_EN_1992_2004_01(
     assert results.iloc[1]["DCR"] == pytest.approx(0.861, rel=1e-3)
 
 
-@pytest.mark.published_example
+# Not published_example: the cited Calcpad sheet no longer gives these numbers; they were
+# re-baselined to mento's own output (dd0df9f) with no derivation outside mento.
 def test_flexure_check_EN_1992_2004_02(
     beam_example_EN_1992_2004_01: RectangularBeam,
 ) -> None:
@@ -1231,7 +1232,8 @@ def test_flexure_check_EN_1992_2004_03(
     assert results.iloc[1]["As,req top"] == pytest.approx(0, rel=1e-3)
 
 
-@pytest.mark.published_example
+# Not published_example: the Concrete Centre case of Lecture 3 p. 14 (C30/B500S, +370 kN·m,
+# 23.07 / 4.27 cm²) was replaced by C60/B400S at -370 kN·m, and 25.85 cm² is mento's output.
 def test_flexure_check_EN_1992_2004_04(
     beam_example_EN_1992_2004_03: RectangularBeam,
 ) -> None:
@@ -1290,7 +1292,8 @@ def test_flexure_EN_1992_2004_matches_concise_eurocode_closed_form() -> None:
     assert results.iloc[1]["As,req bot"] == pytest.approx(A_s_ref, rel=2e-3)
 
 
-@pytest.mark.published_example
+# Not published_example: a unit test of an internal function, whose expectation is built
+# from mento's own attributes.
 def test_compression_zone_limits_EN_1992_2004_are_expressed_on_the_neutral_axis() -> None:
     """The ductility limits are on x_u/d; the block depth is lambda times that.
 
@@ -2164,7 +2167,8 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_06() -> None:
     assert A_s_comp.to("inch**2").magnitude == pytest.approx(0.0, abs=1e-3)
 
 
-@pytest.mark.published_example
+# Not published_example: it pins mento's 4/3*A_s,calc of ACI 318-19 §9.6.1.3, not ETABS's A_s,min
+# (sheet Flexion, column BC = 2.2137 in²).
 def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_07() -> None:
     """
     Test_Etabs_07: b=18", h=30", fc=8000psi, fy=60ksi, Mu=200 kip.ft, simple.
@@ -2191,7 +2195,8 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_07() -> None:
     assert A_s_bool is True  # 4/3 rule was applied
 
 
-@pytest.mark.published_example
+# Not published_example: it pins mento's 4/3*A_s,calc of ACI 318-19 §9.6.1.3, not ETABS's A_s,min
+# (sheet Flexion, column BC = 2.6089 in²).
 def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_08() -> None:
     """
     Test_Etabs_08: b=20", h=30", fc=9000psi, fy=60ksi, Mu=200 kip.ft, simple.
@@ -2217,7 +2222,8 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_08() -> None:
     assert A_s_bool is True  # 4/3 rule was applied
 
 
-@pytest.mark.published_example
+# Not published_example: it pins mento's 4/3*A_s,calc of ACI 318-19 §9.6.1.3, not ETABS's A_s,min
+# (sheet Flexion, column BC = 4.02 in²).
 def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_09() -> None:
     """
     Test_Etabs_09: b=24", h=36", fc=10000psi, fy=60ksi, Mu=200 kip.ft, simple.
@@ -2243,7 +2249,8 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_09() -> None:
     assert A_s_bool is True  # 4/3 rule was applied
 
 
-@pytest.mark.published_example
+# Not published_example: it pins mento's 4/3*A_s,calc of ACI 318-19 §9.6.1.3, not ETABS's A_s,min
+# (sheet Flexion, column BC = 4.2162 in²).
 def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_10() -> None:
     """
     Test_Etabs_10: b=24", h=36", fc=11000psi, fy=60ksi, Mu=200 kip.ft, simple.
@@ -2437,7 +2444,8 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_17() -> None:
     assert A_s_comp.to("inch**2").magnitude == pytest.approx(0.0, abs=1e-3)
 
 
-@pytest.mark.published_example
+# Not published_example: it pins mento's geometric floor 0.0018*b*h, not ETABS's A_s,min
+# (sheet Flexion, column BC = 3.2915 in²).
 def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_18() -> None:
     """
     Test_Etabs_18: b=16", h=60", fc=8000psi, fy=75ksi, Mu=200 kip.ft, simple.
@@ -2545,7 +2553,8 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_22() -> None:
     assert A_s_comp.to("inch**2").magnitude == pytest.approx(0.0, abs=1e-3)
 
 
-@pytest.mark.published_example
+# Not published_example: it asserts A_s >= 19.0 cm² and phi*Mn >= Mu from mento's own check;
+# ETABS asks for 19.38 cm² (sheet Flexion, row 27, column BC) and the design passes below it.
 def test_design_flexure_ACI_318_19_Test_Etabs_01() -> None:
     """
     Test_Etabs_01: b=12", h=20", fc=2500psi, fy=60ksi, Mu=200 kip·ft.
@@ -2592,7 +2601,7 @@ def test_design_flexure_ACI_318_19_Test_Etabs_01() -> None:
     assert phi_Mn >= 271.0
 
 
-@pytest.mark.published_example
+# Not published_example: the spreadsheet has no negative-moment row; nothing external is asserted.
 def test_design_flexure_ACI_318_19_negative_moment_doubly_reinforced() -> None:
     """
     Mirror of Test_Etabs_01 with NEGATIVE moment: b=12", h=20", fc=2500psi,
