@@ -544,7 +544,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
             self._stirrup_d_b = d_b
             self._stirrup_s_l = s_l
             self._A_v = 0 * cm**2 / m
-            self._update_effective_heights()
+            self._update_stirrup_dependents()
             return
 
         # Every non-empty reinforcement configuration must be strictly positive.
@@ -568,7 +568,21 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         # Calculate the transverse reinforcement area per unit length.
         self._A_v = A_vs / s_l
 
-        # Recalculate effective depths using the new stirrup diameter.
+        self._update_stirrup_dependents()
+
+    def _update_stirrup_dependents(self) -> None:
+        """Recompute what the stirrup diameter enters into.
+
+        The legs sit between the cover and the longitudinal bars, so a
+        thicker stirrup narrows the clear space those bars have across the
+        width as well as lowering the effective depths. The clear space used
+        to be recomputed only when the bars were set, so stirrups set after
+        them -- or changed later -- left ``clear_spacing_below_min`` reading a
+        stale value until a reporting check happened to refresh it, and the
+        answer depended on the order of the calls. Everything that follows
+        from the stirrup goes through here.
+        """
+        self._calculate_min_clear_spacing()
         self._update_effective_heights()
 
     def _leg_spacing_across_width(self) -> Quantity:

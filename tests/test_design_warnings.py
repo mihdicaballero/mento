@@ -372,3 +372,52 @@ def test_en_minimum_is_not_relieved() -> None:
     node.design()
     top = beam.flexure_design.top
     assert top.A_s_min_eff == top.A_s_min
+
+
+# ---------------------------------------------------------------------------
+# The spacing is read off the section as it is now
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("bars_first", [True, False], ids=["bars then stirrups", "stirrups then bars"])
+def test_clear_spacing_follows_the_stirrup_whatever_the_call_order(bars_first: bool) -> None:
+    """20x50, 4Ø12 below, 1eØ16, c_c 25 mm.
+
+    The legs sit between the cover and the bars, so the clear space left for
+    the four bars is (200 - 2*(25 + 16) - 4*12)/3 = 23.3 mm, under the 25 mm of
+    ACI 318-19 §25.2.1 the settings ask for. With the Ø8 the settings assume
+    it is (200 - 2*(25 + 8) - 48)/3 = 28.7 mm and passes. The warning is
+    read off the section, so it cannot depend on whether the stirrups were
+    set before or after the bars, nor wait for a reporting check to refresh
+    it: on bd94d2f the "bars then stirrups" order kept the 28.7 mm and stayed
+    silent until ``check_flexure`` ran.
+    """
+    beam = _beam(height=50 * cm)
+    if bars_first:
+        beam.set_longitudinal_rebar_bot(n1=4, d_b1=12 * mm)
+        beam.set_transverse_rebar(n_stirrups=1, d_b=16 * mm, s_l=20 * cm)
+    else:
+        beam.set_transverse_rebar(n_stirrups=1, d_b=16 * mm, s_l=20 * cm)
+        beam.set_longitudinal_rebar_bot(n1=4, d_b1=12 * mm)
+
+    spacing = _by_code(beam.warnings)["clear_spacing_below_min"]
+    assert spacing.face == "bottom"
+    assert spacing.values["s"].to("mm").magnitude == pytest.approx(23.33, abs=0.01)
+    assert spacing.values["s_min"].to("mm").magnitude == pytest.approx(25.0)
+
+    # A lighter stirrup set afterwards widens the space again, and the
+    # warning goes with it -- with no check in between.
+    beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=20 * cm)
+    assert "clear_spacing_below_min" not in _by_code(beam.warnings)
+    assert beam._available_s_bot.to("mm").magnitude == pytest.approx(28.67, abs=0.01)
+
+
+def test_clearing_the_stirrups_widens_the_space_for_the_bars() -> None:
+    """Without stirrups the bars sit against the cover: (200 - 50 - 48)/3 = 34 mm."""
+    beam = _beam(height=50 * cm)
+    beam.set_longitudinal_rebar_bot(n1=4, d_b1=12 * mm)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=16 * mm, s_l=20 * cm)
+    beam.set_transverse_rebar(0, 0 * mm, 0 * cm)
+
+    assert beam._available_s_bot.to("mm").magnitude == pytest.approx(34.0, abs=0.01)
+    assert "clear_spacing_below_min" not in _by_code(beam.warnings)
