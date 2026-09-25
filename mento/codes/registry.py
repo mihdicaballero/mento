@@ -90,8 +90,24 @@ class DesignCode:
     #: one -- ACI 318-19 §9.7.6.4.2 / CIRSOC 201-25 §9.7.6.4.2, Tabla 9.7.6.4.2,
     #: which differ: a No. 10 bar against 6 to 12 mm graded by longitudinal bar
     #: size -- it applies to the stirrups supporting compression reinforcement,
-    #: not to every stirrup.
+    #: not to every stirrup. That graded clause is ``min_stirrup_for_compression_bar``.
     min_stirrup_diameter: Callable[..., Any] | None = None
+    #: The smallest stirrup this code lets laterally support a compression bar
+    #: of a given diameter, ``(concrete, d_b_long) -> Quantity``: ACI 318-19
+    #: §9.7.6.4.2, a No. 10 up to a No. 32 bar and a No. 13 above (No. 3 and
+    #: No. 4 in the in-lb edition), against CIRSOC 201-25 Tabla 9.7.6.4.2,
+    #: 6, 8, 10 and 12 mm as the bar passes 16, 25 and 32 mm. They differ, so
+    #: each registers its own. ``None`` where the code states none.
+    min_stirrup_for_compression_bar: Callable[..., Any] | None = None
+    #: What the stirrups of a doubly reinforced section owe its compression
+    #: bars -- ACI 318-19 / CIRSOC 201-25 §9.7.6.4: the spacing cap of
+    #: §9.7.6.4.3 and the stirrup size of §9.7.6.4.2 -- or ``None`` when
+    #: nothing on the section acts as compression steel.
+    #: ``(beam, d_b_stirrup) -> CompressionSupport | None``. Read by the shear
+    #: design, which caps the bars and the spacing it may choose, and by the
+    #: shear warnings. ``None`` for a code with no such clause here: EN 1992-1-1
+    #: has its own, §9.2.1.2(3), which is not implemented.
+    stirrup_compression_support: Callable[..., Any] | None = None
     #: Absolute caps of Table 9.7.6.2.2 on the spacing of stirrup legs, as
     #: ``(under the Vs threshold, over it)``; they bound the spacing both along
     #: the member and across its width. Codes sharing the table differ only in

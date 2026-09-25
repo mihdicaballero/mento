@@ -372,3 +372,119 @@ def test_en_minimum_is_not_relieved() -> None:
     node.design()
     top = beam.flexure_design.top
     assert top.A_s_min_eff == top.A_s_min
+
+
+# ---------------------------------------------------------------------------
+# Stirrups that brace compression reinforcement, ACI 318-19 / CIRSOC 201-25 §9.7.6.4
+# ---------------------------------------------------------------------------
+
+
+def test_stirrups_of_a_doubly_reinforced_beam_are_held_to_its_compression_bars() -> None:
+    """ACI 20x50 H25 ADN 420, Mu 260 kNm, Vu 60 kN: 2Ø20 + 1Ø20 in two layers below, 2Ø16 + 1Ø16 above.
+
+    The top bars are compression steel. §9.7.6.4.3 caps the stirrups at
+    min(16*16 = 256, 48*10 = 480, 200) = 200 mm, tighter than the d/2 =
+    216 mm of Table 9.7.6.2.2, so the design details 1eØ10/20 where it used
+    to detail 1eØ10/21. Set by hand at 21 cm the check says so, against the
+    Ø16 bar; set at Ø8, below the No. 10 (9.5 mm) that §9.7.6.4.2(a) asks
+    for a bar up to No. 32, it says that. Neither belongs to a combination:
+    the bars are the section's.
+    """
+    beam = _beam(height=50 * cm)
+    node = Node(section=beam, forces=[Forces(label="ELU", V_z=60 * kN, M_y=260 * kNm)])
+    node.design()
+
+    assert str(beam.reinforcement.top) == "2Ø16 mm + 1Ø16 mm"
+    assert (beam.shear_design.d_b, beam.shear_design.s_l) == (10 * mm, 20 * cm)
+    assert node.warnings == ()
+
+    beam.set_transverse_rebar(n_stirrups=1, d_b=10 * mm, s_l=21 * cm)
+    node.check()
+    found = _by_code(node.warnings)
+    spacing = found["stirrup_spacing_exceeds_compression_support"]
+    assert (spacing.values["s"], spacing.values["s_max"], spacing.values["d_b_comp"]) == (21 * cm, 20 * cm, 16 * mm)
+    assert spacing.combinations == ()
+    assert "stirrup_spacing_exceeds_max" not in found  # Table 9.7.6.2.2 alone allows 21.6 cm
+    assert "stirrup_diameter_below_compression_support" not in found
+
+    beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=20 * cm)
+    node.check()
+    found = _by_code(node.warnings)
+    diameter = found["stirrup_diameter_below_compression_support"]
+    assert (diameter.values["d_b"], diameter.values["d_b_min"], diameter.values["d_b_comp"]) == (
+        8 * mm,
+        9.5 * mm,
+        16 * mm,
+    )
+    assert "stirrup_spacing_exceeds_compression_support" not in found
+
+
+def test_a_negative_moment_puts_the_braced_bars_at_the_bottom() -> None:
+    """The same beam under Mu = -260 kNm: 2Ø16 + 1Ø16 at the bottom are the compression steel."""
+    beam = _beam(height=50 * cm)
+    node = Node(section=beam, forces=[Forces(label="ELU", V_z=60 * kN, M_y=-260 * kNm)])
+    node.design()
+
+    assert str(beam.reinforcement.bottom) == "2Ø16 mm + 1Ø16 mm"
+    assert beam.shear_design.s_l == 20 * cm
+
+    beam.set_transverse_rebar(n_stirrups=1, d_b=10 * mm, s_l=21 * cm)
+    node.check()
+    spacing = _by_code(node.warnings)["stirrup_spacing_exceeds_compression_support"]
+    assert (spacing.values["s_max"], spacing.values["d_b_comp"]) == (20 * cm, 16 * mm)
+
+
+def test_cirsoc_grades_the_bracing_stirrup_with_the_compression_bar() -> None:
+    """CIRSOC 20x40 H25 ADN 420, Mu 200 kNm, Vu 60 kN: 2Ø20 + 1Ø20 on top as compression steel.
+
+    Tabla 9.7.6.4.2 asks 8 mm for a bar over 16 and up to 25 mm, so the
+    design passes over the Ø6 its catalogue starts at -- it used to detail
+    1eØ6/16 -- and details 1eØ8/16; §9.7.6.4.3 allows min(320, 384, 200) =
+    200 mm, looser than the 16.7 cm of Tabla 9.7.6.2.2 at that depth. A Ø6
+    set by hand is warned, against the Ø20 bar.
+    """
+    from mento import Concrete_CIRSOC_201_25
+
+    beam = RectangularBeam(
+        label="V",
+        concrete=Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=20 * cm,
+        height=40 * cm,
+        c_c=25 * mm,
+    )
+    node = Node(section=beam, forces=[Forces(label="ELU", V_z=60 * kN, M_y=200 * kNm)])
+    node.design()
+
+    assert str(beam.reinforcement.top) == "2Ø20 mm + 1Ø20 mm"
+    assert (beam.shear_design.d_b, beam.shear_design.s_l) == (8 * mm, 16 * cm)
+    assert node.warnings == ()
+
+    beam.set_transverse_rebar(n_stirrups=1, d_b=6 * mm, s_l=16 * cm)
+    node.check()
+    found = _by_code(node.warnings)
+    diameter = found["stirrup_diameter_below_compression_support"]
+    assert (diameter.values["d_b"], diameter.values["d_b_min"], diameter.values["d_b_comp"]) == (
+        6 * mm,
+        8 * mm,
+        20 * mm,
+    )
+    assert "stirrup_spacing_exceeds_compression_support" not in found
+    mento.set_language("es")
+    assert _by_code(node.warnings)["stirrup_diameter_below_compression_support"].message == (
+        "Diámetro de estribo 6 mm menor que el mínimo 8 mm que exige el arriostramiento de barras comprimidas Ø20 mm."
+    )
+
+
+def test_a_singly_reinforced_beam_owes_its_stirrups_nothing_for_compression() -> None:
+    """20x60 under +150 / -40 kNm needs no compression steel: the bracing limits do not apply, whatever the stirrups."""
+    beam = _beam()
+    node = Node(section=beam, forces=FORCES)
+    node.design()
+    beam.set_transverse_rebar(n_stirrups=1, d_b=6 * mm, s_l=25 * cm)
+    node.check()
+    codes = set(_by_code(node.warnings))
+
+    assert "stirrup_spacing_exceeds_max" in codes
+    assert "stirrup_spacing_exceeds_compression_support" not in codes
+    assert "stirrup_diameter_below_compression_support" not in codes

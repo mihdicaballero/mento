@@ -264,6 +264,10 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         self._shear_checked = False  # Tracks if shear check or design has been done
         self._flexure_checked = False  # Tracks if shear check or design has been done
         self._doubly_reinforced = False  # Tracks if doubly reinforced section is used
+        # The faces whose bars some combination of the last flexure check
+        # relied on as compression steel: what the stirrups have to support
+        # (ACI 318-19 / CIRSOC 201-25 §9.7.6.4.1). See _note_compression_face.
+        self._compression_faces: set[str] = set()
 
         # Initialize default concrete beam attributes
         self._initialize_code_attributes()
@@ -618,6 +622,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         self._stirrup_s_l = 0 * cm
         self._A_v = 0 * cm**2 / m
         self._doubly_reinforced = False
+        self._compression_faces = set()
         self._flexure_options_b = ()
         self._flexure_options_t = ()
         self._flexure_option_pool_b = ()
@@ -989,12 +994,32 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         """
         self._flexure_checks = []
         self._flexure_warnings = []
+        self._compression_faces = set()
         for force in forces:
             state = self._run_flexure_check(force, report=False)
             self._flexure_checks.append(capture_flexure_check(self, force.label, state))
             self._flexure_warnings.extend(flexure_warnings(self, force.label, state))
+            self._note_compression_face(force, state)
         self._flexure_checked = True
         return tuple(self._flexure_checks)
+
+    def _note_compression_face(self, force: Forces, state: Any) -> None:
+        """Record the face ``force`` relies on as compression steel, for the stirrups' sake.
+
+        ACI 318-19 / CIRSOC 201-25 §9.7.6.4.1 ask for lateral support of the
+        compression reinforcement wherever it is required. The flexure check
+        knows when: a combination whose moment needs compression steel
+        (``doubly_reinforced`` on its state) relies on the face opposite the
+        one it puts in tension. The shear design and the shear warnings read
+        the faces so recorded through the code's ``stirrup_compression_support``.
+        A code whose state does not say (EN 1992-1-1) records nothing.
+        """
+        if not getattr(state, "doubly_reinforced", False):
+            return
+        if force._M_y > 0 * kN * m:
+            self._compression_faces.add("top")
+        elif force._M_y < 0 * kN * m:
+            self._compression_faces.add("bot")
 
     def shear_check_results(self, forces: list[Forces]) -> Tuple[ShearCheck, ...]:
         """Check shear and return one result per combination, building no report.
@@ -1058,9 +1083,11 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         self._flexure_results_detailed_list: Dict[Any, Dict[str, Any]] = {}  # Store detailed results by force ID
         self._flexure_checks = []
         self._flexure_warnings = []
+        self._compression_faces = set()
 
         for force in forces:
             state = self._run_flexure_check(force, report=True)
+            self._note_compression_face(force, state)
             result = self._flexure_report_row
             self._flexure_results_list.append(result)
 

@@ -358,7 +358,7 @@ class Rebar:
 
         # Get code specific limitations
         code = design_code(self.beam.concrete)
-        valid_diameters = code.transverse_rebar(self, V_s_req, alpha)[0]
+        valid_diameters = self._supporting_diameters(code.transverse_rebar(self, V_s_req, alpha)[0])
 
         # Iterate through available diameters
         for d_b in valid_diameters:
@@ -541,7 +541,38 @@ class Rebar:
         """
         with self._stirrup_of(d_b):
             _, s_max_l, s_max_w = design_code(self.beam.concrete).transverse_rebar(self, V_s_req, alpha)
+        support = self._compression_support(d_b)
+        if support is not None:
+            # The stirrups of a doubly reinforced section also brace its
+            # compression bars: ACI 318-19 / CIRSOC 201-25 §9.7.6.4.3 cap the
+            # spacing at the least of 16 d_b of the bar, 48 d_b of the stirrup
+            # and the least dimension of the beam, beside Table 9.7.6.2.2.
+            s_max_l = min(s_max_l, support.s_max.to(s_max_l.units))
         return s_max_l, s_max_w
+
+    def _compression_support(self, d_b: Quantity) -> Any:
+        """What the section's compression bars ask of a stirrup of diameter ``d_b``, if anything.
+
+        The code's ``stirrup_compression_support`` -- ``None`` for a code
+        with no such clause, and ``None`` from a code that has one when no
+        face of the section acts as compression steel.
+        """
+        hook = design_code(self.beam.concrete).stirrup_compression_support
+        return None if hook is None else hook(self.beam, d_b)
+
+    def _supporting_diameters(self, diameters: List[Quantity]) -> List[Quantity]:
+        """The bars of ``diameters`` thick enough to support the section's compression steel.
+
+        ACI 318-19 §9.7.6.4.2 / CIRSOC 201-25 Tabla 9.7.6.4.2 put a floor
+        under the stirrups that brace compression reinforcement, graded by
+        the bar they brace; a section with none keeps the whole catalogue.
+        The floor does not move with the stirrup, so it is read once, at the
+        diameter the section holds.
+        """
+        support = self._compression_support(self.beam._stirrup_d_b)
+        if support is None:
+            return diameters
+        return [d_b for d_b in diameters if d_b >= support.d_b_min]
 
     def _transverse_rebar_slab(
         self,
@@ -584,7 +615,9 @@ class Rebar:
         area_unit = "cm**2/m" if metric else "inch**2/ft"
         width = self.beam.width
 
-        valid_diameters = design_code(self.beam.concrete).transverse_rebar(self, V_s_req, alpha)[0]
+        valid_diameters = self._supporting_diameters(
+            design_code(self.beam.concrete).transverse_rebar(self, V_s_req, alpha)[0]
+        )
 
         valid_combinations = []
         for d_b in valid_diameters:

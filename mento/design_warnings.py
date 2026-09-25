@@ -67,6 +67,18 @@ Codes
     ``direction``, ``"h"`` or ``"v"``.
 ``mesh_spacing_exceeds_max``
     The bars of a wall mesh are further apart than §11.7 allows.
+``stirrup_spacing_exceeds_compression_support``
+    The section relies on compression steel and its stirrups are further
+    apart than ACI 318-19 / CIRSOC 201-25 §9.7.6.4.3 allow the stirrups that
+    brace it: the least of 16 d_b of the compression bar, 48 d_b of the
+    stirrup and the least dimension of the beam. ``values`` names the bar it
+    was read on, ``d_b_comp``, the thinnest on the face.
+``stirrup_diameter_below_compression_support``
+    The same section's stirrup is thinner than ACI 318-19 §9.7.6.4.2 /
+    CIRSOC 201-25 Tabla 9.7.6.4.2 require to brace its thickest compression
+    bar, ``d_b_comp``. Both come from the faces the last flexure check found
+    a combination relying on as compression steel, so they need one to have
+    run; they carry no combination label.
 """
 
 from __future__ import annotations
@@ -407,6 +419,22 @@ def shear_warnings(beam: "RectangularBeam", label: str, state: Any) -> List[_Raw
         d_b: Quantity = beam._stirrup_d_b
         if d_b < d_b_min:
             found.append(_Raw("stirrup_diameter_below_min", {"d_b": d_b, "d_b_min": d_b_min.to(d_b.units)}, None))
+
+    # A doubly reinforced section's stirrups also brace its compression bars,
+    # and ACI 318-19 / CIRSOC 201-25 §9.7.6.4 size and space them for that.
+    # Which bars those are is the flexure check's finding, not this
+    # combination's, so both limits are read off the section: no label.
+    support_hook = design_code(beam.concrete).stirrup_compression_support
+    support = None if support_hook is None else support_hook(beam, beam._stirrup_d_b)
+    if support is not None:
+        s_support = support.s_max.to(s_l.units)
+        if s_l > s_support and not math.isclose(s_l.magnitude, s_support.magnitude):
+            values = {"s": s_l, "s_max": s_support, "d_b_comp": support.d_b_comp_spacing}
+            found.append(_Raw("stirrup_spacing_exceeds_compression_support", values, None))
+        d_b_support: Quantity = support.d_b_min.to(beam._stirrup_d_b.units)
+        if beam._stirrup_d_b < d_b_support and not math.isclose(beam._stirrup_d_b.magnitude, d_b_support.magnitude):
+            values = {"d_b": beam._stirrup_d_b, "d_b_min": d_b_support, "d_b_comp": support.d_b_comp_diameter}
+            found.append(_Raw("stirrup_diameter_below_compression_support", values, None))
     return [_with_units(raw, beam) for raw in found]
 
 

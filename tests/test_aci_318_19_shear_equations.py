@@ -381,3 +381,44 @@ def test_shear_strength_of_reinforcement_is_linear():
     base = eq.shear_strength_of_reinforcement(0.25, 420.0, 450.0)
     assert eq.shear_strength_of_reinforcement(0.5, 420.0, 450.0) == pytest.approx(2 * base)
     assert eq.shear_strength_of_reinforcement(0.25, 420.0, 900.0) == pytest.approx(2 * base)
+
+
+# ---------------------------------------------------------------------------
+# Lateral support of compression reinforcement, §9.7.6.4
+# ---------------------------------------------------------------------------
+
+
+def test_max_stirrup_spacing_for_compression_support_takes_the_least_of_the_three():
+    """ACI 318-19 / CIRSOC 201-25 §9.7.6.4.3: 16 d_b of the bar, 48 d_b of the stirrup, least dimension."""
+    # Ø16 bar, Ø10 stirrup, 20x50 beam: 256, 480, 200 -> the least dimension.
+    assert eq.max_stirrup_spacing_for_compression_support(16.0, 10.0, 200.0) == 200.0
+    # Ø12 bar, Ø10 stirrup, 30x60: 192, 480, 300 -> 16 d_b of the bar.
+    assert eq.max_stirrup_spacing_for_compression_support(12.0, 10.0, 300.0) == 192.0
+    # Ø25 bar, Ø6 stirrup, 30x60: 400, 288, 300 -> 48 d_b of the stirrup.
+    assert eq.max_stirrup_spacing_for_compression_support(25.0, 6.0, 300.0) == 288.0
+    # In inches the same expression: No. 5 bar, No. 3 stirrup, 12x24: 10, 18, 12 -> 10 in.
+    assert eq.max_stirrup_spacing_for_compression_support(0.625, 0.375, 12.0) == 10.0
+
+
+@pytest.mark.parametrize(
+    "d_b_long, expected",
+    [(16.0, 9.5), (25.0, 9.5), (32.0, 9.5), (32.3, 9.5), (35.8, 12.7), (40.0, 12.7)],
+)
+def test_min_stirrup_diameter_for_compression_support_si(d_b_long, expected):
+    """ACI 318-19 §9.7.6.4.2, SI: No. 10 (9.5 mm) up to a No. 32 bar (32.3 mm), No. 13 (12.7 mm) from No. 36 (35.8 mm)."""
+    assert eq.min_stirrup_diameter_for_compression_support(d_b_long) == expected
+
+
+@pytest.mark.parametrize("d_b_long, expected", [(0.5, 0.375), (1.0, 0.375), (1.27, 0.375), (1.41, 0.5), (2.257, 0.5)])
+def test_min_stirrup_diameter_for_compression_support_us(d_b_long, expected):
+    """ACI 318-19 §9.7.6.4.2, in-lb: No. 3 up to a No. 10 bar (1.27 in), No. 4 from No. 11 (1.41 in)."""
+    assert eq.min_stirrup_diameter_for_compression_support(d_b_long, is_imperial=True) == expected
+
+
+@pytest.mark.parametrize(
+    "d_b_long, expected",
+    [(12.0, 6.0), (16.0, 6.0), (20.0, 8.0), (25.0, 8.0), (32.0, 10.0), (40.0, 12.0)],
+)
+def test_min_stirrup_diameter_for_compression_support_cirsoc(d_b_long, expected):
+    """CIRSOC 201-25 Tabla 9.7.6.4.2: 6 mm to Ø16, 8 mm to Ø25, 10 mm to Ø32, 12 mm above."""
+    assert eq.min_stirrup_diameter_for_compression_support_cirsoc(d_b_long) == expected

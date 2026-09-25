@@ -14,13 +14,14 @@ the two still agree.
 """
 
 from mento.units import Quantity
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Optional, cast
 import warnings
 # from devtools import debug
 
 from mento.codes.flexure_design import _FaceDemand, _run_flexure_design
 from mento.codes.aci_318_19.equations import flexure as flexure_eq
 from mento.codes.check_state import (
+    CompressionSupport,
     FlexureCheckState,
     ShearCheckState,
     apply_shear_state,
@@ -296,6 +297,53 @@ def _calculate_rebar_spacing_aci(self: "RectangularBeam", st: ShearCheckState) -
         st.stirrup_s_max_l,
         st.stirrup_s_max_w,
     ) = max_stirrup_spacing_ACI_318_19(self, st.V_s_req, st.A_cv)
+
+
+def _stirrup_compression_support_ACI_318_19(
+    self: "RectangularBeam", d_b_stirrup: Quantity
+) -> Optional[CompressionSupport]:
+    """The stirrups the section owes its compression bars — ACI 318-19 §9.7.6.4 / CIRSOC 201-25 §9.7.6.4.
+
+    §9.7.6.4.1 of both codes asks for lateral support of the longitudinal
+    compression reinforcement, wherever it is required, by closed stirrups
+    sized per §9.7.6.4.2 and spaced per §9.7.6.4.3. Which bars are
+    compression reinforcement is the flexure check's to say: a combination
+    that needs compression steel to carry its moment (``doubly_reinforced``)
+    relies on the face opposite its tension face, and the last flexure check
+    or design leaves those faces in ``_compression_faces``. A face with no
+    bars on it is nothing to support. ``None`` when no face qualifies -- the
+    ordinary singly reinforced beam, whose stirrups are for shear alone.
+
+    Two readings, both on the conservative side, where the codes do not say:
+    with bars of more than one diameter on a face, 16 d_b of §9.7.6.4.3(a)
+    is read on the thinnest, which buckles first, and the stirrup size on
+    the thickest, since §9.7.6.4.2 / Tabla 9.7.6.4.2 climb with the bar.
+    Which size that is differs between the two codes and comes from the
+    registry (``min_stirrup_for_compression_bar``).
+    """
+    sec = section_floats(self)
+    length = CANONICAL[sec.is_imperial]["length"]
+    reinforcement = self.reinforcement
+    diameters = []
+    faces = []
+    for face, bars in (("bot", reinforcement.bottom), ("top", reinforcement.top)):
+        if face in self._compression_faces and bars.layers:
+            faces.append(face)
+            diameters.extend(layer.d_b for layer in bars.layers)
+    if not faces:
+        return None
+    thinnest, thickest = min(diameters), max(diameters)
+    s_max = shear_eq.max_stirrup_spacing_for_compression_support(
+        thinnest.to(length).magnitude, d_b_stirrup.to(length).magnitude, min(sec.width, sec.height)
+    )
+    minimum_for = design_code(self.concrete).requires("min_stirrup_for_compression_bar")
+    return CompressionSupport(
+        s_max=to_display(s_max, "length", sec.is_imperial),
+        d_b_min=minimum_for(self.concrete, thickest),
+        d_b_comp_spacing=thinnest,
+        d_b_comp_diameter=thickest,
+        faces=tuple(faces),
+    )
 
 
 def _check_shear_ACI_318_19(self: "RectangularBeam", force: Forces) -> ShearCheckState:

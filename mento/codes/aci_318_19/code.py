@@ -46,8 +46,10 @@ from mento.codes.ACI_318_19_beam import (
     _design_flexure_ACI_318_19,
     _design_shear_ACI_318_19,
     _flexure_ductile_ACI_318_19,
+    _stirrup_compression_support_ACI_318_19,
 )
 from mento.codes.ACI_318_19_punching import check_punching_ACI_318_19
+from mento.codes.aci_318_19.equations import shear as shear_eq
 from mento.codes.ACI_318_19_wall import _check_shear_ACI_318_19_wall, _design_shear_ACI_318_19_wall
 from mento.codes.check_state import (
     apply_flexure_state,
@@ -226,6 +228,30 @@ def _min_effective_depth_on_soil(concrete: Any) -> Any:
     CIRSOC, both short of the 150 mm the clause asks for.
     """
     return 150 * mm if concrete.unit_system == "metric" else 6 * inch
+
+
+def _min_stirrup_for_compression_bar(concrete: Any, d_b_long: Any) -> Any:
+    """ACI 318-19 §9.7.6.4.2: a No. 10 stirrup up to a No. 32 compression bar, a No. 13 above.
+
+    The clause the stirrups supporting compression reinforcement are sized
+    by (§9.7.6.4.1), in the bars of each edition: No. 10 and No. 13 in SI
+    (9.5 and 12.7 mm), No. 3 and No. 4 in in-lb. In metric units it is the
+    Ø10 of the local catalogue that meets the 9.5 mm; a Ø8 does not. CIRSOC
+    201-25 Tabla 9.7.6.4.2 grades it in four steps instead; see
+    :func:`_min_stirrup_for_compression_bar_cirsoc`.
+    """
+    unit = inch if concrete.is_imperial else mm
+    return (
+        shear_eq.min_stirrup_diameter_for_compression_support(
+            d_b_long.to(unit).magnitude, is_imperial=concrete.is_imperial
+        )
+        * unit
+    )
+
+
+def _min_stirrup_for_compression_bar_cirsoc(concrete: Any, d_b_long: Any) -> Any:
+    """CIRSOC 201-25 Tabla 9.7.6.4.2: 6, 8, 10 or 12 mm as the compression bar passes 16, 25 and 32 mm."""
+    return shear_eq.min_stirrup_diameter_for_compression_support_cirsoc(d_b_long.to(mm).magnitude) * mm
 
 
 def _min_stirrup_diameter_cirsoc(concrete: Any) -> Any:
@@ -411,6 +437,9 @@ _COMMON = dict(
     # that is the limit a layout is held to, compression steel included.
     max_steel_is_ductility_limit=True,
     flexure_admissible=_flexure_ductile_ACI_318_19,
+    # §9.7.6.4: the same clause in both; the stirrup size it reads comes from
+    # each code's own ``min_stirrup_for_compression_bar``.
+    stirrup_compression_support=_stirrup_compression_support_ACI_318_19,
 )
 
 ACI_318_19 = register(
@@ -420,6 +449,7 @@ ACI_318_19 = register(
         materials=(Concrete_ACI_318_19,),
         transverse_rebar=_transverse_rebar_aci,
         min_stirrup_diameter=_min_stirrup_diameter,
+        min_stirrup_for_compression_bar=_min_stirrup_for_compression_bar,
         stirrup_spacing_caps=_stirrup_spacing_caps,
         flexural_min_fy_cap=_flexural_min_fy_cap,
         min_shear_reinforcement_coefficient=_min_shear_reinforcement_coefficient,
@@ -441,6 +471,7 @@ CIRSOC_201_25 = register(
         # same numbering; see the module docstring for what is not hooked.
         transverse_rebar=_transverse_rebar_cirsoc,
         min_stirrup_diameter=_min_stirrup_diameter_cirsoc,
+        min_stirrup_for_compression_bar=_min_stirrup_for_compression_bar_cirsoc,
         stirrup_spacing_caps=_stirrup_spacing_caps_cirsoc,
         flexural_min_fy_cap=_flexural_min_fy_cap_cirsoc,
         min_shear_reinforcement_coefficient=_min_shear_reinforcement_coefficient_cirsoc,
