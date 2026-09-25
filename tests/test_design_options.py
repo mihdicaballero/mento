@@ -513,6 +513,55 @@ def test_design_ignores_the_reinforcement_set_before_it() -> None:
     assert _signature(beam) == _signature(_designed(TWO_FACES))
 
 
+@pytest.mark.parametrize(
+    "forces",
+    [
+        TWO_FACES,
+        [Forces(label="ELU", V_z=250 * kN, M_y=150 * kNm)],
+    ],
+    ids=["two-faces", "settles-twice"],
+)
+def test_a_full_design_verifies_the_alternatives_once(forces: list[Forces], monkeypatch: pytest.MonkeyPatch) -> None:
+    """The alternatives are judged on the finished section, so only that verification counts.
+
+    ``design_flexure`` verifies them on the section it leaves, which is right
+    when it is called alone; inside ``design()`` every such pass was
+    overwritten by the one on the finished section -- the 20x60 under +150 /
+    -40 kNm verified twice, a design that redoes its flexure (20x60 H25 has
+    none, so the 20x50 of ``_settle_design`` stands for it: 150 kNm and
+    250 kN) three times. The options are the same either way.
+    """
+    calls: list[int] = []
+    verify = RectangularBeam._verify_longitudinal_options
+
+    def counted(self: RectangularBeam, forces: list[Forces]) -> None:
+        calls.append(1)
+        verify(self, forces)
+
+    beam = _aci_beam()
+    if len(forces) == 1:
+        beam = RectangularBeam(
+            label="V",
+            concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+            steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+            width=20 * cm,
+            height=50 * cm,
+            c_c=25 * mm,
+        )
+    Node(section=beam, forces=forces).design()
+    expected = (beam.flexure_design.bottom.options, beam.flexure_design.top.options)
+
+    monkeypatch.setattr(RectangularBeam, "_verify_longitudinal_options", counted)
+    Node(section=beam, forces=forces).design()
+
+    assert len(calls) == 1
+    assert (beam.flexure_design.bottom.options, beam.flexure_design.top.options) == expected
+
+    calls.clear()
+    Node(section=beam, forces=forces).design_flexure()
+    assert len(calls) == 1, "design_flexure alone still verifies what it leaves"
+
+
 def test_design_shear_alone_is_repeatable() -> None:
     beam = _aci_beam()
     node = Node(section=beam, forces=[Forces(label="V", V_z=120 * kN)])

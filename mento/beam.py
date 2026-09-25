@@ -1047,6 +1047,21 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         -------
         DataFrame
             A DataFrame summarizing the flexural design results for all forces.
+
+        The alternatives kept for each face are verified on the section it
+        leaves (see :meth:`_verify_longitudinal_options`).
+        """
+        all_results = self._design_flexure(forces)
+        self._verify_longitudinal_options(forces)
+        return all_results
+
+    def _design_flexure(self, forces: list[Forces]) -> DataFrame:
+        """:meth:`design_flexure` without verifying the alternatives.
+
+        What :meth:`design` runs: its alternatives are judged once, on the
+        finished section, and a verification on the section a flexure pass
+        leaves -- with the starter stirrup, or one a later round replaces --
+        would be work thrown away.
         """
         # Initialize limiting cases
         max_M_y_top = 0 * kN * m  # For negative M_y (top reinforcement design)
@@ -1065,11 +1080,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         design_code(self.concrete).design_flexure(self, max_M_y_bot, max_M_y_top)
 
         # Check flexural capacity for all forces with the assigned reinforcement
-        all_results = self.check_flexure(forces)
-        # The alternatives are judged on the section as it is now; a full
-        # design judges them again once the stirrups are settled.
-        self._verify_longitudinal_options(forces)
-        return all_results
+        return self.check_flexure(forces)
 
     @property
     def flexure_checks(self) -> Tuple[FlexureCheck, ...]:
@@ -1480,7 +1491,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         depth the bars sit at.
         """
         self._reset_for_design()
-        self.design_flexure(forces)
+        self._design_flexure(forces)
         self.design_shear(forces)
         self._settle_design(forces)
         self.check_flexure(forces)
@@ -1516,7 +1527,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
             if self._flexure_verdict(forces, ("bot", "top")).passes:
                 return
             self._reset_longitudinal_for_design()
-            self.design_flexure(forces)
+            self._design_flexure(forces)
             self.design_shear(forces)
             state = self._design_state()
             if state in seen:
