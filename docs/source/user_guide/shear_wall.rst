@@ -4,8 +4,9 @@ Shear Wall
 The `ShearWall` class models a reinforced-concrete structural wall for **in-plane
 shear analysis and design** per ACI 318-19 Chapter 11.
 
-- Concrete shear capacity follows ACI 318-19 §11.5.4.6 with the aspect-ratio
-  factor ``α_c``, instead of a longitudinal-reinforcement term.
+- Concrete shear capacity follows ACI 318-19 Eq. (11.5.4.3) with the aspect-ratio
+  factor ``α_c`` defined under it, instead of a longitudinal-reinforcement term,
+  capped by §11.5.4.2.
 - Reinforcement is **distributed mesh** in two orthogonal directions
   (``ρt`` horizontal, ``ρl`` vertical), placed on **both faces** of the wall
   (E.F. — each face), not stirrups.
@@ -18,8 +19,10 @@ shear analysis and design** per ACI 318-19 Chapter 11.
   shear needs therefore asks for a heavier vertical mesh, up to ``ρt,req``.
 
 The same shear provisions serve both **ACI 318-19** and **CIRSOC 201-25**;
-CIRSOC differs only in the reinforcing-bar catalogue used for design (it
-allows Ø6 mm for the transverse mesh and Ø10 mm minimum for the vertical mesh).
+CIRSOC differs in the reinforcing-bar catalogue used for design (it allows
+Ø6 mm for the transverse mesh and Ø10 mm minimum for the vertical mesh) and in
+the divisor of Eq. (11.5.4.4) for a wall in net axial tension (3.5·Ag against
+ACI's 3.45·Ag).
 
 .. note::
 
@@ -218,9 +221,9 @@ attributes on the wall:
 +----------------------+----------------------------------------------+
 | ``_rho_l_min``       | Minimum vertical reinforcement ratio         |
 +----------------------+----------------------------------------------+
-| ``_s_h_max``         | §11.7.3 horizontal spacing limit             |
+| ``_s_h_max``         | §11.7.3.1 horizontal spacing limit           |
 +----------------------+----------------------------------------------+
-| ``_s_v_max``         | §11.7.3 vertical spacing limit               |
+| ``_s_v_max``         | §11.7.2.1 vertical spacing limit             |
 +----------------------+----------------------------------------------+
 | ``_d_b_h`` / ``_s_h``| Designed horizontal bar diameter / spacing   |
 +----------------------+----------------------------------------------+

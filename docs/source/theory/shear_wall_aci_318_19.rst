@@ -2,8 +2,9 @@ Shear Wall — ACI 318-19
 =======================
 
 Provisions implemented for ``ShearWall``, covering **in-plane shear** per
-ACI 318-19 Chapter 11. Also valid for ``Concrete_CIRSOC_201_25``, which differs only
-in the reinforcing bar catalogue used for design.
+ACI 318-19 Chapter 11. Also valid for ``Concrete_CIRSOC_201_25``, which differs in
+the reinforcing bar catalogue used for design and in the divisor of Eq. (11.5.4.4)
+for a wall in net axial tension (3.5·Ag against ACI's 3.45·Ag).
 
 Scope
 -----
@@ -18,7 +19,7 @@ minimum reinforcement ratios in both directions, and spacing limits.
    from ``RectangularBeam``, but those assume beam geometry and a lumped tension
    chord — they are not validated for a wall section with distributed vertical steel
    and must not be used. Also absent: boundary element design (§18.10.6),
-   out-of-plane bending, sliding shear at construction joints (§11.5.4.4), coupling
+   out-of-plane bending, shear friction at construction joints (§22.9), coupling
    beams, and any seismic detailing of Chapter 18.
 
 How it differs from a beam
@@ -61,7 +62,7 @@ Symbols
      - Gross area resisting shear, :math:`l_w t`
      - ``_Acv``
    * - :math:`\alpha_c`
-     - Aspect-ratio factor (§11.5.4.6)
+     - Aspect-ratio factor (§11.5.4.3)
      - ``_alpha_c``
    * - :math:`\rho_t,\ \rho_l`
      - Horizontal and vertical distributed reinforcement ratios
@@ -76,7 +77,8 @@ Shear strength
 Aspect-ratio factor
 ^^^^^^^^^^^^^^^^^^^
 
-§11.5.4.6 — linear interpolation on :math:`h_w/l_w`:
+§11.5.4.3 — defined in the three lines under Eq. (11.5.4.3), a linear interpolation
+on :math:`h_w/l_w`:
 
 .. math::
 
@@ -101,7 +103,7 @@ Nominal strength
    \qquad
    V_n = V_c + V_s
 
-bounded above by §11.5.4.3:
+bounded above by §11.5.4.2:
 
 .. math::
 
@@ -128,7 +130,7 @@ Inverting :math:`\phi_v V_n \ge V_u` for the mesh ratio:
 Minimum reinforcement
 ---------------------
 
-Horizontal, §11.6.1 — a flat minimum:
+Horizontal, §11.6.2(b) — a flat minimum:
 
 .. math::
 
@@ -162,7 +164,8 @@ needs therefore asks for a heavier vertical mesh, up to :math:`\rho_{t,req}`.
 Spacing limits
 --------------
 
-§11.7.3, with the absolute cap being 450 mm (18 in):
+§11.7.3.1 (horizontal) and §11.7.2.1 (vertical), with the absolute cap being 450 mm
+(18 in):
 
 .. math::
 
@@ -178,8 +181,8 @@ Reinforcement on both faces
 
 The mesh is assumed placed on **both faces** (E.F.), so the ratio is computed as
 :math:`\rho = n_{curtains}\, A_b/(s\,t)` with ``_n_curtains`` fixed at 2. mento does
-not currently model single-curtain walls; ACI §11.7.2.3 requires two curtains above a
-shear demand threshold in any case.
+not currently model single-curtain walls; ACI 318-19 / CIRSOC 201-25 §11.7.2.3 require
+two layers for any wall thicker than 250 mm in any case.
 
 CIRSOC bar catalogue
 ^^^^^^^^^^^^^^^^^^^^
@@ -209,25 +212,27 @@ Tests live in ``tests/test_shear_wall.py``, organised in classes by topic.
    * - :math:`\alpha_c`, squat / slender / interpolated
      - ``test_alpha_c_low_hw_lw``, ``test_alpha_c_high_hw_lw``,
        ``test_alpha_c_interpolated``
-     - §11.5.4.6
+     - §11.5.4.3
    * - :math:`V_c`, :math:`\phi V_c`, :math:`\phi V_n`, :math:`\phi V_{n,max}`
      - ``test_Vc``, ``test_phi_Vc``, ``test_phi_Vn``, ``test_phi_Vn_max``
-     - §11.5.4.6, §11.5.4.3
+     - §11.5.4.3, §11.5.4.2
    * - DCR and capacity flags
      - ``test_DCR``, ``test_Vu_le_phi_Vn``, ``test_Vu_le_phi_Vn_max``
      - Internal consistency
    * - :math:`\rho_{t,min}`
      - ``test_rho_t_min_is_0025``
-     - §11.6.1
-   * - :math:`\rho_{l,min}`, slender and interpolated
+     - §11.6.2(b)
+   * - :math:`\rho_{l,min}`, slender, interpolated and capped
      - ``test_rho_l_min_is_0025_when_hw_lw_gt2``,
-       ``test_rho_l_min_interpolated_per_11_6_2``
-     - §11.6.2
+       ``test_rho_l_min_interpolated_per_11_6_2``,
+       ``test_rho_l_min_reads_the_horizontal_mesh_provided``,
+       ``test_design_sizes_the_vertical_mesh_to_the_horizontal_one_applied``
+     - §11.6.2(a)
    * - Spacing limits
      - ``test_s_h_max_metric``, ``test_s_v_max_metric``,
        ``test_spacing_ok_flag_when_within_limit``,
        ``test_spacing_fail_flag_when_exceeds_limit``
-     - §11.7.3
+     - §11.7.2.1, §11.7.3.1
    * - Mesh ratios from bar layout
      - ``test_set_horizontal_rebar_updates_rho_t``,
        ``test_set_vertical_rebar_updates_rho_l``
