@@ -76,7 +76,7 @@ Codes
     EN 1992-1-1 V_Rd,max of Eq. (6.9) at θ = 45°. Both are read the same with
     or without stirrups, so the warning means the section has to grow; a
     section that is only short of stirrups gets ``stirrups_required`` or
-    ``Av_below_min`` instead. A wall reports it against ØVn,max of §11.5.4.3.
+    ``Av_below_min`` instead. A wall reports it against ØVn,max of §11.5.4.2.
 ``mesh_ratio_below_min``
     A wall mesh gives less than its direction asks for: the horizontal one
     below the ρt the shear needs (never below its minimum), the vertical one
