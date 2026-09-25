@@ -248,6 +248,21 @@ ES.update(
         "Vertical wall mesh spacing: {s} exceeds the maximum {s_max}.": (
             "Separación de la malla vertical del muro: {s} supera la máxima {s_max}."
         ),
+        (
+            "Stirrup spacing along the member: {s} exceeds the {s_max} that lateral support of the "
+            "Ø{d_b_comp} compression bars allows (16 d_b, 48 d_b of the stirrup, least dimension of the beam)."
+        ): (
+            "Separación de estribos a lo largo del elemento: {s} supera los {s_max} que admite el "
+            "arriostramiento de las barras comprimidas Ø{d_b_comp} (16 d_b, 48 d_b del estribo, menor "
+            "dimensión de la viga)."
+        ),
+        (
+            "Stirrup diameter {d_b} is below the minimum {d_b_min} that lateral support of "
+            "Ø{d_b_comp} compression bars requires."
+        ): (
+            "Diámetro de estribo {d_b} menor que el mínimo {d_b_min} que exige el arriostramiento de "
+            "barras comprimidas Ø{d_b_comp}."
+        ),
     }
 )
 

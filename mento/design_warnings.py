@@ -152,6 +152,14 @@ _MESSAGES: Dict[str, str] = {
     "mesh_ratio_below_min_v": "Vertical wall mesh: ρl = {rho} is below the minimum ρl,min = {rho_min}.",
     "mesh_spacing_exceeds_max_h": "Horizontal wall mesh spacing: {s} exceeds the maximum {s_max}.",
     "mesh_spacing_exceeds_max_v": "Vertical wall mesh spacing: {s} exceeds the maximum {s_max}.",
+    "stirrup_spacing_exceeds_compression_support": (
+        "Stirrup spacing along the member: {s} exceeds the {s_max} that lateral support of the "
+        "Ø{d_b_comp} compression bars allows (16 d_b, 48 d_b of the stirrup, least dimension of the beam)."
+    ),
+    "stirrup_diameter_below_compression_support": (
+        "Stirrup diameter {d_b} is below the minimum {d_b_min} that lateral support of "
+        "Ø{d_b_comp} compression bars requires."
+    ),
 }
 
 _FACES = {"bottom": "bottom face", "top": "top face"}
