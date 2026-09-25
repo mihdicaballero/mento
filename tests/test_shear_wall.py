@@ -827,6 +827,61 @@ def test_shear_design_before_a_check_raises(wall_metric: ShearWall) -> None:
         wall_metric.shear_design
 
 
+def test_shear_results_carry_the_mesh_they_were_checked_with(wall_metric: ShearWall) -> None:
+    """A design never pairs the mesh the wall carries now with the DCR of another.
+
+    Reference wall under Vu = 2200 kN, by hand:
+        ρt,req = (2200/0.75 − 1250)/(420·1000) = 0.0040079 → Ø10/15 E.F.
+        (ρt = 2·78.54/(250·150) = 0.0041888; scores 0.965 against 0.946 for Ø12/22)
+        ØVn = 0.75·(1250 + 0.0041888·420·1000) = 2257.0 kN, DCR = 2200/2257.0 = 0.975
+    Ø6/45 E.F. set by hand afterwards: ρt = 2·28.27/(250·450) = 0.00050265,
+        ØVn = 0.75·(1250 + 211.1) = 1095.8 kN, DCR = 2.008.
+    The design read before the change used to print the new mesh next to the
+    old 0.975.
+    """
+    from mento.design_results import DesignNotRunError
+
+    forces = [Forces(label="U1", V_z=2200 * kN)]
+    wall_metric.design_shear(forces)
+    designed = wall_metric.shear_design
+    assert str(designed.mesh.horizontal) == "2×Ø10 mm/15 cm"
+    assert designed.DCR == pytest.approx(0.975, abs=1e-3)
+    assert designed.V_capacity.to("kN").magnitude == pytest.approx(2257.0, abs=0.1)
+    assert wall_metric.shear_checks[0].mesh == designed.mesh == wall_metric.mesh
+
+    wall_metric.set_horizontal_rebar(d_b=6 * mm, s=45 * cm)
+    assert wall_metric.mesh != designed.mesh
+    assert wall_metric.shear_checks == ()
+    assert wall_metric.warnings == ()
+    with pytest.raises(DesignNotRunError, match="mesh the wall carries"):
+        wall_metric.shear_design
+    # The result read earlier is a value: it still describes the mesh it was formed with.
+    assert str(designed.mesh.horizontal) == "2×Ø10 mm/15 cm" and designed.DCR == pytest.approx(0.975, abs=1e-3)
+
+    wall_metric.check_shear(forces)
+    rechecked = wall_metric.shear_design
+    assert rechecked.mesh == wall_metric.mesh
+    assert str(rechecked.mesh.horizontal) == "2×Ø6 mm/45 cm"
+    assert rechecked.DCR == pytest.approx(2.008, abs=1e-3)
+    assert rechecked.V_capacity.to("kN").magnitude == pytest.approx(1095.8, abs=0.1)
+    assert {w.code for w in wall_metric.warnings} == {"mesh_ratio_below_min"}
+
+
+@pytest.mark.parametrize("setter", ["set_horizontal_rebar", "set_vertical_rebar"])
+def test_a_mesh_set_by_hand_drops_the_results_of_the_previous_one(wall_metric: ShearWall, setter: str) -> None:
+    from mento.design_results import DesignNotRunError
+
+    wall_metric.set_horizontal_rebar(d_b=12 * mm, s=20 * cm)
+    wall_metric.set_vertical_rebar(d_b=12 * mm, s=20 * cm)
+    wall_metric.shear_check_results([Forces(label="U1", V_z=1200 * kN)])
+    assert len(wall_metric.shear_checks) == 1
+
+    getattr(wall_metric, setter)(d_b=10 * mm, s=25 * cm)
+    assert wall_metric.shear_checks == ()
+    with pytest.raises(DesignNotRunError):
+        wall_metric.shear_design
+
+
 def test_the_mesh_prints_both_directions(wall_metric: ShearWall) -> None:
     wall_metric.set_horizontal_rebar(d_b=12 * mm, s=20 * cm)
     wall_metric.set_vertical_rebar(d_b=10 * mm, s=25 * cm)

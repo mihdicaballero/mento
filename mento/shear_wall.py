@@ -182,6 +182,10 @@ class ShearWall(RectangularBeam):
 
         Bars are placed on each face (E.F.):  ρt = n_curtains · Ab / (t × s_h)
         A zero spacing means no rebar, which clears the horizontal reinforcement.
+
+        The shear results of the last check belong to the mesh they were
+        checked with, so they are dropped: ``shear_checks`` and ``warnings``
+        are empty and ``shear_design`` raises until the next check or design.
         """
         self._d_b_h = d_b
         self._s_h = s
@@ -190,12 +194,16 @@ class ShearWall(RectangularBeam):
         else:
             A_b = math.pi / 4 * d_b**2
             self._rho_t = (self._n_curtains * A_b / (self.thickness * s)).to("")
+        self._wall_shear_checks = []
 
     def set_vertical_rebar(self, d_b: Quantity, s: Quantity) -> None:
         """Set distributed vertical reinforcement.
 
         Bars are placed on each face (E.F.):  ρl = n_curtains · Ab / (t × s_v)
         A zero spacing means no rebar, which clears the vertical reinforcement.
+
+        Drops the shear results of the last check, as
+        :meth:`set_horizontal_rebar` does.
         """
         self._d_b_v = d_b
         self._s_v = s
@@ -204,6 +212,7 @@ class ShearWall(RectangularBeam):
         else:
             A_b = math.pi / 4 * d_b**2
             self._rho_l = (self._n_curtains * A_b / (self.thickness * s)).to("")
+        self._wall_shear_checks = []
 
     # ------------------------------------------------------------------
     # Shear check and design (override RectangularBeam)
@@ -336,15 +345,20 @@ class ShearWall(RectangularBeam):
 
     @property
     def shear_checks(self) -> Tuple[WallShearCheck, ...]:  # type: ignore[override]
-        """One immutable shear result per combination of the last check."""
+        """One immutable shear result per combination of the last check.
+
+        Each carries the mesh it was checked with. Empty until a check or
+        design has run, and again once the mesh is changed by hand.
+        """
         return tuple(self._wall_shear_checks)
 
     @property
     def shear_design(self) -> WallShearDesign:  # type: ignore[override]
-        """The mesh and the envelope of the last shear check or design.
+        """The checked mesh and the envelope of the last shear check or design.
 
         Raises:
-            DesignNotRunError: if no shear check or design has been run.
+            DesignNotRunError: if no shear check or design has been run, or
+                the mesh was changed by hand since the last one.
         """
         return build_wall_shear_design(self)
 
@@ -352,9 +366,13 @@ class ShearWall(RectangularBeam):
     def warnings(self) -> Tuple[DesignWarning, ...]:  # type: ignore[override]
         """The mesh limits the wall misses under the last check, as data.
 
-        Empty until a check or design has run. See :mod:`mento.design_warnings`.
+        Empty until a check or design has run, and again once the mesh is
+        changed by hand: the limits are those of the mesh that was checked.
+        See :mod:`mento.design_warnings`.
         """
-        return collect(wall_warnings(self, self.mesh, tuple(self._wall_shear_checks)))
+        checks = tuple(self._wall_shear_checks)
+        mesh = checks[0].mesh if checks else self.mesh
+        return collect(wall_warnings(self, mesh, checks))
 
     def _not_a_beam(self, name: str) -> NoReturn:
         raise NotImplementedError(
