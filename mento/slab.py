@@ -467,6 +467,20 @@ class Footing(OneWaySlab):
     #: bounds the cost when the lightest ones do not verify.
     _MAT_CANDIDATES = 12
 
+    def _record_longitudinal_options(self, face: str, design: Any, table: Any) -> None:
+        """A footing offers no alternatives: its mat is chosen as a whole.
+
+        The rows the search ranks for one face are layouts of that face
+        alone, and the mat that replaces them is chosen for both faces at
+        once -- one module, the top at ``s`` or ``2s``, a bar each -- after
+        the faces were designed (:meth:`_finalize_longitudinal_design`). No
+        row is the mat with one thing changed, so none is an alternative to
+        it: offered as they came, 509 of 540 footings ended with a mat first
+        and unrelated per-face rows after it, some of which fail when built.
+        Only what the footing carries is reported, with its ``DCR``.
+        """
+        super()._record_longitudinal_options(face, design, None)
+
     def _finalize_longitudinal_design(
         self,
         A_req_bot: Quantity,

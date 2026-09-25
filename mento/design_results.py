@@ -95,11 +95,20 @@ class RebarOption:
     diameters and the use of a second layer. It is ``None`` for a layout the
     search did not score -- a footing mat, which is chosen afterwards and as a
     whole.
+
+    ``DCR`` is the worst demand-capacity ratio in flexure of the finished
+    section with this layout on its face and the other face as applied --
+    both faces, every combination the design was run for. An alternative is
+    only offered when that ratio is at most 1, the bars fit beside the
+    stirrups the design finished with, and the section keeps within the code's
+    limits on its reinforcement with it; the applied layout carries its own,
+    whatever it is. ``None`` on an option that has not been verified.
     """
 
     layers: Tuple[RebarLayer, ...]
     A_s: Quantity
     functional: Optional[float] = None
+    DCR: Optional[float] = None
 
     @property
     def n_bars(self) -> float:
@@ -424,7 +433,13 @@ class FlexureFaceDesign:
     and complies.
 
     ``options`` are the layouts the last design found for this face, best
-    first; ``options[0]`` is the one applied. Empty when the face was not
+    first; ``options[0]`` is the one applied. The rest were each built on
+    the finished section -- the stirrups the design ended with, the other
+    face as applied -- and kept only if the section carries both moments
+    with it, within the code's limits on its reinforcement; each carries the
+    ``DCR`` it was kept at. A footing offers none: its mat is chosen as a
+    whole, module and both bars together, and no row of the per-face search
+    is that mat with one thing changed. Empty when the face was not
     designed, or when its bars were changed by hand after the design.
 
     ``M_capacity`` is the design moment resistance of the face as reinforced
@@ -481,9 +496,17 @@ class StirrupOption:
     """One transverse layout a shear design found.
 
     The fields read as those of :class:`ShearDesign`. ``functional`` says how
-    much steel the option adds: the excess of ``A_v`` over what the design
-    asked for, ``A_v / A_v_req - 1``, plus one for every stirrup beyond the
-    fewest any option needs.
+    much steel the option adds: the excess of ``A_v`` over what the section
+    asks for with this stirrup on it, ``A_v / A_v_req - 1``, plus one for
+    every stirrup beyond the fewest any option needs.
+
+    ``DCR`` is the worst demand-capacity ratio of the finished section built
+    with this option -- shear and flexure, both faces, every combination the
+    design was run for. A stirrup is not only shear: a heavier one sits the
+    bars deeper, which lowers the effective depth and with it the section's
+    shear limit and its moment capacity. An alternative is only offered when
+    that ratio is at most 1 and the section misses no limit with it; the
+    applied layout carries its own, whatever it is.
     """
 
     n_stirrups: int
@@ -493,6 +516,7 @@ class StirrupOption:
     A_v: Quantity
     functional: float
     layout: str = STIRRUPS
+    DCR: Optional[float] = None
 
     @property
     def n_legs(self) -> int:
@@ -527,10 +551,13 @@ class ShearDesign:
     tension. The per-combination results carry each one's own.
 
     ``options`` are the stirrup layouts the last design found: ``options[0]``
-    is the one applied, and the rest follow in order of bar diameter -- the
-    same cage in a heavier bar, which is the substitution a drawing makes when
-    that is the bar at hand. Empty when the stirrups were not designed, or were
-    changed by hand afterwards.
+    is the one applied, and the rest are one layout per other bar diameter
+    the code offers, lighter and heavier alike, in order of diameter -- each
+    the widest spacing with the fewest legs that covers the demand read at
+    the depth that bar gives the section. Only the ones the finished section
+    passes with are kept, shear and flexure, so a drawing can take any of
+    them for the bar at hand; each carries its ``DCR``. Empty when the
+    stirrups were not designed, or were changed by hand afterwards.
     """
 
     n_stirrups: int

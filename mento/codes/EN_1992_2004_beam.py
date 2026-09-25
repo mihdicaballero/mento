@@ -666,6 +666,16 @@ def _flexure_within_maximum_EN_1992_2004(self: "RectangularBeam") -> bool:
     return within
 
 
+def _flexure_admissible_EN_1992_2004(self: "RectangularBeam", face: str) -> bool:
+    """The registry's ``flexure_admissible`` hook: :func:`_flexure_within_maximum_EN_1992_2004`.
+
+    ``face`` does not enter, because EN 1992-1-1 §9.2.1.1(3) caps the bars of
+    either face whatever they do; the hook takes it so that every code answers
+    the same question in the same shape.
+    """
+    return _flexure_within_maximum_EN_1992_2004(self)
+
+
 def _required_areas_EN_1992_2004(
     self: "RectangularBeam", face: str, M: Quantity, d: Quantity, d_prime: Quantity
 ) -> _FaceDemand:

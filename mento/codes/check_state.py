@@ -13,7 +13,7 @@ The fields are pre-zeroed in the section's own unit system by
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING, Tuple
 
 from mento.units import Quantity
 
@@ -178,6 +178,31 @@ def apply_shear_state(section: "RectangularBeam", state: ShearCheckState) -> Non
     imperial = section.concrete.is_imperial
     for field_name, (attribute, kind) in BEAM_ATTRIBUTES.items():
         setattr(section, attribute, to_display(getattr(state, field_name), kind, imperial))
+
+
+@dataclass(frozen=True)
+class CompressionSupport:
+    """What the stirrups of a doubly reinforced section owe its compression bars.
+
+    ACI 318-19 §9.7.6.4 / CIRSOC 201-25 §9.7.6.4, the same text in both:
+    ``s_max`` is the spacing cap of §9.7.6.4.3 with the stirrup the section
+    carries -- the least of 16 d_b of the compression bar, 48 d_b of the
+    stirrup and the least dimension of the beam -- and ``d_b_min`` the
+    smallest stirrup §9.7.6.4.2 lets support those bars. Each is read
+    against one compression bar, named beside it: ``d_b_comp_spacing`` is
+    the thinnest bar on the face, which 16 d_b binds first on;
+    ``d_b_comp_diameter`` the thickest, which the minimum climbs with.
+    ``faces`` are the faces whose bars act as compression steel.
+
+    Quantities rather than floats: it is read by the design, which speaks
+    pint, and quoted by the warnings, which print it.
+    """
+
+    s_max: Quantity
+    d_b_min: Quantity
+    d_b_comp_spacing: Quantity
+    d_b_comp_diameter: Quantity
+    faces: Tuple[str, ...]
 
 
 #: EN 1992-1-1 works with a different set of quantities than ACI, so it gets its
