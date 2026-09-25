@@ -38,7 +38,8 @@ Codes
     the layer nearest the face against the code's limits.
 ``bars_do_not_fit``
     The bars on a face leave no clear space between them, or a design found no
-    layout that fits the width.
+    layout that fits the width -- which holds until the face is given bars by
+    hand, since those are the spacing check's to judge.
 ``As_below_required``
     A design found no layout that fits the section and carries the moment --
     or, under ACI 318-19 / CIRSOC 201-25, carries it tension-controlled -- so

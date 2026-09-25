@@ -319,6 +319,7 @@ class OneWaySlab(RectangularBeam):
         self._s_b1_b = s_b1 if s_b1 != 0 * mm else self._s_b1_b
         self._d_b3_b = d_b3 if d_b3 != 0 * mm else self._d_b3_b
         self._s_b3_b = s_b3 if s_b3 != 0 * mm else self._s_b3_b
+        self._face_set_by_hand("bot")
         self._calculate_longitudinal_rebars()
         self._update_longitudinal_rebar_attributes()
 
@@ -342,6 +343,7 @@ class OneWaySlab(RectangularBeam):
         self._s_b1_t = s_b1 if s_b1 != 0 * mm else self._s_b1_t
         self._d_b3_t = d_b3 if d_b3 != 0 * mm else self._d_b3_t
         self._s_b3_t = s_b3 if s_b3 != 0 * mm else self._s_b3_t
+        self._face_set_by_hand("top")
         self._calculate_longitudinal_rebars()
         self._update_longitudinal_rebar_attributes()
 

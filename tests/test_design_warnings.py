@@ -412,6 +412,54 @@ def test_clear_spacing_follows_the_stirrup_whatever_the_call_order(bars_first: b
     assert beam._available_s_bot.to("mm").magnitude == pytest.approx(28.67, abs=0.01)
 
 
+def test_bars_set_by_hand_that_fit_clear_the_flag_of_their_face() -> None:
+    """A 10x30 web finds no layout for 80 kNm on either face (it is doubly
+    reinforced and neither the tension nor the compression steel fits), so
+    the design flags both. The flag is the search's verdict on the width,
+    not a property of the bars: one Ø12 set by hand has 100 - 2*(25 + 10) -
+    12 = 18 mm beside it and fits. On bd94d2f the flag outlived the bars and
+    the face was reported as not fitting with a single bar on it; the other
+    face keeps its flag until it is set too.
+    """
+    beam = _beam(width=10 * cm, height=30 * cm)
+    node = Node(section=beam, forces=[Forces(label="U", V_z=20 * kN, M_y=80 * kNm)])
+    node.design()
+
+    def not_fitting() -> set[str | None]:
+        return {w.face for w in node.warnings if w.code == "bars_do_not_fit"}
+
+    assert not_fitting() == {"bottom", "top"}
+    beam.set_longitudinal_rebar_bot(n1=1, d_b1=12 * mm)
+    assert not_fitting() == {"top"}
+    beam.set_longitudinal_rebar_top(n1=1, d_b1=12 * mm)
+    assert not_fitting() == set()
+    # A design run again reads the width again, and flags it again.
+    node.design()
+    assert not_fitting() == {"bottom", "top"}
+
+
+def test_slab_bars_set_by_hand_clear_the_flag_of_their_face() -> None:
+    """The slab setters detail a spacing, not a count, but they are the same
+    hand: a face given bars by hand is no longer the face the search gave
+    up on."""
+    from mento import OneWaySlab
+    from mento.units import m
+
+    slab = OneWaySlab(
+        label="L1",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=1 * m,
+        height=20 * cm,
+        c_c=25 * mm,
+    )
+    slab._infeasible_faces = {"bot", "top"}
+    slab.set_slab_longitudinal_rebar_bot(d_b1=12 * mm, s_b1=15 * cm)
+    assert slab._infeasible_faces == {"top"}
+    slab.set_slab_longitudinal_rebar_top(d_b1=12 * mm, s_b1=15 * cm)
+    assert slab._infeasible_faces == set()
+
+
 def test_clearing_the_stirrups_widens_the_space_for_the_bars() -> None:
     """Without stirrups the bars sit against the cover: (200 - 50 - 48)/3 = 34 mm."""
     beam = _beam(height=50 * cm)

@@ -643,6 +643,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         self._d_b3_b = d_b3 if d_b3 is not None else 0 * L
         self._n4_b = n4
         self._d_b4_b = d_b4 if d_b4 is not None else 0 * L
+        self._face_set_by_hand("bot")
         self._update_longitudinal_rebar_attributes()
 
     def set_longitudinal_rebar_top(
@@ -665,7 +666,22 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         self._d_b3_t = d_b3 if d_b3 is not None else 0 * L
         self._n4_t = n4
         self._d_b4_t = d_b4 if d_b4 is not None else 0 * L
+        self._face_set_by_hand("top")
         self._update_longitudinal_rebar_attributes()
+
+    def _face_set_by_hand(self, face: str) -> None:
+        """A face given bars is no longer the face the search gave up on.
+
+        ``bars_do_not_fit`` records, per face, that the last design found no
+        layout that fits the width. That is the search's verdict on the
+        width, not a property of whatever bars the face carries: bars set by
+        hand afterwards are a different section, which the spacing check
+        judges on its own. The design itself sets the flag after it has
+        applied its layout -- through these same setters -- so it survives
+        the design and goes with the first hand-set bars. ``face`` is
+        ``"bot"`` or ``"top"``.
+        """
+        self._infeasible_faces.discard(face)
 
     def _calculate_longitudinal_rebar_area(self) -> None:
         """Calculate total rebar area (robust to None or zero diameters)."""
