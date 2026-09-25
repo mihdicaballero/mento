@@ -1322,6 +1322,39 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
                 max_V_s_req = self._V_s_req
         return max_A_v_req, max_V_s_req
 
+    def _compression_faces_under(self, forces: list[Forces]) -> set[str]:
+        """The faces the section as it stands relies on as compression steel under ``forces``.
+
+        Values-only flexure checks, one per combination (see
+        :meth:`_compression_face_of`); nothing is written to the section.
+        """
+        faces: set[str] = set()
+        for force in forces:
+            face = self._compression_face_of(force, self._run_flexure_check(force, report=False))
+            if face is not None:
+                faces.add(face)
+        return faces
+
+    def _stirrup_demand(self, forces: list[Forces], braced: set[str]) -> Tuple[Quantity, Quantity]:
+        """What the section as it stands asks of its stirrups: read once per diameter the search tries.
+
+        The governing ``(A_v_req, V_s_req)`` of :meth:`_shear_demand`, and the
+        compression bars the stirrups have to brace, left in
+        ``_compression_faces`` for the code's ``stirrup_compression_support``
+        to read -- the diameter floor of ACI 318-19 / CIRSOC 201-25 §9.7.6.4.2
+        and the spacing cap of §9.7.6.4.3. Both move with the depth the
+        stirrup gives the bars. A section singly reinforced at the depth of
+        the starter stirrup can rely on its compression bars at the depth of
+        a heavier one: an ACI 15x50 H40 under 211.5 kNm asks 14.94 cm² against
+        A_s,max = 14.98 cm² with Ø8, and its 16.10 cm² are past the 14.92 of
+        the Ø10 the shear design picks, so the Ø10 has to brace the 2Ø10 on
+        top at 150 mm. Read off the last flexure check alone, the stirrups
+        were spaced at 210. ``braced`` -- the faces that check found -- stay
+        braced whatever the depth, the conservative side.
+        """
+        self._compression_faces = braced | self._compression_faces_under(forces)
+        return self._shear_demand(forces)
+
     # Factory method to select the shear design method
     def design_shear(self, forces: list[Forces]) -> DataFrame:
         """Design the stirrups for the worst of ``forces``, then check them all.
@@ -1341,6 +1374,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         self._shear_options = ()
         self._stirrup_d_b = self._design_start_stirrup()
         self._update_longitudinal_rebar_attributes()
+        braced = set(self._compression_faces)
 
         max_A_v_req, max_V_s_req = self._shear_demand(forces)
 
@@ -1353,7 +1387,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
 
         section_rebar = Rebar(self)
         self.shear_design_results = section_rebar.transverse_rebar(
-            max_A_v_req, max_V_s_req, self._alpha, demand=lambda: self._shear_demand(forces)
+            max_A_v_req, max_V_s_req, self._alpha, demand=lambda: self._stirrup_demand(forces, braced)
         )
         self._best_rebar_design = section_rebar.transverse_rebar_design
 
@@ -1362,6 +1396,9 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         self._stirrup_s_max_l = self._best_rebar_design["s_max_l"]
         self._stirrup_s_max_w = self._best_rebar_design["s_max_w"]
         self._apply_transverse_design(self._best_rebar_design)
+        # The search left the faces of the last diameter it tried; the check
+        # reads the ones of the stirrup applied.
+        self._compression_faces = braced | self._compression_faces_under(forces)
         self._record_transverse_options(self.shear_design_results, forces)
 
         # Update longitudinal rebar attributes

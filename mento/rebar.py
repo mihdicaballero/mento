@@ -356,7 +356,12 @@ class Rebar:
         the demand off it is what let the design of a 30x40 CIRSOC beam
         trade Ø8 and Ø10 back and forth and apply 1eØ10/15 against a limit of
         8.9 cm. Each row is therefore sized at its own depth, and the row the
-        design applies passes its own check by construction.
+        design applies passes its own check by construction. That includes
+        what the section's compression bars ask of the stirrups (ACI 318-19 /
+        CIRSOC 201-25 §9.7.6.4): whether the section relies on them moves
+        with the depth too, so the diameter floor and the spacing cap are
+        read after the demand of each diameter, which the beam's ``demand``
+        reads with its compression steel.
 
         For each diameter the search keeps the widest spacing, with the fewest
         legs, that covers the ``A_v_req`` of that diameter. The rows are then
@@ -368,11 +373,12 @@ class Rebar:
 
         # Get code specific limitations
         code = design_code(self.beam.concrete)
-        valid_diameters = self._supporting_diameters(code.transverse_rebar(self, V_s_req, alpha)[0])
 
         # Iterate through available diameters
-        for d_b in valid_diameters:
+        for d_b in code.transverse_rebar(self, V_s_req, alpha)[0]:
             A_v_req_d, V_s_req_d = self._demand_for(d_b, A_v_req, V_s_req, demand)
+            if not self._supports_compression(d_b):
+                continue
             s_max_l, s_max_w = self._spacing_limits_for(d_b, V_s_req_d, alpha)
             # Start from the fewest legs that keep the transverse spacing within s_max_w,
             # rather than from a single stirrup: on a wide section two legs never comply.
@@ -569,6 +575,17 @@ class Rebar:
         """
         hook = design_code(self.beam.concrete).stirrup_compression_support
         return None if hook is None else hook(self.beam, d_b)
+
+    def _supports_compression(self, d_b: Quantity) -> bool:
+        """Whether a stirrup of diameter ``d_b`` is thick enough for the compression bars it braces.
+
+        ACI 318-19 §9.7.6.4.2 / CIRSOC 201-25 Tabla 9.7.6.4.2, read with the
+        compression steel the section relies on as the demand last left it
+        -- for a beam, at the depth ``d_b`` itself gives the bars, since
+        :meth:`_demand_for` reads the demand with that stirrup on.
+        """
+        support = self._compression_support(d_b)
+        return support is None or d_b >= support.d_b_min
 
     def _supporting_diameters(self, diameters: List[Quantity]) -> List[Quantity]:
         """The bars of ``diameters`` thick enough to support the section's compression steel.

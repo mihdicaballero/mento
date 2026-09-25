@@ -955,6 +955,40 @@ def test_a_negative_moment_puts_the_braced_bars_at_the_bottom() -> None:
     assert (spacing.values["s_max"], spacing.values["d_b_comp"]) == (20 * cm, 16 * mm)
 
 
+def test_a_stirrup_that_makes_the_section_doubly_reinforced_is_spaced_for_it() -> None:
+    """ACI 15x50 H40 ADN 420, c_c 25 mm, Mu = 211.5 kNm, Vu = 0: 2Ø25 + 2Ø20 in two layers, 2Ø10 on top.
+
+    The flexure is designed at the depth of the Ø8 starter stirrup, where
+    the section is singly reinforced: A_s,req = 14.94 cm² against the
+    tension-controlled A_s,max = 14.98 cm² there. The shear design picks
+    Ø10, which sinks the bars 2 mm: A_s,max falls to 14.92 cm², the 16.10
+    cm² placed are past it, and the section now relies on the 2Ø10 on top
+    as compression steel. §9.7.6.4.3 then caps the stirrups at min(16*10,
+    48*10, 150) = 150 mm. The stirrups used to be spaced before the design
+    knew, with the compression faces of the Ø8 depth: 1eØ10/21 and
+    ``stirrup_spacing_exceeds_compression_support`` on the design itself.
+    Each diameter is now read with the compression steel its own depth
+    relies on.
+    """
+    beam = RectangularBeam(
+        label="V",
+        concrete=Concrete_ACI_318_19(name="H40", f_c=40 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=15 * cm,
+        height=50 * cm,
+        c_c=25 * mm,
+    )
+    node = Node(section=beam, forces=[Forces(label="ELU", M_y=211.5 * kNm)])
+    node.design()
+
+    assert str(beam.reinforcement.bottom) == "2Ø25 mm + 2Ø20 mm"
+    assert str(beam.reinforcement.top) == "2Ø10 mm"
+    assert beam._compression_faces == {"top"}
+    assert beam.shear_design.d_b == 10 * mm
+    assert beam.shear_design.s_l <= 15 * cm
+    assert node.warnings == ()
+
+
 def test_cirsoc_grades_the_bracing_stirrup_with_the_compression_bar() -> None:
     """CIRSOC 20x40 H25 ADN 420, Mu 200 kNm, Vu 60 kN: 2Ø20 + 1Ø20 on top as compression steel.
 
