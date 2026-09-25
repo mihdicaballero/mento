@@ -613,6 +613,23 @@ def _flexure_capacity_EN_1992_2004(self: "RectangularBeam", face: str, M_demand:
     return self._M_Rd_bot if face == "bot" else self._M_Rd_top
 
 
+def _flexure_within_maximum_EN_1992_2004(self: "RectangularBeam") -> bool:
+    """Does neither face carry more than A_s,max?
+
+    EN 1992-1-1 §9.2.1.1(3): "The cross-sectional area of tension or
+    compression reinforcement should not exceed A_s,max" -- either face,
+    whichever does what, so the face in tension does not matter. Held against
+    the same ``rho_max*b*d`` the check reports the limit as. A design that
+    reached the moment past it would hand back a section the check warns about.
+    """
+    sec = section_floats(self)
+    _, rho_max = _min_max_flexural_reinforcement_ratio_EN_1992_2004(self)
+    within = True
+    for A_s, d in ((sec.A_s_bot, sec.d_bot), (sec.A_s_top, sec.d_top)):
+        within = within and A_s <= rho_max * d * sec.width * (1 + 1e-9)
+    return within
+
+
 def _required_areas_EN_1992_2004(
     self: "RectangularBeam", face: str, M: Quantity, d: Quantity, d_prime: Quantity
 ) -> _FaceDemand:
@@ -649,7 +666,10 @@ def _design_flexure_EN_1992_2004(self: "RectangularBeam", max_M_y_bot: Quantity,
     def _capacity(face: str, M: Quantity) -> Quantity:
         return _flexure_capacity_EN_1992_2004(self, face, M)
 
-    _run_flexure_design(self, max_M_y_bot, max_M_y_top, _required, _capacity)
+    def _admissible(face: str) -> bool:
+        return _flexure_within_maximum_EN_1992_2004(self)
+
+    _run_flexure_design(self, max_M_y_bot, max_M_y_top, _required, _capacity, _admissible)
 
 
 def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> ENFlexureCheckState:
