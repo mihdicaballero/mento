@@ -26,7 +26,11 @@ allows Ø6 mm for the transverse mesh and Ø10 mm minimum for the vertical mesh)
     The module covers **shear check and design only**. Flexure design
     for shear walls is not implemented yet. Inherited flexure methods from
     ``RectangularBeam`` are not validated for wall geometry and should not be
-    used.
+    used. The beam's results are not offered at all: ``wall.reinforcement``,
+    ``wall.flexure_design`` and ``wall.flexure_checks`` raise ``NotABeamError``,
+    an ``AttributeError`` (so ``hasattr`` is ``False`` and ``getattr`` takes its
+    default) that points to ``wall.mesh``, ``wall.shear_design`` and
+    ``wall.shear_checks``.
 
 Key Concepts
 ------------

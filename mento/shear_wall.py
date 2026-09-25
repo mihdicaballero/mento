@@ -30,6 +30,21 @@ from mento.plots.walls import plot_wall_elevation
 from mento.reports import walls as wall_reports
 
 
+class NotABeamError(AttributeError, NotImplementedError):
+    """A beam result read on a wall, which is reinforced with a mesh instead.
+
+    Raised by ``wall.reinforcement``, ``wall.flexure_design``,
+    ``wall.flexure_checks`` and ``wall.flexure_check_results()``. It is an
+    ``AttributeError`` so that the member is missing the way an attribute is:
+    ``hasattr(wall, "reinforcement")`` is False and
+    ``getattr(wall, "reinforcement", None)`` takes its default, which lets a
+    loop over mixed beams and walls ask for the member instead of the class.
+    It is a ``NotImplementedError`` too, for the callers that already catch
+    that. The message points to ``wall.mesh``, ``wall.shear_design`` and
+    ``wall.shear_checks``.
+    """
+
+
 class ShearWall(RectangularBeam):
     """
     Reinforced concrete structural wall — shear check and design.
@@ -375,27 +390,28 @@ class ShearWall(RectangularBeam):
         return collect(wall_warnings(self, mesh, checks))
 
     def _not_a_beam(self, name: str) -> NoReturn:
-        raise NotImplementedError(
+        raise NotABeamError(
             f"ShearWall has no {name}: it is reinforced with a distributed mesh. "
             "Read wall.mesh, wall.shear_design and wall.shear_checks instead."
         )
 
     @property
     def reinforcement(self) -> NoReturn:  # type: ignore[override]
-        """Not available on a wall: see :attr:`mesh`."""
+        """Not available on a wall: see :attr:`mesh`. Raises :class:`NotABeamError`."""
         self._not_a_beam("beam reinforcement")
 
     @property
     def flexure_design(self) -> NoReturn:  # type: ignore[override]
-        """Not available on a wall: flexure is not implemented (Phase 0)."""
+        """Not available on a wall: flexure is not implemented (Phase 0). Raises :class:`NotABeamError`."""
         self._not_a_beam("flexure design")
 
     @property
     def flexure_checks(self) -> NoReturn:  # type: ignore[override]
-        """Not available on a wall: flexure is not implemented (Phase 0)."""
+        """Not available on a wall: flexure is not implemented (Phase 0). Raises :class:`NotABeamError`."""
         self._not_a_beam("flexure checks")
 
     def flexure_check_results(self, forces: list[Forces]) -> NoReturn:  # type: ignore[override]
+        """Not available on a wall: flexure is not implemented (Phase 0). Raises :class:`NotABeamError`."""
         self._not_a_beam("flexure check")
 
     def check_flexure(self, forces: list[Forces]) -> DataFrame:  # type: ignore[override]

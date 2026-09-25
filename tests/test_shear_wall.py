@@ -900,14 +900,51 @@ def test_the_shear_design_prints_its_mesh(wall_metric: ShearWall) -> None:
 
 @pytest.mark.parametrize("name", ["reinforcement", "flexure_design", "flexure_checks"])
 def test_beam_results_are_not_offered_on_a_wall(wall_metric: ShearWall, name: str) -> None:
-    with pytest.raises(NotImplementedError, match="mesh"):
+    """The member is missing the way an attribute is, and still a NotImplementedError.
+
+    ``hasattr`` used to raise on a wall, which broke any loop over mixed beams
+    and walls that asked for the member before reading it.
+    """
+    from mento.shear_wall import NotABeamError
+
+    with pytest.raises(NotABeamError, match="mesh") as excinfo:
         getattr(wall_metric, name)
+    assert isinstance(excinfo.value, AttributeError)
+    assert isinstance(excinfo.value, NotImplementedError)
+    assert not hasattr(wall_metric, name)
+    assert getattr(wall_metric, name, None) is None
 
 
 def test_flexure_check_results_is_not_offered_on_a_wall(wall_metric: ShearWall) -> None:
     """The values-only flexure entry point is a method, so the guard needs a call."""
-    with pytest.raises(NotImplementedError, match="mesh"):
+    from mento.shear_wall import NotABeamError
+
+    with pytest.raises(NotABeamError, match="mesh"):
         wall_metric.flexure_check_results([Forces(label="U1", V_z=1200 * kN)])
+    with pytest.raises(NotImplementedError):
+        wall_metric.flexure_check_results([Forces(label="U1", V_z=1200 * kN)])
+
+
+def test_a_loop_over_beams_and_walls_can_ask_for_the_member(wall_metric: ShearWall) -> None:
+    """What a generic caller does: read the beam result where there is one, the mesh where there is not."""
+    from mento.beam import RectangularBeam
+
+    beam = RectangularBeam(
+        label="B1",
+        concrete=wall_metric.concrete,
+        steel_bar=wall_metric.steel_bar,
+        width=20 * cm,
+        height=50 * cm,
+        c_c=25 * mm,
+    )
+    described = [
+        str(reinforcement)
+        if (reinforcement := getattr(section, "reinforcement", None)) is not None
+        else str(section.mesh)
+        for section in (beam, wall_metric)
+    ]
+    assert described[0].startswith("bottom: ")
+    assert described[1] == "horizontal: no reinforcement / vertical: no reinforcement"
 
 
 def test_wall_warnings(wall_metric: ShearWall) -> None:
