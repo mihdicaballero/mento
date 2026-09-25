@@ -504,7 +504,15 @@ def test_bars_that_do_not_fit_are_warned_after_a_design() -> None:
 
 
 def test_a_design_short_of_the_moment_is_warned_until_the_bars_reach_it() -> None:
-    """A 12x30 web takes 4Ø12 at most, and 40 kNm asks for 5.18 cm² below."""
+    """A 12x30 web takes 2Ø16 + 2Ø16 = 8.04 cm² at most beside the 1eØ6 it ends with; 60 kNm asks for 8.14 below.
+
+    The moment needs compression steel too, 7.27 cm² above, where 2Ø12 + 2Ø12
+    = 4.52 fit: both faces are short, and each is warned for as long as it
+    carries what the design left. (At 40 kNm this web used to be declared
+    short because Ø16 did not fit beside the 8 mm starter stirrup; a full
+    design now redoes the flexure with the stirrup the shear design chose,
+    and 2Ø16 + 2Ø12 carry it.)
+    """
     beam = RectangularBeam(
         label="101",
         concrete=mento.Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa),
@@ -513,18 +521,20 @@ def test_a_design_short_of_the_moment_is_warned_until_the_bars_reach_it() -> Non
         height=30 * cm,
         c_c=25 * mm,
     )
-    node = Node(section=beam, forces=[Forces(label="1.4D", V_z=50 * kN, M_y=40 * kNm)])
+    node = Node(section=beam, forces=[Forces(label="1.4D", V_z=50 * kN, M_y=60 * kNm)])
     node.design()
 
-    short = _by_code(node.warnings)["As_below_required"]
-    assert short.face == "bottom"
-    assert short.values["A_s"].to("cm**2").magnitude == pytest.approx(4.52, rel=1e-3)
-    assert short.values["A_s_req"].to("cm**2").magnitude == pytest.approx(5.18, rel=1e-2)
+    short = {w.face: w for w in node.warnings if w.code == "As_below_required"}
+    assert set(short) == {"bottom", "top"}
+    assert short["bottom"].values["A_s"].to("cm**2").magnitude == pytest.approx(8.04, rel=1e-3)
+    assert short["bottom"].values["A_s_req"].to("cm**2").magnitude == pytest.approx(8.14, rel=1e-2)
     mento.set_language("es")
     assert "agrandar la sección" in _by_code(node.warnings)["As_below_required"].message
 
-    # Bars set by hand that reach the area clear it.
-    beam.set_longitudinal_rebar_bot(2, 16 * mm, 0, None, 2, 16 * mm)
+    # Bars set by hand that reach the area clear it, face by face.
+    beam.set_longitudinal_rebar_bot(2, 20 * mm, 0, None, 2, 20 * mm)
+    assert {w.face for w in node.warnings if w.code == "As_below_required"} == {"top"}
+    beam.set_longitudinal_rebar_top(2, 20 * mm, 0, None, 2, 20 * mm)
     assert "As_below_required" not in {w.code for w in node.warnings}
 
 

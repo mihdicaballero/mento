@@ -2934,17 +2934,20 @@ def test_design_flexure_ACI_318_19_gap_past_cap_negative_moment_upgrades_bottom(
     assert node.warnings == ()
 
 
-def test_design_flexure_CIRSOC_201_25_narrow_web_gives_the_most_that_fits() -> None:
+def test_design_flexure_CIRSOC_201_25_narrow_web_fits_the_bars_its_stirrup_leaves_room_for() -> None:
     """
-    Viga 12x30 cm, H25, ADN 420, c_c = 2.5 cm, Mu = +40 kN·m.
+    Viga 12x30 cm, H25, ADN 420, c_c = 2.5 cm, Mu = +40 kN·m, Vu = 50 kN.
 
-    Ancho libre = 12 - 2·(2.5 + 0.8) = 5.4 cm: dos barras por capa, y como
-    mucho Ø12 (54 - 2·16 = 22 mm < 30 mm del vibrador descarta el Ø16). Lo
-    mas que entra es 2Ø12 + 2Ø12 = 4.52 cm², por debajo de lo que pide el
-    momento (5.13 cm² de traccion, con compresion). Ni pasando el tope hay
-    una combinacion que alcance, asi que el diseño deja el maximo que entra
-    -- antes de corregir el redondeo de la separacion eran 4Ø10 = 3.14 cm²,
-    DCR 1.53 -- y el DCR > 1 dice que la seccion no alcanza.
+    Con el estribo de arranque de 8 mm el ancho libre es 12 - 2·(2.5 + 0.8) =
+    5.4 cm: dos barras por capa y como mucho Ø12 (54 - 2·16 = 22 mm < 25 mm
+    de separacion libre, §25.2.1). Lo mas que entraba era 2Ø12 + 2Ø12 =
+    4.52 cm², por debajo de los 5.13 cm² que pide el momento, y el diseño
+    quedaba con DCR 1.129 y ``As_below_required``. Pero el diseño de corte
+    elige 1eØ6/12 para 50 kN, y con el Ø6 el ancho libre es 5.8 cm: 2Ø16
+    entran (58 - 32 = 26 mm ≥ 25 mm). El diseño completo rehace la flexion
+    con el estribo con el que termina y deja 2Ø16 + 2Ø12 = 6.28 cm² abajo
+    sobre 2Ø12 arriba: DCR 0.803, sin avisos. Antes quedaba con la seccion
+    declarada corta por un estribo que no lleva.
     """
     beam = RectangularBeam(
         label="101",
@@ -2958,10 +2961,41 @@ def test_design_flexure_CIRSOC_201_25_narrow_web_gives_the_most_that_fits() -> N
     node.design()
 
     bottom = beam.flexure_design.bottom
-    assert [(layer.n, layer.d_b.to("mm").magnitude) for layer in bottom.layers] == [(2, 12), (2, 12)]
-    assert bottom.A_s.to("cm**2").magnitude == pytest.approx(4.52, rel=1e-3)
-    assert bottom.DCR == pytest.approx(1.129, rel=1e-3)
-    assert [w.face for w in node.warnings if w.code == "As_below_required"] == ["bottom"]
+    assert beam._stirrup_d_b.to("mm").magnitude == pytest.approx(6.0)
+    assert [(layer.n, layer.d_b.to("mm").magnitude) for layer in bottom.layers] == [(2, 16), (2, 12)]
+    assert bottom.A_s.to("cm**2").magnitude == pytest.approx(6.283, rel=1e-3)
+    assert bottom.DCR == pytest.approx(0.803, rel=1e-3)
+    assert node.warnings == ()
+
+
+def test_design_flexure_CIRSOC_201_25_narrow_web_gives_the_most_that_fits() -> None:
+    """
+    Viga 12x30 cm, H25, ADN 420, c_c = 2.5 cm, Mu = +60 kN·m, Vu = 50 kN.
+
+    Con el 1eØ6/12 que elige el corte el ancho libre es 5.8 cm: dos barras
+    por capa y como mucho Ø16 (58 - 2·16 = 26 mm ≥ 25 mm de §25.2.1; el Ø20
+    dejaria 18). Lo mas que entra es 2Ø16 + 2Ø16 = 8.04 cm², por debajo de
+    los 8.14 cm² que pide el momento (con compresion: arriba pide 7.27 y
+    entran 2Ø12 + 2Ø12 = 4.52). Ni pasando el tope hay una combinacion que
+    alcance, asi que el diseño deja el maximo que entra y lo dice:
+    ``As_below_required`` en las dos caras, DCR 1.137.
+    """
+    beam = RectangularBeam(
+        label="101",
+        concrete=Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=12 * cm,
+        height=30 * cm,
+        c_c=25 * mm,
+    )
+    node = Node(section=beam, forces=[Forces(label="1.4D", V_z=50 * kN, M_y=60 * kNm)])
+    node.design()
+
+    bottom = beam.flexure_design.bottom
+    assert [(layer.n, layer.d_b.to("mm").magnitude) for layer in bottom.layers] == [(2, 16), (2, 16)]
+    assert bottom.A_s.to("cm**2").magnitude == pytest.approx(8.042, rel=1e-3)
+    assert bottom.DCR == pytest.approx(1.137, rel=1e-3)
+    assert "bottom" in [w.face for w in node.warnings if w.code == "As_below_required"]
 
 
 def test_design_flexure_ACI_318_19_compression_bottom_exceeds_provided_bottom() -> None:

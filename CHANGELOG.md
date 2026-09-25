@@ -216,6 +216,27 @@ from the release history and are summaries rather than complete lists.
   design used to pick 28 cm at the depth of the 8 mm starter stirrup, past the 27.95 cm
   limit of the beam once its Ø10 was placed.
 
+- **A full design passes its own check with the stirrups it ends with.** `design()`
+  designed the flexure at the depth of the starter stirrup and never looked at it again
+  once the shear design chose another. A heavier stirrup sank the bars: an ACI 318-19
+  20×50 with f'c = 25 MPa under 150 kN·m got 2Ø25, φMn = 150.7 kN·m at the Ø8 depth and
+  149.9 at the 1eØ10 the shear design picked for 250 kN — DCR 1.0005 and no warning, since
+  the search never saw a shortfall. A lighter one lifted them, and under EN 1992-1-1 lifted
+  A_s,min with d (§9.2.1.1(1)) past the bars placed: a 30×80 under 30 kN·m carried
+  2Ø12 + 1Ø10 = 3.047 cm² against 3.046 at the Ø8 depth and 3.054 at the 1eØ6, and warned
+  `As_below_min` on its own bars. It also narrowed or widened what the bars had between
+  the legs: a CIRSOC 12×30 under 40 kN·m was declared short (2Ø12 + 2Ø12, DCR 1.129,
+  `As_below_required`) because Ø16 did not fit beside an 8 mm stirrup, when the 1eØ6/12
+  it ends with leaves 58 mm and 2Ø16 + 2Ø12 carry it at DCR 0.80. When the section as the
+  shear design left it fails its flexure check, `design()` now designs the flexure again
+  with that stirrup on the section, and the stirrups again for the new bars, until the
+  pair passes or repeats — a repeat means no layout passes at that depth either, and the
+  warnings say what is short. In a sweep of 480 ACI / CIRSOC / EN designs (b 20–60, h 40–80,
+  30–400 kN·m, 80 and 250 kN) the eight that failed themselves silently now pass, and every
+  one of the 15 left past DCR 1 carries `As_below_required`, `As_above_max` or
+  `shear_exceeds_section_limit`. `design_flexure()` and `design_shear()` on their own are
+  unchanged, and a design still gives the same bars every time.
+
 - **The stirrup design is sized at the depth of its own diameter.** Every bar the code
   offers is sized against the `A_v,req` and the Table 9.7.6.2.2 row read with that bar on
   the section, so the applied layout passes its own check by construction. The design

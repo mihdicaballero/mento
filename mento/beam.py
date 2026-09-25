@@ -415,6 +415,11 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
     #: the options it will show: dropping the ones the finished section fails
     #: with still leaves the number asked for, in most cases.
     _OPTION_POOL_FACTOR = 3
+    #: Rounds a full design may redo its flexure with the stirrup the shear
+    #: design chose, when that stirrup moved the bars past what they carry.
+    #: One is what it takes when a layout exists; the bound is for a section
+    #: that has none, which then ends on a repeated state anyway.
+    _DESIGN_ROUNDS = 3
 
     def _record_longitudinal_options(self, face: str, design: Any, table: Any) -> None:
         """Keep the layouts the search ranked for one face, the applied one first.
@@ -633,13 +638,23 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         self._stirrup_d_b = self._design_start_stirrup()
         self._stirrup_s_l = 0 * cm
         self._A_v = 0 * cm**2 / m
+        self._shear_options = ()
+        self._reset_longitudinal_for_design()
+
+    def _reset_longitudinal_for_design(self) -> None:
+        """Return the bars and what a flexure design left about them to where one starts.
+
+        The stirrups are kept: this is what a design that has to redo its
+        flexure at the depth of the stirrup it settled on starts from (see
+        :meth:`_settle_design`), and what :meth:`_reset_for_design` does once
+        it has put the starter stirrup back.
+        """
         self._doubly_reinforced = False
         self._compression_faces = set()
         self._flexure_options_b = ()
         self._flexure_options_t = ()
         self._flexure_option_pool_b = ()
         self._flexure_option_pool_t = ()
-        self._shear_options = ()
         self._infeasible_faces = set()
         self._short_faces = {}
         self._initialize_longitudinal_rebar_attributes()
@@ -1358,14 +1373,67 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
 
         Starts from the reinforcement a first design would, whatever the
         section carried before, so the same forces always give the same bars.
-        The longitudinal alternatives are verified last, on the section the
-        shear design finished: its stirrup sets the depth the bars sit at.
+        The flexure is designed first, at the depth of the starter stirrup;
+        the shear design then chooses the stirrup, and if that moved the bars
+        past what they carry the flexure is designed again with it
+        (:meth:`_settle_design`). The longitudinal alternatives are verified
+        last, on the section the shear design finished: its stirrup sets the
+        depth the bars sit at.
         """
         self._reset_for_design()
         self.design_flexure(forces)
         self.design_shear(forces)
+        self._settle_design(forces)
         self.check_flexure(forces)
         self._verify_longitudinal_options(forces)
+
+    def _settle_design(self, forces: list[Forces]) -> None:
+        """Redo the flexure with the stirrup the shear design chose, until the pair holds.
+
+        The flexure design sizes the bars at the depth of the starter stirrup
+        and the shear design then picks one of its own, which moves them. A
+        heavier stirrup sinks them: an ACI 318-19 20x50 with f'c = 25 MPa under
+        150 kN·m gets 2Ø25 at the Ø8 depth (d = 454.5 mm, φMn = 150.7 kN·m)
+        and 1eØ10 for 250 kN, after which d = 452.5 mm and φMn = 149.9 kN·m:
+        DCR 1.0005 and nothing to warn about, since the search never saw a
+        shortfall. A lighter one lifts them, and under EN 1992-1-1 lifts
+        A_s,min with d (§9.2.1.1(1)): a 30x80 under 30 kN·m gets 2Ø12 + 1Ø10 =
+        3.047 cm² against 3.045 at the Ø8 depth, then 1eØ6 and 3.054 required,
+        so the design warned ``As_below_min`` on its own bars. It also narrows
+        or widens what is left between the legs for the bars to fit.
+
+        So when the section as the shear design left it fails
+        :meth:`_flexure_verdict`, the flexure is designed again from the
+        placeholder bars with that stirrup on the section, and the stirrups
+        again for the new bars, until the pair passes or comes back to a
+        state already seen -- which means no layout passes at that depth
+        either, and the warnings of the last round say what is short. Bounded
+        by ``_DESIGN_ROUNDS``; a design that passes at once does nothing here,
+        and the sequence is a function of the forces, so ``design()`` still
+        gives the same bars every time.
+        """
+        seen = {self._design_state()}
+        for _ in range(self._DESIGN_ROUNDS):
+            _, passes = self._flexure_verdict(forces, ("bot", "top"))
+            if passes:
+                return
+            self._reset_longitudinal_for_design()
+            self.design_flexure(forces)
+            self.design_shear(forces)
+            state = self._design_state()
+            if state in seen:
+                return
+            seen.add(state)
+
+    def _design_state(self) -> Tuple[float, ...]:
+        """The reinforcement on the section as numbers, to tell one design round from another."""
+
+        def value(x: Any) -> float:
+            return float(x.to("mm").magnitude) if hasattr(x, "to") else float(x)
+
+        bars = [self._longitudinal_snapshot(face) for face in ("b", "t")]
+        longitudinal = tuple(value(v) for snapshot in bars for _, v in sorted(snapshot.items()))
+        return longitudinal + (float(self._stirrup_n), value(self._stirrup_d_b), value(self._stirrup_s_l))
 
     def check(self, forces: list[Forces]) -> None:
         """

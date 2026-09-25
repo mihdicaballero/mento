@@ -33,7 +33,7 @@ from mento import (
     RectangularBeam,
     SteelBar,
 )
-from mento.units import MPa, cm, kNm, mm
+from mento.units import MPa, cm, kN, kNm, mm
 
 _F_Y = 420.0
 _E_S = 200000.0
@@ -148,6 +148,75 @@ def test_a_design_passes_its_own_check(code: str) -> None:
             assert "As_above_max" in codes, (b_cm, h_cm, f_c, M, eps_t)
     assert not silent, f"{code}: designs that fail their own check without saying so: {silent}"
     assert not overstated, f"{code}: capacity above strain compatibility: {overstated}"
+
+
+def test_a_full_design_passes_its_own_check_with_the_stirrups_it_ends_with() -> None:
+    """ACI 318-19 20x50, f'c 25 MPa, ADN 420, c_c 25 mm, Mu = 150 kN·m, Vu = 250 kN.
+
+    The flexure design runs at the depth of the 8 mm starter stirrup, where
+    2Ø25 = 981.7 mm² carry the moment: d = 500 − 25 − 8 − 12.5 = 454.5 mm,
+    a = 981.7·420 / (0.85·25·200) = 97.0 mm, φMn = 0.9·981.7·420·(454.5 − 48.5)
+    = 150.66 kN·m, DCR 0.996. The shear design then settles on 1eØ10/11 for
+    250 kN, the bars sink 2 mm to d = 452.5 mm and φMn = 0.9·412314·404.0 =
+    149.92 kN·m: DCR 1.0005, and nothing warned, since the search never saw
+    a shortfall (A_s,req = 9.823 cm² at that depth against 9.817 placed).
+    ``design()`` now designs the flexure again with the stirrup it ended
+    with: 2Ø25 + 1Ø20 at DCR 0.787, the same bars every time it runs. Fails
+    before that with DCR 1.0005 and no warning.
+    """
+    beam = RectangularBeam(
+        label="V",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=20 * cm,
+        height=50 * cm,
+        c_c=25 * mm,
+    )
+    node = Node(section=beam, forces=[Forces(label="U", M_y=150 * kNm, V_z=250 * kN)])
+    node.design()
+    node.check()
+    first = str(beam.reinforcement.bottom)
+
+    assert beam._stirrup_d_b.to("mm").magnitude == pytest.approx(10.0)
+    assert beam.flexure_checks[0].bottom.DCR <= 1.0
+    assert beam.shear_checks[0].DCR <= 1.0
+    assert node.warnings == ()
+    assert beam.flexure_design.bottom.A_s >= beam.flexure_design.bottom.A_s_req
+
+    node.design()
+    assert str(beam.reinforcement.bottom) == first
+
+
+def test_a_lighter_stirrup_does_not_lift_the_minimum_past_the_bars_a_design_placed() -> None:
+    """EN 1992-1-1 C25/30, B500S, 30x80, c_c 25 mm, M_Ed = 30 kN·m, V_Ed = 80 kN.
+
+    A_s,min = 0.26·f_ctm/f_yk·b_t·d ≥ 0.0013·b_t·d (§9.2.1.1(1)), with
+    f_ctm = 0.30·25^(2/3) = 2.565 MPa: 0.001334·b_t·d, which grows with d.
+    At the Ø8 starter depth the design places 2Ø12 + 1Ø10 = 304.7 mm² on
+    d = 761.3 mm against A_s,min = 0.001334·300·761.3 = 304.6 mm², and
+    passes. The shear design then settles on 1eØ6/23, the bars rise 2 mm to
+    d = 763.3 mm, A_s,min = 305.4 mm², and the design warned ``As_below_min``
+    on its own bars. It now redoes the flexure with the Ø6 on the section and
+    places 4Ø10 = 314.2 mm² (A_s,min 305.7 at the depth they sit). Fails
+    before that with ``As_below_min``.
+    """
+    beam = RectangularBeam(
+        label="V",
+        concrete=Concrete_EN_1992_2004(name="C25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="B500S", f_y=500 * MPa),
+        width=30 * cm,
+        height=80 * cm,
+        c_c=25 * mm,
+    )
+    node = Node(section=beam, forces=[Forces(label="U", M_y=30 * kNm, V_z=80 * kN)])
+    node.design()
+    node.check()
+
+    assert beam._stirrup_d_b.to("mm").magnitude == pytest.approx(6.0)
+    assert node.warnings == ()
+    bottom = beam.flexure_design.bottom
+    assert bottom.A_s >= bottom.A_s_min
+    assert bottom.A_s.to("mm**2").magnitude == pytest.approx(314.16, abs=0.05)
 
 
 @pytest.mark.parametrize("code", ["ACI 318-19", "CIRSOC 201-25"])
