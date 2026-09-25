@@ -638,6 +638,38 @@ def test_slab_bars_set_by_hand_clear_the_flag_of_their_face() -> None:
     assert slab._infeasible_faces == set()
 
 
+def test_a_face_with_one_bar_has_no_clear_spacing_to_miss() -> None:
+    """10x30, 1Ø12 top and bottom, 1eØ10/10. A layer with one bar leaves
+    100 - 2*(25 + 10) - 12 = 18 mm beside it, which is not a distance between
+    bars: there is no pair to hold to the 25 mm of ACI 318-19 §25.2.1 (30 mm
+    on top, the vibrator). bd94d2f reported both faces as "clear spacing
+    between the bars below the minimum". Two Ø12 in the same web are 100 -
+    70 - 24 = 6 mm apart and are warned, as before."""
+    beam = _beam(width=10 * cm, height=30 * cm)
+    beam.set_longitudinal_rebar_bot(n1=1, d_b1=12 * mm)
+    beam.set_longitudinal_rebar_top(n1=1, d_b1=12 * mm)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=10 * mm, s_l=10 * cm)
+    node = Node(section=beam, forces=[Forces(label="U", V_z=10 * kN, M_y=5 * kNm)])
+    node.check()
+    assert "clear_spacing_below_min" not in _by_code(node.warnings)
+
+    beam.set_longitudinal_rebar_bot(n1=2, d_b1=12 * mm)
+    spacing = _by_code(beam.warnings)["clear_spacing_below_min"]
+    assert spacing.face == "bottom"
+    assert spacing.values["s"].to("mm").magnitude == pytest.approx(6.0, abs=0.01)
+
+
+def test_one_bar_per_layer_is_still_no_pair() -> None:
+    """1Ø12 in the first layer and 1Ø12 in the second sit one above the other:
+    neither layer has two bars side by side, so there is no clear spacing to
+    report on the width."""
+    beam = _beam(width=10 * cm, height=30 * cm)
+    beam.set_longitudinal_rebar_bot(1, 12 * mm, 0, None, 1, 12 * mm)
+    beam.set_longitudinal_rebar_top(n1=1, d_b1=12 * mm)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=10 * mm, s_l=10 * cm)
+    assert "clear_spacing_below_min" not in _by_code(beam.warnings)
+
+
 def test_clearing_the_stirrups_widens_the_space_for_the_bars() -> None:
     """Without stirrups the bars sit against the cover: (200 - 50 - 48)/3 = 34 mm."""
     beam = _beam(height=50 * cm)

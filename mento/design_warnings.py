@@ -314,7 +314,16 @@ def spacing_warnings(beam: "RectangularBeam") -> List[_Raw]:
         if not is_slab and value.magnitude <= 0 and sum(layer.n for layer in layers) > 1:
             found.append(_Raw("bars_do_not_fit", {"s": value}, name))
             continue
-        if s_min is not None and value < s_min and not math.isclose(value.magnitude, s_min.to(value.units).magnitude):
+        # A beam layer with one bar has no pair to measure: what the row
+        # carries for it is the room beside the bar, not a distance between
+        # bars, and there is no minimum for it to miss.
+        measurable = is_slab or _bars_side_by_side(beam, face)
+        if (
+            measurable
+            and s_min is not None
+            and value < s_min
+            and not math.isclose(value.magnitude, s_min.to(value.units).magnitude)
+        ):
             code = "bar_spacing_below_min" if is_slab else "clear_spacing_below_min"
             found.append(_Raw(code, {"s": value, "s_min": s_min}, name))
         if s_max is not None and value > s_max and not math.isclose(value.magnitude, s_max.to(value.units).magnitude):
@@ -324,6 +333,18 @@ def spacing_warnings(beam: "RectangularBeam") -> List[_Raw]:
         if not any(raw.code == "bars_do_not_fit" and raw.face == name for raw in found):
             found.append(_Raw("bars_do_not_fit", {}, name))
     return [_with_units(raw, beam) for raw in found]
+
+
+def _bars_side_by_side(beam: "RectangularBeam", face: str) -> bool:
+    """Whether some layer of the face holds two bars, so a clear spacing exists.
+
+    Groups 1 and 2 share the layer nearest the face, groups 3 and 4 the one
+    behind it; one bar in each layer sits above the other, not beside it.
+    ``face`` is ``"b"`` or ``"t"``.
+    """
+    nearest = getattr(beam, f"_n1_{face}") + getattr(beam, f"_n2_{face}")
+    behind = getattr(beam, f"_n3_{face}") + getattr(beam, f"_n4_{face}")
+    return max(nearest, behind) >= 2
 
 
 def shortfall_warnings(beam: "RectangularBeam") -> List[_Raw]:
