@@ -97,6 +97,16 @@ class Rebar:
         self._clear_limit_mm = self.beam.settings.clear_spacing.to("mm").magnitude
         self._vibrator_mm = self.beam.settings.vibrator_size.to("mm").magnitude
         self._clear_spacing = self.beam.settings.clear_spacing.to("mm")
+        # The most the code lets the bars nearest a face sit apart, centre to
+        # centre: the crack-control cap of ACI 318-19 / CIRSOC 201-25 §24.3.2,
+        # which §9.7.2.2 sends a beam to (hook ``max_bar_spacing_tension``;
+        # None for a code without it). A beam's search holds its layouts to
+        # it; a slab strip applies it afterwards, through the spacing it is
+        # written back as (``OneWaySlab._spacing_for_bars``), since the
+        # layer this search lays out between the stirrup legs is not how a
+        # strip carries its bars.
+        limit = design_code(self.beam.concrete).max_bar_spacing_tension
+        self._max_centre_mm: float | None = None if limit is None else limit(self.beam).to("mm").magnitude
         # Unit system default rebar.
         #
         # The metric list is the bar sizes of CIRSOC 201-25 §20.2.1.3,
@@ -876,6 +886,15 @@ class Rebar:
         # Ø12 bars 29.999999999999993 mm apart against a 30 mm limit.
         if clear_mm < max_clear_spacing_mm and not math.isclose(clear_mm, max_clear_spacing_mm):
             return None
+        # ... and, on a beam, no further apart than the crack-control cap of
+        # ACI 318-19 / CIRSOC 201-25 §24.3.2 allows the bars nearest the
+        # tension face: adjacent centres sit one clear distance and the larger
+        # bar apart. Without this a wide web was laid out with two bars half
+        # a metre apart, and the check that followed failed it.
+        if self.mode != "slab" and self._max_centre_mm is not None:
+            centre_mm = clear_mm + max(d1_mm, d2_mm)
+            if centre_mm > self._max_centre_mm and not math.isclose(centre_mm, self._max_centre_mm):
+                return None
         return clear_mm
 
     def _long_combo(

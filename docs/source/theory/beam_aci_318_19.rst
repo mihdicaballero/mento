@@ -293,9 +293,12 @@ the stirrup legs, and holds the face the combination puts in tension to it; a wi
 beam detailed with two bars — 60 cm with 2Ø25, 505 mm apart — fails it. With a single
 bar nearest the face, §24.3.3 compares the width of the face instead. The detailed
 report adds a *Maximum spacing* row per face, and the warning is
-``bar_spacing_exceeds_max``. The design does not yet apply the cap when it selects the
-bars: a beam whose design comes out with two bars in a wide web is reported by the
-check that follows.
+``bar_spacing_exceeds_max``. The bar search holds every layer it lays out to the cap
+as well, so a wide web is designed with three bars where two would sit too far apart:
+that 60x50 beam comes out as 3Ø20, 255 mm apart. The search reads the cap with the
+stirrup the section carries when it runs — the starter stirrup, before the shear design
+picks the real one — so a layout that lands within a few millimetres of the cap can be
+reported by the check that follows with the heavier stirrup.
 
 Shear
 -----

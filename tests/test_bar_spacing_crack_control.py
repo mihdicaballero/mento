@@ -21,7 +21,7 @@ from mento import (
     SteelBar,
 )
 from mento.slab import Footing
-from mento.units import MPa, cm, inch, kNm, kip, ksi, mm
+from mento.units import MPa, cm, inch, kN, kNm, kip, ksi, mm
 
 ADN_420 = SteelBar(name="ADN 420", f_y=420 * MPa)
 
@@ -299,6 +299,41 @@ def test_an_en_beam_has_no_such_row() -> None:
 
     assert len(beam._data_min_max_flexure["Check"]) == 4
     assert "bar_spacing_exceeds_max" not in {w.code for w in beam.warnings}
+
+
+def test_a_designed_wide_beam_keeps_its_bars_within_table_24_3_2() -> None:
+    """The bar search holds a beam's layer to the cap while it lays it out.
+
+    A 60x50 ACI beam under 150 kN·m and 50 kN used to come out as 2Ø20:
+    530 - 40 = 490 mm clear between the Ø10 stirrup legs, 510 mm centre to
+    centre, and the check that followed failed it. With the cap in the search
+    it comes out as 3Ø20: (530 - 60)/2 + 20 = 255 mm, inside 292.5, and the
+    design passes its own check with nothing to warn about.
+    """
+    beam = _beam(Concrete_ACI_318_19(name="H25", f_c=25 * MPa), 60 * cm)
+    Node(section=beam, forces=[Forces(label="C1", M_y=150 * kNm, V_z=50 * kN)]).design()
+
+    assert beam.reinforcement.bottom.n_bars == 3
+    assert beam.reinforcement.transverse.d_b == 10 * mm
+    rows = beam._data_min_max_flexure
+    assert rows["Check"][-1] == "Maximum spacing bottom"
+    assert rows["Value"][-1] == pytest.approx(255.0)
+    assert rows["Ok?"][-1] == "✅"
+    assert beam.warnings == ()
+
+
+def test_the_search_cap_leaves_a_slab_strip_to_its_own_spacing() -> None:
+    """A strip is not laid out between stirrup legs, so the search does not
+    hold it to the cap: the 12 cm slab of the first test still gets the three
+    Ø10 the area asks for, and the spacing the strip is written back as is
+    what applies the 300 mm (Ø10/30, not the five bars a 300 mm centre-to-
+    centre layout between the covers would take)."""
+    slab = _slab(Concrete_ACI_318_19(name="H25", f_c=25 * MPa), 12 * cm)
+    Node(section=slab, forces=Forces(label="C1", M_y=7.5 * kNm)).design()
+
+    row = slab.flexure_design_results_bot
+    assert int(row["n_1"]) + int(row["n_2"]) == 3
+    assert slab.reinforcement.bottom.layers[0].s.to("cm").magnitude == 30
 
 
 def test_a_bare_face_has_no_row() -> None:
