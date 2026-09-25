@@ -230,9 +230,6 @@ ES.update(
         "Stirrup leg spacing across the width: {s} exceeds the maximum {s_max}.": (
             "Separación de las ramas de estribo en el ancho: {s} supera la máxima {s_max}."
         ),
-        "Stirrup diameter {d_b} is below the minimum {d_b_min}.": (
-            "Diámetro de estribo {d_b} menor que el mínimo {d_b_min}."
-        ),
         "Shear V = {V} exceeds the most the section can carry, {V_max}: enlarge the section.": (
             "El corte V = {V} supera el máximo que admite la sección, {V_max}: hay que agrandarla."
         ),

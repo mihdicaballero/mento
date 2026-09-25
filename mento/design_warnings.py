@@ -55,8 +55,13 @@ Codes
 ``stirrup_spacing_exceeds_max``
     The stirrups are further apart than the code allows, along the member or
     across its width.
-``stirrup_diameter_below_min``
-    The stirrup bar is thinner than the code's minimum.
+
+    There is no code for the stirrup diameter: neither ACI 318-19, CIRSOC
+    201-25 nor EN 1992-1-1 states a minimum for a stirrup placed for shear
+    alone, and the 10 mm (6 mm under CIRSOC) the design starts from is the
+    bottom of the catalogue, a preference. The minimum §9.7.6.4.2 does state
+    is for the stirrups laterally supporting compression bars, a limit of
+    its own.
 ``shear_exceeds_section_limit``
     The shear exceeds the most the section can carry however it is
     reinforced: under ACI 318-19 / CIRSOC 201-25 the Eq. (22.5.1.2) limit
@@ -151,7 +156,6 @@ _MESSAGES: Dict[str, str] = {
     "Av_below_min": "The stirrups provide A_v = {A_v}, below the minimum A_v,min = {A_v_min}.",
     "stirrup_spacing_exceeds_max_l": "Stirrup spacing along the member: {s} exceeds the maximum {s_max}.",
     "stirrup_spacing_exceeds_max_w": "Stirrup leg spacing across the width: {s} exceeds the maximum {s_max}.",
-    "stirrup_diameter_below_min": "Stirrup diameter {d_b} is below the minimum {d_b_min}.",
     "shear_exceeds_section_limit": "Shear V = {V} exceeds the most the section can carry, {V_max}: enlarge the section.",
     "mesh_ratio_below_min_h": "Horizontal wall mesh: ρt = {rho} is below the required ρt = {rho_min}.",
     "mesh_ratio_below_min_v": "Vertical wall mesh: ρl = {rho} is below the minimum ρl,min = {rho_min}.",
@@ -405,12 +409,12 @@ def shear_warnings(beam: "RectangularBeam", label: str, state: Any) -> List[_Raw
                 )
             )
 
-    minimum = design_code(beam.concrete).min_stirrup_diameter
-    if minimum is not None:
-        d_b_min: Quantity = minimum(beam.concrete)
-        d_b: Quantity = beam._stirrup_d_b
-        if d_b < d_b_min:
-            found.append(_Raw("stirrup_diameter_below_min", {"d_b": d_b, "d_b_min": d_b_min.to(d_b.units)}, None))
+    # No minimum diameter: neither code states one for a stirrup placed for
+    # shear alone. The registry's ``min_stirrup_diameter`` is the bottom of
+    # the code's catalogue -- a design preference the report row quotes --
+    # and ACI 318-19 §9.7.6.4.2 / CIRSOC 201-25 §9.7.6.4.2 size only the
+    # stirrups of §9.7.6.4.1, those laterally supporting compression bars,
+    # which is a limit of its own and not this one.
     return [_with_units(raw, beam) for raw in found]
 
 

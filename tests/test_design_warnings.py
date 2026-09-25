@@ -73,7 +73,6 @@ def test_each_missed_limit_is_one_warning_with_a_stable_code() -> None:
         "bars_do_not_fit",
         "Av_below_min",
         "stirrup_spacing_exceeds_max",
-        "stirrup_diameter_below_min",
     }
     assert found["As_below_min"].face == "bottom"
     assert found["As_above_max"].face == "top"
@@ -98,9 +97,6 @@ def test_values_are_quantities_in_report_units() -> None:
     # The governing combination is the one furthest past the limit: the high
     # shear halves the spacing limit to d/4.
     assert spacing["s_max"].to("cm").magnitude == pytest.approx(beam._d_shear.to("cm").magnitude / 4)
-
-    diameter = found["stirrup_diameter_below_min"].values
-    assert (diameter["d_b"], diameter["d_b_min"]) == (6 * mm, 10 * mm)
 
 
 def test_messages_follow_the_language() -> None:
@@ -297,8 +293,38 @@ def test_en_beam_reports_its_own_limits() -> None:
 
     codes = set(_by_code(node.warnings))
     assert "stirrup_spacing_exceeds_max" in codes
-    # EN 1992-1-1 states no minimum stirrup diameter, so none is reported.
     assert "stirrup_diameter_below_min" not in codes
+
+
+@pytest.mark.parametrize("concrete", [Concrete_ACI_318_19, mento.Concrete_CIRSOC_201_25], ids=["ACI", "CIRSOC"])
+def test_a_thin_stirrup_placed_for_shear_alone_is_not_below_any_code_minimum(concrete: type) -> None:
+    """20x50, 3Ø16 below, 2Ø10 above, 1eØ8/15, M = 60 kNm, V = 80 kN: singly
+    reinforced (DCR 0.61 in flexure, 0.52 in shear), so no bar is compression
+    steel that a stirrup has to support. ACI 318-19 §9.7.6.4.2 / CIRSOC 201-25
+    §9.7.6.4.2, Tabla 9.7.6.4.2 size only the stirrups of §9.7.6.4.1, those
+    laterally supporting compression reinforcement; neither code states a
+    minimum for a stirrup placed for shear. The 10 mm bd94d2f quoted as "the
+    minimum" is the bottom of mento's ACI catalogue -- a design preference,
+    which stays one -- and the 6 mm of the CIRSOC hook the bottom of its
+    catalogue. The Ø6 of ``_poorly_detailed`` is not a code limit either."""
+    beam = RectangularBeam(
+        label="V",
+        concrete=concrete(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=20 * cm,
+        height=50 * cm,
+        c_c=25 * mm,
+    )
+    beam.set_longitudinal_rebar_bot(n1=3, d_b1=16 * mm)
+    beam.set_longitudinal_rebar_top(n1=2, d_b1=10 * mm)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=15 * cm)
+    node = Node(section=beam, forces=[Forces(label="U", V_z=80 * kN, M_y=60 * kNm)])
+    node.check()
+
+    assert not beam._doubly_reinforced
+    assert beam.flexure_design.bottom.DCR < 1 and beam.shear_design.DCR < 1
+    assert "stirrup_diameter_below_min" not in _by_code(node.warnings)
+    assert "stirrup_diameter_below_min" not in mento.design_warnings._MESSAGES
 
 
 def test_warnings_are_empty_before_any_check() -> None:
