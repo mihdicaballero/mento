@@ -96,13 +96,17 @@ class RebarOption:
     search did not score -- a footing mat, which is chosen afterwards and as a
     whole.
 
-    ``DCR`` is the worst demand-capacity ratio in flexure of the finished
-    section with this layout on its face and the other face as applied --
-    both faces, every combination the design was run for. An alternative is
-    only offered when that ratio is at most 1, the bars fit beside the
-    stirrups the design finished with, and the section keeps within the code's
-    limits on its reinforcement with it; the applied layout carries its own,
-    whatever it is. ``None`` on an option that has not been verified.
+    ``DCR`` is the worst demand-capacity ratio of the finished section with
+    this layout on its face and the other face as applied -- flexure and
+    shear, both faces, every combination the design was run for. The bars
+    set the depth the shear is read at too, so a layout that sits deeper
+    lowers the section's shear limit and can tighten its stirrup spacing
+    limit. An alternative is only offered when that ratio is at most 1, the
+    bars fit beside the stirrups the design finished with, the section keeps
+    within the code's limits on its reinforcement, and its stirrups within
+    theirs -- the compression bars the layout relies on included; the applied
+    layout carries its own, whatever it is. ``None`` on an option that has
+    not been verified.
     """
 
     layers: Tuple[RebarLayer, ...]

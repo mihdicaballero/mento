@@ -166,9 +166,12 @@ A design ranks every layout that fits and applies the best one. The runners-up a
 too, best first, with the applied layout always in first place -- but only the ones the
 finished section passes with. Each longitudinal alternative is built on the beam as the
 design left it, with the stirrups it ended with and the other face as applied, and kept
-if the beam carries both moments with it within the code's limits on its reinforcement
-(tension-controlled under ACI 318-19 / CIRSOC 201-25, the 4 % of EN 1992-1-1); its
-``DCR`` says at what ratio. A footing offers none, because its mat is chosen as a whole.
+if the beam carries both moments and the shear with it, within the code's limits on its
+reinforcement (tension-controlled under ACI 318-19 / CIRSOC 201-25, the 4 % of EN
+1992-1-1) and on its stirrups. The bars set the effective depth the shear is read at as
+well, so a layout in two layers, or of thicker bars, lowers the section's shear limit and
+can tighten the stirrup spacing it allows. The option's ``DCR`` says at what ratio. A
+footing offers none, because its mat is chosen as a whole.
 
 .. code-block:: python
 

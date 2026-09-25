@@ -1,5 +1,5 @@
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any, Callable, Optional, Dict, Tuple
+from typing import TYPE_CHECKING, Any, Callable, FrozenSet, NamedTuple, Optional, Dict, Tuple
 
 if TYPE_CHECKING:
     from matplotlib.figure import Figure
@@ -46,6 +46,25 @@ from mento.design_results import (
     capture_flexure_check,
     capture_shear_check,
 )
+
+
+class _Verdict(NamedTuple):
+    """What values-only checks of the section as it stands found, over every combination.
+
+    ``DCR`` is the worst ratio checked; ``clean`` says the checks left no
+    warning and the reinforcement keeps within the code's limits; and
+    ``compression_faces`` are the faces some combination relies on as
+    compression steel (see :meth:`RectangularBeam._compression_face_of`), which
+    the stirrups of that section have to brace.
+    """
+
+    DCR: float
+    clean: bool
+    compression_faces: FrozenSet[str] = frozenset()
+
+    @property
+    def passes(self) -> bool:
+        return self.clean and self.DCR <= 1.0
 
 
 class _DesignCodeAttributes:
@@ -492,8 +511,8 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
             setattr(self, name, value)
         self._update_longitudinal_rebar_attributes()
 
-    def _flexure_verdict(self, forces: list[Forces], faces: Tuple[str, ...]) -> Tuple[float, bool]:
-        """``(worst flexure DCR, passes)`` of the section as it stands, under ``forces``.
+    def _flexure_verdict(self, forces: list[Forces], faces: Tuple[str, ...]) -> _Verdict:
+        """The flexure of the section as it stands, under ``forces``.
 
         The worst ratio over both faces and every combination. It passes when
         that ratio is at most 1, the bars of ``faces`` (``"bot"``/``"top"``)
@@ -502,12 +521,15 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         reinforcement -- the registry's ``flexure_admissible``, tension-
         controlled under ACI 318-19 / CIRSOC 201-25 §9.3.3.1 and the 4 % of
         EN 1992-1-1 §9.2.1.1(3), the same limit the design holds its own
-        layout to. Values-only checks, so the section is not written to.
+        layout to. It also names the faces the section relies on as
+        compression steel. Values-only checks, so the section is not written
+        to.
         """
         admissible = design_code(self.concrete).flexure_admissible
         names = tuple("bottom" if face == "bot" else "top" for face in faces)
         worst = 0.0
         clean = not any(raw.face in names for raw in spacing_warnings(self))
+        compression: set[str] = set()
         for force in forces:
             state = self._run_flexure_check(force, report=False)
             check = capture_flexure_check(self, force.label, state)
@@ -516,18 +538,29 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
             tension = "bot" if force._M_y > 0 * kN * m else "top" if force._M_y < 0 * kN * m else None
             if tension is not None and admissible is not None and not admissible(self, tension):
                 clean = False
-        return worst, clean and worst <= 1.0
+            braced = self._compression_face_of(force, state)
+            if braced is not None:
+                compression.add(braced)
+        return _Verdict(worst, clean, frozenset(compression))
 
     def _verify_longitudinal_options(self, forces: list[Forces]) -> None:
         """Keep, of each face's pooled alternatives, those the finished section passes with.
 
         Each is built on the section as the design left it -- its stirrups,
-        the other face as applied -- and judged by :meth:`_flexure_verdict`
-        under every combination; the ones that pass are offered, best first,
-        up to the number the settings ask for, each with its ``DCR``. The
-        applied layout is first whatever its verdict, with its own. Then the
-        face is put back. Run after a flexure design, and again once the shear
-        design has settled the stirrups the section is built with.
+        the other face as applied -- and judged by :meth:`_section_verdict`
+        under every combination: flexure and shear. The bars set the depth
+        the shear is read at as much as the moment's, ``d = min(d_bot,
+        d_top)``, so a layout in two layers, or of thicker bars, lowers the
+        section's shear limit and can halve its stirrup spacing limit (ACI
+        318-19 Table 9.7.6.2.2): an ACI 12x25 whose 2Ø10 carry 78 kN at
+        shear DCR 0.994 was offered 2Ø10 + 2Ø10, DCR 1.085 once built. And a
+        layout that makes the section rely on its compression steel owes that
+        steel stirrups of its own (§9.7.6.4). The ones that pass are offered,
+        best first, up to the number the settings ask for, each with its
+        ``DCR``. The applied layout is first whatever its verdict, with its
+        own. Then the face is put back. Run after a flexure design, and again
+        once the shear design has settled the stirrups the section is built
+        with.
 
         The rows go on through the public setters, which clear the face's
         ``bars_do_not_fit`` -- right for bars set by hand, wrong for a layout
@@ -540,8 +573,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
             # A design records at least the layout each face carries, so there
             # is always a first option to judge.
             options: Tuple[RebarOption, ...] = getattr(self, f"_flexure_options_{suffix}")
-            worst, _ = self._flexure_verdict(forces, (face,))
-            kept = [replace(options[0], DCR=worst)]
+            kept = [replace(options[0], DCR=self._section_verdict(forces, (face,)).DCR)]
             pool: Tuple[Tuple[RebarOption, Dict[str, Any]], ...] = getattr(self, f"_flexure_option_pool_{suffix}")
             if pool:
                 snapshot = self._longitudinal_snapshot(suffix)
@@ -550,31 +582,41 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
                     if len(kept) >= limit:
                         break
                     apply(row)
-                    worst, passes = self._flexure_verdict(forces, (face,))
-                    if passes:
-                        kept.append(replace(option, DCR=worst))
+                    verdict = self._section_verdict(forces, (face,))
+                    if verdict.passes:
+                        kept.append(replace(option, DCR=verdict.DCR))
                 self._restore_longitudinal(snapshot)
             setattr(self, f"_flexure_options_{suffix}", tuple(kept))
         self._infeasible_faces = infeasible
 
-    def _section_verdict(self, forces: list[Forces]) -> Tuple[float, bool]:
-        """``(worst DCR, passes)`` of the section as it stands, under ``forces``.
+    def _section_verdict(self, forces: list[Forces], faces: Tuple[str, ...] = ("bot", "top")) -> _Verdict:
+        """The section as it stands, under ``forces``: flexure and shear.
 
         The worst of shear and flexure, both faces, over every combination;
         it passes when that ratio is at most 1, the shear check leaves no
-        warning and the flexure passes :meth:`_flexure_verdict` on both faces
-        -- a stirrup changes the width left to the bars as much as their
-        depth. Values-only checks, so nothing is written to the section and
-        the results of the last reporting check stay what they were -- which
-        is what lets a design try a layout on the section and take it off
-        again.
+        warning and the flexure passes :meth:`_flexure_verdict` with the bars
+        of ``faces`` -- both by default, since a stirrup changes the width
+        left to the bars as much as their depth. The shear warnings read the
+        compression steel of this section, not of the last reporting check:
+        a layout tried here can make the section rely on its compression bars,
+        or stop relying on them, and the stirrups owe them lateral support
+        (ACI 318-19 / CIRSOC 201-25 §9.7.6.4) only in the first case.
+        Values-only checks, so nothing is written to the section and the
+        results of the last reporting check stay what they were -- which is
+        what lets a design try a layout on the section and take it off again.
         """
-        worst, clean = self._flexure_verdict(forces, ("bot", "top"))
-        for force in forces:
-            shear_state = self._run_shear_check(force, report=False)
-            worst = max(worst, capture_shear_check(self, force.label, shear_state).DCR)
-            clean = clean and not shear_warnings(self, force.label, shear_state)
-        return worst, clean and worst <= 1.0
+        flexure = self._flexure_verdict(forces, faces)
+        worst, clean = flexure.DCR, flexure.clean
+        braced = self._compression_faces
+        self._compression_faces = set(flexure.compression_faces)
+        try:
+            for force in forces:
+                shear_state = self._run_shear_check(force, report=False)
+                worst = max(worst, capture_shear_check(self, force.label, shear_state).DCR)
+                clean = clean and not shear_warnings(self, force.label, shear_state)
+        finally:
+            self._compression_faces = braced
+        return _Verdict(worst, clean, flexure.compression_faces)
 
     def _record_transverse_options(self, table: DataFrame, forces: list[Forces]) -> None:
         """Keep the stirrup layouts the search found, the applied one first.
@@ -616,9 +658,9 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         options = []
         for row in [applied] + alternatives:
             self._apply_transverse_design(row)
-            worst, passes = self._section_verdict(forces)
-            if row is applied or passes:
-                options.append(option(row, worst))
+            verdict = self._section_verdict(forces)
+            if row is applied or verdict.passes:
+                options.append(option(row, verdict.DCR))
         # Back to the layout the design applied, whatever was tried last.
         self._apply_transverse_design(applied)
         self._shear_options = tuple(options[: int(self.settings.design_options)])
@@ -1078,12 +1120,25 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         the faces so recorded through the code's ``stirrup_compression_support``.
         A code whose state does not say (EN 1992-1-1) records nothing.
         """
+        face = self._compression_face_of(force, state)
+        if face is not None:
+            self._compression_faces.add(face)
+
+    @staticmethod
+    def _compression_face_of(force: Forces, state: Any) -> Optional[str]:
+        """The face ``force`` relies on as compression steel, per its flexure ``state``, if any.
+
+        The face opposite the one the moment puts in tension, when the
+        combination needs compression steel to carry it (``doubly_reinforced``);
+        ``None`` otherwise, and for a code whose state does not say.
+        """
         if not getattr(state, "doubly_reinforced", False):
-            return
+            return None
         if force._M_y > 0 * kN * m:
-            self._compression_faces.add("top")
-        elif force._M_y < 0 * kN * m:
-            self._compression_faces.add("bot")
+            return "top"
+        if force._M_y < 0 * kN * m:
+            return "bot"
+        return None
 
     def shear_check_results(self, forces: list[Forces]) -> Tuple[ShearCheck, ...]:
         """Check shear and return one result per combination, building no report.
@@ -1421,8 +1476,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         """
         seen = {self._design_state()}
         for _ in range(self._DESIGN_ROUNDS):
-            _, passes = self._flexure_verdict(forces, ("bot", "top"))
-            if passes:
+            if self._flexure_verdict(forces, ("bot", "top")).passes:
                 return
             self._reset_longitudinal_for_design()
             self.design_flexure(forces)
