@@ -448,6 +448,41 @@ def test_an_unlabelled_wall_combination_is_named_by_its_position() -> None:
     assert found["mesh_ratio_below_min"].combinations[0] in ("#1", "#2")
 
 
+def test_a_value_just_past_its_limit_prints_with_enough_digits_to_show_it() -> None:
+    """Three significant figures print 13.00 cm and 12.95 cm both as "13 cm",
+    and bd94d2f read "Stirrup spacing along the member: 13 cm exceeds the
+    maximum 13 cm." A message quotes as many digits as it takes for two
+    values that differ to print differently, and no more than three where
+    they already do."""
+    from mento.design_warnings import _Raw, collect
+
+    tight = collect([_Raw("stirrup_spacing_exceeds_max", {"s": 13.0 * cm, "s_max": 12.96 * cm, "direction": "l"})])
+    assert tight[0].message == "Stirrup spacing along the member: 13 cm exceeds the maximum 12.96 cm."
+    closer = collect([_Raw("stirrup_spacing_exceeds_max", {"s": 13.001 * cm, "s_max": 13.0 * cm, "direction": "l"})])
+    assert closer[0].message == "Stirrup spacing along the member: 13.001 cm exceeds the maximum 13 cm."
+    loose = collect([_Raw("stirrup_spacing_exceeds_max", {"s": 35.0 * cm, "s_max": 13.912 * cm, "direction": "l"})])
+    assert loose[0].message == "Stirrup spacing along the member: 35 cm exceeds the maximum 13.9 cm."
+    ratio = collect([_Raw("mesh_ratio_below_min", {"direction": "v", "rho": 0.0025, "rho_min": 0.00251})])
+    assert ratio[0].message.endswith("ρl = 0.0025 is below the minimum ρl,min = 0.00251.")
+
+
+def test_the_stirrup_spacing_of_the_review_prints_its_limit() -> None:
+    """10x30 designed for 80 kNm gets 1eØ10/13 with d = 300 - 25 - 10 - 4 =
+    261 mm (2Ø8 left below), d/2 = 13.05 cm; 1Ø12 set below by hand lowers
+    d to 259 mm and d/2 to 12.95 cm, which 13 cm now exceeds -- by 0.05 cm,
+    which the message has to show."""
+    beam = _beam(width=10 * cm, height=30 * cm)
+    node = Node(section=beam, forces=[Forces(label="U", V_z=20 * kN, M_y=80 * kNm)])
+    node.design()
+    beam.set_longitudinal_rebar_bot(n1=1, d_b1=12 * mm)
+    node.check()
+
+    spacing = _by_code(node.warnings)["stirrup_spacing_exceeds_max"]
+    assert spacing.values["s"].to("cm").magnitude == pytest.approx(13.0)
+    assert spacing.values["s_max"].to("cm").magnitude == pytest.approx(12.95)
+    assert spacing.message == "Stirrup spacing along the member: 13 cm exceeds the maximum 12.95 cm."
+
+
 def test_a_warning_prints_as_its_message() -> None:
     _, node = _poorly_detailed()
     warning = node.warnings[0]

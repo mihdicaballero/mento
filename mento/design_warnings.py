@@ -183,16 +183,45 @@ _MESSAGES: Dict[str, str] = {
 _FACES = {"bottom": "bottom face", "top": "top face"}
 
 
-def _format(value: Any) -> str:
-    """A value as the messages print it: three significant figures.
+def _format(value: Any, digits: int = 3) -> str:
+    """A value as the messages print it, to ``digits`` significant figures.
 
     Everything a warning quotes is a quantity -- an area, a spacing, a force --
     so there is one format, and pint's ``~P`` writes the unit with it. A
     reinforcement ratio is the exception, a bare number.
     """
     if not isinstance(value, Quantity):
-        return f"{value:.3g}"
-    return f"{value:.3g~P}"
+        return f"{value:.{digits}g}"
+    return f"{value:.{digits}g~P}"
+
+
+def _fields(values: Mapping[str, Any]) -> Dict[str, str]:
+    """The values of one message, printed so that the message reads true.
+
+    Three significant figures, or as many more as it takes for two values
+    that differ to print differently: a spacing of 13.00 cm against a limit
+    of 12.95 cm printed as "13 cm exceeds the maximum 13 cm" at three. The
+    triggers already leave out a value equal to its limit, so a message
+    always has a difference to show.
+    """
+    items = list(values.items())
+    for digits in range(3, 10):
+        fields = {name: _format(value, digits) for name, value in items}
+        if all(
+            fields[a] != fields[b]
+            for i, (a, first) in enumerate(items)
+            for b, second in items[i + 1 :]
+            if _differ(first, second)
+        ):
+            break
+    return fields
+
+
+def _differ(first: Any, second: Any) -> bool:
+    """Whether two quoted values are different numbers, units included."""
+    if isinstance(first, Quantity) != isinstance(second, Quantity):
+        return True
+    return bool(first != second)
 
 
 def _q(value: float, kind: str, beam: "RectangularBeam") -> Quantity:
@@ -537,7 +566,7 @@ def collect(raws: List[_Raw]) -> Tuple[DesignWarning, ...]:
         labels = tuple(dict.fromkeys(raw.combination for raw in group if raw.combination is not None))
         values = {name: value for name, value in worst.values.items() if name != "direction"}
         template = _MESSAGES[f"{code}_{direction}" if direction else code]
-        fields = {name: _format(value) for name, value in values.items()}
+        fields = _fields(values)
         if face is not None:
             fields["face"] = translate(_FACES[face])
         warnings.append(
