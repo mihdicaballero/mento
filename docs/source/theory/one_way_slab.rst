@@ -62,9 +62,17 @@ A design is written back as a spacing
 The bar selection is the beam's, and it answers with groups of bars per layer. A
 design applied to a slab is translated back into the parameterisation above: the bars
 of a layer are spread over the design width, and the spacing is rounded to the whole
-centimetre (inch, in imperial) so that it is one that can be detailed. The rounding is
-checked against the count it produces, so it never leaves the strip with fewer bars —
-and so less steel — than the search selected.
+centimetre (inch, in imperial) so that it is one that can be detailed. It is rounded
+**down**: the strip carries :math:`b/s` bars, so a spacing wider than :math:`b/n`
+would carry fewer bars — and so less steel — than the search selected. Rounding down
+only ever adds steel, and by less than one bar in the strip.
+
+The count :math:`n = b/s` is not rounded either. A strip is a slice of a slab that goes
+on past both of its edges, so what it carries is the bars per metre its spacing gives:
+a metre of Ø10/12 carries 8.33 bars, 6.54 cm²/m, which is what every metre of that slab
+carries. Counting the whole bars that would cover the strip (9, 7.07 cm²) credited it
+with 8 % more steel than it has, and let a face designed to its minimum fall short of
+it unnoticed.
 
 Maximum bar spacing
 ^^^^^^^^^^^^^^^^^^^

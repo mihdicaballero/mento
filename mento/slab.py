@@ -4,8 +4,6 @@ from dataclasses import dataclass
 import math
 import warnings
 
-import numpy as np
-
 from mento.beam import RectangularBeam
 from mento.design_results import RebarLayer
 from mento.codes.registry import design_code
@@ -20,16 +18,25 @@ if TYPE_CHECKING:
     from mento.units import Quantity
 
 
-def _bars_at_spacing(spacing: Quantity, width: Quantity) -> int:
+def _bars_at_spacing(spacing: Quantity, width: Quantity) -> float:
     """How many bars a strip of ``width`` carries at a centre-to-centre ``spacing``.
+
+    ``width / spacing``, and not a whole number. A strip is a slice of a slab
+    that goes on past both of its edges, so what it carries is the bars per
+    metre the spacing gives, and its steel is that many bar areas: a metre of
+    Ø10/12 carries 8.33 bars, 6.54 cm². Rounding the count up credited it
+    with 9 bars, 7.07 cm², 8 % more than the spacing puts in any metre --
+    which let a face designed to its minimum fall short of it with no
+    warning, and overstated its capacity by as much. (Nor is 9 what an
+    isolated metre holds: nine bars at 12 cm span 96 cm centre to centre,
+    and a metre has 95 between its covers.)
 
     The one place the count-from-spacing rule lives, so that a spacing chosen
     for a given number of bars can be checked against the count it produces.
     """
     if spacing == 0 * mm:
-        return 0  # Default to 0 bars if spacing is zero
-    # Round up to ensure full bars (e.g., 3.2 bars → 4 bars)
-    return int(np.ceil((width.to("cm").magnitude / spacing.to("cm").magnitude)))  # Returns dimensionless count
+        return 0.0  # no spacing, no bars
+    return float((width / spacing).to("dimensionless").magnitude)
 
 
 @dataclass
@@ -215,30 +222,30 @@ class OneWaySlab(RectangularBeam):
         return None if limit is None else cast("Quantity | None", limit(self))
 
     def _spacing_for_bars(self, n: int) -> Quantity:
-        """The spacing that puts ``n`` bars across the strip, as it would be drawn.
+        """The spacing that puts at least ``n`` bars on the strip, as it would be drawn.
 
         The exact answer is ``width / n``, which is rarely a number anyone
-        details to, so it is rounded to the whole centimetre (inch). Rounding up
-        is what usually keeps the layout the search chose -- the count comes
-        back as ``ceil(width / s)``, so a slightly wider spacing still asks for
-        the same ``n`` bars, while a narrower one would silently add one -- but
-        it is checked rather than assumed, because it does not always hold. The
-        result is then capped at what the code allows between the bars of a
-        slab, which only ever asks for more of them.
+        details to, so it is rounded to the whole centimetre (inch) -- and
+        down, never up. The search chose ``n`` bars for the steel they add up
+        to, and a strip at spacing ``s`` carries ``width / s`` of them (see
+        :func:`_bars_at_spacing`): any spacing past ``width / n`` carries
+        fewer, and so less steel than the search chose. Rounding up did just
+        that -- 7 Ø10 in a metre became Ø10/15, 6.67 bars, and a face designed
+        to its minimum came out 3 % below it -- while the count was rounded up
+        as well, so nothing showed. Rounding down only ever adds steel, and by
+        less than one bar in the strip. The result is then capped at what the
+        code allows between the bars of a slab, which only ever asks for more
+        of them.
         """
         if n <= 0:
             return 0 * cm
         unit = cm if self.concrete.unit_system == "metric" else inch
         exact = (self.width / n).to(unit).magnitude
-        spacing = math.ceil(exact) * unit
-        if _bars_at_spacing(spacing, self.width) < n:
-            # Rounding up costs a bar once the bars are close enough that a whole
-            # centimetre spans more than one of them -- from about eleven bars in
-            # a metre. Round down there instead: that can only ask for more bars
-            # than the design chose, never fewer, so the strip is never detailed
-            # with less steel than it needs. (The floor is only ever zero at a
-            # spacing below one centimetre, where the bars would already overlap.)
-            spacing = max(math.floor(exact), 1) * unit
+        # A whole answer is kept whole: the division arrives through unit
+        # conversions, and 25 can come out a hair under 25. The floor is only
+        # ever below one unit at a spacing where the bars would overlap, which
+        # the search never asks for.
+        spacing = max(math.floor(exact + 1e-9), 1) * unit
         limit = self._max_bar_spacing()
         if limit is not None:
             # The area the search asked for is not the only thing the layout has
@@ -346,7 +353,13 @@ class OneWaySlab(RectangularBeam):
         self._update_longitudinal_rebar_attributes()
 
     def _calculate_longitudinal_rebars(self) -> None:
-        """Calculate the total rebar area for a slab, given spacing and slab width."""
+        """The bars each layer puts on the strip, from its spacing and the width.
+
+        Bars per strip, ``width / s``, not a whole number -- see
+        :func:`_bars_at_spacing`. The beam's area and centroid then follow from
+        these counts as they do from a beam's, so the steel of the strip is
+        the bar area times the bars per metre, which is what a slab carries.
+        """
 
         # --- BOTTOM REBAR ---
         self._n1_b = _bars_at_spacing(self._s_b1_b, self.width)
@@ -521,7 +534,10 @@ class Footing(OneWaySlab):
             """The lightest bar that covers ``needed`` at ``spacing``, or None."""
             if needed <= 0:
                 return (0.0, 0.0)
-            n = math.ceil(width / spacing)
+            # The bars per strip the spacing gives, as the strip is counted
+            # (see _bars_at_spacing): a mat counted in whole bars covered a
+            # face its spacing did not.
+            n = width / spacing
             covering = [(n * area, d) for d, area in bars if spacing - d >= clear and n * area >= needed]
             return min(covering) if covering else None
 

@@ -33,14 +33,14 @@ class DesignNotRunError(RuntimeError):
     """Raised when results are read before a check or design has been run."""
 
 
-def format_longitudinal_rebar(n: int, d_b: str, s: Optional[str] = None) -> str:
+def format_longitudinal_rebar(n: float, d_b: str, s: Optional[str] = None) -> str:
     """Label one layer of longitudinal bars in the notation of its element.
 
     A beam is detailed as a number of bars of a diameter, so the count leads:
     ``4Ø16``. A slab is one bar repeated at a spacing across the strip, and the
-    count that falls out of it says nothing about how it is drawn, so the
-    spacing takes its place: ``Ø12/17cm`` -- the same notation its grid of
-    stirrups is written in.
+    count that falls out of it -- ``width / s``, not a whole number -- says
+    nothing about how it is drawn, so the spacing takes its place:
+    ``Ø12/17cm`` -- the same notation its grid of stirrups is written in.
 
     Takes the numbers already formatted, so each caller keeps its own precision
     and units while the shape of the label is decided in one place.
@@ -56,10 +56,15 @@ class RebarLayer:
 
     ``s`` is the centre-to-centre spacing the layer was detailed with, and is
     ``None`` on a section that is detailed by a bar count instead -- a beam.
-    The area is the same either way; what changes is how the layer reads.
+    On a beam ``n`` is a whole number of bars. On a slab strip it is
+    ``width / s``, the bars per strip the spacing gives, and need not be
+    whole: a metre of Ø10/12 carries 8.33 of them, 6.54 cm², which is what
+    every metre of that slab carries -- not the 9 bars, 7.07 cm², that would
+    cover the strip if it stopped at its edges. The area is ``n`` bar areas
+    either way; what changes is how the layer reads.
     """
 
-    n: int
+    n: float
     d_b: Quantity
     s: Optional[Quantity] = None
 
@@ -97,8 +102,12 @@ class RebarOption:
     functional: Optional[float] = None
 
     @property
-    def n_bars(self) -> int:
-        """Total number of bars across every layer of this layout."""
+    def n_bars(self) -> float:
+        """Total number of bars across every layer of this layout.
+
+        Whole on a beam; on a slab strip the bars per strip its spacings give,
+        which need not be (see :class:`RebarLayer`).
+        """
         return sum(layer.n for layer in self.layers)
 
     def __str__(self) -> str:
@@ -304,8 +313,12 @@ class FaceReinforcement:
     A_s: Quantity
 
     @property
-    def n_bars(self) -> int:
-        """Total number of bars across every layer of this face."""
+    def n_bars(self) -> float:
+        """Total number of bars across every layer of this face.
+
+        Whole on a beam; on a slab strip the bars per strip its spacings give,
+        which need not be (see :class:`RebarLayer`).
+        """
         return sum(layer.n for layer in self.layers)
 
     def __str__(self) -> str:
@@ -433,8 +446,12 @@ class FlexureFaceDesign:
     options: Tuple[RebarOption, ...] = ()
 
     @property
-    def n_bars(self) -> int:
-        """Total number of bars across every layer of this face."""
+    def n_bars(self) -> float:
+        """Total number of bars across every layer of this face.
+
+        Whole on a beam; on a slab strip the bars per strip its spacings give,
+        which need not be (see :class:`RebarLayer`).
+        """
         return sum(layer.n for layer in self.layers)
 
     def __str__(self) -> str:
@@ -560,7 +577,8 @@ def _layers(beam: RectangularBeam, face: str) -> Tuple[RebarLayer, ...]:
         if s is not None and s.magnitude == 0:
             s = None
         if n and d_b is not None and d_b.magnitude > 0:
-            layers.append(RebarLayer(n=int(n), d_b=d_b, s=s))
+            # As the section counts them: whole on a beam, width / s on a slab.
+            layers.append(RebarLayer(n=n, d_b=d_b, s=s))
     return tuple(layers)
 
 

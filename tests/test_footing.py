@@ -7,6 +7,7 @@ motivated the class: the design returns the largest applicable minimum already
 applied, so a consumer never has to correct the engine's answer.
 """
 
+import math
 import warnings
 
 import pytest
@@ -665,6 +666,30 @@ def test_matching_the_mat_never_undoes_the_design(steel_b500s: SteelBar) -> None
     assert max(r.top.DCR for r in results) <= 1.0
     assert footing._A_s_bot >= footing._A_s_min_bot
     assert footing._A_s_top >= footing._A_s_min_top
+
+
+def test_the_mat_covers_each_face_in_every_metre(steel_b500s: SteelBar) -> None:
+    """The mat search reads a candidate as the strip does: width / s bars.
+
+    An EN 1 m x 0.40 m footing with c_c 50 mm under +100 / -20 kN·m used to
+    come out as Ø12/150 mm, counted as ceil(1000/150) = 7 bars, 7.92 cm²,
+    against 6.90 cm² required. In a metre Ø12/150 is 6.67 bars, 7.54 cm²,
+    which still covers it -- but the count the search chose the mat by was
+    not the steel the mat has. Whatever mat it chooses now, the steel it is
+    credited with is the bar area times the bars per metre, and it covers
+    what each face requires.
+    """
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    footing, _ = _design_envelope(_strip(Footing, concrete, steel_b500s, "Z1", height=40 * cm), 100 * kNm, 20 * kNm)
+
+    for face, spacing, d_b in (
+        (footing.reinforcement.bottom, footing._s_b1_b, footing._d_b1_b),
+        (footing.reinforcement.top, footing._s_b1_t, footing._d_b1_t),
+    ):
+        per_metre = (math.pi * d_b**2 / 4) * (footing.width / spacing)
+        assert face.A_s.to("cm**2").magnitude == pytest.approx(per_metre.to("cm**2").magnitude)
+    assert footing.reinforcement.bottom.A_s >= footing.flexure_design.bottom.A_s_req
+    assert footing.reinforcement.top.A_s >= footing.flexure_design.top.A_s_req
 
 
 def test_the_mat_keeps_each_face_within_the_spacing_range(steel_b500s: SteelBar) -> None:

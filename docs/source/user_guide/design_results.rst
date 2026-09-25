@@ -81,10 +81,14 @@ The bars are still there to be counted when what you need is the steel actually 
 
     layer.d_b                            # 12 mm
     layer.s.to("cm")                     # 17 cm, None on a beam
-    layer.n                              # 6, the bars that spacing puts on the strip
+    layer.n                              # 5.88, the bars a metre carries at that spacing: 100/17
     str(layer)                           # 'Ø12 mm/17 cm'
 
-    slab.flexure_design.bottom.n_bars    # 6, every layer of the face
+    slab.flexure_design.bottom.n_bars    # 5.88, every layer of the face
+
+The count of a slab layer is ``width / s`` and is not a whole number: the strip is a
+slice of a slab that goes on past its edges, and its steel is the bar area times the
+bars per metre, ``layer.A_s == layer.n * π d_b² / 4`` on a slab as on a beam.
 
 Shear
 -----
