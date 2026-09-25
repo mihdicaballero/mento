@@ -325,3 +325,14 @@ def test_max_bar_spacing_crack_control_imperial():
     plus a #3 stirrup): 15 - 2.81 = 12.19 in, and the flat 12 in governs.
     """
     assert eq.max_bar_spacing_crack_control(40_000.0, 1.125, is_imperial=True) == pytest.approx(12.0)
+
+
+def test_max_bar_spacing_crack_control_takes_the_unit_system_by_name():
+    """``is_imperial`` is keyword-only, as in every other equation that takes it.
+
+    A positional ``True`` would read 40,000 as MPa and 1.125 as mm without a
+    word; by name the call says what it means (the ADR-0005 convention the
+    shear and wall equations follow).
+    """
+    with pytest.raises(TypeError):
+        eq.max_bar_spacing_crack_control(40_000.0, 1.125, True)  # type: ignore[misc]

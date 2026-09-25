@@ -122,7 +122,7 @@ def shrinkage_and_temperature_ratio() -> float:
     return 0.0018
 
 
-def max_bar_spacing_crack_control(f_s: float, c_c: float, is_imperial: bool = False) -> float:
+def max_bar_spacing_crack_control(f_s: float, c_c: float, *, is_imperial: bool = False) -> float:
     """Maximum spacing of the bars nearest the tension face — ACI 318-19 Table 24.3.2 / CIRSOC 201-25 Tabla 24.3.2.
 
     The crack-control limit §24.3.2 puts on the bonded reinforcement closest
