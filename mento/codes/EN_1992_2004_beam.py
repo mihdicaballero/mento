@@ -1,4 +1,5 @@
 import math
+from dataclasses import replace
 from mento.units import Quantity
 from typing import TYPE_CHECKING, Tuple, cast
 
@@ -185,6 +186,34 @@ def _calculate_required_shear_reinforcement_EN_1992_2004(self: "RectangularBeam"
     st.V_Rd = min(st.V_Rd_s, st.V_Rd_max)
 
 
+def _stirrups_a_bare_section_needs_EN_1992_2004(self: "RectangularBeam", st: ENShearCheckState) -> None:
+    """A_v,req of a section that carries no stirrups.
+
+    EN 1992-1-1 §6.2.1(3): where V_Ed <= V_Rd,c no calculated shear
+    reinforcement is necessary, and (4) asks for the minimum of §9.2.2 all
+    the same -- zero where the member may omit it, which the initialisation
+    already settled in ``A_v_min``. §6.2.1(5): where V_Ed > V_Rd,c, enough
+    that V_Ed <= V_Rd, which is the truss of §6.2.3 at the angle the demand
+    asks for -- what the section will be checked with once it has stirrups,
+    and what ``stirrups_required`` has to quote. The check used to quote the
+    minimum whatever the shear, so a bare section under 300 kN was asked for
+    the same 2.4 cm²/m as one under 30 kN.
+
+    The truss is read on a copy of the state: what the report prints for a
+    bare section -- no strut angle, V_Rd = V_Rd,c -- describes the section as
+    it is and stays as it is.
+    """
+    if st.V_Ed_2 <= st.V_Rd_c:
+        st.A_v_req = st.A_v_min
+        return
+    truss = replace(st)
+    _calculate_max_shear_strength_EN_1992_2004(self, truss)
+    st.A_v_req = max(
+        shear_eq.required_shear_reinforcement(st.V_Ed_2, truss.z, st.f_ywd, truss.cot_theta),
+        st.A_v_min,
+    )
+
+
 def _check_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> ENShearCheckState:
     """Run the EN shear check for one combination and return what it found.
 
@@ -207,12 +236,10 @@ def _check_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> ENShear
     if self._stirrup_n == 0:
         # The assumed stirrup diameter stays: see the note in the ACI check.
         st.V_Rd_c = _shear_without_rebar_EN_1992_2004(self, st)
-        # According to EN1992-1-1 §6.2.1(4) minimum shear reinforcement should nevertheless be provided
-        # according to EN1992-1-1 §9.2.2. The minimum shear reinforcement may be omitted in members where
-        # transverse redistribution of loads is possible (such as slabs) and members of minor importance
-        # which do not contribute significantly to the overall resistance and stability of the structure.
-        st.A_v_req = st.A_v_min
-        # Maximum shear capacity is the same as the concrete capacity
+        # The stirrups the demand needs: the minimum of §9.2.2 under V_Rd,c
+        # (§6.2.1(3)-(4)), the truss of §6.2.3 past it (§6.2.1(5)).
+        _stirrups_a_bare_section_needs_EN_1992_2004(self, st)
+        # The capacity of the section as it is: the concrete alone.
         st.V_Rd = st.V_Rd_c
         st.V_Rd_max = st.V_Rd
         st.max_shear_ok = st.V_Ed_1 <= st.V_Rd_max

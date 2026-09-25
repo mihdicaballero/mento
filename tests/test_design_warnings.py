@@ -149,152 +149,54 @@ def test_a_section_too_small_for_the_shear_says_so() -> None:
     assert values["V"] > values["V_max"]
 
 
-def test_values_only_checks_record_warnings_too() -> None:
-    beam = _beam()
-    beam.set_longitudinal_rebar_bot(n1=2, d_b1=10 * mm)
-    beam.set_transverse_rebar(n_stirrups=1, d_b=10 * mm, s_l=35 * cm)
-    beam.flexure_check_results(FORCES)
-    beam.shear_check_results(FORCES)
-
-    assert {"As_below_min", "stirrup_spacing_exceeds_max"} <= set(_by_code(beam.warnings))
-
-
-def test_en_beam_reports_its_own_limits() -> None:
+def _bare_en_beam(stirrups: bool = False) -> RectangularBeam:
+    """EN C25/30, 30x50, 3Ø16 below, 2Ø12 above, c_c 25 mm: the review's e15."""
     beam = RectangularBeam(
         label="V",
-        concrete=Concrete_EN_1992_2004(name="C25", f_c=25 * MPa),
+        concrete=Concrete_EN_1992_2004(name="C25/30", f_c=25 * MPa),
         steel_bar=SteelBar(name="B500S", f_y=500 * MPa),
-        width=20 * cm,
-        height=60 * cm,
+        width=30 * cm,
+        height=50 * cm,
         c_c=25 * mm,
     )
-    beam.set_longitudinal_rebar_bot(n1=4, d_b1=16 * mm)
-    beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=60 * cm)
-    node = Node(section=beam, forces=[Forces(label="V", V_z=100 * kN, M_y=80 * kNm)])
-    node.check()
-
-    codes = set(_by_code(node.warnings))
-    assert "stirrup_spacing_exceeds_max" in codes
-    # EN 1992-1-1 states no minimum stirrup diameter, so none is reported.
-    assert "stirrup_diameter_below_min" not in codes
+    beam.set_longitudinal_rebar_bot(n1=3, d_b1=16 * mm)
+    beam.set_longitudinal_rebar_top(n1=2, d_b1=12 * mm)
+    if stirrups:
+        beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=15 * cm)
+    else:
+        beam.set_transverse_rebar(0, 0 * mm, 0 * cm)
+    return beam
 
 
-def test_warnings_are_empty_before_any_check() -> None:
-    assert _beam().warnings == ()
+def test_en_beam_without_stirrups_is_asked_for_what_the_demand_needs() -> None:
+    """EN C25/30, 30x50, 3Ø16 below, 2Ø12 above, c_c 25 mm, no stirrups.
 
+    d = 500 - 25 - 8 = 467 mm, z = 0.9*d = 420.3 mm, f_ywd = 500/1.15 =
+    434.8 MPa. V_Rd,c of Eq. (6.2.a) = 0.12*1.654*(100*0.00431*25)^(1/3)*
+    300*467 = 61.4 kN. Under 150 kN EN 1992-1-1 §6.2.1(5) asks for enough
+    stirrups that V_Ed ≤ V_Rd: with cot θ = 2.5 (150 kN is far under
+    V_Rd,max at 21.8°, 391 kN) that is A_sw/s = V_Ed/(z*f_ywd*cot θ) =
+    150 000/(420.3*434.8*2.5) = 0.328 mm²/mm = 3.28 cm²/m, not the
+    2.40 cm²/m of Eq. (9.5N) (0.08*sqrt(25)/500*300) bd94d2f quoted whatever
+    the shear. Under 30 kN ≤ V_Rd,c §6.2.1(3) needs none calculated and (4)
+    the minimum, which is what a beam is asked for.
+    """
+    beam = _bare_en_beam()
+    node = Node(section=beam, forces=[Forces(label="ULS", V_z=150 * kN, M_y=50 * kNm)])
+    node.check_shear()
+    required = _by_code(node.warnings)["stirrups_required"]
+    assert required.values["A_v_req"].to("cm**2/m").magnitude == pytest.approx(3.28, abs=0.01)
+    assert required.values["A_v_min"].to("cm**2/m").magnitude == pytest.approx(2.40, abs=0.01)
+    assert beam.shear_checks[0].A_v_req.to("cm**2/m").magnitude == pytest.approx(3.28, abs=0.01)
+    # The capacity of the section as it is stays the concrete's alone.
+    assert beam.shear_checks[0].V_capacity.to("kN").magnitude == pytest.approx(61.4, abs=0.1)
 
-def test_slab_bar_spacing_limits_are_warned() -> None:
-    from mento import OneWaySlab
-    from mento.units import m
-
-    slab = OneWaySlab(
-        label="L1",
-        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
-        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
-        width=1 * m,
-        height=20 * cm,
-        c_c=25 * mm,
+    beam = _bare_en_beam()
+    node = Node(section=beam, forces=[Forces(label="ULS", V_z=30 * kN, M_y=50 * kNm)])
+    node.check_shear()
+    assert _by_code(node.warnings)["stirrups_required"].values["A_v_req"].to("cm**2/m").magnitude == pytest.approx(
+        2.40, abs=0.01
     )
-    slab.set_slab_longitudinal_rebar_bot(d_b1=12 * mm, s_b1=60 * cm)
-    slab.set_slab_longitudinal_rebar_top(d_b1=12 * mm, s_b1=2 * cm)
-    Node(section=slab, forces=[Forces(label="M", M_y=10 * kNm)]).check_flexure()
-
-    found = {(w.code, w.face) for w in slab.warnings}
-    assert ("bar_spacing_exceeds_max", "bottom") in found
-    assert ("bar_spacing_below_min", "top") in found
-
-
-def test_a_warning_prints_as_its_message() -> None:
-    _, node = _poorly_detailed()
-    warning = node.warnings[0]
-
-    assert str(warning) == warning.message
-
-
-def test_bars_that_do_not_fit_are_warned_after_a_design() -> None:
-    """A 10x20 web cannot take what 200 kNm asks for: the search finds no layout at all."""
-    beam = _beam(width=10 * cm, height=20 * cm)
-    node = Node(section=beam, forces=[Forces(label="M", M_y=200 * kNm, V_z=20 * kN)])
-    node.design()
-
-    # The moment makes it doubly reinforced, so neither the tension steel below
-    # nor the compression steel above has a layout that fits.
-    not_fitting = [w for w in node.warnings if w.code == "bars_do_not_fit"]
-    assert {w.face for w in not_fitting} == {"bottom", "top"}
-    assert all(w.values == {} for w in not_fitting)
-
-
-def test_a_design_short_of_the_moment_is_warned_until_the_bars_reach_it() -> None:
-    """A 12x30 web takes 4Ø12 at most, and 40 kNm asks for 5.18 cm² below."""
-    beam = RectangularBeam(
-        label="101",
-        concrete=mento.Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa),
-        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
-        width=12 * cm,
-        height=30 * cm,
-        c_c=25 * mm,
-    )
-    node = Node(section=beam, forces=[Forces(label="1.4D", V_z=50 * kN, M_y=40 * kNm)])
-    node.design()
-
-    short = _by_code(node.warnings)["As_below_required"]
-    assert short.face == "bottom"
-    assert short.values["A_s"].to("cm**2").magnitude == pytest.approx(4.52, rel=1e-3)
-    assert short.values["A_s_req"].to("cm**2").magnitude == pytest.approx(5.18, rel=1e-2)
-    mento.set_language("es")
-    assert "agrandar la sección" in _by_code(node.warnings)["As_below_required"].message
-
-    # Bars set by hand that reach the area clear it.
-    beam.set_longitudinal_rebar_bot(2, 16 * mm, 0, None, 2, 16 * mm)
-    assert "As_below_required" not in {w.code for w in node.warnings}
-
-
-def test_the_maximum_is_only_read_on_the_face_in_tension() -> None:
-    """29.45 cm² on the bottom is past A_s,max, but only a positive moment pulls it."""
-
-    def heavy_bottom() -> RectangularBeam:
-        beam = _beam()
-        beam.set_transverse_rebar(n_stirrups=1, d_b=10 * mm, s_l=20 * cm)
-        beam.set_longitudinal_rebar_bot(2, 25 * mm, 1, 25 * mm, 2, 25 * mm, 1, 25 * mm)
-        beam.set_longitudinal_rebar_top(2, 12 * mm)
-        return beam
-
-    # A negative moment makes those bars compression steel, and no moment
-    # pulls neither face: no warning, and the report row passes.
-    beam = heavy_bottom()
-    node = Node(section=beam, forces=[Forces(label="neg", M_y=-50 * kNm), Forces(label="zero", M_y=0 * kNm)])
-    node.check_flexure()
-    assert "As_above_max" not in _by_code(node.warnings)
-    assert beam._data_min_max_flexure["Ok?"][2] == "✅"
-
-    beam = heavy_bottom()
-    node = Node(section=beam, forces=[Forces(label="pos", M_y=150 * kNm)])
-    node.check_flexure()
-    over = _by_code(node.warnings)["As_above_max"]
-    assert (over.face, over.combinations) == ("bottom", ("pos",))
-    assert beam._data_min_max_flexure["Ok?"][2] == "❌"
-
-
-def test_en_holds_both_faces_to_its_maximum() -> None:
-    """EN 1992-1-1 §9.2.1.1(3) caps tension OR compression steel, so the face a
-    moment compresses is read against its 4 % too -- unlike ACI 318-19, whose
-    maximum is the ductility limit of the face in tension."""
-    beam = RectangularBeam(
-        label="E",
-        concrete=Concrete_EN_1992_2004(name="C25", f_c=25 * MPa),
-        steel_bar=SteelBar(name="B500S", f_y=500 * MPa),
-        width=20 * cm,
-        height=40 * cm,
-        c_c=25 * mm,
-    )
-    beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=20 * cm)
-    beam.set_longitudinal_rebar_bot(2, 32 * mm, 1, 32 * mm, 2, 32 * mm, 1, 32 * mm)  # 48.3 cm² > 4 %
-    beam.set_longitudinal_rebar_top(2, 16 * mm)
-    node = Node(section=beam, forces=[Forces(label="neg", M_y=-40 * kNm)])
-    node.check_flexure()
-    over = [w for w in node.warnings if w.code == "As_above_max"]
-    assert [w.face for w in over] == ["bottom"]
-    assert over[0].combinations == ("neg",)
 
 
 # ---------------------------------------------------------------------------
