@@ -37,7 +37,8 @@ The Excel file should contain the following columns:
 - **Comb.**: Load combination label.
 - **t**: Wall thickness in cm.
 - **lw**: Wall in-plane length in m.
-- **hw**: Wall story height in m.
+- **hw**: Wall height in m — the entire wall from base to top, or the clear height
+  of the segment considered (Chapter 2), not the storey height.
 - **cc**: Clear cover in mm.
 - **Nx**: Axial force in kN.
 - **Vz**: Shear force in kN.

@@ -39,7 +39,11 @@ Key Concepts
 
   - ``thickness`` (*t*) — out-of-plane dimension
   - ``length`` (*lw*) — in-plane length, resists in-plane shear
-  - ``height`` (*hw*) — story / overall wall height, used for the ``hw / lw`` aspect ratio
+  - ``height`` (*hw*) — the height of the **entire wall** from base to top, or the
+    clear height of the wall segment or pier considered (ACI 318-19 / CIRSOC 201-25
+    Chapter 2). It is **not** the storey height of a multi-storey wall: ``hw / lw``
+    sets ``α_c`` and ``ρl,min``, and a storey height in its place makes a slender
+    wall look squat and overstates ``ØVn``.
 
 - **Material Properties**: requires a ``Concrete`` object (currently
   ``Concrete_ACI_318_19`` or ``Concrete_CIRSOC_201_25``) and a ``SteelBar``
@@ -77,7 +81,7 @@ constructor parameters ``thickness``, ``length``, and ``height``.
         steel_bar=steel,
         thickness=25 * cm,   # t
         length=4.0 * m,      # lw (in-plane length)
-        height=3.5 * m,      # hw (story height; hw/lw = 0.875)
+        height=3.5 * m,      # hw (height of the whole wall; hw/lw = 0.875)
         c_c=20 * mm,
     )
 

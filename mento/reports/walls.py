@@ -44,7 +44,7 @@ def wall_flexure_results_detailed_doc(self: "ShearWall", force: Optional[Forces]
 
 
 def wall_data(self: "ShearWall") -> None:
-    """Wall basic info as Markdown (length, thickness, story height, materials)."""
+    """Wall basic info as Markdown (length, thickness, wall height hw, materials)."""
     level_str = f"Level {self.level}, " if self.level else ""
     markdown_content = (
         f"{level_str}Shear Wall {self.label}, "

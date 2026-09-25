@@ -53,7 +53,9 @@ Symbols
      - Wall length (in-plane, resists shear)
      - ``length``
    * - :math:`h_w`
-     - Wall height, for the aspect ratio
+     - Wall height for the aspect ratio: the entire wall from base to top, or the
+       clear height of the segment or pier considered (Chapter 2) — not the
+       storey height
      - ``height``
    * - :math:`A_{cv}`
      - Gross area resisting shear, :math:`l_w t`

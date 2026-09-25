@@ -55,7 +55,14 @@ class ShearWall(RectangularBeam):
     Geometry:
         thickness — wall thickness  (t)         [maps to parent's ``width``]
         length    — wall in-plane length  (lw)  [maps to parent's ``height``]
-        height    — wall story height  (hw)     [exposed via property; replaces ``hw``]
+        height    — wall height  (hw)           [exposed via property; replaces ``hw``]
+
+    ``height`` is the hw of ACI 318-19 / CIRSOC 201-25 Chapter 2: the height
+    of the entire wall from base to top, or the clear height of the wall
+    segment or wall pier considered -- not the storey height of a
+    multi-storey wall. It enters only through hw/lw, which sets αc of
+    Eq. (11.5.4.3) and ρl,min of Eq. (11.6.2); a storey height in its place
+    makes a slender wall look squat and overstates ØVn.
 
     Reinforcement:
         Horizontal distributed bars resist in-plane shear (ρt).
@@ -95,7 +102,7 @@ class ShearWall(RectangularBeam):
             settings=settings,
         )
 
-        # Replace bootstrap with the actual wall story height.
+        # Replace bootstrap with the actual wall height hw.
         self._wall_height = height
         # _initialize_wall_attributes was already called via __post_init__ above.
 
@@ -115,7 +122,7 @@ class ShearWall(RectangularBeam):
 
     @property
     def height(self) -> Quantity:  # type: ignore[override]
-        """Wall story height — replaces the legacy ``hw`` field."""
+        """Wall height hw — the whole wall, or the segment considered (Chapter 2); replaces the legacy ``hw`` field."""
         return self._wall_height
 
     @height.setter
@@ -123,7 +130,7 @@ class ShearWall(RectangularBeam):
         # Parent's dataclass-generated ``__init__`` assigns ``self.height = length``;
         # we accept that without complaint because ``_wall_height`` is bootstrapped to
         # the same value by our ``__init__``. Subsequent user assignments update the
-        # wall story height directly.
+        # wall height hw directly.
         self._wall_height = value
 
     def __post_init__(self) -> None:
