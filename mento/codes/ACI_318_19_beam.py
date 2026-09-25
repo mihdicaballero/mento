@@ -687,7 +687,9 @@ def _minimum_flexural_reinforcement_area_ACI_318_19(self: "RectangularBeam", M_u
       temperature reinforcement of §24.4.3.2, which is the equation this branch
       calls, and it is written on the gross section ``b * h``, so ``d`` does
       not enter it. A two-way isolated footing goes to Chapter 8 instead
-      (§13.3.3.1 → §8.6.1.1), with the same 0.0018*Ag.
+      (§13.3.3.1 → §8.6.1.1), which reads "0.0018*Ag, or as defined in
+      8.6.1.2" -- the minimum over the two-way shear critical section of
+      Eq. (8.6.1.2), not implemented here: it gets the flat 0.0018*Ag.
 
     Neither §9.6.1.1(b) nor §13.3.1.2 is the source of this: §9.6.1.1 is a
     single sentence with no items in either code, and §13.3.1.2 is the rule

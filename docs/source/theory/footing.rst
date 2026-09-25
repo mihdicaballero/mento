@@ -47,8 +47,13 @@ ACI 318-19 and CIRSOC 201-25
 that answers there is Chapter 7's: §7.6.1.1 (CIRSOC 201-25 §7.6.1, an unnumbered
 paragraph under that heading), the same ratio as the shrinkage and temperature
 reinforcement of §24.4.3.2. A footing spanning two ways goes by §13.3.3.1 to §8.6.1.1,
-which repeats it. It is written on the **gross** section, so the effective depth does
-not enter it, and it is one ratio for every steel grade:
+which reads "0.0018 A\ :sub:`g`, or as defined in 8.6.1.2": the second is the minimum a
+two-way slab carries over the width of the shear critical section around a column when
+the punching stress exceeds :math:`\phi 2 \lambda_s \lambda \sqrt{f'_c}` (Eq. 8.6.1.2);
+mento does not implement it, so a two-way footing gets the flat 0.0018 A\ :sub:`g` here
+(CIRSOC 201-25 §8.6.1.1 and §8.6.1.2 read the same). It is written on the **gross**
+section, so the effective depth does not enter it, and it is one ratio for every steel
+grade:
 
 .. math::
 
