@@ -126,7 +126,7 @@ def _calculate_concrete_shear_strength_aci(self: "RectangularBeam", st: ShearChe
     # Axial stress influence
     st.sigma_Nu = shear_eq.axial_stress_influence(st.N_u, sec.A_x, sec.f_c)
     # Table 22.5.5.1 uses the defined minimum, even where demand waives it.
-    has_min_rebar = sec.A_v >= _minimum_shear_reinforcement_aci(self)
+    has_min_rebar = _carries_minimum_stirrups_aci(self)
 
     if not has_min_rebar and not sec.is_imperial and st.A_s_tension == 0.0:
         warnings.warn(
@@ -134,7 +134,29 @@ def _calculate_concrete_shear_strength_aci(self: "RectangularBeam", st: ShearChe
             UserWarning,
         )
 
-    st.k_c_min = shear_eq.concrete_shear_stress(
+    st.k_c_min, st.V_c = _concrete_shear_strength_aci(self, st, has_min_rebar=has_min_rebar)
+    st.phi_V_c = self.concrete.phi_v * st.V_c
+
+
+def _carries_minimum_stirrups_aci(self: "RectangularBeam") -> bool:
+    """Whether the section holds the A_v,min of Table 9.6.3.4: the criteria column of Table 22.5.5.1."""
+    return bool(section_floats(self).A_v >= _minimum_shear_reinforcement_aci(self))
+
+
+def _concrete_shear_strength_aci(
+    self: "RectangularBeam", st: ShearCheckState, *, has_min_rebar: bool
+) -> tuple[float, float]:
+    """``(k_c, V_c)`` of Table 22.5.5.1 for the row ``has_min_rebar`` selects.
+
+    Rows (a)/(b) with A_v >= A_v,min, row (c) without; the ceiling of
+    §22.5.5.1.1 and the cap on sqrt(f'c) of §22.5.3.1, lifted by §22.5.3.2
+    for a beam carrying the minimum, go with the row. Split from
+    :func:`_calculate_concrete_shear_strength_aci` so the same table can be
+    read for a section other than the one as it is: the section limit asks
+    what V_c becomes once the minimum stirrups are in.
+    """
+    sec = section_floats(self)
+    k_c = shear_eq.concrete_shear_stress(
         sec.f_c,
         self.concrete.lambda_factor,
         st.rho_w,
@@ -155,26 +177,42 @@ def _calculate_concrete_shear_strength_aci(self: "RectangularBeam", st: ShearChe
         )
         * st.A_cv
     )
-    st.V_c = min(V_cmax, max(0.0, st.k_c_min * st.A_cv))
-    st.phi_V_c = self.concrete.phi_v * st.V_c
+    return k_c, min(V_cmax, max(0.0, k_c * st.A_cv))
 
 
 def _calculate_max_shear_capacity_aci(self: "RectangularBeam", st: ShearCheckState) -> None:
-    """Maximum total shear capacity (V_max).
+    """Maximum total shear capacity (V_max), and the limit of the section itself.
 
     V_u <= phi*(V_c + 0.66*sqrt(f'c)*b_w*d), the section-size limit of
     ACI 318-19 §22.5.1.2, Eq. (22.5.1.2) / CIRSOC 201-25 §22.5.1.2,
     ec. (22.5.1.2); 8*sqrt(f'c)*b_w*d in psi. phi_v = 0.75, ACI 318-19
     Table 21.2.1(b) / CIRSOC 201-25 Tabla 21.2.1(b).
+
+    ``phi_V_max`` reads the V_c of the section as it is, which is what the
+    report prints beside V_u. That V_c is not fixed by the dimensions alone:
+    Table 22.5.5.1 moves from row (c) to rows (a)/(b) once A_v >= A_v,min,
+    and §22.5.3.2 lifts the cap on sqrt(f'c) with it, so a section short of
+    the minimum has a lower phi*V_max than the same section with the
+    stirrups §9.6.3.1 requires of it anyway. ``section_shear_limit`` is the
+    limit with those stirrups in -- the most the section can carry however
+    it is reinforced, the one number that says the section has to grow --
+    and coincides with ``phi_V_max`` once the section carries A_v,min. A
+    20x60 with 2Ø12 and no stirrups under 320 kN was told to enlarge the
+    section at phi*V_max = 309 kN when 2eØ10/10 on it carries the load at
+    DCR 0.92: its limit is 354 kN.
     """
     sec = section_floats(self)
-    V_max = (
-        st.V_c
-        + shear_eq.shear_stress_capacity_increment(sec.f_c, self.concrete.lambda_factor, is_imperial=sec.is_imperial)
+    increment = (
+        shear_eq.shear_stress_capacity_increment(sec.f_c, self.concrete.lambda_factor, is_imperial=sec.is_imperial)
         * st.A_cv
     )
-    st.phi_V_max = self.concrete.phi_v * V_max
+    st.phi_V_max = self.concrete.phi_v * (st.V_c + increment)
     st.max_shear_ok = st.V_u <= st.phi_V_max
+    if _carries_minimum_stirrups_aci(self):
+        V_c_reinforced = st.V_c
+    else:
+        _, V_c_reinforced = _concrete_shear_strength_aci(self, st, has_min_rebar=True)
+    st.section_shear_limit = self.concrete.phi_v * (V_c_reinforced + increment)
 
 
 def _minimum_shear_reinforcement_aci(self: "RectangularBeam") -> float:

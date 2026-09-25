@@ -59,8 +59,12 @@ Codes
     The stirrup bar is thinner than the code's minimum.
 ``shear_exceeds_section_limit``
     The shear exceeds the most the section can carry however it is
-    reinforced (ACI 318-19 §22.5.1.2, EN 1992-1-1 V_Rd,max): the section has
-    to grow. A wall reports it against ØVn,max of §11.5.4.3.
+    reinforced: under ACI 318-19 / CIRSOC 201-25 the Eq. (22.5.1.2) limit
+    with the V_c of Table 22.5.5.1 for a section carrying A_v,min, under
+    EN 1992-1-1 V_Rd,max of Eq. (6.9) at θ = 45°. Both are read the same with
+    or without stirrups, so the warning means the section has to grow; a
+    section that is only short of stirrups gets ``stirrups_required`` or
+    ``Av_below_min`` instead. A wall reports it against ØVn,max of §11.5.4.3.
 ``mesh_ratio_below_min``
     A wall mesh gives less than its direction asks for: the horizontal one
     below the ρt the shear needs (never below its minimum), the vertical one
@@ -341,16 +345,23 @@ def shear_warnings(beam: "RectangularBeam", label: str, state: Any) -> List[_Raw
     A_v_min = _q(state.A_v_min, "per_length", beam).to(A_v.units)
     A_v_req = _q(state.A_v_req, "per_length", beam).to(A_v.units)
 
-    if not state.max_shear_ok:
-        V = _q(state.V_u if hasattr(state, "V_u") else state.V_Ed_1, "force", beam)
-        V_max = _q(state.phi_V_max if hasattr(state, "phi_V_max") else state.V_Rd_max, "force", beam)
+    # Against the limit of the section itself, not the ``max_shear_ok`` of the
+    # report row: that row reads the section as it is, and both codes give a
+    # section short of stirrups a lower ceiling than the same section with
+    # them -- ACI 318-19 Table 22.5.5.1 raises V_c once A_v >= A_v,min, and a
+    # bare EN section is checked against V_Rd,c. Only past the limit with
+    # stirrups in is "enlarge the section" the advice; short of it the advice
+    # is the stirrups, which ``stirrups_required`` and ``Av_below_min`` give.
+    V = _q(state.V_u if hasattr(state, "V_u") else state.V_Ed_1, "force", beam)
+    V_limit = _q(state.section_shear_limit, "force", beam).to(V.units)
+    if V > V_limit and not math.isclose(V.magnitude, V_limit.magnitude):
         found.append(
             _Raw(
                 "shear_exceeds_section_limit",
-                {"V": V, "V_max": V_max},
+                {"V": V, "V_max": V_limit},
                 None,
                 label,
-                severity=float((V - V_max).magnitude),
+                severity=float((V - V_limit).magnitude),
             )
         )
 

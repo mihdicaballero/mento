@@ -116,6 +116,10 @@ class ShearCheckState:
     stirrup_s_max_w: float
     max_shear_ok: bool
     DCR: float
+    #: The most the section can carry however it is reinforced: Eq. (22.5.1.2)
+    #: with the V_c of a section carrying A_v,min. Equal to ``phi_V_max`` once
+    #: the section does; read by ``shear_exceeds_section_limit``.
+    section_shear_limit: float = 0.0
 
     def shear_reinforcement_quantities(self, imperial: bool) -> tuple[Any, Any]:
         """``(A_v_req, A_v_min)`` as quantities, for the frozen public result."""
@@ -242,6 +246,11 @@ class ENShearCheckState:
     stirrup_s_max_w: float
     max_shear_ok: bool
     DCR: float
+    #: The most the section can carry however it is reinforced: V_Rd,max of
+    #: Eq. (6.9) at theta = 45 deg. ``V_Rd_max`` is the strut at the angle the
+    #: demand fixed, or V_Rd,c for a section with no stirrups; this is the
+    #: same number either way, and what ``shear_exceeds_section_limit`` reads.
+    section_shear_limit: float = 0.0
 
     def shear_reinforcement_quantities(self, imperial: bool) -> tuple[Any, Any]:
         """``(A_v_req, A_v_min)`` as quantities, for the frozen public result."""
