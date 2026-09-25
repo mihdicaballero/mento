@@ -115,7 +115,11 @@ all walls. The worst-case load combination is reported for each wall:
 
 The result is a DataFrame with columns: Level, Label, t, lw, hw, horizontal rebar,
 vertical rebar, reinforcement ratios, worst-case Vu, capacity, DCR, and a
-pass/fail status (✅ / ❌).
+pass/fail status (✅ / ❌). The status spans **every** combination of the wall,
+not only the governing one: it is ✅ when each combination is carried
+(DCR ≤ 1) and the mesh misses none of the limits ``wall.warnings`` reports —
+the ratios of §11.6.2, the spacing of §11.7 and the section limit of
+§11.5.4.2. ``ρl,min`` in particular changes with the shear of each combination.
 
 .. note::
 

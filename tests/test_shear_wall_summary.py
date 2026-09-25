@@ -245,6 +245,72 @@ class TestShearWallSummaryCheck:
             s.check()
 
 
+def _two_combination_wall(shears, s_h=15, d_b_h=12):
+    """One wall, 25×400 cm, hw 3.5 m, Ø12/15 + Ø10/20 E.F., with two shear rows in the order given."""
+    data = {
+        "Level": ["", "L1", "L1"],
+        "Label": ["", "W1", "W1"],
+        "Comb.": ["", "F1", "F2"],
+        "t": ["cm", 25, 25],
+        "lw": ["m", 4.0, 4.0],
+        "hw": ["m", 3.5, 3.5],
+        "cc": ["mm", 20, 20],
+        "Nx": ["kN", 0, 0],
+        "Vz": ["kN", shears[0], shears[1]],
+        "My": ["kNm", 0, 0],
+        "dbh": ["mm", d_b_h, d_b_h],
+        "sh": ["cm", s_h, s_h],
+        "dbv": ["mm", 10, 10],
+        "sv": ["cm", 20, 20],
+    }
+    return pd.DataFrame(data)
+
+
+class TestShearWallSummaryStatusSpansEveryCombination:
+    @pytest.mark.parametrize("shears", [(2400, 1000), (1000, 2400)])
+    def test_status_fails_when_any_combination_misses_a_limit(self, concrete, steel, shears):
+        """A wall that misses ρl,min under one combination is ❌ whichever row comes last.
+
+        ACI 318-19 §11.6.2(a), by hand (hw/lw = 0.875, αc = 0.25, Acv = 1.0 m²):
+            Ø12/15 E.F.: ρt = 0.0060319; Ø10/20 E.F.: ρl = 2·78.54/(250·200) = 0.0031416
+            Vu = 2400 kN: ρt,req = (2400/0.75 − 1250)/(420·1000) = 0.0046429
+                Eq. (11.6.2) = 0.0025 + 0.8125·(0.0060319 − 0.0025) = 0.0053697
+                ρl,min = min(0.0053697, 0.0046429) = 0.0046429 > ρl  → missed
+                ØVn = 0.75·min(1250 + 2533.4, 3300) = 2475 kN, DCR = 0.970
+            Vu = 1000 kN: ρt,req = 0.0025 → ρl,min = 0.0025 ≤ ρl  → met, DCR 0.404
+        The summary used to read the pass flag of the last combination checked,
+        so the (2400, 1000) order came out ✅ at DCR 0.97.
+        """
+        summary = ShearWallSummary(concrete=concrete, steel_bar=steel, wall_list=_two_combination_wall(shears))
+        row = summary.check().iloc[1]
+        assert row["DCR"] == pytest.approx(0.970, abs=1e-3)
+        assert row["Status"] == "❌"
+        wall = summary.nodes[0].section
+        assert [w.code for w in wall.warnings] == ["mesh_ratio_below_min"]
+
+    def test_status_passes_when_every_combination_does(self, concrete, steel):
+        """The same wall under shears both combinations carry with ρl,min = 0.0025 is ✅."""
+        summary = ShearWallSummary(concrete=concrete, steel_bar=steel, wall_list=_two_combination_wall((1000, 800)))
+        row = summary.check().iloc[1]
+        assert row["DCR"] == pytest.approx(0.404, abs=1e-3)
+        assert row["Status"] == "✅"
+
+    def test_status_fails_on_a_spacing_the_code_does_not_allow(self, concrete, steel):
+        """A mesh past the 450 mm cap of ACI 318-19 §11.7.3.1 is ❌ however low its DCR.
+
+        Ø20/50 E.F.: ρt = 2·314.16/(250·500) = 0.0050265 ≥ 0.0025, but s = 500 mm >
+        s_h,max = min(4000/5, 3·250, 450) = 450 mm. Vu = 500 kN gives DCR = 500/2475 = 0.202.
+        The old flag left the spacing rows out, so this wall was ✅.
+        """
+        wall_list = _two_combination_wall((500, 400), s_h=50, d_b_h=20)
+        summary = ShearWallSummary(concrete=concrete, steel_bar=steel, wall_list=wall_list)
+        row = summary.check().iloc[1]
+        assert row["DCR"] == pytest.approx(0.202, abs=1e-3)
+        assert row["Status"] == "❌"
+        wall = summary.nodes[0].section
+        assert [w.code for w in wall.warnings] == ["mesh_spacing_exceeds_max"]
+
+
 # ------------------------------------------------------------------
 # Design
 # ------------------------------------------------------------------
