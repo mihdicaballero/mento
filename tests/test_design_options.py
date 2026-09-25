@@ -12,6 +12,7 @@ import pytest
 from mento import (
     BeamSettings,
     Concrete_ACI_318_19,
+    Concrete_CIRSOC_201_25,
     Concrete_EN_1992_2004,
     Forces,
     Node,
@@ -158,8 +159,9 @@ def test_the_alternatives_are_the_same_cage_in_a_heavier_bar() -> None:
     assert diameters[1:] == sorted(diameters[1:])
     assert {option.s_l for option in options} == {13 * cm}
     assert {option.n_stirrups for option in options} == {1}
-    # The functional says what each heavier bar costs in steel.
-    assert [round(option.functional, 2) for option in options] == [0.18, 0.70, 2.02]
+    # The functional says what each heavier bar costs in steel, over the demand
+    # read at that bar's own depth: 2 mm deeper per size, so a little more.
+    assert [round(option.functional, 2) for option in options] == [0.18, 0.69, 1.98]
 
 
 def test_the_alternatives_are_ordered_by_diameter_when_the_demand_governs() -> None:
@@ -247,6 +249,54 @@ def test_the_first_design_respects_the_spacing_limit_of_the_finished_beam() -> N
     assert beam.shear_design.s_l <= beam._d_shear / 2
     assert beam.shear_design.s_l == 27 * cm
     assert "stirrup_spacing_exceeds_max" not in [w.code for w in beam.warnings]
+
+
+@pytest.mark.parametrize(
+    "width, height, f_c, V_z, d_b, s_l",
+    [(30, 40, 20, 180, 8, 9), (25, 50, 25, 300, 8, 6)],
+    ids=["threshold-crossing", "area-short"],
+)
+def test_the_stirrups_are_sized_at_the_depth_of_their_own_diameter(
+    width: int, height: int, f_c: int, V_z: int, d_b: int, s_l: int
+) -> None:
+    """CIRSOC 201-25, c_c 25 mm, ADN 420, Mu = 60 kNm on the two beams of the ids.
+
+    30x40, f'c 20, Vu 180 kN, designed with 2Ø16 + 1Ø12 at the bottom: the
+    bars' centroid sits 7.56 mm in, so with a Ø8 stirrup d = 400 - 25 - 8 -
+    7.56 = 359.44 mm, phi*Vc = 0.75*0.17*sqrt(20)*300*359.44 = 61.5 kN and
+    Vs,req = (180 - 61.5)/0.75 = 158.0 kN, under the 0.33*sqrt(20)*300*359.44
+    = 159.1 kN threshold of Tabla 9.7.6.2.2: s_max,l = d/2 = 17.97 cm.
+    A_v,req = 158.0 kN / (420 MPa * 359.44 mm) = 10.47 cm²/m, which two Ø8
+    legs (1.005 cm²) cover at 9 cm (11.17 cm²/m). With a Ø10 stirrup d is
+    357.44 mm, Vs,req = 158.5 kN crosses the threshold (158.3 kN) and s_max,l
+    halves to 8.94 cm. The design used to pass 10 → 8 → 10, hit its cap and
+    apply the Ø10 row sized at the Ø8 depth, 1eØ10/15: DCR 1.005 and the
+    spacing 1.7 times its limit, unwarned by the design.
+
+    25x50, f'c 25, Vu 300 kN: the same loop applied 1eØ10/10 with A_v = 15.71
+    cm²/m against the 15.78 its own depth asks for, DCR 1.0035. Sized at its
+    own depth every row of the table covers its own demand and spacing limit.
+    """
+    beam = RectangularBeam(
+        label="V",
+        concrete=Concrete_CIRSOC_201_25(name="H", f_c=f_c * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=width * cm,
+        height=height * cm,
+        c_c=25 * mm,
+    )
+    Node(section=beam, forces=[Forces(label="ELU", V_z=V_z * kN, M_y=60 * kNm)]).design()
+    design = beam.shear_design
+
+    assert (design.d_b, design.s_l) == (d_b * mm, s_l * cm)
+    assert design.DCR <= 1.0
+    assert design.A_v >= design.A_v_req
+    assert design.s_l <= beam._stirrup_s_max_l
+    assert "stirrup_spacing_exceeds_max" not in [w.code for w in beam.warnings]
+    table = beam.shear_design_results
+    assert all(row.A_v >= row.A_v_req for row in table.itertuples())
+    assert all(row.s_l <= row.s_max_l for row in table.itertuples())
+    assert len(table) == 4, "one row per bar CIRSOC offers, each sized at its own depth"
 
 
 def test_en_design_is_repeatable_and_reports_options() -> None:

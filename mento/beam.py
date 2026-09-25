@@ -1034,13 +1034,6 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         """
         return self.mode == "slab"
 
-    #: Passes of the stirrup design over its own diameter. The effective depth
-    #: depends on the stirrup, and the stirrup on the demand read at that depth,
-    #: so the design is repeated with the diameter it chose until it chooses the
-    #: same one. It settles in two passes; the cap only stops a pair of
-    #: diameters that keep trading places.
-    _STIRRUP_DESIGN_PASSES = 3
-
     def _shear_demand(self, forces: list[Forces]) -> Tuple[Quantity, Quantity]:
         """The governing ``(A_v_req, V_s_req)`` over the combinations, at the current depth."""
         max_A_v_req = 0 * cm**2 / m
@@ -1060,32 +1053,34 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
 
         The design starts from the stirrup diameter a first design assumes, not
         from the one the section carries, so it gives the same stirrups however
-        many times it runs. It then repeats itself with the diameter it chose
-        until the choice holds, so the demand and the spacing limits are read at
-        the effective depth the finished section has.
+        many times it runs. The effective depth depends on the stirrup, and the
+        demand and the spacing limits on the effective depth, so the search
+        sizes every bar diameter it offers at the depth that diameter gives
+        (:meth:`~mento.rebar.Rebar._transverse_rebar_beam`): what it applies
+        was chosen against the section it makes, and passes its own check by
+        construction. The design used to be re-run with the diameter it chose
+        until the choice held, and a pair of diameters that kept trading places
+        -- 8 → 10 → 8 -- left the last one applied against the demand of the
+        other.
         """
         self._shear_options = ()
         self._stirrup_d_b = self._design_start_stirrup()
         self._update_longitudinal_rebar_attributes()
 
-        for _ in range(self._STIRRUP_DESIGN_PASSES):
-            max_A_v_req, max_V_s_req = self._shear_demand(forces)
+        max_A_v_req, max_V_s_req = self._shear_demand(forces)
 
-            if self._stirrups_optional and max_A_v_req <= 0 * cm**2 / m:
-                # No combination asks for shear reinforcement and the code does not
-                # impose a minimum here, so the section is built without stirrups.
-                self._clear_transverse_rebar_design()
-                self._update_longitudinal_rebar_attributes()
-                return self.check_shear(forces)
-
-            section_rebar = Rebar(self)
-            self.shear_design_results = section_rebar.transverse_rebar(max_A_v_req, max_V_s_req, self._alpha)
-            self._best_rebar_design = section_rebar.transverse_rebar_design
-            chosen = self._best_rebar_design["d_b"]
-            if chosen == self._stirrup_d_b:
-                break
-            self._stirrup_d_b = chosen
+        if self._stirrups_optional and max_A_v_req <= 0 * cm**2 / m:
+            # No combination asks for shear reinforcement and the code does not
+            # impose a minimum here, so the section is built without stirrups.
+            self._clear_transverse_rebar_design()
             self._update_longitudinal_rebar_attributes()
+            return self.check_shear(forces)
+
+        section_rebar = Rebar(self)
+        self.shear_design_results = section_rebar.transverse_rebar(
+            max_A_v_req, max_V_s_req, self._alpha, demand=lambda: self._shear_demand(forces)
+        )
+        self._best_rebar_design = section_rebar.transverse_rebar_design
 
         self._stirrup_s_l = self._best_rebar_design["s_l"]
         self._stirrup_s_w = self._best_rebar_design["s_w"]
