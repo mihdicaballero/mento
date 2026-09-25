@@ -193,8 +193,9 @@ ES.update(
     {
         "bottom face": "cara inferior",
         "top face": "cara superior",
-        "Steel on the {face}: A_s = {A_s} is below the minimum A_s,min = {A_s_min}.": (
-            "Armadura en la {face}: A_s = {A_s} es menor que la mínima A_s,mín = {A_s_min}."
+        "Steel on the {face}: A_s = {A_s} is below the minimum it has to meet, A_s,min,eff = {A_s_min_eff}.": (
+            "Armadura en la {face}: A_s = {A_s} es menor que la mínima que tiene que cumplir, "
+            "A_s,mín,ef = {A_s_min_eff}."
         ),
         "Steel on the {face}: A_s = {A_s} exceeds the maximum A_s,max = {A_s_max}.": (
             "Armadura en la {face}: A_s = {A_s} supera la máxima A_s,máx = {A_s_max}."

@@ -21,8 +21,12 @@ Codes
 -----
 ``As_below_min``
     A face carries less steel than its minimum, and the 4/3 relief of
-    ACI 318-19 §9.6.1.3 / CIRSOC 201-25 §9.6.1.3 does not cover it. The
-    minimum it quotes is the one left after that relief, ``A_s_min_eff``.
+    ACI 318-19 §9.6.1.3 / CIRSOC 201-25 §9.6.1.3 does not cover it. Its
+    ``values`` carry ``A_s_min`` as the clause writes it -- the number
+    ``flexure_design.<face>.A_s_min`` and the report's As,min column also
+    carry -- and ``A_s_min_eff``, the one left after that relief, which is
+    the one the face is short of and the one the message quotes. Where
+    there is no relief (EN 1992-1-1, a slab, a footing) the two are equal.
 ``As_above_max``
     A face carries more steel than its maximum. Under ACI 318-19 and CIRSOC
     201-25 that is the tension face past the tension-controlled limit of
@@ -142,7 +146,9 @@ class _Raw:
 #: The English wording of each code; the text is also the key of the Spanish
 #: catalog in :mod:`mento.i18n`. ``{face}`` is filled with the translated face.
 _MESSAGES: Dict[str, str] = {
-    "As_below_min": "Steel on the {face}: A_s = {A_s} is below the minimum A_s,min = {A_s_min}.",
+    "As_below_min": (
+        "Steel on the {face}: A_s = {A_s} is below the minimum it has to meet, A_s,min,eff = {A_s_min_eff}."
+    ),
     "As_above_max": "Steel on the {face}: A_s = {A_s} exceeds the maximum A_s,max = {A_s_max}.",
     "clear_spacing_below_min": "Clear spacing between the bars on the {face}: {s} is below the minimum {s_min}.",
     "bar_spacing_below_min": "Bar spacing on the {face}: {s} is below the minimum {s_min}.",
@@ -242,10 +248,15 @@ def flexure_warnings(beam: "RectangularBeam", label: str, state: Any) -> List[_R
     tension_face = "bot" if M > 0 else "top" if M < 0 else None
     for suffix in ("bot", "top"):
         A_s: Quantity = getattr(beam, f"_A_s_{suffix}")
-        # The minimum the face has to meet, relief of §9.6.1.3 included; a
-        # code with no relief (EN 1992-1-1) leaves it at A_s_min.
-        A_s_min_raw = getattr(state, f"A_s_min_{suffix}")
-        A_s_min = _q(getattr(state, f"A_s_min_eff_{suffix}", A_s_min_raw), "area", beam).to(A_s.units)
+        # The minimum as the clause writes it, and the one the face has to
+        # meet, relief of §9.6.1.3 included; a code with no relief
+        # (EN 1992-1-1) has no second number and leaves it at A_s_min. The
+        # two go out under their own names: ``flexure_design.<face>.A_s_min``
+        # and the report's As,min column carry the clause value, so the
+        # warning cannot file the relieved one under the same name.
+        A_s_min = _q(getattr(state, f"A_s_min_{suffix}"), "area", beam).to(A_s.units)
+        A_s_min_eff = _q(getattr(state, f"A_s_min_eff_{suffix}", getattr(state, f"A_s_min_{suffix}")), "area", beam)
+        A_s_min_eff = A_s_min_eff.to(A_s.units)
         if ductility_limit:
             limit = getattr(state, f"A_s_max_eff_{suffix}")
             applies = suffix == tension_face
@@ -253,14 +264,14 @@ def flexure_warnings(beam: "RectangularBeam", label: str, state: Any) -> List[_R
             limit = getattr(state, f"A_s_max_{suffix}")
             applies = not doubly
         A_s_max = _q(limit, "area", beam).to(A_s.units)
-        if A_s < A_s_min and not math.isclose(A_s.magnitude, A_s_min.magnitude):
+        if A_s < A_s_min_eff and not math.isclose(A_s.magnitude, A_s_min_eff.magnitude):
             found.append(
                 _Raw(
                     "As_below_min",
-                    {"A_s": A_s, "A_s_min": A_s_min},
+                    {"A_s": A_s, "A_s_min": A_s_min, "A_s_min_eff": A_s_min_eff},
                     _face_name(suffix),
                     label,
-                    severity=float((A_s_min - A_s).magnitude),
+                    severity=float((A_s_min_eff - A_s).magnitude),
                 )
             )
         if applies and A_s_max.magnitude > 0 and A_s > A_s_max and not math.isclose(A_s.magnitude, A_s_max.magnitude):

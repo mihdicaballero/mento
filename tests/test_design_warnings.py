@@ -504,7 +504,37 @@ def test_layout_short_of_four_thirds_still_warns() -> None:
     top = beam.flexure_design.top
     assert top.A_s_calc < top.A_s < top.A_s_min_eff
     warning = next(w for w in node.warnings if w.code == "As_below_min")
-    assert warning.values["A_s_min"].to("cm**2").magnitude == pytest.approx(top.A_s_min_eff.to("cm**2").magnitude)
+    assert warning.values["A_s_min_eff"].to("cm**2").magnitude == pytest.approx(top.A_s_min_eff.to("cm**2").magnitude)
+
+
+def test_the_warning_names_the_clause_minimum_and_the_one_the_face_has_to_meet() -> None:
+    """CIRSOC 201-25 20x60, Mu = -45 kNm, top 2Ø12 = 2.26 cm², 1eØ8.
+
+    d = 600 - 25 - 8 - 6 = 561 mm. §9.6.1.2: A_s,min = max(0.25*sqrt(25)/420,
+    1.4/420)*200*561 = 0.003333*112 200 = 3.74 cm²; A_s,calc = 2.16 cm² and
+    §9.6.1.3 relieves the face to 4/3 of it, A_s,min,eff = 2.88 cm². The
+    same name cannot carry both numbers: ``flexure_design.top.A_s_min`` and
+    the report's As,min column carry 3.74, so ``values["A_s_min"]`` does
+    too, and the one the face is short of -- 2.88, which bd94d2f filed under
+    ``A_s_min`` -- is ``A_s_min_eff``, which the message quotes.
+    """
+    beam = _cirsoc_section("beam")
+    beam.set_longitudinal_rebar_top(n1=2, d_b1=12 * mm)
+    beam.set_longitudinal_rebar_bot(n1=2, d_b1=12 * mm)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=20 * cm)
+    node = Node(section=beam, forces=[Forces(label="U", V_z=40 * kN, M_y=-45 * kNm)])
+    node.check()
+
+    warning = _by_code(node.warnings)["As_below_min"]
+    assert warning.face == "top"
+    assert warning.values["A_s"].to("cm**2").magnitude == pytest.approx(2.26, abs=0.01)
+    assert warning.values["A_s_min"].to("cm**2").magnitude == pytest.approx(3.74, abs=0.01)
+    assert warning.values["A_s_min_eff"].to("cm**2").magnitude == pytest.approx(2.88, abs=0.01)
+    assert warning.values["A_s_min"] == beam.flexure_design.top.A_s_min
+    assert "A_s,min,eff = 2.88 cm²" in warning.message
+    assert "3.74" not in warning.message
+    mento.set_language("es")
+    assert "A_s,mín,ef = 2.88 cm²" in _by_code(node.warnings)["As_below_min"].message
 
 
 def test_en_minimum_is_not_relieved() -> None:
