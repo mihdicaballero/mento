@@ -140,6 +140,16 @@ class DesignCode:
     #: they do -- EN 1992-1-1 §9.2.1.1(3), "tension or compression
     #: reinforcement". Read by the warnings and the report tables.
     max_steel_is_ductility_limit: bool = False
+    #: Does ``face`` of a beam, in tension, keep within the limits this code
+    #: puts on its reinforcement with the layout the section carries?
+    #: ``(beam, face) -> bool``. Strength alone does not say it: ACI 318-19 /
+    #: CIRSOC 201-25 §9.3.3.1 hold a beam tension-controlled, past which the
+    #: capacity only drops through phi and may still reach the moment; EN
+    #: 1992-1-1 §9.2.1.1(3) caps either face at A_s,max, and bars past it add
+    #: resistance a design must not rely on. What a design's own verification
+    #: and the alternatives it offers are held to. ``None`` where the code
+    #: states no such limit, read as every layout admissible.
+    flexure_admissible: Callable[..., bool] | None = None
 
     def requires(self, hook: str) -> Callable[..., Any]:
         """The hook, or a clear error naming the code that lacks it."""

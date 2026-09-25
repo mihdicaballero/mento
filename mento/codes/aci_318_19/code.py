@@ -45,6 +45,7 @@ from mento.codes.ACI_318_19_beam import (
     _check_shear_ACI_318_19,
     _design_flexure_ACI_318_19,
     _design_shear_ACI_318_19,
+    _flexure_ductile_ACI_318_19,
 )
 from mento.codes.ACI_318_19_punching import check_punching_ACI_318_19
 from mento.codes.ACI_318_19_wall import _check_shear_ACI_318_19_wall, _design_shear_ACI_318_19_wall
@@ -406,8 +407,10 @@ _COMMON = dict(
     # §13.3.1.2 is written on d, not on h, so there is no overall-thickness
     # hook for these two codes; ``min_thickness_on_soil`` stays unset.
     min_effective_depth_on_soil=_min_effective_depth_on_soil,
-    # A_s,max is the tension-controlled limit of §9.3.3.1 (Table 21.2.2).
+    # A_s,max is the tension-controlled limit of §9.3.3.1 (Table 21.2.2), and
+    # that is the limit a layout is held to, compression steel included.
     max_steel_is_ductility_limit=True,
+    flexure_admissible=_flexure_ductile_ACI_318_19,
 )
 
 ACI_318_19 = register(

@@ -90,11 +90,20 @@ class RebarOption:
     diameters and the use of a second layer. It is ``None`` for a layout the
     search did not score -- a footing mat, which is chosen afterwards and as a
     whole.
+
+    ``DCR`` is the worst demand-capacity ratio in flexure of the finished
+    section with this layout on its face and the other face as applied --
+    both faces, every combination the design was run for. An alternative is
+    only offered when that ratio is at most 1, the bars fit beside the
+    stirrups the design finished with, and the section keeps within the code's
+    limits on its reinforcement with it; the applied layout carries its own,
+    whatever it is. ``None`` on an option that has not been verified.
     """
 
     layers: Tuple[RebarLayer, ...]
     A_s: Quantity
     functional: Optional[float] = None
+    DCR: Optional[float] = None
 
     @property
     def n_bars(self) -> int:
@@ -411,8 +420,12 @@ class FlexureFaceDesign:
     and complies.
 
     ``options`` are the layouts the last design found for this face, best
-    first; ``options[0]`` is the one applied. Empty when the face was not
-    designed, or when its bars were changed by hand after the design.
+    first; ``options[0]`` is the one applied. The rest were each built on
+    the finished section -- the stirrups the design ended with, the other
+    face as applied -- and kept only if the section carries both moments
+    with it, within the code's limits on its reinforcement; each carries the
+    ``DCR`` it was kept at. Empty when the face was not designed, or when its
+    bars were changed by hand after the design.
 
     ``M_capacity`` is the design moment resistance of the face as reinforced
     -- ``ØMn`` under ACI 318-19 and CIRSOC 201-25, ``MRd`` under EN 1992-1-1

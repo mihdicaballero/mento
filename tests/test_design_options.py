@@ -118,6 +118,91 @@ def test_options_are_dropped_once_the_bars_are_changed_by_hand() -> None:
     assert beam.shear_design.options == ()
 
 
+def test_longitudinal_alternatives_are_verified_on_the_finished_beam() -> None:
+    """20x60 H25 ADN 420, +150 / -40 kNm: 2Ø20 + 1Ø16 at the bottom, 2Ø12 + 1Ø10 on top, 1eØ10/13.
+
+    An option's DCR is the worst ratio of the finished beam with that layout
+    on its face and the other face as applied. Rebuilt by hand with the
+    stirrup the design ended with, d = 600 - 25 - 10 - d_b/2: 2Ø20 + 1Ø20 =
+    9.42 cm² at d = 555 mm, a = 942.5*420/(0.85*25*200) = 93.1 mm, phi*Mn =
+    0.9*942.5*420*(555 - 46.6) = 181.1 kNm, 150/181.1 = 0.828; 2Ø25 = 9.82
+    cm² at 552.5 mm, a = 97.0 mm, phi*Mn = 187.0 kNm, 0.802.
+    """
+    beam = _designed(TWO_FACES)
+    flexure = beam.flexure_design
+    options = flexure.bottom.options
+
+    assert [str(o) for o in options] == ["2Ø20 mm + 1Ø16 mm", "2Ø20 mm + 1Ø20 mm", "2Ø25 mm"]
+    assert options[0].DCR == pytest.approx(flexure.DCR)
+    assert all(o.DCR is not None and o.DCR <= 1.0 for o in options)
+    assert [round(o.DCR, 3) for o in options] == [0.930, 0.828, 0.802]  # type: ignore[arg-type]
+    assert all(o.DCR == options[0].DCR for o in flexure.top.options)  # the bottom governs all three
+
+    for option, layout in (
+        (options[1], dict(n1=2, d_b1=20 * mm, n2=1, d_b2=20 * mm)),
+        (options[2], dict(n1=2, d_b1=25 * mm)),
+    ):
+        rebuilt = _aci_beam()
+        rebuilt.set_longitudinal_rebar_bot(**layout)  # type: ignore[arg-type]
+        rebuilt.set_longitudinal_rebar_top(n1=2, d_b1=12 * mm, n2=1, d_b2=10 * mm)
+        rebuilt.set_transverse_rebar(n_stirrups=1, d_b=10 * mm, s_l=13 * cm)
+        Node(section=rebuilt, forces=TWO_FACES).check()
+        assert rebuilt.flexure_design.DCR == pytest.approx(option.DCR)
+
+
+def test_an_alternative_short_of_the_moment_on_the_finished_beam_is_dropped() -> None:
+    """20x60 H25 ADN 420, Mu = 80 kNm: 2Ø16 applied (A_s,req 3.94 cm²), 1eØ10/27.
+
+    The search also ranked 2Ø10 + 1Ø10 in one layer with 2Ø10 behind, 3.93
+    cm²: enough for the 3.92 cm² its own iteration asked for, read with the
+    8 mm starter stirrup, and short of the finished beam's 3.94. Built by
+    hand: centroid (3*5 + 2*40)/5 = 19 mm, d = 600 - 25 - 10 - 19 = 546 mm,
+    a = 392.7*420/(0.85*25*200) = 38.8 mm, phi*Mn = 0.9*392.7*420*(546 -
+    19.4) = 78.2 kNm, 80/78.2 = 1.023. It used to be offered as options[2].
+    """
+    beam = _designed([Forces(label="ELU", M_y=80 * kNm)])
+    options = beam.flexure_design.bottom.options
+
+    assert str(options[0]) == "2Ø16 mm"
+    assert "2Ø10 mm + 1Ø10 mm + 2Ø10 mm" not in [str(o) for o in options]
+    assert all(o.DCR is not None and o.DCR <= 1.0 for o in options)
+
+    beam.set_longitudinal_rebar_bot(n1=2, d_b1=10 * mm, n2=1, d_b2=10 * mm, n3=2, d_b3=10 * mm)
+    Node(section=beam, forces=[Forces(label="ELU", M_y=80 * kNm)]).check()
+    assert beam.flexure_design.DCR == pytest.approx(1.023, abs=0.001)
+
+
+def test_a_compression_face_alternative_that_fails_the_other_face_is_dropped() -> None:
+    """EN 20x60 C25 B500S, M_Ed = +400 kNm, V_Ed = 250 kN: doubly reinforced.
+
+    Bottom 2Ø25 + 2Ø25, top 2Ø25 + 1Ø20 (12.96 cm², d' = 46.9 mm), bottom
+    DCR 0.996 at M_Rd 401.5 kNm. The search ranked 2Ø32 for the top by area
+    alone (16.09 cm², more steel), but its centroid sits at d' = 51 mm, the
+    compression steel reaches less stress at the ductility limit and the
+    couple gives less: M_Rd 399.6 kNm, bottom DCR 1.001. An alternative of
+    the top face that fails the bottom is not an alternative.
+    """
+    beam = RectangularBeam(
+        label="V",
+        concrete=Concrete_EN_1992_2004(name="C25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="B500S", f_y=500 * MPa),
+        width=20 * cm,
+        height=60 * cm,
+        c_c=25 * mm,
+    )
+    forces = [Forces(label="ELU", M_y=400 * kNm, V_z=250 * kN)]
+    Node(section=beam, forces=forces).design()
+    top = beam.flexure_design.top.options
+
+    assert str(top[0]) == "2Ø25 mm + 1Ø20 mm"
+    assert "2Ø32 mm" not in [str(o) for o in top]
+    assert all(o.DCR is not None and o.DCR <= 1.0 for o in top)
+
+    beam.set_longitudinal_rebar_top(n1=2, d_b1=32 * mm)
+    Node(section=beam, forces=forces).check()
+    assert beam.flexure_design.bottom.DCR == pytest.approx(1.001, abs=0.0005)
+
+
 def test_slab_options_read_as_spacings() -> None:
     slab = OneWaySlab(
         label="L1",

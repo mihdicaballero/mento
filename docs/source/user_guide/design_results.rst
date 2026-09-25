@@ -159,7 +159,12 @@ Design alternatives
 -------------------
 
 A design ranks every layout that fits and applies the best one. The runners-up are kept
-too, best first, with the applied layout always in first place:
+too, best first, with the applied layout always in first place -- but only the ones the
+finished section passes with. Each longitudinal alternative is built on the beam as the
+design left it, with the stirrups it ended with and the other face as applied, and kept
+if the beam carries both moments with it within the code's limits on its reinforcement
+(tension-controlled under ACI 318-19 / CIRSOC 201-25, the 4 % of EN 1992-1-1); its
+``DCR`` says at what ratio.
 
 .. code-block:: python
 
