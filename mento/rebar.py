@@ -670,6 +670,26 @@ class Rebar:
             skip_limit_cm2 = min(skip_limit_cm2, A_s_max.to("cm**2").magnitude)
         max_limit_cm2 = max(skip_limit_cm2, n1 * self.rebar_areas[self.min_long_rebar].to("cm**2").magnitude)
 
+        # The loops reach the same layout many times: a group with no bars has no
+        # diameter, so every d_b2..d_b4 it is paired with yields the same row.
+        # Only the first is kept. The key holds bar counts and indices into
+        # valid_rebar_diameters, never Quantities: hashing a Quantity converts it
+        # to base units, which made the old drop_duplicates on the DataFrame the
+        # largest single cost of the flexure design.
+        seen_layouts: set[tuple[int, ...]] = set()
+
+        def keep_layout(
+            i1: int, n2: int, i2: int, n3: int, i3: int, n4: int, i4: int, total_as_cm2: float, clear_mm: float
+        ) -> None:
+            key = (i1, n2, i2 if n2 > 0 else -1, n3, i3 if n3 > 0 else -1, n4, i4 if n4 > 0 else -1)
+            if key in seen_layouts:
+                return
+            seen_layouts.add(key)
+            d = valid_rebar_diameters
+            valid_combinations.append(
+                self._long_combo(n1, d[i1], n2, d[i2], n3, d[i3], n4, d[i4], total_as_cm2, clear_mm)
+            )
+
         # valid_rebar_diameters is ascending, so "every diameter <= d_bN" is a
         # prefix of it and the nested loops can walk indices instead of
         # re-filtering the list with a pint comparison on each pass.
@@ -725,9 +745,7 @@ class Rebar:
                             # And also less than the maximum limit
                             if A_s_layer_1 >= A_s_req_cm2 and A_s_layer_1 <= max_limit_cm2:
                                 # Only consider layer 1 — no bars in layer 2
-                                valid_combinations.append(
-                                    self._long_combo(n1, d_b1, n2, d_b2, 0, None, 0, None, A_s_layer_1, clear_mm)
-                                )
+                                keep_layout(i1, n2, i2, 0, i3, 0, i4, A_s_layer_1, clear_mm)
                             else:
                                 # Track the combination with the maximum possible area (fallback)
                                 if A_s_layer_1 > max_fallback_cm2 and A_s_layer_1 <= max_limit_cm2:
@@ -760,9 +778,7 @@ class Rebar:
                                     # --- Compute total reinforcement and evaluate -----------
                                     total_as = A_s_layer_1 + A_s_layer_2
                                     if total_as >= A_s_req_cm2 and total_as <= max_limit_cm2:
-                                        valid_combinations.append(
-                                            self._long_combo(n1, d_b1, n2, d_b2, n3, d_b3, n4, d_b4, total_as, clear_mm)
-                                        )
+                                        keep_layout(i1, n2, i2, n3, i3, n4, i4, total_as, clear_mm)
                                     else:
                                         # Track fallback combination with maximum As
                                         if total_as > max_fallback_cm2 and total_as <= max_limit_cm2:
@@ -786,11 +802,7 @@ class Rebar:
 
                                         total_as = A_s_layer_1 + A_s_layer_2
                                         if total_as >= A_s_req_cm2 and total_as <= max_limit_cm2:
-                                            valid_combinations.append(
-                                                self._long_combo(
-                                                    n1, d_b1, n2, d_b2, n3, d_b3, n4, d_b4, total_as, clear_mm
-                                                )
-                                            )
+                                            keep_layout(i1, n2, i2, n3, i3, n4, i4, total_as, clear_mm)
                                         else:
                                             if total_as > max_fallback_cm2 and total_as <= max_limit_cm2:
                                                 max_fallback_cm2 = total_as
@@ -798,10 +810,8 @@ class Rebar:
                                                     n1, d_b1, n2, d_b2, n3, d_b3, n4, d_b4, total_as, clear_mm
                                                 )
 
-        # Convert valid combinations to DataFrame
+        # Convert valid combinations to DataFrame (already free of repeated layouts)
         df = pd.DataFrame(valid_combinations)
-        # Drop duplicate rows based on the specified columns
-        df = df.drop_duplicates(subset=["n_1", "d_b1", "n_2", "d_b2", "n_3", "d_b3", "n_4", "d_b4"])
 
         # If no valid combinations satisfy A_s_req, use the best fallback combination
         if df.empty and best_fallback_combination is not None:
