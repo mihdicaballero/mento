@@ -389,6 +389,79 @@ def test_wall_mesh_spacing_names_the_limit_as_mentos_own() -> None:
     assert "el límite que aplica mento" in wall.warnings[0].message
 
 
+def test_stirrup_legs_too_far_apart_across_the_width_are_worded_as_such() -> None:
+    """ACI 318-19 80x40 H25, 4Ø16 at the bottom, 1eØ8/15, Vu = 250 kN.
+
+    One closed stirrup has two legs, and across 80 cm they sit
+    800 - 2*25 - 8 = 742 mm apart, centre to centre. With d = 400 - 25 - 8 -
+    8 = 359 mm, phi*Vc = 0.75*0.17*sqrt(25)*800*359 = 183.1 kN and
+    Vs,req = (250 - 183.1)/0.75 = 89.2 kN, under the 0.33*sqrt(25)*800*359 =
+    473.9 kN of Table 9.7.6.2.2: the legs may be up to d = 359 mm apart
+    across the width. The along-the-member spacing of 15 cm is within d/2.
+    The width direction carries a template of its own, in both languages.
+    """
+    beam = _beam(width=80 * cm, height=40 * cm)
+    beam.set_longitudinal_rebar_bot(n1=4, d_b1=16 * mm)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=15 * cm)
+    node = Node(section=beam, forces=[Forces(label="V", V_z=250 * kN)])
+    node.check()
+
+    spacing = [w for w in node.warnings if w.code == "stirrup_spacing_exceeds_max"]
+    assert len(spacing) == 1
+    assert spacing[0].values["s"].to("mm").magnitude == pytest.approx(742)
+    assert spacing[0].values["s_max"].to("mm").magnitude == pytest.approx(359)
+    assert spacing[0].message == "Stirrup leg spacing across the width: 74.2 cm exceeds the maximum 35.9 cm."
+    mento.set_language("es")
+    assert _by_code(node.warnings)["stirrup_spacing_exceeds_max"].message == (
+        "Separación de las ramas de estribo en el ancho: 74.2 cm supera la máxima 35.9 cm."
+    )
+
+
+def test_the_other_direction_of_each_wall_mesh_limit_is_worded_as_such() -> None:
+    """ACI 318-19 wall 25x150, hw = 3 m, Ø10/20 horizontal, Ø16/60 vertical, Vu = 900 kN.
+
+    Horizontal: 2 curtains of Ø10 at 200 mm give rho_t = 2*78.54/(250*200) =
+    0.00314. hw/lw = 2, so alpha_c = 0.17 and phi*Vn >= Vu asks for
+    rho_t = (900/0.75 - 0.17*sqrt(25)*250*1500)/(250*1500*420) = (1200 -
+    318.75)/157.5 = 0.0056 (§11.5.4.3). Vertical: §11.7.2.1 with lw/3 taken
+    always caps the spacing at min(3*250, 450, 1500/3) = 450 mm, and the bars
+    sit at 600. Each is the direction the other wall test does not word.
+    """
+    from mento import ShearWall
+    from mento.units import m
+
+    wall = ShearWall(
+        label="W",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        thickness=25 * cm,
+        length=1.5 * m,
+        height=3.0 * m,
+        c_c=20 * mm,
+    )
+    wall.set_horizontal_rebar(d_b=10 * mm, s=20 * cm)
+    wall.set_vertical_rebar(d_b=16 * mm, s=60 * cm)
+    wall.shear_check_results([Forces(label="E", V_z=900 * kN)])
+
+    found = _by_code(wall.warnings)
+    assert (
+        found["mesh_ratio_below_min"].message == "Horizontal wall mesh: ρt = 0.00314 is below the required ρt = 0.0056."
+    )
+    assert found["mesh_spacing_exceeds_max"].message == (
+        "Vertical wall mesh spacing: 60 cm exceeds the limit mento applies, 45 cm "
+        "(§11.7.2.1 with lw/3 taken always: conservative)."
+    )
+    mento.set_language("es")
+    found = _by_code(wall.warnings)
+    assert found["mesh_ratio_below_min"].message == (
+        "Malla horizontal del muro: ρt = 0.00314 es menor que la requerida ρt = 0.0056."
+    )
+    assert found["mesh_spacing_exceeds_max"].message == (
+        "Separación de la malla vertical del muro: 60 cm supera el límite que aplica mento, 45 cm "
+        "(§11.7.2.1 con lw/3 siempre: conservador)."
+    )
+
+
 def test_an_unlabelled_combination_is_named_by_its_position() -> None:
     """The same poorly detailed beam under the same two forces without labels.
 
