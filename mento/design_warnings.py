@@ -207,21 +207,16 @@ def _fields(values: Mapping[str, Any]) -> Dict[str, str]:
     items = list(values.items())
     for digits in range(3, 10):
         fields = {name: _format(value, digits) for name, value in items}
+        # pint answers ``!=`` across units, and against a bare number, with
+        # True rather than an error, so the pairs need no sorting by kind.
         if all(
             fields[a] != fields[b]
             for i, (a, first) in enumerate(items)
             for b, second in items[i + 1 :]
-            if _differ(first, second)
+            if first != second
         ):
             break
     return fields
-
-
-def _differ(first: Any, second: Any) -> bool:
-    """Whether two quoted values are different numbers, units included."""
-    if isinstance(first, Quantity) != isinstance(second, Quantity):
-        return True
-    return bool(first != second)
 
 
 def _q(value: float, kind: str, beam: "RectangularBeam") -> Quantity:
