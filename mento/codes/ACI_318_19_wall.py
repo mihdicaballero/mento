@@ -10,7 +10,7 @@ from mento.codes.aci_318_19.equations import wall as wall_eq
 from mento.codes.check_state import WallShearCheckState, apply_wall_shear_state, new_wall_shear_state
 from mento.codes.registry import design_code
 from mento.material import Concrete_ACI_318_19
-from mento.units import MPa, cm, mm, psi, inch, dimensionless
+from mento.units import MPa, cm, kN, kip, mm, psi, inch, dimensionless
 from mento.forces import Forces
 
 if TYPE_CHECKING:
@@ -61,6 +61,18 @@ _WALL_BAR_CAP_IMPERIAL = 0.5 * inch  # #4
 def _wall_units(self: "ShearWall") -> tuple[Quantity, Quantity]:
     """(stress, length) units for the wall's unit system."""
     return (psi, inch) if self.concrete.is_imperial else (MPa, mm)
+
+
+def _wall_force_unit(self: "ShearWall") -> Quantity:
+    """The force unit of the wall's unit system: kip, or kN.
+
+    Every force the check leaves on the state is converted to it, so the
+    public results and the compatibility attributes read in the section's
+    own system -- the promise of :mod:`mento.wall_results`, and what the
+    beam's ``ShearCheck`` does. ``new_wall_shear_state`` zeroes the state in
+    the same unit.
+    """
+    return kip if self.concrete.is_imperial else kN
 
 
 def _calculate_f_yt_wall(self: "ShearWall") -> Quantity:
@@ -166,11 +178,15 @@ def _calculate_wall_shear_strength(
     but the factor is not in the clause and the signature is due a fix.
 
     φ = 0.75 per ACI 318-19 Table 21.2.1(b) / CIRSOC 201-25 Table 21.2.1(b).
+
+    The forces are stored in the wall's own force unit (kip, or kN): the
+    public results promise the section's unit system.
     """
     lam = concrete.lambda_factor
     phi_v = concrete.phi_v
     is_imperial = concrete.is_imperial
     stress_unit, _ = _wall_units(self)
+    force_unit = _wall_force_unit(self)
     f_c_mag = concrete.f_c.to(stress_unit).magnitude
 
     Vc = wall_eq.concrete_shear_stress(f_c_mag, st.alpha_c, lam) * stress_unit * st.Acv
@@ -182,12 +198,12 @@ def _calculate_wall_shear_strength(
     )
     Vn = Vc + Vs
 
-    st.V_c_wall = Vc.to("kN")  # type:ignore
-    st.V_s_wall = Vs.to("kN")  # type:ignore
-    st.V_n_wall = Vn.to("kN")  # type:ignore
-    st.V_n_max = Vn_max.to("kN")  # type:ignore
-    st.phi_V_n_wall = (phi_v * min(Vn, Vn_max)).to("kN")  # type:ignore
-    st.phi_V_n_max_wall = (phi_v * Vn_max).to("kN")  # type:ignore
+    st.V_c_wall = Vc.to(force_unit)  # type:ignore
+    st.V_s_wall = Vs.to(force_unit)  # type:ignore
+    st.V_n_wall = Vn.to(force_unit)  # type:ignore
+    st.V_n_max = Vn_max.to(force_unit)  # type:ignore
+    st.phi_V_n_wall = (phi_v * min(Vn, Vn_max)).to(force_unit)  # type:ignore
+    st.phi_V_n_max_wall = (phi_v * Vn_max).to(force_unit)  # type:ignore
 
 
 def _calculate_rho_min_wall(self: "ShearWall", st: WallShearCheckState) -> None:
@@ -283,9 +299,10 @@ def _check_shear_ACI_318_19_wall(self: "ShearWall", force: Forces) -> WallShearC
     concrete = self.concrete
     st = new_wall_shear_state(self)
 
-    # 1. Demand
-    st.V_u = abs(force._V_z.to("kN"))
-    st.N_u = force._N_x.to("kN")
+    # 1. Demand, in the wall's own force unit
+    force_unit = _wall_force_unit(self)
+    st.V_u = abs(force._V_z.to(force_unit))
+    st.N_u = force._N_x.to(force_unit)
 
     # 2. Geometry: Acv = lw × t
     _calculate_wall_Acv(self, st)

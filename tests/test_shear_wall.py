@@ -556,6 +556,37 @@ class TestImperialWall:
         assert wall_imperial._s_v.magnitude > 0
         assert wall_imperial._rho_t.to("").magnitude >= wall_imperial._rho_t_req.to("").magnitude - 1e-9
 
+    def test_imperial_results_are_in_kip(self, wall_imperial: ShearWall) -> None:
+        """The public results and the detail table read in the wall's own unit system.
+
+        ACI 318-19 §11.5.4.2 and Eq. (11.5.4.3) in in-lb, by hand:
+            Acv = 10·160 = 1600 in², hw/lw = 0.75 → αc = 3
+            Vc = 3·√4000·1600 = 303 579 lb = 303.58 kip
+            #4 @ 12 in E.F.: ρt = 2·0.19635/(10·12) = 0.0032725
+            Vs = 0.0032725·60 000·1600 = 314 159 lb = 314.16 kip
+            Vn,max = 8·√4000·1600 = 809 543 lb = 809.54 kip
+            ØVn = 0.75·(303.58 + 314.16) = 463.30 kip, ØVn,max = 607.16 kip
+            Vu = 100 kip → DCR = 0.2158
+        The check used to store every force in kN, so V_capacity read 2060.8 kN
+        and the detail table printed 2060.8 under a "kip" label.
+        """
+        wall_imperial.set_horizontal_rebar(d_b=0.5 * inch, s=12 * inch)
+        wall_imperial.set_vertical_rebar(d_b=0.5 * inch, s=12 * inch)
+        check = wall_imperial.shear_check_results([Forces(label="U1", V_z=100 * kip)])[0]
+        assert check.V_u.units == kip and check.V_capacity.units == kip and check.V_max.units == kip
+        assert check.V_u.magnitude == pytest.approx(100.0)
+        assert check.V_capacity.magnitude == pytest.approx(463.30, abs=0.01)
+        assert check.V_max.magnitude == pytest.approx(607.16, abs=0.01)
+        assert check.DCR == pytest.approx(0.2158, abs=1e-4)
+        assert check.s_h_max.units == inch
+
+        wall_imperial.check_shear([Forces(label="U1", V_z=100 * kip)])
+        assert wall_imperial._V_c_wall.units == kip
+        strength = wall_imperial._shear_capacity_wall
+        assert strength["Unit"][:4] == ["kip"] * 4
+        assert strength["Value"][:4] == pytest.approx([227.68, 235.62, 463.30, 607.16], abs=0.01)
+        assert wall_imperial.shear_design.V_capacity.units == kip
+
 
 # ---------------------------------------------------------------------------
 # Reporting, display, plot, and error paths (coverage)
