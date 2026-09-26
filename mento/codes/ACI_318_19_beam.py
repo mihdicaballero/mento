@@ -344,7 +344,14 @@ def _stirrup_compression_support_ACI_318_19(
 
     §9.7.6.4.1 of both codes asks for lateral support of the longitudinal
     compression reinforcement, wherever it is required, by closed stirrups
-    sized per §9.7.6.4.2 and spaced per §9.7.6.4.3. Which bars are
+    per §9.7.6.4.2 through §9.7.6.4.4. This reads the first two: the size of
+    §9.7.6.4.2 and the spacing of §9.7.6.4.3. §9.7.6.4.4 is not checked --
+    every corner and alternate compression bar enclosed by a stirrup corner
+    of at most 135°, and no bar farther than 150 mm clear along the stirrup
+    from an enclosed one (ACI 318-19 SI p. 148; CIRSOC 201-25 Cap. 9 p. 179
+    reads 15 d_b of the stirrup or 150 mm) -- because the section does not
+    say which bars the legs enclose: a wide compression face whose middle
+    bars sit far from the corners passes it silently. Which bars are
     compression reinforcement is the flexure check's to say: a combination
     that needs compression steel to carry its moment (``doubly_reinforced``)
     relies on the face opposite its tension face, and the last flexure check

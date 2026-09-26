@@ -110,6 +110,13 @@ Codes
     allows for the thickest compression bar, ``d_b_comp``, and the spacing
     §9.7.6.4.3 gives that stirrup, ``s_max``. No combination label, as
     above. A one-way slab is not held to it.
+
+    §9.7.6.4.1 sends the lateral support to §9.7.6.4.2 through §9.7.6.4.4,
+    and none of the three codes above reads the last: that every corner and
+    alternate compression bar sit in a stirrup corner of at most 135°, with
+    no bar farther than 150 mm clear (CIRSOC 201-25: 15 d_b of the stirrup or
+    150 mm) along the stirrup from one that does. mento does not know which
+    bars the legs enclose, so a wide compression face passes it unchecked.
 """
 
 from __future__ import annotations
