@@ -201,6 +201,10 @@ _MESSAGES: Dict[str, str] = {
         "Stirrup diameter {d_b} is below the minimum {d_b_min} that lateral support of "
         "Ø{d_b_comp} compression bars requires."
     ),
+    "stirrups_required_for_compression_support": (
+        "The section relies on Ø{d_b_comp} compression bars and has no stirrups to brace them: "
+        "closed stirrups of at least {d_b_min} at no more than {s_max} are required."
+    ),
 }
 
 _FACES = {"bottom": "bottom face", "top": "top face"}

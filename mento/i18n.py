@@ -269,6 +269,13 @@ ES.update(
             "Diámetro de estribo {d_b} menor que el mínimo {d_b_min} que exige el arriostramiento de "
             "barras comprimidas Ø{d_b_comp}."
         ),
+        (
+            "The section relies on Ø{d_b_comp} compression bars and has no stirrups to brace them: "
+            "closed stirrups of at least {d_b_min} at no more than {s_max} are required."
+        ): (
+            "La sección depende de barras comprimidas Ø{d_b_comp} y no tiene estribos que las arriostren: "
+            "hacen falta estribos cerrados de al menos {d_b_min} separados a lo sumo {s_max}."
+        ),
     }
 )
 
