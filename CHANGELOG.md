@@ -24,35 +24,45 @@ from the release history and are summaries rather than complete lists.
   layout per other bar diameter the code offers, lighter and heavier alike, each sized at
   its own depth; `functional` says what each one adds in steel, the excess of `A_v` over
   its own requirement plus one per extra stirrup. An alternative, longitudinal or
-  transverse, is offered only if the finished section passes with it, and carries the
-  `DCR` it passes at. Which layout is built is unchanged: fewest stirrups first, least
-  steel among those. How many options are kept is at most
-  `BeamSettings(design_options=3)`. A check reports none, a footing offers none, and a
-  face changed by hand after the design drops its own.
+  transverse, is offered only if the finished section passes with it, and carries its
+  `section_DCR`: the worst ratio of the section built with that option — flexure on both
+  faces and the shear, under every combination — not the ratio of the result it hangs off
+  (an ACI 20×50 under 100 kN·m and 120 kN has `shear_design.DCR` 0.748 and
+  `shear_design.options[0].section_DCR` 0.993, the flexure's). A full `design()` verifies
+  the alternatives once, on the section it finishes with. Which layout is built is
+  unchanged: fewest stirrups first, least steel among those. How many options are kept is
+  at most `BeamSettings(design_options=3)`. A check reports none, a footing offers none,
+  and a face changed by hand after the design drops its own.
 
 - **Detailing limits are reported as data.** `beam.warnings` and `node.warnings` are tuples
   of `DesignWarning` with a stable `code` (`As_below_min`, `As_above_max`,
   `clear_spacing_below_min`, `bar_spacing_below_min`, `bar_spacing_exceeds_max`,
   `bars_do_not_fit`, `As_below_required`, `stirrups_required`, `Av_below_min`,
   `stirrup_spacing_exceeds_max`, `stirrup_spacing_exceeds_compression_support`,
-  `stirrup_diameter_below_compression_support`, `shear_exceeds_section_limit`), a
-  `message` in the language of `mento.set_language`, the `values` it quotes as quantities,
-  the `face` and the `combinations` it occurs under. They are the limit rows the detailed
-  reports mark with ❌, which until now were only text. A warning does not change a DCR.
-  There is no code for the stirrup diameter alone: neither code states a minimum for a
-  stirrup placed for shear only; the 10 mm (6 mm under CIRSOC) the design starts from is
-  the bottom of the catalogue. The minimum §9.7.6.4.2 does state is for the stirrups that
-  brace compression bars, which has its own code.
+  `stirrup_diameter_below_compression_support`,
+  `stirrups_required_for_compression_support`, `shear_exceeds_section_limit`), a
+  `message` in the language of `mento.set_language`, the `values` it quotes as quantities
+  (and the `direction` of a limit that has two), the `face` and the `combinations` it
+  occurs under. They are the limit rows the detailed reports mark with ❌, which until now
+  were only text. A warning does not change a DCR. There is no code for the stirrup
+  diameter alone: neither code states a minimum for a stirrup placed for shear only; the
+  10 mm (6 mm under CIRSOC) the shear catalogue starts at is a preference, not a clause.
+  The minimum §9.7.6.4.2 does state is for the stirrups that brace compression bars, which
+  has its own code. `mento.design_warnings.combination_label(label, position)` gives the
+  name a warning files a combination under: its label, or `#n` by its position (from 1)
+  when it has none.
 
 - **A wall's mesh and shear results are readable as data.** `wall.mesh` is a `WallMesh`
   with `.horizontal` and `.vertical` `MeshDirection`s (`d_b`, `s`, `rho`, `n_curtains`,
   `A_s` per unit length); `wall.shear_checks` holds one `WallShearCheck` per combination
-  (`V_u`, `V_capacity` = ØVn, `V_max` = ØVn,max, `rho_t`, `rho_t_req`, `rho_l`, `rho_l_min`,
-  `s_h_max`, `s_v_max`, `DCR`), and `wall.shear_design` a `WallShearDesign` with the mesh and
-  the envelope. `wall.shear_check_results(forces)` returns the per-combination results
-  without building the report, and `wall.warnings` reports the mesh limits missed with the
-  new codes `mesh_ratio_below_min` and `mesh_spacing_exceeds_max`, plus
-  `shear_exceeds_section_limit` against ØVn,max.
+  (`label`; `mesh`, the `WallMesh` it was checked with; `V_u`, `V_capacity` = ØVn,
+  `V_max` = ØVn,max, `rho_t`, `rho_t_req`, `rho_l`, `rho_l_min`, `s_h_max`, `s_v_max`,
+  `DCR`), and `wall.shear_design` a `WallShearDesign` with the mesh and the envelope;
+  `mesh` is the second field of `WallShearCheck`, so build one by keyword.
+  `wall.shear_check_results(forces)` returns the per-combination results without building
+  the report, and `wall.warnings` reports the mesh limits missed with the new codes
+  `mesh_ratio_below_min` and `mesh_spacing_exceeds_max`, plus `shear_exceeds_section_limit`
+  against ØVn,max.
 
 - **The minimum a face has to meet, `A_s_min_eff`.** `FlexureFaceCheck` and
   `FlexureFaceDesign` carry it next to `A_s_min`: under ACI 318-19 and CIRSOC 201-25 it is
@@ -72,13 +82,14 @@ from the release history and are summaries rather than complete lists.
   `stats.json` (`{"tests": N}`) to the GitHub Release and sends a `mento-release`
   `repository_dispatch` to `mihdicaballero/mento-web`. `N` counts the tests marked
   `published_example`: the 31 whose expected numbers come from a document outside mento —
-  the Calcpad sheets of the ACI and EN beam cases, The Concrete Centre's Eurocode 2 guide,
-  and rows 27–49 of the ETABS/spreadsheet cross-check of the flexure suite. Each says where
+  the Calcpad sheets of the ACI and EN beam cases (kept outside the repository), The
+  Concrete Centre's *How to design concrete structures using Eurocode 2*, 3. Slabs, and
+  rows 27–49 of the ETABS/spreadsheet cross-check of the flexure suite. Each says where
   in that document the number is, in a `Source:` paragraph of its docstring, and
   `tests/test_published_examples.py` fails when one does not. 21 tests that pinned mento's
-  own output — the 4/3 rule of §9.6.1.3 and the geometric floor where ETABS applies
-  A_s,min, re-baselined EN checks, the slab tests whose Calcpad sheet still carries the
-  beam minimum, and eight shear tests that cite no source — are not marked. With nothing
+  own output — among them the 4/3 rule of §9.6.1.3 and the geometric floor where ETABS
+  applies A_s,min, re-baselined EN checks, the slab tests whose Calcpad sheet still carries
+  the beam minimum, and eight shear tests that cite no source — are not marked. With nothing
   marked the workflow publishes 0 and warns; it never publishes the size of the whole
   suite. The dispatch needs the repository secret `MENTO_WEB_DISPATCH_TOKEN`, a token with
   `Contents: read and write` on mento-web; without it the step warns and the release goes
@@ -92,17 +103,33 @@ from the release history and are summaries rather than complete lists.
   to Ø10/30; a footing with 50 mm of cover from 300 to 255 mm); beams get two
   `Maximum spacing` rows in the flexure report and `bar_spacing_exceeds_max` on the
   tension face (a 60×50 beam with 2Ø25 is 505 mm past a 292.5 mm cap), and the bar search
-  lays a beam out within the cap (a 60×50 beam under 150 kN·m goes from 2Ø20, 510 mm
-  apart, to 3Ø20 at 255 mm). EN 1992-1-1 is unchanged: its slab cap stays §9.3.1.1(3) and
-  its crack control needs the service stress mento does not have. New registry hook
-  `max_bar_spacing_tension`.
+  lays a beam out within the cap (an ACI 40×50 beam under 80 kN·m goes from 2Ø20, 310 mm
+  apart, to 2Ø16 + 2Ø12 at 107 mm). EN 1992-1-1 is unchanged: its slab cap stays
+  §9.3.1.1(3) and its crack control needs the service stress mento does not have. New
+  registry hook `max_bar_spacing_tension`. The beam computes the spacing
+  (`RectangularBeam._tension_bar_spacing`), and the report row and the warning read it;
+  the equation, `max_bar_spacing_crack_control`, takes `is_imperial` by keyword only.
 
 - **Registry hooks for the alternatives and the compression bars.**
   `DesignCode.flexure_admissible` (tension-controlled under ACI 318-19 / CIRSOC 201-25,
-  within the 4 % of §9.2.1.1(3) under EN 1992-1-1: the rule each flexure design already
-  applied, now data of the registry), `DesignCode.stirrup_compression_support` and
+  within the 0.04·b·h of §9.2.1.1(3) under EN 1992-1-1: the rule each flexure design
+  already applied, now data of the registry), `DesignCode.stirrup_compression_support` and
   `DesignCode.min_stirrup_for_compression_bar`; `CompressionSupport` in
-  `mento.codes.check_state`; `DCR` on `RebarOption` and `StirrupOption`.
+  `mento.codes.check_state`; `section_DCR` on `RebarOption` and `StirrupOption`. The new
+  `DesignCode` fields default to `None` and sit beside the hooks they belong with
+  (`min_stirrup_for_compression_bar` and `stirrup_compression_support` after
+  `min_stirrup_diameter`, `max_bar_spacing_tension` after `min_bar_spacing_slab`,
+  `flexure_admissible` last): build a `DesignCode` by keyword.
+
+- **`stirrups_required_for_compression_support`.** A beam that relies on compression steel
+  and carries no stirrups is told so, whatever the shear — ACI 318-19 / CIRSOC 201-25
+  §9.7.6.4.1 — with the smallest stirrup §9.7.6.4.2 allows and the spacing §9.7.6.4.3
+  gives it: an ACI 20×50 with 2Ø25 + 2Ø25 in two layers under 3Ø16 and no stirrups, at
+  260 kN·m, is told No. 10 (9.5 mm) at 200 mm, where nothing was raised. A one-way slab is
+  not held to it.
+
+- **`tests/test_docs_references.py`** fails when a page under `docs/source` cites a
+  `test_…` that `tests/` does not define.
 
 ### Performance
 
@@ -230,68 +257,99 @@ from the release history and are summaries rather than complete lists.
   design used to pick 28 cm at the depth of the 8 mm starter stirrup, past the 27.95 cm
   limit of the beam once its Ø10 was placed.
 
-- **A full design passes its own check with the stirrups it ends with.** `design()`
-  designed the flexure at the depth of the starter stirrup and never looked at it again
-  once the shear design chose another. A heavier stirrup sank the bars: an ACI 318-19
-  20×50 with f'c = 25 MPa under 150 kN·m got 2Ø25, φMn = 150.7 kN·m at the Ø8 depth and
-  149.9 at the 1eØ10 the shear design picked for 250 kN — DCR 1.0005 and no warning, since
-  the search never saw a shortfall. A lighter one lifted them, and under EN 1992-1-1 lifted
-  A_s,min with d (§9.2.1.1(1)) past the bars placed: a 30×80 under 30 kN·m carried
-  2Ø12 + 1Ø10 = 3.047 cm² against 3.046 at the Ø8 depth and 3.054 at the 1eØ6, and warned
-  `As_below_min` on its own bars. It also narrowed or widened what the bars had between
-  the legs: a CIRSOC 12×30 under 40 kN·m was declared short (2Ø12 + 2Ø12, DCR 1.129,
-  `As_below_required`) because Ø16 did not fit beside an 8 mm stirrup, when the 1eØ6/12
-  it ends with leaves 58 mm and 2Ø16 + 2Ø12 carry it at DCR 0.80. When the section as the
-  shear design left it fails its flexure check, `design()` now designs the flexure again
-  with that stirrup on the section, and the stirrups again for the new bars, until the
-  pair passes or repeats — a repeat means no layout passes at that depth either, and the
-  warnings say what is short. In a sweep of 480 ACI / CIRSOC / EN designs (b 20–60, h 40–80,
-  30–400 kN·m, 80 and 250 kN) the eight that failed themselves silently now pass, and every
-  one of the 15 left past DCR 1 carries `As_below_required`, `As_above_max` or
-  `shear_exceeds_section_limit`. `design_flexure()` and `design_shear()` on their own are
-  unchanged, and a design still gives the same bars every time.
+- **A full design passes its own check with the stirrups it ends with, or says what it
+  misses.** `design()` designed the flexure at the depth of the starter stirrup and never
+  looked at it again once the shear design chose another. A heavier stirrup sank the bars:
+  an ACI 318-19 20×50 with f'c = 25 MPa under 150 kN·m got 2Ø25, φMn = 150.7 kN·m at the
+  Ø8 depth and 149.9 at the 1eØ10 the shear design picked for 250 kN — DCR 1.0005 and no
+  warning, since the search never saw a shortfall. A lighter one lifted them, and under
+  EN 1992-1-1 lifted A_s,min with d (§9.2.1.1(1)) past the bars placed: a 30×80 under
+  30 kN·m and 80 kN carried 2Ø12 + 1Ø10 = 3.047 cm² against 3.046 at the Ø8 depth and
+  3.054 at the 1eØ6, and warned `As_below_min` on its own bars. It also narrowed or
+  widened what the bars had between the legs: a CIRSOC 12×30 under 40 kN·m and 50 kN was
+  declared short (2Ø12 + 2Ø12, DCR 1.129, `As_below_required`) because Ø16 did not fit
+  beside an 8 mm stirrup, when the 1eØ6/12 it ends with leaves 58 mm and 2Ø16 + 2Ø12 carry
+  it at DCR 0.80. When the section as the shear design left it fails its flexure check,
+  `design()` now designs the flexure again with that stirrup on the section, and the
+  stirrups again for the new bars, until the pair passes or repeats. When no round passes,
+  the design ends on the one that came closest — bars that fit first, then the smallest
+  flexure DCR — and warns what it is short of: an ACI 20×25 with c_c = 40 mm under
+  38.2 kN·m and 36.2 kN keeps 2Ø20 over 2Ø10 and 1eØ10/9 at DCR 1.010, which it used to
+  leave with no warning, and now warns `As_below_required` on the bottom
+  (6.28 < 6.36 cm²). A one-way slab can have no such pair at all, since its depth jumps by
+  a bar when the shear design adds or drops stirrups: an ACI 100×15 slab with f'c = 20 MPa
+  under 46.9 kN·m and 60 kN needs stirrups with Ø10/6 and falls 1 % short over them, and
+  needs none with Ø10/5, which is past A_s,max. It ended on Ø10/7 over a Ø10 grid at
+  DCR 1.103 with no warning, and now ends on Ø10/5 with no stirrups, warning
+  `As_above_max` and `As_below_required`. In a sweep of 480 ACI / CIRSOC / EN designs
+  (b 20–60, h 40–80, 30–400 kN·m, 80 and 250 kN) 28 used to fail their own check without
+  saying so — 24 past DCR 1 with no warning, 4 warning `As_below_min` on their own bars;
+  with this and the stirrup fixes below none does, and every one of the 15 left past DCR 1
+  carries `As_below_required`, `As_above_max` or `shear_exceeds_section_limit`.
+  `design_flexure()` and `design_shear()` on their own are unchanged, and a design still
+  gives the same bars every time.
 
 - **The stirrup design is sized at the depth of its own diameter.** Every bar the code
   offers is sized against the `A_v,req` and the Table 9.7.6.2.2 row read with that bar on
   the section, so the applied layout passes its own check by construction. The design
   used to repeat itself with the diameter it chose and, when two diameters kept trading
   places (8 → 10 → 8), applied a row sized at the other's depth: a CIRSOC 30×40 with
-  Vu = 180 kN got 1eØ10/15 against a limit of 8.9 cm, and a 25×50 with Vu = 300 kN got
-  1eØ10/10 with A_v = 15.71 cm²/m against 15.78 required. The outer loop is gone. An
-  alternative's `functional` is measured against its own demand.
+  f'c = 20 MPa under 60 kN·m and Vu = 180 kN got 1eØ10/15 against a limit of 8.9 cm, and a
+  25×50 with f'c = 25 MPa under 60 kN·m and Vu = 300 kN got 1eØ10/10 with A_v =
+  15.71 cm²/m against 15.78 required; they now get 1eØ8/9 and 1eØ8/6. The outer loop is
+  gone. An alternative's `functional` is measured against its own demand.
+  `Rebar.transverse_rebar` takes an optional `demand`, a callable that reads
+  `(A_v_req, V_s_req)` off the section with each bar diameter on it; left out, the two
+  values passed stand for every diameter.
 
 - **Stirrup alternatives are built and checked on the finished section.**
   `shear_design.options[1:]` are one layout per other bar diameter, lighter and heavier
   alike; each is built on the section, checked for shear and flexure under every
-  combination, and kept only if it passes. `StirrupOption.DCR` says at what ratio;
-  `options[0]` is the applied layout with its own. They were described as "the same cage
-  in a heavier bar" and never built: 215 of 1152 failed when they were (an ACI 25×50 under
-  350 kN offered 1eØ16/11 at DCR 1.007).
+  combination, and kept only if it passes. `StirrupOption.section_DCR` says at what
+  ratio; `options[0]` is the applied layout with its own. They were described as "the
+  same cage in a heavier bar" and never built: in the 480-design sweep above, 110 of the
+  960 offered failed when they were (an ACI 25×50 under 150 kN·m and 350 kN offered
+  1eØ16/11, which sits the bars 6 mm deeper and takes the section past its shear limit,
+  DCR 1.007).
 
 - **Longitudinal alternatives are verified on the finished beam.**
   `flexure_design.<face>.options[1:]` are rebuilt after the design ends — the stirrups it
-  chose, the other face as applied — and kept only if the beam carries both moments with
-  them within the code's reinforcement limits (tension-controlled under ACI 318-19 /
-  CIRSOC 201-25, 4 % under EN 1992-1-1) and the bars fit; `RebarOption.DCR` says at what
-  ratio. They came from the last Picard iteration with the 8 mm starter stirrup, ranked
-  by area, and some failed when placed (ACI 20×60, Mu = 80 kN·m: a 3.93 cm² alternative
-  at DCR 1.023; EN 20×60 at 400 kN·m: 2Ø32 on top took the bottom face to 1.001).
+  chose, the other face as applied — and kept only if the beam carries both moments and
+  the shear with them, within the code's limits on its reinforcement (tension-controlled
+  under ACI 318-19 / CIRSOC 201-25, 4 % under EN 1992-1-1) and its stirrups, and the bars
+  fit; `RebarOption.section_DCR` says at what ratio. They came from the last Picard
+  iteration with the 8 mm starter stirrup, ranked by area, and some failed when placed
+  (ACI 20×60, Mu = 80 kN·m: the fourth row of the search, 3.93 cm², offered with
+  `design_options=4` and at DCR 1.023 once built; EN 20×60 at 400 kN·m and 250 kN: 2Ø32
+  on top took the bottom face to 1.001). The bars also set the depth the shear is read
+  at: an ACI 12×25 under 8 kN·m and 78 kN offered 2Ø10 + 2Ø10 in two layers, at a flexure
+  DCR of 0.404, and its shear DCR is 1.085 once built. Trying the alternatives leaves the
+  design's `bars_do_not_fit` where it was.
 
 - **A footing offers no alternatives.** Its mat is chosen as a whole; the per-face rows
-  the mat replaced were listed after it and were not alternatives to it (509 of 540
-  footings in a sweep, some failing: an EN 1 m × 15 cm footing offered Ø12/15 at 1.065).
+  the mat replaced were listed after it and were not alternatives to it (in a sweep of
+  288 footings — the three codes, 1 m × 15–80 cm, c_c = 50 mm, ±10 to ±250 kN·m — 273
+  listed some, and some of those failed: an EN 1 m × 15 cm footing under −30 kN·m offered
+  Ø12/15 on top, DCR 1.065 once built).
 
 - **Stirrups that brace compression reinforcement.** A section whose flexure relies on
   compression steel now holds its stirrups to ACI 318-19 / CIRSOC 201-25 §9.7.6.4: spacing
   at most the least of 16 d_b of the compression bar, 48 d_b of the stirrup and the least
   dimension of the beam (§9.7.6.4.3), and a stirrup no thinner than §9.7.6.4.2 (ACI: No. 10
   up to a No. 32 bar, No. 13 above) / CIRSOC Tabla 9.7.6.4.2 (6 to 12 mm by bar) require.
-  The shear design applies both; the check reports
+  The shear design applies both, reading each stirrup diameter with the compression steel
+  the section relies on at that diameter's depth; the check reports
   `stirrup_spacing_exceeds_compression_support` and
   `stirrup_diameter_below_compression_support`, read off the section and not a
-  combination. mento's own designs broke both (ACI 20×50, Mu = 260 kN·m: 1eØ10/21 against
-  200 mm; CIRSOC 20×40, Mu = 200 kN·m: Ø6 where the table asks Ø8). EN 1992-1-1
-  §9.2.1.2(3) (15·φ) is not applied yet.
+  combination. mento's own designs broke both (ACI 20×50, Mu = 260 kN·m, Vu = 60 kN:
+  1eØ10/21 against 200 mm; CIRSOC 20×40, Mu = 200 kN·m, Vu = 60 kN: Ø6 where the table
+  asks Ø8; an ACI 15×50 with f'c = 40 MPa under 211.5 kN·m, singly reinforced at the depth
+  of the 8 mm starter stirrup and doubly reinforced at that of the Ø10 it gets: 1eØ10/21
+  against 150 mm). A one-way slab is not held to it: ACI 318-19 §7.7.5.1 / CIRSOC 201-25
+  §7.7.5 send its transverse reinforcement to §9.7.6.2 alone. §9.7.6.4.4 — every corner
+  and alternate compression bar in a stirrup corner, none farther than 150 mm clear from
+  one that is — is not checked: mento does not know which bars the legs enclose. EN
+  1992-1-1 §9.2.1.2(3) (15·φ) is not applied yet.
 
 - **A slab strip is counted as bars per metre.** `Ø10/12` on a metre is 8.33 bars,
   6.54 cm²/m, not the 9 bars (7.07 cm²) that covered the strip. The design rounds the
@@ -299,8 +357,15 @@ from the release history and are summaries rather than complete lists.
   search chose; a CIRSOC 100×25 strip under 80 kN·m used to be reported at DCR 0.995 with a
   real DCR of 1.071 per metre, and a 100×30 strip designed to its 5.40 cm² minimum
   carried 5.24. The footing's mat search counted the same way and is read the same.
-  `RebarLayer.n` and the `n_bars` properties are floats now (still whole on beams); a
-  section drawing shows the whole bars that cover the strip.
+  `RebarLayer.n` and the `n_bars` properties are floats now (still whole on beams), and
+  `format_longitudinal_rebar` takes a float count; a section drawing shows the whole bars
+  that cover the strip.
+
+- **A bar count that comes in as a float prints whole.** `format_longitudinal_rebar(2.0,
+  "16")` printed "2.0Ø16"; it prints "2Ø16". A beam given its bars as floats —
+  `set_longitudinal_rebar_bot(2.0, 16 mm, 1.0, 12 mm)`, a spreadsheet cell, a numpy float —
+  reads "2Ø16 mm + 1Ø12 mm" in `reinforcement` and `flexure_design` now that a slab's count
+  is a float, and a slab keeps its fraction of a bar and its `Ø10 mm/12 cm`.
 
 - **The slab minimum belongs to the face in tension.** ACI 318-19 §7.6.1.1 / CIRSOC 201-25
   §7.6.1 is a flexural minimum (R7.6.1.1 / C 7.6.1): under a combination with no moment
@@ -313,8 +378,8 @@ from the release history and are summaries rather than complete lists.
   §11.5.4.3; mento fed the equation the required ratio, under which the cap could never
   bind. `WallShearCheck.rho_l_min`, `WallShearDesign.rho_l_min`, the report and the design
   now use max(0.0025, min(0.0025 + 0.5·(2.5 − hw/lw)·(ρt − 0.0025), ρt,req)) with the ρt
-  provided: a 25×400 wall with Ø12/15 E.F. under 2000 kN needs ρl,min = 0.00337 (was
-  0.00321), and its design gives Ø10/17 E.F. vertical instead of Ø12/27.
+  provided: a 25×400 wall, hw = 3.5 m, with Ø12/15 E.F. under 2000 kN needs ρl,min =
+  0.00337 (was 0.00321), and its design gives Ø10/17 E.F. vertical instead of Ø12/27.
   `min_vertical_reinforcement_ratio(hw_lw, rho_t, rho_t_req)` takes the provided ratio as
   its second argument and the required one as the cap.
 
@@ -329,15 +394,32 @@ from the release history and are summaries rather than complete lists.
   hand afterwards drops the results (`shear_checks` and `warnings` empty, `shear_design`
   raises `DesignNotRunError`) until the next check.
 
+- **A wall's notebook summary no longer prints one mesh with another's results.** After a
+  mesh set by hand, `wall.shear_results` showed the new mesh beside the ρt and DCR of the
+  one checked: a 25×400 wall checked with Ø10/15 E.F. at 2000 kN and then given Ø6/45
+  E.F. printed "Ø6/45 cm E.F., ρt=0.00419 … DCR=0.89", where Ø6/45 gives 0.0005 and 1.83.
+  It now says the results are not available, and `results` shows the wall data alone,
+  until the next check.
+
 - **An imperial wall reports in kip.** `WallShearCheck.V_u`, `V_capacity` and `V_max`, the
   wall's attributes and the detailed strength table came in kN (the table labelled them
   kip).
 
+- **`ShearWallSummary` writes an imperial wall in its own units**: t in in, lw and hw in
+  ft, the mesh in in ("Ø0.5/8" for #4 @ 8 in, which printed "Ø13/20"), the forces in kip
+  as before. The units row of the input accepts `in`, `kip` and `kipft`.
+
+- **A wall at exactly ØVn,max is not past it.** Vu = ØVn,max worked out apart
+  (0.75·0.66·√25·Acv = 2475.0000000000005 kN on a 25×400) raised
+  `shear_exceeds_section_limit`, and a wall checked for that shear alone came out ❌ in
+  `ShearWallSummary`, at DCR 1.0000000000000002; the wall now takes the rounding
+  tolerance the beam already did.
+
 - **`hw` is the height of the entire wall, or of the segment considered** (ACI 318-19 /
   CIRSOC 201-25 Chapter 2), not the storey height: the class docstring and the user guides
-  said otherwise, and hw/lw sets αc and ρl,min. Wall clause numbers in the docs follow
-  ACI 318-19 (§11.5.4.3 for αc and Vn, §11.5.4.2 for Vn,max, §11.6.2(b) for ρt,min,
-  §11.7.2.1 / §11.7.3.1 for the spacing).
+  said otherwise, and hw/lw sets αc and ρl,min. Wall clause numbers in the docs and the
+  roadmap follow ACI 318-19 (§11.5.4.3 for αc and Vn, §11.5.4.2 for Vn,max, §11.6.2(b) for
+  ρt,min, §11.7.2.1 / §11.7.3.1 for the spacing).
 
 - **`shear_exceeds_section_limit` reads the limit of the section however it is
   reinforced:** under ACI 318-19 / CIRSOC 201-25 the Eq. (22.5.1.2) limit with the V_c of
@@ -369,6 +451,11 @@ from the release history and are summaries rather than complete lists.
 - **A combination with no label is named `#n` by its position** in `combinations`; an
   empty tuple now means a limit of the section alone, as documented.
 
+- **`mesh_ratio_below_min`, `mesh_spacing_exceeds_max` and `stirrup_spacing_exceeds_max`
+  carry their `direction` in `values`** (`"h"`/`"v"` for a wall mesh, `"l"`/`"w"` for
+  stirrups), as the module documented; it only survived in the text, which changes with
+  `set_language`.
+
 - **Warning messages print as many significant figures as it takes to tell a value from
   its limit** (`13 cm exceeds the maximum 12.95 cm`, not `13 cm … 13 cm`).
 
@@ -378,6 +465,11 @@ from the release history and are summaries rather than complete lists.
   exist; and the footing theory page and docstrings quote §8.6.1.1 as printed —
   "0.0018Ag, or as defined in 8.6.1.2" — noting that the minimum over the punching
   critical section of 8.6.1.2 is not implemented.
+
+- **The foundation minimum mento applies under EN 1992-1-1 is cited to its source,
+  EHE-08 Tabla 42.3.5 note (1)** (1.0‰ / 0.9‰ of the gross section per direction, at
+  f_yk = 400 / 500 MPa); EN §9.8.1 and §9.8.2.1 state only a minimum bar diameter. The
+  300 mm footing cap is EHE-08 art. 58.8.2, not EN §9.8.2.1. The rule is unchanged.
 
 ### Changed
 
@@ -392,13 +484,20 @@ from the release history and are summaries rather than complete lists.
   and needs the same update. EN 1992-1-1 is unchanged.
 
 - **The slab and footing minimum is 0.0018·Ag for every steel grade.** mento scaled it as
-  0.0018·420/f_y with a 0.0014 floor, the Table 7.6.1.1 / 24.4.3.2 of ACI 318-14. ACI 318-19
-  withdrew that reduction (R24.4.3.2) and CIRSOC 201-25 prints the flat ratio as well. With
-  ADN 420 or Grade 60 nothing changes; a B500S footing goes from 1.51‰ to 1.8‰, and for
-  f_y below 420 MPa the minimum goes **down**: the old scaling 0.0018·420/f_y gave 2.7‰ at
-  f_y = 280 MPa (Grade 40) and 2.16‰ at 350 MPa, where the flat ratio is 1.8‰ (a 1 m × 200 mm
-  strip with f_y = 280 MPa goes from 5.40 cm² to 3.60 cm²; ACI 318-14's Table 24.4.3.2 had
-  0.0020 for those grades, ACI 318-19 prints 0.0018 for all).
+  0.0018·420/f_y with a 0.0014 floor, the Table 7.6.1.1 / 24.4.3.2 of ACI 318-14.
+  ACI 318-19 withdrew that reduction (R24.4.3.2) and CIRSOC 201-25 prints the flat ratio
+  as well. With ADN 420 or Grade 60 nothing changes; a B500S footing goes from 1.51‰ to
+  1.8‰, and for f_y below 420 MPa the minimum goes **down**: the old scaling
+  0.0018·420/f_y gave 2.7‰ at f_y = 280 MPa (Grade 40) and 2.16‰ at 350 MPa, where the
+  flat ratio is 1.8‰ (a 1 m × 200 mm footing with f_y = 280 MPa goes from 5.40 cm² to
+  3.60 cm²; ACI 318-14's Table 24.4.3.2 had 0.0020 for those grades, ACI 318-19 prints
+  0.0018 for all).
+
+- **EN 1992-1-1 A_s,max is 0.04·b·h**, the 0.04·A_c of §9.2.1.1(3) with A_c the concrete
+  section (§1.6). It was 0.04·b·d, tighter by the cover and different on each face: a
+  20×60 C30/37 with 3Ø32 + 2Ø32 + 1Ø20 = 43.35 cm² below (d = 526 mm) was held to
+  42.1 cm² there and 44.9 cm² on top, and warned `As_above_max`; both faces now take
+  48.0 cm². The check, the design and the `flexure_admissible` gate read it.
 
 - **mento runs on pint 0.26.** The cap added after 0.26 broke CI is lifted and the
   dependency is `pint>=0.24` again. pint 0.26 types every arithmetic result as
