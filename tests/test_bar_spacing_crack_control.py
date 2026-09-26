@@ -349,6 +349,48 @@ def test_a_designed_beam_reports_the_spacing_of_its_tension_bars() -> None:
     assert beam.warnings == ()
 
 
+def test_the_search_cap_leaves_a_compression_face_alone() -> None:
+    """§9.7.2.2 sends the bars nearest the tension face to Table 24.3.2, not the compression bars.
+
+    A 40x80 CIRSOC beam, H30, c_c = 40 mm, under 1196.5 kN·m of positive
+    moment only: the top face is never pulled. The bottom takes 11Ø25 =
+    54.00 cm², past A_s,max = 53.88 cm² of §9.3.3.1, and two Ø10 on top lift
+    it to A_s,max,eff = 55.36 cm² (A_s,max + A's*f's/f_y). Between the legs
+    of the Ø8 stirrup, 400 - 2*(40 + 8) = 304 mm, those two bars sit 284 mm
+    clear and 294 mm centre to centre, past the 260 mm the cap would allow a
+    tension face (f_s = 280 MPa, c_c = 48 mm to the bar: min(380 - 120,
+    300)). The search held the compression face to it too, found no two
+    bars within 10 times the 0.12 cm² asked for, and left the top bare:
+    ``bars_do_not_fit`` on top and ``As_below_required`` below. PR #164
+    designed it as here -- 2Ø10 on top, DCR 0.961, nothing to warn about --
+    and the report prints the top's 294 mm against the cap without holding
+    it there, since no combination pulls that face.
+    """
+    beam = RectangularBeam(
+        label="V1",
+        concrete=Concrete_CIRSOC_201_25(name="H30", f_c=30 * MPa),
+        steel_bar=ADN_420,
+        width=40 * cm,
+        height=80 * cm,
+        c_c=40 * mm,
+    )
+    Node(section=beam, forces=[Forces(label="C1", M_y=1196.5 * kNm)]).design()
+
+    assert str(beam.reinforcement.top) == "2Ø10 mm"
+    assert beam.warnings == ()
+    assert beam.reinforcement.transverse.d_b == 8 * mm
+    assert beam.reinforcement.bottom.A_s.to("cm**2").magnitude == pytest.approx(54.00, abs=5e-3)
+    (check,) = beam.flexure_check_results([Forces(label="C1", M_y=1196.5 * kNm)])
+    assert check.bottom.A_s_max.to("cm**2").magnitude == pytest.approx(53.88, abs=5e-3)
+    assert check.bottom.A_s_max_eff.to("cm**2").magnitude == pytest.approx(55.36, abs=5e-3)
+    assert check.bottom.DCR == pytest.approx(0.961, abs=5e-4)
+    rows = beam._data_min_max_flexure
+    assert rows["Check"][4:] == ["Maximum spacing top", "Maximum spacing bottom"]
+    assert rows["Value"][4] == pytest.approx(294.0)
+    assert rows["Max."][4] == pytest.approx(260.0)
+    assert rows["Ok?"][4] == "✅"
+
+
 def test_the_search_cap_leaves_a_slab_strip_to_its_own_spacing() -> None:
     """A strip is not laid out between stirrup legs, so the search does not
     hold it to the cap: the 12 cm slab of the first test still gets the three

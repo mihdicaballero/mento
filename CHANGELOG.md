@@ -103,8 +103,10 @@ from the release history and are summaries rather than complete lists.
   to Ø10/30; a footing with 50 mm of cover from 300 to 255 mm); beams get two
   `Maximum spacing` rows in the flexure report and `bar_spacing_exceeds_max` on the
   tension face (a 60×50 beam with 2Ø25 is 505 mm past a 292.5 mm cap), and the bar search
-  lays a beam out within the cap (an ACI 40×50 beam under 80 kN·m goes from 2Ø20, 310 mm
-  apart, to 2Ø16 + 2Ø12 at 107 mm). EN 1992-1-1 is unchanged: its slab cap stays
+  lays a beam's tension face out within the cap (an ACI 40×50 beam under 80 kN·m goes from
+  2Ø20, 310 mm apart, to 2Ø16 + 2Ø12 at 107 mm) and leaves a face no combination pulls --
+  the compression steel of a doubly reinforced beam -- to its clear-spacing rules. EN
+  1992-1-1 is unchanged: its slab cap stays
   §9.3.1.1(3) and its crack control needs the service stress mento does not have. New
   registry hook `max_bar_spacing_tension`. The beam computes the spacing
   (`RectangularBeam._tension_bar_spacing`), and the report row and the warning read it;

@@ -229,6 +229,10 @@ def _run_flexure_design(
     # of alternatives -- run with the mechanical cover the design finished on.
     tables: Dict[str, Dict[tuple, Any]] = {"bot": {}, "top": {}}
     infeasible: Dict[str, bool] = {"bot": False, "top": False}
+    # The faces some load puts in tension: a positive moment pulls the bottom,
+    # a negative one the top. Only their bars are held to the crack-control
+    # cap of §24.3.2 (see :meth:`Rebar.longitudinal_rebar`).
+    pulled = {"bot": max_M_y_bot > 0 * kNm, "top": max_M_y_top < 0 * kNm}
 
     def _design_longitudinal_for_area(A_req: Quantity, A_max: Any, mech_cover: Quantity, face: str) -> Any:
         """Run discrete design for a target area and return best_design dict, or
@@ -238,7 +242,7 @@ def _run_flexure_design(
         crashes, delegating the "insufficient section" report to check_flexure
         via DCR>1, and to the ``bars_do_not_fit`` warning."""
         rebar = self._create_rebar_designer()
-        _ = rebar.longitudinal_rebar(A_req, A_max, mech_cover, face)
+        _ = rebar.longitudinal_rebar(A_req, A_max, mech_cover, face, tension=pulled[face])
         try:
             best = rebar.longitudinal_rebar_design
         except RebarDesignInfeasibleError:
@@ -377,7 +381,7 @@ def _run_flexure_design(
         shallowest = self.c_c + self._stirrup_d_b + settings.minimum_longitudinal_diameter / 2
         request = max(own_req, _compression_need(tension_face, tension_row, shallowest))
         rebar = self._create_rebar_designer()
-        rebar.longitudinal_rebar(request, None, shallowest, face)
+        rebar.longitudinal_rebar(request, None, shallowest, face, tension=pulled[face])
         try:
             rebar.longitudinal_rebar_design
         except RebarDesignInfeasibleError:

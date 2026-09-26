@@ -104,16 +104,18 @@ class Rebar:
         self._clear_limit_mm = self.beam.settings.clear_spacing.to("mm").magnitude
         self._vibrator_mm = self.beam.settings.vibrator_size.to("mm").magnitude
         self._clear_spacing = self.beam.settings.clear_spacing.to("mm")
-        # The most the code lets the bars nearest a face sit apart, centre to
-        # centre: the crack-control cap of ACI 318-19 / CIRSOC 201-25 §24.3.2,
-        # which §9.7.2.2 sends a beam to (hook ``max_bar_spacing_tension``;
-        # None for a code without it). A beam's search holds its layouts to
-        # it; a slab strip applies it afterwards, through the spacing it is
-        # written back as (``OneWaySlab._spacing_for_bars``), since the
-        # layer this search lays out between the stirrup legs is not how a
-        # strip carries its bars.
+        # The most the code lets the bars nearest a tension face sit apart,
+        # centre to centre: the crack-control cap of ACI 318-19 / CIRSOC
+        # 201-25 §24.3.2, which §9.7.2.2 sends a beam to (hook
+        # ``max_bar_spacing_tension``; None for a code without it). A beam's
+        # search holds its layouts to it on a face some load pulls
+        # (:meth:`longitudinal_rebar` lifts it off one nothing does); a slab
+        # strip applies it afterwards, through the spacing it is written back
+        # as (``OneWaySlab._spacing_for_bars``), since the layer this search
+        # lays out between the stirrup legs is not how a strip carries its bars.
         limit = design_code(self.beam.concrete).max_bar_spacing_tension
-        self._max_centre_mm: float | None = None if limit is None else limit(self.beam).to("mm").magnitude
+        self._tension_cap_mm: float | None = None if limit is None else limit(self.beam).to("mm").magnitude
+        self._max_centre_mm: float | None = self._tension_cap_mm
         # Unit system default rebar.
         #
         # The metric list is the bar sizes of CIRSOC 201-25 §20.2.1.3,
@@ -1190,6 +1192,7 @@ class Rebar:
         A_s_max: Quantity | None = None,
         mech_cover: Quantity | None = None,
         face: str | None = None,
+        tension: bool = True,
     ) -> Dict[str, Any]:
         """
         Selects the appropriate longitudinal rebar method based on the design
@@ -1205,7 +1208,17 @@ class Rebar:
                 of the top bars -- the rule the check and the warnings apply.
                 ``None`` keeps it on whatever face this is, the safe side for a
                 caller that does not say.
+            tension: whether some load puts this face in tension. The
+                crack-control cap of §24.3.2 is on the bars nearest a tension
+                face (§9.7.2.2), and the check and ``bar_spacing_exceeds_max``
+                read it there only; a face that is only ever compressed --
+                the compression steel of a doubly reinforced beam -- is laid
+                out without it. Held to it, two bars across a 40 cm web were
+                too far apart, and a compression face with no room for a
+                third was left bare. ``True`` keeps the cap, as before, for a
+                caller that does not say.
         """
         vibrator = self.beam.settings.vibrator_size.to("mm").magnitude
         self._vibrator_mm = 0.0 if face == "bot" else vibrator
+        self._max_centre_mm = self._tension_cap_mm if tension else None
         return design_code(self.beam.concrete).longitudinal_rebar(self, A_s_req, A_s_max, mech_cover)
