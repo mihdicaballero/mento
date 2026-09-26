@@ -55,12 +55,15 @@ class _Verdict(NamedTuple):
     warning and the reinforcement keeps within the code's limits; and
     ``compression_faces`` are the faces some combination relies on as
     compression steel (see :meth:`RectangularBeam._compression_face_of`), which
-    the stirrups of that section have to brace.
+    the stirrups of that section have to brace. ``fits`` says the bars of
+    the faces judged fit the width -- no spacing warning -- whatever else
+    the checks found.
     """
 
     DCR: float
     clean: bool
     compression_faces: FrozenSet[str] = frozenset()
+    fits: bool = True
 
     @property
     def passes(self) -> bool:
@@ -528,7 +531,8 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         admissible = design_code(self.concrete).flexure_admissible
         names = tuple("bottom" if face == "bot" else "top" for face in faces)
         worst = 0.0
-        clean = not any(raw.face in names for raw in spacing_warnings(self))
+        fits = not any(raw.face in names for raw in spacing_warnings(self))
+        clean = fits
         compression: set[str] = set()
         for force in forces:
             state = self._run_flexure_check(force, report=False)
@@ -541,7 +545,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
             braced = self._compression_face_of(force, state)
             if braced is not None:
                 compression.add(braced)
-        return _Verdict(worst, clean, frozenset(compression))
+        return _Verdict(worst, clean, frozenset(compression), fits)
 
     def _verify_longitudinal_options(self, forces: list[Forces]) -> None:
         """Keep, of each face's pooled alternatives, those the finished section passes with.
@@ -616,7 +620,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
                 clean = clean and not shear_warnings(self, force.label, shear_state)
         finally:
             self._compression_faces = braced
-        return _Verdict(worst, clean, flexure.compression_faces)
+        return _Verdict(worst, clean, flexure.compression_faces, flexure.fits)
 
     def _record_transverse_options(self, table: DataFrame, forces: list[Forces]) -> None:
         """Keep the stirrup layouts the search found, the applied one first.
@@ -1517,22 +1521,84 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         placeholder bars with that stirrup on the section, and the stirrups
         again for the new bars, until the pair passes or comes back to a
         state already seen -- which means no layout passes at that depth
-        either, and the warnings of the last round say what is short. Bounded
-        by ``_DESIGN_ROUNDS``; a design that passes at once does nothing here,
-        and the sequence is a function of the forces, so ``design()`` still
-        gives the same bars every time.
+        either. Bounded by ``_DESIGN_ROUNDS``; a design that passes at once
+        does nothing here, and the sequence is a function of the forces, so
+        ``design()`` still gives the same bars every time.
+
+        When no round passes, the section ends with the round that came
+        closest -- one whose bars fit the width before one whose bars do not,
+        then the smallest flexure DCR -- not with the last: a later round is
+        designed from a different depth and need not be better. An ACI 20x25
+        with c_c = 40 mm under 38.2 kN·m gets 2Ø20 at the Ø8 depth, DCR
+        1.010 with the 1eØ10 the shear picks, and its second round, at the
+        Ø10 depth, landed on 3Ø12 + 3Ø10 in two layers under 2Ø25, DCR 1.166.
+        Bars that do not fit are no layout at all, however strong: an ACI
+        12x25 under -21.3 kN·m gets 2Ø12 + 2Ø10 on top at the Ø8 width, DCR
+        0.907, which the Ø10 leaves 26 mm apart where the vibrator needs 30,
+        and keeps the 2Ø10 + 2Ø10 of the next round, DCR 1.092. The round
+        kept is re-run (its result is a function of the stirrup it started
+        from), and :meth:`_record_shortfall` makes sure the face that fails
+        says so.
         """
+        verdict = self._flexure_verdict(forces, ("bot", "top"))
+        if verdict.passes:
+            return
+        # Each round's verdict, with the stirrup it started from (None: the
+        # starter stirrup of the first).
+        rounds: list[Tuple[_Verdict, Optional[Tuple[int, Quantity, Quantity]]]] = [(verdict, None)]
         seen = {self._design_state()}
         for _ in range(self._DESIGN_ROUNDS):
-            if self._flexure_verdict(forces, ("bot", "top")).passes:
+            start = (self._stirrup_n, self._stirrup_d_b, self._stirrup_s_l)
+            self._redesign_from(start, forces)
+            verdict = self._flexure_verdict(forces, ("bot", "top"))
+            if verdict.passes:
                 return
-            self._reset_longitudinal_for_design()
-            self._design_flexure(forces)
-            self.design_shear(forces)
+            rounds.append((verdict, start))
             state = self._design_state()
             if state in seen:
-                return
+                break
             seen.add(state)
+        last = len(rounds) - 1
+        closest = min(range(len(rounds)), key=lambda i: (not rounds[i][0].fits, rounds[i][0].DCR, i != last))
+        if closest != last:
+            self._redesign_from(rounds[closest][1], forces)
+        self._record_shortfall(forces)
+
+    def _redesign_from(self, stirrup: Optional[Tuple[int, Quantity, Quantity]], forces: list[Forces]) -> None:
+        """One design round: the flexure at the depth of ``stirrup``, then the stirrups for its bars.
+
+        ``stirrup`` is ``(n_stirrups, d_b, s_l)`` to put on the section first,
+        or ``None`` for the starter stirrup a first design assumes.
+        """
+        if stirrup is None:
+            self._reset_for_design()
+        else:
+            self.set_transverse_rebar(*stirrup)
+            self._reset_longitudinal_for_design()
+        self._design_flexure(forces)
+        self.design_shear(forces)
+
+    def _record_shortfall(self, forces: list[Forces]) -> None:
+        """Make a design that ends short of a moment say so, on the face that is short.
+
+        The flexure design records the faces it could not bring up to what
+        they need at the depth it was run at; the stirrups move that depth
+        afterwards, so the section it ends on can fail a face the design
+        never saw short -- the 2Ø20 of an ACI 20x25 carry 38.2 kN·m at the Ø8
+        depth and not at the Ø10 one. Each face some combination leaves past
+        DCR 1 and the design did not record is recorded here, with the
+        ``A_s_req`` the check finds for it: ``As_below_required`` then says
+        what is short, and a design never fails its own check in silence.
+        """
+        needed: Dict[str, Quantity] = {}
+        for force in forces:
+            check = capture_flexure_check(self, force.label, self._run_flexure_check(force, report=False))
+            for face, result in (("bot", check.bottom), ("top", check.top)):
+                if result.DCR > 1.0 and result.A_s_req is not None:
+                    needed[face] = max(needed[face], result.A_s_req) if face in needed else result.A_s_req
+        for face, A_s_req in needed.items():
+            if face not in self._short_faces:
+                self._short_faces[face] = (A_s_req, getattr(self, f"_A_s_{face}"))
 
     def _design_state(self) -> Tuple[float, ...]:
         """The reinforcement on the section as numbers, to tell one design round from another."""

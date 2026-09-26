@@ -219,6 +219,112 @@ def test_a_lighter_stirrup_does_not_lift_the_minimum_past_the_bars_a_design_plac
     assert bottom.A_s.to("mm**2").magnitude == pytest.approx(314.16, abs=0.05)
 
 
+def _short_beam() -> Tuple[RectangularBeam, Node]:
+    """ACI 318-19 20x25, f'c 25 MPa, ADN 420, c_c 40 mm, Mu = 38.2 kN·m, Vu = 36.2 kN."""
+    beam = RectangularBeam(
+        label="V",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=20 * cm,
+        height=25 * cm,
+        c_c=40 * mm,
+    )
+    return beam, Node(section=beam, forces=[Forces(label="U", M_y=38.2 * kNm, V_z=36.2 * kN)])
+
+
+def test_a_design_with_no_layout_ends_on_the_round_that_came_closest() -> None:
+    """ACI 318-19 20x25, f'c 25, c_c 40 mm, Mu = 38.2 kN·m, Vu = 36.2 kN: no layout carries it.
+
+    At the Ø8 starter depth 2Ø20 = 6.28 cm² carry the moment. The shear
+    design picks 1eØ10/9, and at d = 250 - 40 - 10 - 10 = 190 mm the
+    tension-controlled limit is c_t = 0.003·190/(0.003 + 0.0021 + 0.003) =
+    70.4 mm, A_s,max = 0.85·25·200·0.85·70.4/420 = 6.05 cm²: the 2Ø20 lean
+    on the 2Ø10 on top, whose strain at d' = 55 mm is small, and φMn =
+    37.83 kN·m, DCR 1.010. Nothing fits that does better at that depth
+    (the review tried 2Ø20 under 2Ø10, 2Ø12, 2Ø16, 2Ø20 at 38.19 kN·m:
+    1.0096 to 1.0120). The rounds that redesign the flexure at the Ø10 depth
+    end on 3Ø12 + 3Ø10 in two layers under 2Ø25, DCR 1.166, and the design
+    used to keep that last round -- with ``As_below_required`` on top
+    quoting A_s,req = 38.4 cm², the compression steel that the tension face
+    would need with bars that close to the neutral axis. The design now ends on the round that
+    came closest, 2Ø20 / 2Ø10, and says what the bottom is short of at the
+    depth it ends at: the check's A_s,req = 6.36 cm².
+    """
+    beam, node = _short_beam()
+    node.design()
+
+    assert str(beam.reinforcement.bottom) == "2Ø20 mm"
+    assert str(beam.reinforcement.top) == "2Ø10 mm"
+    assert beam._stirrup_d_b.to("mm").magnitude == pytest.approx(10.0)
+    assert beam.flexure_design.bottom.DCR == pytest.approx(1.010, abs=0.0005)
+    short = [w for w in node.warnings if w.code == "As_below_required"]
+    assert [w.face for w in short] == ["bottom"]
+    assert short[0].values["A_s_req"].to("cm**2").magnitude == pytest.approx(6.36, abs=0.01)
+    assert short[0].values["A_s_req"] > short[0].values["A_s"]
+
+    node.design()
+    assert str(beam.reinforcement.bottom) == "2Ø20 mm"
+
+
+def test_a_round_whose_bars_do_not_fit_is_not_the_closest() -> None:
+    """ACI 318-19 12x25, f'c 20, c_c 25 mm, Mu = -21.27 kN·m: the bars that carry it do not fit.
+
+    At the Ø8 starter width, 120 - 2*25 - 2*8 = 54 mm, 2Ø12 on top leave
+    54 - 24 = 30 mm, the vibrator clearance, and 2Ø12 + 2Ø10 carry the
+    moment. The stirrup the shear design settles on is a Ø10, which leaves
+    50 mm: 26 mm between the Ø12, ``clear_spacing_below_min``, DCR 0.907.
+    The round at the Ø10 width fits 2Ø10 per layer (50 - 20 = 30 mm) and
+    no more: 2Ø10 + 2Ø10 = 3.14 cm² against 3.50 required, DCR 1.092. The
+    smaller DCR belongs to bars that cannot be placed, so the round kept is
+    the one whose bars fit, and it says what it is short of.
+    """
+    beam = RectangularBeam(
+        label="V",
+        concrete=Concrete_ACI_318_19(name="H20", f_c=20 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=12 * cm,
+        height=25 * cm,
+        c_c=25 * mm,
+    )
+    node = Node(section=beam, forces=[Forces(label="U", M_y=-21.27 * kNm)])
+    node.design()
+
+    assert str(beam.reinforcement.top) == "2Ø10 mm + 2Ø10 mm"
+    assert beam._stirrup_d_b.to("mm").magnitude == pytest.approx(10.0)
+    assert beam.flexure_design.top.DCR == pytest.approx(1.092, abs=0.0005)
+    assert [(w.code, w.face) for w in node.warnings] == [("As_below_required", "top")]
+    short = node.warnings[0]
+    assert short.values["A_s_req"].to("cm**2").magnitude == pytest.approx(3.50, abs=0.005)
+
+
+def test_the_design_rounds_are_bounded_and_end_on_the_closest(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The same 20x25 with a single round allowed: the loop runs out instead of repeating.
+
+    Round 0 (the Ø8 depth) leaves DCR 1.010 with the Ø10 stirrup; the one
+    round allowed redesigns at the Ø10 depth and ends past it, 1.166, on a
+    state not seen before. The bound stops there, and the section is not
+    left on that round: round 0 is run again (its result is a function of
+    the stirrup it starts from) and the design warns what it is short of.
+    Three flexure passes: round 0, round 1, and round 0 again.
+    """
+    passes: List[Any] = []
+    design_flexure = RectangularBeam._design_flexure
+
+    def counted(self: RectangularBeam, forces: List[Forces]) -> Any:
+        passes.append(self._stirrup_d_b.to("mm").magnitude)
+        return design_flexure(self, forces)
+
+    monkeypatch.setattr(RectangularBeam, "_DESIGN_ROUNDS", 1)
+    monkeypatch.setattr(RectangularBeam, "_design_flexure", counted)
+    beam, node = _short_beam()
+    node.design()
+
+    assert passes == [8.0, 10.0, 8.0]
+    assert str(beam.reinforcement.bottom) == "2Ø20 mm"
+    assert beam.flexure_design.bottom.DCR == pytest.approx(1.010, abs=0.0005)
+    assert [w.face for w in node.warnings if w.code == "As_below_required"] == ["bottom"]
+
+
 @pytest.mark.parametrize("code", ["ACI 318-19", "CIRSOC 201-25"])
 def test_the_steel_asked_for_grows_with_the_moment(code: str) -> None:
     """A_s,req on the tension face, and the compression it asks for, never drop as M grows.
