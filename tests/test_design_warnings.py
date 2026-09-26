@@ -1043,3 +1043,93 @@ def test_a_singly_reinforced_beam_owes_its_stirrups_nothing_for_compression() ->
     assert "stirrup_spacing_exceeds_max" in codes
     assert "stirrup_spacing_exceeds_compression_support" not in codes
     assert "stirrup_diameter_below_compression_support" not in codes
+
+
+@pytest.mark.parametrize(
+    "concrete, top, d_b_min",
+    [
+        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), 16 * mm, 9.5 * mm),
+        (mento.Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa), 20 * mm, 8 * mm),
+    ],
+    ids=["ACI", "CIRSOC"],
+)
+def test_a_doubly_reinforced_beam_with_no_stirrups_is_told_it_needs_them(
+    concrete: Concrete_ACI_318_19, top: Quantity, d_b_min: Quantity
+) -> None:
+    """20x50 H25 ADN 420, no stirrups, Mu = 260 kNm, Vu = 0: 2Ø25 + 2Ø25 in two layers below, 3 bars above.
+
+    With no stirrup the layers sit at 25 + 12.5 = 37.5 and 37.5 + 25 + 25 =
+    87.5 mm, d = 500 - 62.5 = 437.5 mm, and the tension-controlled limit is
+    A_s,max = 0.85*25*200*0.85*(0.003/0.0081)*437.5/420 = 13.94 cm²: the
+    19.63 cm² below lean on the top bars as compression steel (flexure DCR
+    0.92 under ACI, 0.89 under CIRSOC). §9.7.6.4.1 of both codes asks for
+    transverse reinforcement wherever compression reinforcement is
+    required, whatever the shear, and the check said nothing: with no
+    stirrups it returned before reading the compression steel, and with
+    Vu = 0 there was no ``stirrups_required`` either. Now it quotes the
+    smallest stirrup §9.7.6.4.2 allows (No. 10 = 9.5 mm under ACI for a bar
+    up to No. 32; 8 mm under CIRSOC Tabla 9.7.6.4.2 for a Ø20) and the
+    spacing §9.7.6.4.3 gives it: min(16*16 = 256 or 16*20 = 320, 48*d_b,
+    200) = 200 mm. Under 150 kNm the section is singly reinforced and owes
+    nothing. A one-way slab is not held to it: §9.7.6.4 is the beams'.
+    """
+    beam = RectangularBeam(
+        label="V",
+        concrete=concrete,
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=20 * cm,
+        height=50 * cm,
+        c_c=25 * mm,
+    )
+    beam.set_longitudinal_rebar_bot(n1=2, d_b1=25 * mm, n3=2, d_b3=25 * mm)
+    beam.set_longitudinal_rebar_top(n1=3, d_b1=top)
+    beam.set_transverse_rebar(0, 0 * mm, 0 * cm)
+    node = Node(section=beam, forces=[Forces(label="ELU", M_y=260 * kNm)])
+    node.check()
+
+    assert beam.flexure_design.bottom.A_s_max.to("cm**2").magnitude == pytest.approx(13.94, abs=0.005)
+    assert beam.flexure_design.DCR < 1
+    found = _by_code(node.warnings)
+    assert set(found) == {"stirrups_required_for_compression_support"}
+    bracing = found["stirrups_required_for_compression_support"]
+    assert (bracing.values["d_b_comp"], bracing.values["d_b_min"], bracing.values["s_max"]) == (top, d_b_min, 20 * cm)
+    assert bracing.combinations == ()
+    mento.set_language("es")
+    assert _by_code(node.warnings)["stirrups_required_for_compression_support"].message == (
+        f"La sección depende de barras comprimidas Ø{top.magnitude:g} mm y no tiene estribos que las arriostren: "
+        f"hacen falta estribos cerrados de al menos {d_b_min.magnitude:g} mm separados a lo sumo 20 cm."
+    )
+
+    node = Node(section=beam, forces=[Forces(label="ELU", M_y=150 * kNm)])
+    node.check()
+    assert node.warnings == ()
+
+
+def test_a_doubly_reinforced_slab_strip_owes_no_stirrups_for_its_compression_bars() -> None:
+    """ACI 100x15 slab, Ø20/8 below and Ø12/15 above, Mu = 80 kNm: the top bars act in compression.
+
+    ACI 318-19 §9.7.6.4 is a beam provision; a one-way slab sends its shear
+    reinforcement to §9.7.6.2 alone (§7.7.5.1) and may be built with none.
+    The strip carries Ø20/8 = 39.27 cm²/m against the tension-controlled
+    A_s,max = 0.85*25*1000*0.85*(0.003/0.0081)*115/420 = 18.32 cm² at d =
+    150 - 25 - 10 = 115 mm, so it relies on the top bars; no bracing
+    warning is raised for it.
+    """
+    from mento import OneWaySlab
+    from mento.units import m
+
+    slab = OneWaySlab(
+        label="L1",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=1 * m,
+        height=15 * cm,
+        c_c=25 * mm,
+    )
+    slab.set_slab_longitudinal_rebar_bot(d_b1=20 * mm, s_b1=8 * cm)
+    slab.set_slab_longitudinal_rebar_top(d_b1=12 * mm, s_b1=15 * cm)
+    node = Node(section=slab, forces=[Forces(label="ELU", M_y=80 * kNm)])
+    node.check()
+
+    assert slab._compression_faces == {"top"}
+    assert "stirrups_required_for_compression_support" not in _by_code(node.warnings)

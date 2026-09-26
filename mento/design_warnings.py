@@ -101,6 +101,14 @@ Codes
     bar, ``d_b_comp``. Both come from the faces the last flexure check found
     a combination relying on as compression steel, so they need one to have
     run; they carry no combination label.
+``stirrups_required_for_compression_support``
+    A beam that relies on compression steel carries no stirrups at all.
+    §9.7.6.4.1 of both codes asks for transverse reinforcement wherever
+    compression reinforcement is required, whatever the shear, so the
+    warning holds under any Vu. It quotes the smallest stirrup §9.7.6.4.2
+    allows for the thickest compression bar, ``d_b_comp``, and the spacing
+    §9.7.6.4.3 gives that stirrup, ``s_max``. No combination label, as
+    above. A one-way slab is not held to it.
 """
 
 from __future__ import annotations
@@ -470,7 +478,7 @@ def shear_warnings(beam: "RectangularBeam", label: str, state: Any) -> List[_Raw
 
     Mirrors the limit rows of the detailed report -- spacing along and across,
     the minimum area and, where the code states one, the minimum diameter --
-    and adds the two a section without stirrups or with too small a web runs
+    and adds the ones a section without stirrups or with too small a web runs
     into.
     """
     found: List[_Raw] = []
@@ -498,6 +506,7 @@ def shear_warnings(beam: "RectangularBeam", label: str, state: Any) -> List[_Raw
             )
         )
 
+    support_hook = design_code(beam.concrete).stirrup_compression_support
     if int(beam._stirrup_n) == 0 or A_v.magnitude == 0:
         if A_v_req.magnitude > 0:
             found.append(
@@ -509,6 +518,20 @@ def shear_warnings(beam: "RectangularBeam", label: str, state: Any) -> List[_Raw
                     severity=float(A_v_req.magnitude),
                 )
             )
+        # ACI 318-19 / CIRSOC 201-25 §9.7.6.4.1: transverse reinforcement
+        # wherever longitudinal compression reinforcement is required,
+        # whatever the shear -- so a bare doubly reinforced beam misses the
+        # clause even where the concrete carries Vu. Quoted with the smallest
+        # stirrup §9.7.6.4.2 allows, the one whose 48 d_b §9.7.6.4.3 reads. A
+        # slab strip is not held to it: the clause is the beams' (a one-way
+        # slab's stirrups go to §9.7.6.2 only, §7.7.5.1), and a slab is the
+        # element that may be built with no stirrups at all.
+        if support_hook is not None and not beam._stirrups_optional:
+            support = support_hook(beam, beam._stirrup_d_b)
+            if support is not None:
+                support = support_hook(beam, support.d_b_min)
+                values = {"d_b_comp": support.d_b_comp_diameter, "d_b_min": support.d_b_min, "s_max": support.s_max}
+                found.append(_Raw("stirrups_required_for_compression_support", values, None))
         return [_with_units(raw, beam) for raw in found]
 
     if A_v < A_v_min and not math.isclose(A_v.magnitude, A_v_min.magnitude):
@@ -549,7 +572,6 @@ def shear_warnings(beam: "RectangularBeam", label: str, state: Any) -> List[_Raw
     # and ACI 318-19 / CIRSOC 201-25 §9.7.6.4 size and space them for that.
     # Which bars those are is the flexure check's finding, not this
     # combination's, so both limits are read off the section: no label.
-    support_hook = design_code(beam.concrete).stirrup_compression_support
     support = None if support_hook is None else support_hook(beam, beam._stirrup_d_b)
     if support is not None:
         s_support = support.s_max.to(s_l.units)
