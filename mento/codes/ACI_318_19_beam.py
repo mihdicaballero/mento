@@ -353,8 +353,10 @@ def _stirrup_compression_support_ACI_318_19(
     say which bars the legs enclose: a wide compression face whose middle
     bars sit far from the corners passes it silently. Which bars are
     compression reinforcement is the flexure check's to say: a combination
-    that needs compression steel to carry its moment (``doubly_reinforced``)
-    relies on the face opposite its tension face, and the last flexure check
+    that needs compression steel to carry its moment (``doubly_reinforced``),
+    or whose tension steel is admissible only through it (past A_s,max,
+    within A_s,max,eff: the report's "D.R."), relies on the face opposite its
+    tension face (``RectangularBeam._compression_face_of``), and the last flexure check
     or design leaves those faces in ``_compression_faces``. A face with no
     bars on it is nothing to support. ``None`` when no face qualifies -- the
     ordinary singly reinforced beam, whose stirrups are for shear alone.

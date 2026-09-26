@@ -351,7 +351,12 @@ from the release history and are summaries rather than complete lists.
   §7.7.5 send its transverse reinforcement to §9.7.6.2 alone. §9.7.6.4.4 — every corner
   and alternate compression bar in a stirrup corner, none farther than 150 mm clear from
   one that is — is not checked: mento does not know which bars the legs enclose. EN
-  1992-1-1 §9.2.1.2(3) (15·φ) is not applied yet.
+  1992-1-1 §9.2.1.2(3) (15·φ) is not applied yet. A section relies on its compression steel
+  when a combination's moment needs it, and also when the tension steel placed is past
+  A_s,max and admissible only through it (A_s,max,eff, the face the report marks "D.R."):
+  a CIRSOC 40×80 H30 under 1196.5 kN·m asks 51.90 cm², takes 11Ø25 = 54.00 cm² against
+  A_s,max = 53.88 cm², and its 2Ø10 on top lift the limit to 55.36 cm²; set with 1eØ8/30 it
+  now warns against 160 mm, and the design details 1eØ6/16 where it detailed 1eØ8/30.
 
 - **A slab strip is counted as bars per metre.** `Ø10/12` on a metre is 8.33 bars,
   6.54 cm²/m, not the 9 bars (7.07 cm²) that covered the strip. The design rounds the

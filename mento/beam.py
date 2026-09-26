@@ -1171,8 +1171,10 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         ACI 318-19 / CIRSOC 201-25 §9.7.6.4.1 ask for lateral support of the
         compression reinforcement wherever it is required. The flexure check
         knows when: a combination whose moment needs compression steel
-        (``doubly_reinforced`` on its state) relies on the face opposite the
-        one it puts in tension. The shear design and the shear warnings read
+        (``doubly_reinforced`` on its state), or whose tension steel is
+        admissible only through it (past A_s,max, within A_s,max,eff), relies
+        on the face opposite the one it puts in tension (see
+        :meth:`_compression_face_of`). The shear design and the shear warnings read
         the faces so recorded through the code's ``stirrup_compression_support``.
         A code whose state does not say (EN 1992-1-1) records nothing.
         """
@@ -1185,12 +1187,37 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         """The face ``force`` relies on as compression steel, per its flexure ``state``, if any.
 
         The face opposite the one the moment puts in tension, when the
-        combination needs compression steel to carry it (``doubly_reinforced``);
-        ``None`` otherwise, and for a code whose state does not say.
+        combination relies on compression steel: its moment needs it to be
+        carried (``doubly_reinforced``), or the tension steel placed is past
+        A_s,max of the singly reinforced section and complies with ACI 318-19
+        / CIRSOC 201-25 §9.3.3.1 only through the compression steel opposite
+        it, which lifts the limit to A_s,max,eff -- the face the report marks
+        "D.R.". The design reaches the second on purpose, where the catalogue
+        has nothing between the area asked for and A_s,max (see
+        ``_design_tension_face``): a CIRSOC 40x80 H30 under 1196.5 kN·m takes
+        11Ø25 = 54.00 cm² against A_s,max = 53.88 cm², and its two Ø10 on top
+        are what make that admissible. ``None`` otherwise, and for a code
+        whose state does not say.
         """
-        if not getattr(state, "doubly_reinforced", False) or force._M_y == 0 * kN * m:
+        if not hasattr(state, "doubly_reinforced") or force._M_y == 0 * kN * m:
             return None
-        return "top" if force._M_y > 0 * kN * m else "bot"
+        tension = "bot" if force._M_y > 0 * kN * m else "top"
+        relies = bool(state.doubly_reinforced)
+        if not relies:
+            # Past A_s,max and within A_s,max,eff: the face complies through the
+            # compression steel. Past A_s,max,eff it does not comply at all, and
+            # ``As_above_max`` says so.
+            A_s = state.A_s_tension
+            A_s_max, A_s_max_eff = getattr(state, f"A_s_max_{tension}"), getattr(state, f"A_s_max_eff_{tension}")
+            relies = (
+                A_s_max > 0
+                and A_s > A_s_max
+                and not math.isclose(A_s, A_s_max)
+                and (A_s <= A_s_max_eff or math.isclose(A_s, A_s_max_eff))
+            )
+        if not relies:
+            return None
+        return "top" if tension == "bot" else "bot"
 
     def shear_check_results(self, forces: list[Forces]) -> Tuple[ShearCheck, ...]:
         """Check shear and return one result per combination, building no report.

@@ -1140,6 +1140,56 @@ def test_a_singly_reinforced_beam_owes_its_stirrups_nothing_for_compression() ->
     assert "stirrup_diameter_below_compression_support" not in codes
 
 
+def test_compression_bars_that_make_the_tension_steel_admissible_are_braced() -> None:
+    """CIRSOC 40x80 H30, c_c 40 mm, Mu = 1196.5 kNm: 11Ø25 below, 2Ø10 above, the face the report marks "D.R.".
+
+    The moment alone needs no compression steel: it asks 51.90 cm², under
+    A_s,max = 53.88 cm² of §9.3.3.1 with the Ø8 stirrup. But the 11Ø25
+    placed are 54.00 cm², and they are admissible only because the two Ø10
+    on top lift the limit to A_s,max,eff = 55.36 cm² -- the design lays the
+    beam out that way itself, where the catalogue has nothing between the
+    area and the limit. Those Ø10 are compression reinforcement the section
+    requires, so §9.7.6.4.3 holds the stirrups to min(16*10 = 160, 48*8 =
+    384, 400) = 160 mm: at 30 cm the check says so. PR #164 read only the
+    moment and said nothing. A Ø6 stirrup puts the bars 2 mm lower, A_s,max
+    grows to 54.03 cm², the bottom is admissible on its own and the top
+    bars owe nothing; so the design, which used to detail 1eØ8/30, details
+    1eØ6/16 -- the 16 cm is A_v,min, 0.35*400/420 mm²/mm for two Ø6 legs.
+    """
+    concrete = mento.Concrete_CIRSOC_201_25(name="H30", f_c=30 * MPa)
+    steel = SteelBar(name="ADN 420", f_y=420 * MPa)
+    beam = RectangularBeam(label="V", concrete=concrete, steel_bar=steel, width=40 * cm, height=80 * cm, c_c=40 * mm)
+    beam.set_longitudinal_rebar_bot(n1=2, d_b1=25 * mm, n2=4, d_b2=25 * mm, n3=2, d_b3=25 * mm, n4=3, d_b4=25 * mm)
+    beam.set_longitudinal_rebar_top(n1=2, d_b1=10 * mm)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=30 * cm)
+    node = Node(section=beam, forces=[Forces(label="ELU", M_y=1196.5 * kNm)])
+    node.check()
+
+    bottom = beam.flexure_design.bottom
+    assert bottom.A_s_req.to("cm**2").magnitude == pytest.approx(51.90, abs=0.005)
+    assert bottom.A_s_max.to("cm**2").magnitude == pytest.approx(53.88, abs=0.005)
+    assert bottom.A_s_max_eff.to("cm**2").magnitude == pytest.approx(55.36, abs=0.005)
+    assert beam._data_min_max_flexure["Ok?"][2] == "✅ D.R."
+    found = _by_code(node.warnings)
+    assert set(found) == {"stirrup_spacing_exceeds_compression_support"}
+    spacing = found["stirrup_spacing_exceeds_compression_support"]
+    assert (spacing.values["s"], spacing.values["s_max"], spacing.values["d_b_comp"]) == (30 * cm, 16 * cm, 10 * mm)
+
+    beam.set_transverse_rebar(n_stirrups=1, d_b=6 * mm, s_l=16 * cm)
+    node.check()
+    assert beam.flexure_design.bottom.A_s_max.to("cm**2").magnitude == pytest.approx(54.03, abs=0.005)
+    assert node.warnings == ()
+
+    designed = RectangularBeam(
+        label="V", concrete=concrete, steel_bar=steel, width=40 * cm, height=80 * cm, c_c=40 * mm
+    )
+    node = Node(section=designed, forces=[Forces(label="ELU", M_y=1196.5 * kNm)])
+    node.design()
+    assert str(designed.reinforcement.top) == "2Ø10 mm"
+    assert (designed.shear_design.d_b, designed.shear_design.s_l) == (6 * mm, 16 * cm)
+    assert node.warnings == ()
+
+
 @pytest.mark.parametrize(
     "concrete, top, d_b_min",
     [
@@ -1165,7 +1215,11 @@ def test_a_doubly_reinforced_beam_with_no_stirrups_is_told_it_needs_them(
     smallest stirrup §9.7.6.4.2 allows (No. 10 = 9.5 mm under ACI for a bar
     up to No. 32; 8 mm under CIRSOC Tabla 9.7.6.4.2 for a Ø20) and the
     spacing §9.7.6.4.3 gives it: min(16*16 = 256 or 16*20 = 320, 48*d_b,
-    200) = 200 mm. Under 150 kNm the section is singly reinforced and owes
+    200) = 200 mm. Under 150 kNm the moment needs no compression steel, but
+    the 19.63 cm² placed are still past A_s,max and within A_s,max,eff only
+    through the top bars (19.66 cm² under ACI, 22.89 under CIRSOC), so they
+    still owe it; with 2Ø25 alone below, 9.82 cm² under an A_s,max of
+    14.73 cm² at d = 462.5 mm, the section is singly reinforced and owes
     nothing. A one-way slab is not held to it: §9.7.6.4 is the beams'.
     """
     beam = RectangularBeam(
@@ -1197,6 +1251,11 @@ def test_a_doubly_reinforced_beam_with_no_stirrups_is_told_it_needs_them(
 
     node = Node(section=beam, forces=[Forces(label="ELU", M_y=150 * kNm)])
     node.check()
+    assert set(_by_code(node.warnings)) == {"stirrups_required_for_compression_support"}
+
+    beam.set_longitudinal_rebar_bot(n1=2, d_b1=25 * mm)
+    node.check()
+    assert beam.flexure_design.bottom.A_s_max.to("cm**2").magnitude == pytest.approx(14.73, abs=0.005)
     assert node.warnings == ()
 
 
