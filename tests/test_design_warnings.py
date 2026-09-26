@@ -1014,11 +1014,11 @@ def test_a_stirrup_that_makes_the_section_doubly_reinforced_is_spaced_for_it() -
     Ø10, which sinks the bars 2 mm: A_s,max falls to 14.92 cm², the 16.10
     cm² placed are past it, and the section now relies on the 2Ø10 on top
     as compression steel. §9.7.6.4.3 then caps the stirrups at min(16*10,
-    48*10, 150) = 150 mm. The stirrups used to be spaced before the design
-    knew, with the compression faces of the Ø8 depth: 1eØ10/21 and
-    ``stirrup_spacing_exceeds_compression_support`` on the design itself.
-    Each diameter is now read with the compression steel its own depth
-    relies on.
+    48*10, 150) = 150 mm. Spaced with the compression faces of the Ø8 depth,
+    the stirrups came out at 1eØ10/21: in silence before the cap existed,
+    and with ``stirrup_spacing_exceeds_compression_support`` on the design
+    itself once it did. Each diameter is now read with the compression steel
+    its own depth relies on.
     """
     beam = RectangularBeam(
         label="V",

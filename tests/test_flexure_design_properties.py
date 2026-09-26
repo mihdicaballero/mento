@@ -242,13 +242,15 @@ def test_a_design_with_no_layout_ends_on_the_round_that_came_closest() -> None:
     on the 2Ø10 on top, whose strain at d' = 55 mm is small, and φMn =
     37.83 kN·m, DCR 1.010. Nothing fits that does better at that depth
     (the review tried 2Ø20 under 2Ø10, 2Ø12, 2Ø16, 2Ø20 at 38.19 kN·m:
-    1.0096 to 1.0120). The rounds that redesign the flexure at the Ø10 depth
-    end on 3Ø12 + 3Ø10 in two layers under 2Ø25, DCR 1.166, and the design
-    used to keep that last round -- with ``As_below_required`` on top
-    quoting A_s,req = 38.4 cm², the compression steel that the tension face
-    would need with bars that close to the neutral axis. The design now ends on the round that
-    came closest, 2Ø20 / 2Ø10, and says what the bottom is short of at the
-    depth it ends at: the check's A_s,req = 6.36 cm².
+    1.0096 to 1.0120). A design that never looked at the flexure again
+    kept 2Ø20 / 2Ø10 and said nothing, DCR 1.010 in silence. Redoing the
+    flexure at the Ø10 depth ends on 3Ø12 + 3Ø10 in two layers under 2Ø25,
+    DCR 1.166, and a design that kept that last round warned
+    ``As_below_required`` on top quoting A_s,req = 38.4 cm², the compression
+    steel the tension face would need with bars that close to the neutral
+    axis. The design now ends on the round that came closest, 2Ø20 / 2Ø10,
+    and says what the bottom is short of at the depth it ends at: the
+    check's A_s,req = 6.36 cm².
     """
     beam, node = _short_beam()
     node.design()

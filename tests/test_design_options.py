@@ -281,12 +281,14 @@ def test_trying_the_alternatives_leaves_the_faces_flagged_as_they_were() -> None
 
     Each pooled row is put on the face through the public setters, and those
     drop the face's ``bars_do_not_fit`` (the search's verdict on the width no
-    longer describes bars set by hand). Putting the applied bars back did not
-    put the flag back, so a face the search gave up on and that still kept
-    alternatives lost its warning to the verification. Through ``design()``
-    the two do not meet today -- a face the search cannot fit keeps no table
-    -- so the state is set by hand: 25x50 H25 under 120 kNm keeps two
-    alternatives on the bottom, and the flag is planted on that face.
+    longer describes bars set by hand). Putting the applied bars back has to
+    put the flag back too, or a face the search gave up on and that still
+    kept alternatives would lose its warning to the verification -- which it
+    did when the verification came in (the base design verified nothing, so
+    it had no such step to lose it in). Through ``design()`` the two do not
+    meet today -- a face the search cannot fit keeps no table -- so the
+    state is set by hand: 25x50 H25 under 120 kNm keeps two alternatives on
+    the bottom, and the flag is planted on that face.
     """
     beam = RectangularBeam(
         label="V",
@@ -442,8 +444,9 @@ def test_an_options_ratio_is_the_sections_and_is_named_so() -> None:
     the 1eØ10/22, 0.748; the flexure governs the section at 0.993. The
     applied stirrup option carries the section's 0.993, not the shear's.
     The top face carries nothing (``top.DCR`` 0.0), and its one option --
-    no bars -- carries the section's 0.993 too. One field name used to mean
-    both, ``DCR``; the options call theirs ``section_DCR``.
+    no bars -- carries the section's 0.993 too. The ratio came in with the
+    verification of the alternatives under the name ``DCR``, which then
+    meant both; the options call theirs ``section_DCR``.
     """
     beam = RectangularBeam(
         label="V",
@@ -555,11 +558,13 @@ def test_a_full_design_verifies_the_alternatives_once(forces: list[Forces], monk
     """The alternatives are judged on the finished section, so only that verification counts.
 
     ``design_flexure`` verifies them on the section it leaves, which is right
-    when it is called alone; inside ``design()`` every such pass was
-    overwritten by the one on the finished section -- the 20x60 under +150 /
-    -40 kNm verified twice, a design that redoes its flexure (20x60 H25 has
-    none, so the 20x50 of ``_settle_design`` stands for it: 150 kNm and
-    250 kN) three times. The options are the same either way.
+    when it is called alone; inside ``design()`` any such pass would be
+    overwritten by the one on the finished section, and when the
+    verification came in it ran on every flexure pass -- the 20x60 under +150
+    / -40 kNm twice, a design that redoes its flexure (20x60 H25 has none, so
+    the 20x50 of ``_settle_design`` stands for it: 150 kNm and 250 kN) three
+    times. A guard on the cost, not on a result: the options are the same
+    either way.
     """
     calls: list[int] = []
     verify = RectangularBeam._verify_longitudinal_options
