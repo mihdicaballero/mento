@@ -369,14 +369,12 @@ def flexure_warnings(beam: "RectangularBeam", label: str, state: Any) -> List[_R
             )
     # The bars nearest the tension face of a beam against the crack-control
     # cap of ACI 318-19 / CIRSOC 201-25 §24.3.2, which §9.7.2.2 sends them to:
-    # the row the report prints (:func:`mento.reports.tables._max_bar_spacing_row`),
+    # the spacing the report prints (:meth:`RectangularBeam._tension_bar_spacing`),
     # on the face this combination pulls. A slab carries that cap inside the
     # spacing limit :func:`spacing_warnings` reads, and a code without it
     # (EN 1992-1-1) has no row.
     if tension_face is not None:
-        from mento.reports.tables import _max_bar_spacing_row
-
-        row = _max_bar_spacing_row(beam, "b" if tension_face == "bot" else "t")
+        row = beam._tension_bar_spacing("b" if tension_face == "bot" else "t")
         if row is not None:
             s, s_max = row[0], row[1].to(row[0].units)
             if s > s_max and not math.isclose(s.magnitude, s_max.magnitude):

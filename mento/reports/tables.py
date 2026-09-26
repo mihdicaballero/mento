@@ -144,57 +144,13 @@ def _bar_spacing_row(
     )
 
 
-def _max_bar_spacing_row(self: "RectangularBeam", face: str) -> tuple[Quantity, Quantity] | None:
-    """The centre-to-centre spacing of the bars nearest ``face`` of a beam, and the most the code allows it.
-
-    ACI 318-19 §9.7.2.2 / CIRSOC 201-25 art. 9.7.2.2 send the bars closest to
-    the tension face of a beam to Table 24.3.2, a crack-control cap on their
-    spacing, which the code supplies through ``max_bar_spacing_tension``. A
-    slab carries the same cap inside its own spacing row (§7.7.2.2, folded
-    into ``OneWaySlab._max_bar_spacing``), and a code without the hook --
-    EN 1992-1-1 controls cracking through §7.3.3 instead -- has nothing of
-    this kind to report, so both answer ``None``; so does a face with no bars.
-
-    A beam is detailed by a bar count, so the spacing is read off the layer
-    nearest the face the way the section spreads it: the bars evenly spaced
-    between the stirrup legs, which puts adjacent centres one clear distance
-    and two half-diameters apart -- the larger bar of the layer, on the safe
-    side where it mixes two. With a single bar nearest the face there is no
-    pair to measure, and §24.3.3 compares the width of the face against the
-    same limit instead. ``face`` is ``"b"`` or ``"t"``.
-    """
-    if getattr(self, f"_s_b1_{face}", None) is not None:
-        return None
-    limit_of = design_code(self.concrete).max_bar_spacing_tension
-    if limit_of is None:
-        return None
-    groups = [
-        (n, d_b)
-        for n, d_b in (
-            (getattr(self, f"_n1_{face}"), getattr(self, f"_d_b1_{face}")),
-            (getattr(self, f"_n2_{face}"), getattr(self, f"_d_b2_{face}")),
-        )
-        if n > 0 and d_b is not None and d_b.magnitude > 0
-    ]
-    bars = sum(n for n, _ in groups)
-    if bars == 0:
-        return None
-    limit = cast("Quantity", limit_of(self))
-    if bars == 1:
-        return self.width, limit
-    effective: Quantity = self.width - 2 * (self.c_c + self._stirrup_d_b)
-    across: Quantity = sum((n * d_b for n, d_b in groups), 0 * self.width)
-    clear: Quantity = (effective - across) / (bars - 1)
-    return clear + max(d_b for _, d_b in groups), limit
-
-
 def _append_max_bar_spacing_rows(self: "RectangularBeam", M: Quantity) -> None:
     """Add a beam's §24.3.2 rows to the flexure limits table, the tension face held to the cap.
 
     "Maximum spacing top" and "Maximum spacing bottom", each carrying the
     centre-to-centre spacing of the layer nearest the face against the
     crack-control cap of ACI 318-19 / CIRSOC 201-25 §24.3.2 (see
-    :func:`_max_bar_spacing_row`). The cap is printed on both faces and
+    :meth:`~mento.beam.RectangularBeam._tension_bar_spacing`). The cap is printed on both faces and
     checked on the one the combination puts in tension, the way
     :func:`_drop_max_off_tension_face` treats A_s,max: the clause is written
     on the bars closest to the face in tension, and a combination pulls one
@@ -204,7 +160,7 @@ def _append_max_bar_spacing_rows(self: "RectangularBeam", M: Quantity) -> None:
     """
     table = self._data_min_max_flexure
     for face, label in (("t", "Maximum spacing top"), ("b", "Maximum spacing bottom")):
-        row = _max_bar_spacing_row(self, face)
+        row = self._tension_bar_spacing(face)
         if row is None:
             continue
         value, limit = row

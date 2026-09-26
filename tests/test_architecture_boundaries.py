@@ -132,6 +132,29 @@ def test_elements_do_not_import_presentation_libraries(path: Path) -> None:
     )
 
 
+def test_the_warnings_take_no_quantity_from_the_report_layer() -> None:
+    """ADR-0004: presentation consumes result objects; a quantity of the section is the element's.
+
+    ``mento.design_warnings`` is data the element builds, and the spacing its
+    ``bar_spacing_exceeds_max`` quotes -- the centre-to-centre spacing of the
+    layer nearest the tension face, against the Table 24.3.2 cap -- is a
+    quantity of the section: the beam computes it
+    (``RectangularBeam._tension_bar_spacing``) and the report prints it. It
+    used to be computed in ``mento.reports.tables`` and imported from there.
+    The one report helper the warnings still read, ``_bar_spacing_row``,
+    only labels the clear spacing the beam stores and the limits the element
+    supplies.
+    """
+    tree = _parse(MENTO_ROOT / "design_warnings.py")
+    imported = {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("mento.reports")
+        for alias in node.names
+    }
+    assert imported <= {"_bar_spacing_row"}, f"design_warnings reads {imported} from the report layer"
+
+
 # Every design-code module: no longer just the beam ones, since the wall's
 # report tables moved out too.
 CODE_MODULES = sorted(EQUATIONS_ROOT.glob("*.py"))

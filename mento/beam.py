@@ -923,6 +923,66 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
             + area(self._n4_t, self._d_b4_t)
         )
 
+    def _layer_clear_spacing(self, n_a: int, d_a: Quantity, n_b: int, d_b: Quantity) -> Quantity:
+        """The clear distance between the bars of one layer, spread evenly between the stirrup legs.
+
+        Parameters:
+            n_a (int): Number of bars in the first group of the layer.
+            d_a (Quantity): Diameter of bars in the first group of the layer.
+            n_b (int): Number of bars in the second group of the layer.
+            d_b (Quantity): Diameter of bars in the second group of the layer.
+
+        Returns:
+            Quantity: Clear spacing for the given layer -- for a layer of one
+            bar, the room left beside it.
+        """
+        effective_width = self.width - 2 * (self.c_c + self._stirrup_d_b)
+        total_bars = n_a + n_b
+        if total_bars <= 1:
+            return effective_width - max(d_a, d_b)  # Clear space for one bar
+        total_bar_width = n_a * d_a + n_b * d_b
+        return (effective_width - total_bar_width) / (total_bars - 1)
+
+    def _tension_bar_spacing(self, face: str) -> Optional[Tuple[Quantity, Quantity]]:
+        """The centre-to-centre spacing of the bars nearest ``face``, and the most the code allows it.
+
+        ACI 318-19 §9.7.2.2 / CIRSOC 201-25 art. 9.7.2.2 send the bars closest to
+        the tension face of a beam to Table 24.3.2, a crack-control cap on their
+        spacing, which the code supplies through ``max_bar_spacing_tension``. A
+        slab carries the same cap inside its own spacing row (§7.7.2.2, folded
+        into ``OneWaySlab._max_bar_spacing``), and a code without the hook --
+        EN 1992-1-1 controls cracking through §7.3.3 instead -- has nothing of
+        this kind to report, so both answer ``None``; so does a face with no bars.
+
+        A beam is detailed by a bar count, so the spacing is read off the layer
+        nearest the face the way the section spreads it: the bars evenly spaced
+        between the stirrup legs (:meth:`_layer_clear_spacing`), which puts
+        adjacent centres one clear distance and two half-diameters apart -- the
+        larger bar of the layer, on the safe side where it mixes two. With a
+        single bar nearest the face there is no pair to measure, and §24.3.3
+        compares the width of the face against the same limit instead. The
+        report's §24.3.2 rows and ``bar_spacing_exceeds_max`` both read this.
+        ``face`` is ``"b"`` or ``"t"``.
+        """
+        if getattr(self, f"_s_b1_{face}", None) is not None:
+            return None
+        limit_of = design_code(self.concrete).max_bar_spacing_tension
+        if limit_of is None:
+            return None
+        # The two groups of the layer nearest the face; one with no bars, or
+        # bars of no size, counts for nothing.
+        nearest = []
+        for group in (1, 2):
+            n, d_b = getattr(self, f"_n{group}_{face}"), getattr(self, f"_d_b{group}_{face}")
+            nearest.append((n, d_b) if n > 0 and d_b is not None and d_b.magnitude > 0 else (0, 0 * self.width))
+        (n_a, d_a), (n_b, d_b) = nearest
+        if n_a + n_b == 0:
+            return None
+        limit: Quantity = limit_of(self)
+        if n_a + n_b == 1:
+            return self.width, limit
+        return self._layer_clear_spacing(n_a, d_a, n_b, d_b) + max(d_a, d_b), limit
+
     def _calculate_min_clear_spacing(self) -> None:
         """
         Calculates the maximum clear spacing between bars for the bottom rebar layers.
@@ -930,26 +990,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         Returns:
             Quantity: The maximum clear spacing between bars in either the first or second layer.
         """
-
-        def layer_clear_spacing(n_a: int, d_a: Quantity, n_b: int, d_b: Quantity) -> Quantity:
-            """
-            Helper function to calculate clear spacing for a given layer.
-
-            Parameters:
-                n_a (int): Number of bars in the first group of the layer.
-                d_a (Quantity): Diameter of bars in the first group of the layer.
-                n_b (int): Number of bars in the second group of the layer.
-                d_b (Quantity): Diameter of bars in the second group of the layer.
-
-            Returns:
-                Quantity: Clear spacing for the given layer.
-            """
-            effective_width = self.width - 2 * (self.c_c + self._stirrup_d_b)
-            total_bars = n_a + n_b
-            if total_bars <= 1:
-                return effective_width - max(d_a, d_b)  # Clear space for one bar
-            total_bar_width = n_a * d_a + n_b * d_b
-            return (effective_width - total_bar_width) / (total_bars - 1)
+        layer_clear_spacing = self._layer_clear_spacing
 
         # AVAIABLE CLEAR SPACING FOR BOTTOM BARS
         # Calculate clear spacing for each layer
