@@ -1188,13 +1188,9 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         combination needs compression steel to carry it (``doubly_reinforced``);
         ``None`` otherwise, and for a code whose state does not say.
         """
-        if not getattr(state, "doubly_reinforced", False):
+        if not getattr(state, "doubly_reinforced", False) or force._M_y == 0 * kN * m:
             return None
-        if force._M_y > 0 * kN * m:
-            return "top"
-        if force._M_y < 0 * kN * m:
-            return "bot"
-        return None
+        return "top" if force._M_y > 0 * kN * m else "bot"
 
     def shear_check_results(self, forces: list[Forces]) -> Tuple[ShearCheck, ...]:
         """Check shear and return one result per combination, building no report.
