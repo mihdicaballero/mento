@@ -1,4 +1,5 @@
 import math
+from typing import Any
 
 import pytest
 from mento.rebar import Rebar, RebarDesignInfeasibleError
@@ -319,6 +320,25 @@ def test_beam_transverse_rebar_CIRSOC_201_25(
     assert shear.A_v.to("cm**2/m").magnitude == pytest.approx(2.57, rel=1e-3)
 
 
+_LAYOUT = ["n_1", "d_b1", "n_2", "d_b2", "n_3", "d_b3", "n_4", "d_b4"]
+
+
+@pytest.mark.parametrize("A_s_req", [1 * cm**2, 6 * cm**2, 20 * cm**2])
+@pytest.mark.parametrize("fixture", ["beam_example_metric", "slab_example_metric"])
+def test_longitudinal_combinations_hold_each_layout_once(
+    fixture: str, A_s_req: Any, request: pytest.FixtureRequest
+) -> None:
+    """Every layout appears once, and a group with no bars carries no diameter."""
+    beam_rebar = Rebar(request.getfixturevalue(fixture))
+    beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=A_s_req)
+    table = beam_rebar._long_combos_df
+
+    keys = table[_LAYOUT].map(lambda v: None if v is None else getattr(v, "magnitude", v))
+    assert not keys.duplicated().any()
+    for n, d in (("n_2", "d_b2"), ("n_3", "d_b3"), ("n_4", "d_b4")):
+        assert ((table[n] == 0) == table[d].isna()).all()
+
+
 # Test 1: Slab mode - spacing penalty
 def test_slab_mode_spacing_penalty(slab_example_metric: OneWaySlab) -> None:
     """Test that slab mode applies spacing penalty correctly"""
@@ -473,6 +493,68 @@ def test_beam_layer2_spacing_check() -> None:
     # All results should have valid spacing
     for _, row in result.iterrows():
         assert row["clear_spacing"].magnitude >= 50
+
+
+def test_layer_spacing_equal_to_the_limit_is_accepted() -> None:
+    """A clear spacing that meets its limit exactly is not lost to rounding.
+
+    12 cm - 2*(25 mm + 8 mm) comes out of pint as 53.99999999999999 mm, so two
+    Ø12 bars sat 29.999999999999993 mm apart against the 30 mm vibrator limit
+    and were rejected: the design fell back to 4Ø10 for a face asking for 4.9 cm².
+    """
+    concrete = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
+    steelBar = SteelBar(name="ADN 420", f_y=420 * MPa)
+    beam = RectangularBeam(
+        label="101",
+        concrete=concrete,
+        steel_bar=steelBar,
+        width=12 * cm,
+        height=30 * cm,
+        c_c=25 * mm,
+        settings=BeamSettings(stirrup_diameter_ini=8 * mm),
+    )
+
+    beam_rebar = Rebar(beam)
+    beam_rebar.longitudinal_rebar_ACI_318_19(A_s_req=4.88 * cm**2, A_s_max=4.91 * cm**2)
+    best = beam_rebar.longitudinal_rebar_design
+
+    assert best["d_b1"] == 12 * mm
+    assert best["total_as"].to("cm**2").magnitude == pytest.approx(4.524, abs=1e-3)
+    assert best["clear_spacing"].to("mm").magnitude == pytest.approx(30.0)
+
+
+def test_vibrator_size_only_spaces_the_top_bars() -> None:
+    """The vibrator goes in from the top: below, the clear spacing is 25 mm.
+
+    15 cm web, Ø8 stirrups: 84 mm between the stirrups, so 2Ø12 + 1Ø10 sit
+    (84 - 24 - 10)/2 = 25 mm apart -- enough on the bottom, not under a 30 mm
+    vibrator. The bottom reaches 5.06 cm² with three bars a layer; the top, and
+    a caller that names no face, stay at two.
+    """
+    beam = RectangularBeam(
+        label="V15",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=15 * cm,
+        height=30 * cm,
+        c_c=25 * mm,
+        settings=BeamSettings(stirrup_diameter_ini=8 * mm),
+    )
+
+    def best(face: str | None) -> pd.Series:
+        rebar = Rebar(beam)
+        rebar.longitudinal_rebar(5.06 * cm**2, 5.79 * cm**2, 5 * cm, face)
+        return rebar.longitudinal_rebar_design
+
+    bottom = best("bot")
+    assert (bottom["n_1"], bottom["n_2"]) == (2, 1)
+    assert bottom["total_as"].to("cm**2").magnitude == pytest.approx(5.40, rel=1e-3)
+    assert bottom["clear_spacing"].to("mm").magnitude == pytest.approx(25.0)
+
+    for face in ("top", None):
+        row = best(face)
+        assert (row["n_1"], row["n_2"]) == (2, 0)
+        assert row["clear_spacing"].to("mm").magnitude >= 30.0
 
 
 # Test 9: Fallback combination tracking

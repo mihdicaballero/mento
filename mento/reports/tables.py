@@ -14,7 +14,7 @@ confining it to this layer is the step that makes removing it possible.
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Any, Dict, cast
+from typing import TYPE_CHECKING, Any, Dict, List, cast
 
 import pandas as pd
 from mento.units import Quantity
@@ -462,6 +462,21 @@ def _initialize_dicts_ACI_318_19_shear(self: "RectangularBeam") -> None:
     self._shear_all_checks = self._all_shear_checks_passed and (check_max == "✅") and (check_FU == "✅")
 
 
+def _drop_max_off_tension_face(max_values: List[Any], M: Quantity) -> None:
+    """Stop holding to A_s_max a face the combination does not put in tension.
+
+    ``max_values`` is the list of the flexure min/max rows, top steel at 0 and
+    bottom steel at 2. A_s_max limits tension steel: the bars a negative moment
+    asks for on the bottom are compression steel, and a combination with no
+    moment pulls neither face. The limit is still printed; only the check skips
+    it. :func:`mento.design_warnings.flexure_warnings` reads it the same way.
+    """
+    if M.magnitude <= 0:
+        max_values[2] = None
+    if M.magnitude >= 0:
+        max_values[0] = None
+
+
 def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
     # Update longitudinal rebar attributes
     self._update_longitudinal_rebar_attributes()
@@ -522,36 +537,33 @@ def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
         self._A_s_min_bot,
         s_bot_min,
     ]  # Use None for items without a minimum constraint
+    # The maximum is the tension-controlled limit of §9.3.3.1 with the
+    # compression steel the other face carries, A_s_max + A_s'*f_s'/f_y: a
+    # doubly reinforced face is held to it rather than excused from it.
     max_values = [
-        self._A_s_max_top,
+        self._A_s_max_eff_top,
         s_top_max,
-        self._A_s_max_bot,
+        self._A_s_max_eff_bot,
         s_bot_max,
     ]  # Use None for items without a maximum constraint
+    _drop_max_off_tension_face(max_values, self._M_u)
     current_values = [
         self._A_s_top,
         s_top,
         self._A_s_bot,
         s_bot,
     ]  # Current values to check
+    # Past these a face complies only through its compression steel: D.R.
+    singly_max = {0: self._A_s_max_top, 2: self._A_s_max_bot}
 
     ARTICLE_STR = "9.6.1.3"
 
     checks = []
     for i, (curr, min_val, max_val) in enumerate(zip(current_values, min_values, max_values)):
-        # --- EXCEPTION FOR DOUBLY REINFORCED SECTIONS ---
-        # If doubly reinforced, ignore maximum limits for top (i=0) and bottom (i=2)
-        if self._doubly_reinforced and i in (0, 2):
-            # If it passes min, we give the special tag
-            if min_val is None or curr >= min_val:
-                checks.append("✅ D.R.")
-                continue
-            # If it fails min, let the normal logic handle it (fall through)
-        # -------------------------------------------------
-
         passed = (min_val is None or curr >= min_val) and (max_val is None or curr <= max_val)
         if passed:
-            checks.append("✅")
+            doubly = max_val is not None and i in singly_max and curr > singly_max[i]
+            checks.append("✅ D.R." if doubly else "✅")
             continue
 
         # Below A_s_min but not below the minimum left after the 4/3 relief of
@@ -587,9 +599,9 @@ def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
             _shown_mm(s_bot_min),
         ],
         "Max.": [
-            round(self._A_s_max_top.to("cm**2").magnitude, 2),
+            round(self._A_s_max_eff_top.to("cm**2").magnitude, 2),
             _shown_mm(s_top_max),
-            round(self._A_s_max_bot.to("cm**2").magnitude, 2),
+            round(self._A_s_max_eff_bot.to("cm**2").magnitude, 2),
             _shown_mm(s_bot_max),
         ],
         "Ok?": checks,

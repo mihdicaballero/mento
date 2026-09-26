@@ -29,8 +29,10 @@ from mento.codes.ACI_318_19_beam import (
     _minimum_flexural_reinforcement_ratio_ACI_318_19,
     _determine_nominal_moment_simple_reinf_ACI_318_19,
     _determine_nominal_moment_double_reinf_ACI_318_19,
-    _select_safe_design,
+    _flexure_capacity_ACI_318_19,
+    _flexure_ductile_ACI_318_19,
 )
+from mento.codes.flexure_design import _best_visited_pair
 from mento.codes.EN_1992_2004_beam import (
     _compression_zone_limits_EN_1992_2004,
     _initialize_variables_EN_1992_2004,
@@ -1569,7 +1571,6 @@ def beam_example_flexure_ACI() -> RectangularBeam:
     return section
 
 
-@pytest.mark.published_example
 def test_check_flexure_ACI_318_19_1(beam_example_flexure_ACI: RectangularBeam) -> None:
     # Testing the check of the reinforced beam with a large moment that requires
     # compression reinforcement, the moment being positive.
@@ -1596,13 +1597,18 @@ def test_check_flexure_ACI_318_19_1(beam_example_flexure_ACI: RectangularBeam) -
     assert results.iloc[1]["As,req top"] == pytest.approx(5.22, rel=1e-2)
     assert results.iloc[1]["As"] == pytest.approx(36.49, rel=1e-2)
     assert results.iloc[1]["Mu"] == pytest.approx(542.33, rel=1e-3)
-    # ØMn validado contra Beam Flexure 03_v3 - test_1.cpd (validacion autoreferencial —
-    # calcpad implementa la misma logica que Mento). PENDIENTE validar en ETABS o
-    # spColumn cuando esten disponibles.
-    assert results.iloc[1]["ØMn"] == pytest.approx(550.34, rel=1e-3)
+    # La seccion no esta controlada por traccion: con los 5.656 in² reales y el
+    # acero comprimido, compatibilidad de deformaciones da c = 8.344 in y
+    # eps_t = 0.00432 < eps_ty + 0.003 = 0.00507, asi que phi = 0.838 (Tabla 21.2.2)
+    # y ØMn = 546.80 kN·m. El calcpad v3 recortaba A_s a A_s_max_total y mantenia
+    # phi = 0.90 (550.34, del lado inseguro); ya no es la referencia de este valor,
+    # que se verifico con una compatibilidad escrita aparte.
+    assert results.iloc[1]["ØMn"] == pytest.approx(546.80, rel=1e-3)
+    # Y lo dice: la cara traccionada supera el tope de §9.3.3.1 con su compresion.
+    over = [w for w in node.warnings if w.code == "As_above_max"]
+    assert [w.face for w in over] == ["bottom"]
 
 
-@pytest.mark.published_example
 def test_check_flexure_ACI_318_19_2(beam_example_flexure_ACI: RectangularBeam) -> None:
     # Testeo el checkeo de la viga con momento NEGATIVO que requiere armadura de compresión.
     # Calcpad de referencia: ACI 318-19 Beam Flexure 03_v3 - test_2.cpd
@@ -1622,10 +1628,10 @@ def test_check_flexure_ACI_318_19_2(beam_example_flexure_ACI: RectangularBeam) -
     assert results.iloc[1]["As,req top"] == pytest.approx(33.17, rel=1e-3)
     assert results.iloc[1]["As"] == pytest.approx(36.49, rel=1e-3)
     assert results.iloc[1]["Mu"] == pytest.approx(-542.33, rel=1e-5)
-    # ØMn validado contra Beam Flexure 03_v3 - test_2.cpd (validacion autoreferencial —
-    # calcpad implementa la misma logica que Mento). PENDIENTE validar en ETABS o
-    # spColumn cuando esten disponibles.
-    assert results.iloc[1]["ØMn"] == pytest.approx(550.34, rel=1e-3)
+    # El espejo de test_1: eps_t = 0.00432, phi = 0.838, ØMn = 546.80 kN·m.
+    assert results.iloc[1]["ØMn"] == pytest.approx(546.80, rel=1e-3)
+    over = [w for w in node.warnings if w.code == "As_above_max"]
+    assert [w.face for w in over] == ["top"]
 
 
 @pytest.mark.published_example
@@ -2653,7 +2659,7 @@ def test_design_flexure_ACI_318_19_negative_moment_insufficient_section() -> Non
     Negative moment on a section too small to resist it: b=15", h=15",
     fc=20MPa, fy=500MPa, Mu=-120 kN·m. The design cannot find a top layout
     that satisfies phi*Mn >= Mu, so the post-loop final verification falls back
-    to _select_safe_design on the top face (best-effort layout). The contract
+    to _best_visited_pair (best-effort layout). The contract
     is that design_flexure never raises; check_flexure downstream reports DCR>1.
     """
     concrete = Concrete_ACI_318_19(name="C20", f_c=20 * MPa)
@@ -2673,31 +2679,29 @@ def test_design_flexure_ACI_318_19_negative_moment_insufficient_section() -> Non
     # flag DCR>1, but the design still returns the best-effort layout.
 
 
-def test_select_safe_design_prefers_smallest_passing_layout() -> None:
+def test_best_visited_pair_prefers_the_lightest_admissible_pair() -> None:
     """
-    _select_safe_design — criterio 1 (rama `if passing:`): entre los armados
-    visitados por el lazo de Picard, gana el de MENOR As que igual cumple
-    ØMn >= Mu (el mas economico), NO el de mayor ØMn.
+    _best_visited_pair: de los pares de armados que el lazo visito, gana el de
+    MENOR acero que resiste y es admisible (controlado por traccion), no el de
+    mayor ØMn; si ninguno resiste, el admisible que mas se acerca.
 
-    Seccion 20x50 cm, fc=25 MPa, fy=420 MPa, c_c=2.5 cm, estribo Ø8.
-    Dos candidatos, ambos simplemente armados (As <= As,max = ρmax·d·b, con
-    ρmax = 0.85·β1·fc/fy·(0.003/(εy+0.006)) = 0.01593 → As,max ≈ 14.6 cm²),
-    de modo que ACI 318-19 da Mn = As·fy·(d - a/2) con a = As·fy/(0.85·fc·b):
+    Seccion 20x50 cm, fc=25 MPa, fy=420 MPa, c_c=2.5 cm, estribo Ø8, sin
+    armadura superior (la cara superior nunca se visito: el par la deja vacia).
+    Candidatos de la cara inferior, simplemente armados salvo el ultimo
+    (As,max = ρmax·d·b = 0.01593·d·200, ≈ 14.6 cm²):
 
-      2Ø20: As = 6.28 cm², d = 50 - 2.5 - 0.8 - 1.00 = 45.7 cm
-            a = 628.3·420/(0.85·25·200) = 62.1 mm
+      2Ø20: As = 6.28 cm², d = 45.7 cm, a = 62.1 mm
             ØMn = 0.9 · 628.3·420·(457 - 31.0) = 101.2 kN·m
-      2Ø25: As = 9.82 cm², d = 50 - 2.5 - 0.8 - 1.25 = 45.45 cm
-            a = 981.7·420/(0.85·25·200) = 97.0 mm
+      2Ø25: As = 9.82 cm², d = 45.45 cm, a = 97.0 mm
             ØMn = 0.9 · 981.7·420·(454.5 - 48.5) = 150.7 kN·m
+      6Ø25 en dos capas: As = 29.45 cm² > As,max → no controlada por traccion
 
-    Con M_demand = 90 kN·m ambos cumplen: debe devolverse el 2Ø20 aunque el
-    2Ø25 tenga mayor capacidad, y el orden de la lista no debe influir.
-    Con M_demand = 200 kN·m no cumple ninguno y aplica el criterio 2
-    (fallback: el de mayor ØMn → 2Ø25), que deja el DCR>1 para check_flexure.
+    Con Mu = 90 kN·m resisten los dos primeros: gana 2Ø20, en cualquier orden.
+    Con Mu = 200 kN·m no resiste ninguno admisible: gana 2Ø25, el que mas se
+    acerca, aunque 6Ø25 tenga mas capacidad -- pasa el limite de §9.3.3.1.
     """
     beam = RectangularBeam(
-        label="select_safe_design",
+        label="best_visited_pair",
         concrete=Concrete_ACI_318_19(name="C25", f_c=25 * MPa),
         steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
         width=20 * cm,
@@ -2706,81 +2710,73 @@ def test_select_safe_design_prefers_smallest_passing_layout() -> None:
     )
     beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=20 * cm)
 
-    # Payloads con la misma forma que devuelve el diseñador de barras.
-    small = {
-        "n_1": 2,
-        "d_b1": 20 * mm,
-        "n_2": 0,
-        "d_b2": None,
-        "n_3": 0,
-        "d_b3": None,
-        "n_4": 0,
-        "d_b4": None,
-        "total_as": (2 * np.pi * (20 * mm) ** 2 / 4).to("cm**2"),
-    }
-    large = {
-        "n_1": 2,
-        "d_b1": 25 * mm,
-        "n_2": 0,
-        "d_b2": None,
-        "n_3": 0,
-        "d_b3": None,
-        "n_4": 0,
-        "d_b4": None,
-        "total_as": (2 * np.pi * (25 * mm) ** 2 / 4).to("cm**2"),
-    }
+    def layout(n1: int, d_b: Quantity, n3: int = 0) -> dict:
+        area = ((n1 + n3) * np.pi * d_b**2 / 4).to("cm**2")
+        return {
+            "n_1": n1,
+            "d_b1": d_b,
+            "n_2": 0,
+            "d_b2": None,
+            "n_3": n3,
+            "d_b3": d_b if n3 else None,
+            "n_4": 0,
+            "d_b4": None,
+            "total_as": area,
+        }
 
-    # Capacidades reales de cada candidato (verificacion de la hipotesis del test).
-    beam._apply_longitudinal_design_bot(small)
-    assert beam._d_bot.to("mm").magnitude == pytest.approx(457.0, rel=1e-3)
-    beam._apply_longitudinal_design_top(small)
+    small, large, heavy = layout(2, 20 * mm), layout(2, 25 * mm), layout(3, 25 * mm, 3)
 
-    # Criterio 1: ambos cumplen ØMn >= 90 kN·m → gana el de menor As.
-    chosen = _select_safe_design(beam, [large, small], 90 * kNm, face="bot")
-    assert chosen["total_as"].to("cm**2").magnitude == pytest.approx(6.28, rel=1e-3)
-    # El orden de los candidatos no altera la seleccion.
-    chosen_reordered = _select_safe_design(beam, [small, large], 90 * kNm, face="bot")
-    assert chosen_reordered["total_as"].to("cm**2").magnitude == pytest.approx(6.28, rel=1e-3)
-    # Mismo criterio en la cara superior (momento negativo).
-    chosen_top = _select_safe_design(beam, [large, small], -90 * kNm, face="top")
-    assert chosen_top["total_as"].to("cm**2").magnitude == pytest.approx(6.28, rel=1e-3)
+    def assess_for(M: Quantity):  # type: ignore[no-untyped-def]
+        def assess() -> tuple[bool, float]:
+            M_R = _flexure_capacity_ACI_318_19(beam, "bot", M)
+            return _flexure_ductile_ACI_318_19(beam, "bot"), float((M / M_R).to("dimensionless").magnitude)
 
-    # Criterio 2 (fallback): ninguno cumple → el de mayor ØMn.
-    fallback = _select_safe_design(beam, [small, large], 200 * kNm, face="bot")
-    assert fallback["total_as"].to("cm**2").magnitude == pytest.approx(9.82, rel=1e-3)
+        return assess
+
+    for order in ([large, small], [small, large]):
+        bot, top = _best_visited_pair(beam, {i: row for i, row in enumerate(order)}, {}, assess_for(90 * kNm))
+        assert bot["total_as"].to("cm**2").magnitude == pytest.approx(6.28, rel=1e-3)
+        assert top is None
+        # The pair it returns is the one it leaves on the section.
+        assert beam._A_s_bot.to("cm**2").magnitude == pytest.approx(6.28, rel=1e-3)
+        assert beam._A_s_top.magnitude == 0
+
+    beam._apply_longitudinal_design_bot(heavy)
+    assert not _flexure_ductile_ACI_318_19(beam, "bot")
+    bot, _ = _best_visited_pair(beam, {0: small, 1: heavy, 2: large}, {}, assess_for(200 * kNm))
+    assert bot["total_as"].to("cm**2").magnitude == pytest.approx(9.82, rel=1e-3)
 
 
-def test_design_flexure_ACI_318_19_cycle_adopts_passing_visited_layout() -> None:
+def test_design_flexure_ACI_318_19_gap_past_cap_adds_compression_steel() -> None:
     """
-    Rama `if passing:` de _select_safe_design alcanzada desde design_flexure:
-    el lazo de Picard cicla y el armado activo al salir NO cumple, pero uno de
-    los visitados si → se adopta ese.
+    Ninguna combinacion discreta cae entre As,req y As,max: el diseño pasa el
+    tope con la menor que cubre As,req y arma la cara opuesta con la compresion
+    que la mantiene controlada por traccion, en vez de quedarse con el fallback
+    que no alcanza.
 
     Seccion 15x25 cm, fc=35 MPa, fy=500 MPa, c_c=2.5 cm, estribo Ø8, Mu=+40 kN·m.
     Ancho libre = 15 - 2·(2.5 + 0.8) = 8.4 cm; con la separacion libre minima
     (max(25 mm, vibrador 30 mm, d_b)) solo entran 2 barras por capa.
 
-    Recorrido del lazo (verificado con traza sobre design_flexure):
-      it.1  d = 25 - 4.3 = 20.7 cm → As,req = 4.96 cm², As,max = 5.22 cm².
-            Ninguna combinacion discreta cae en [4.96, 5.22] (2Ø20 y 2Ø16+2Ø12
-            dan 6.28 cm²; 3Ø12 no entra por separacion), asi que el diseñador
-            devuelve el fallback 4Ø12 = 4.52 cm² en dos capas.
-      it.2  el centroide de las dos capas baja d → As,req = 5.43 cm² > As,max
-            = 4.85 cm² → sin tope superior el diseñador elige 2Ø20 = 6.28 cm².
-      it.3  con 2Ø20 en una capa el centroide vuelve a subir d y se repite el
-            armado 4Ø12 → se detecta el ciclo y se sale del lazo.
+    d = 25 - 4.3 = 20.7 cm → As,req = 4.96 cm², As,max = 5.22 cm². Ninguna
+    combinacion cae en [4.96, 5.22] (2Ø20 y 2Ø16+2Ø12 dan 6.28 cm²; 3Ø12 no
+    entra), y el tope dejaba el fallback 4Ø12 = 4.52 cm² (ØMn = 34.0 kN·m).
+    Antes se terminaba en 2Ø20 sin compresion: sobre-armada, capacidad
+    capeada en As,max (ØMn = 41.7 kN·m) y aviso As_above_max.
 
-    El armado activo a la salida es 4Ø12 (ØMn = 34.0 kN·m < 40) por lo que la
-    verificacion final llama a _select_safe_design sobre {4Ø12, 2Ø20}.
+    Ahora 2Ø20 abajo pide compresion arriba por el exceso sobre As,max, leida
+    a la profundidad de cada candidato: 2Ø12 en una capa queda a
+    d' = 2.5 + 0.8 + 0.6 = 3.9 cm, mas arriba que 2Ø16, y alcanza:
+      β1 = 0.80 ; εy = 0.0025 ; c_t = 0.003·207/0.0085 = 73.1 mm
+      f's = (73.1 - 39)/73.1·0.003·200000 = 279.9 MPa ; f's,net = 250.1 MPa
+      A's = (6.28 - 5.22)·500/250.1 = 2.12 cm² <= 2Ø12 = 2.26 cm²
+      As,max_total = 5.22 + 2.26·250.1/500 = 6.35 cm² >= 6.28
 
-    Capacidad del candidato que cumple (2Ø20, As = 6.28 cm², d = 20.7 cm):
-      β1 = 0.85 - 0.05·(35-28)/7 = 0.80 ; εy = 500/200000 = 0.0025
-      ρmax = 0.85·0.80·35/500·(0.003/0.0085) = 0.01680
-      As,max = 0.01680·207·150 = 5.22 cm² < 6.28 cm² → seccion sobre-armada:
-      sin acero de compresion (As,top = 0) la capacidad se capea en As,max
-        a  = 521.6·500/(0.85·35·150) = 58.4 mm
-        Mn = 521.6·500·(207 - 29.2) = 46.4 kN·m
-        ØMn = 0.9·46.4 = 41.7 kN·m >= 40 kN·m  → DCR = 0.96
+    Equilibrio (acero comprimido sin fluir), c = 72.3 mm, a = 57.8 mm:
+      Cc = 0.85·35·150·57.8 = 258.1 kN ; f's = 600·(72.3 - 39)/72.3 = 276.3 MPa
+      Cs = 226·(276.3 - 29.75) = 55.7 kN ; T = 628·500 = 314 kN ✓
+      Mn = 258.1·(207 - 28.9) + 55.7·(207 - 39) = 55.3 kN·m
+      ØMn = 0.9·55.3 = 49.8 kN·m ; εt = 0.003·(207 - 72.3)/72.3 = 0.0056 >= 0.0055
     """
     beam = RectangularBeam(
         label="picard_cycle_bot",
@@ -2795,18 +2791,83 @@ def test_design_flexure_ACI_318_19_cycle_adopts_passing_visited_layout() -> None
     results = node.design_flexure()
 
     assert isinstance(results, pd.DataFrame)
-    # Se adopta el candidato visitado que cumple (2Ø20), no el activo al salir
-    # del lazo (4Ø12 = 4.52 cm², ØMn = 34.0 kN·m).
     bottom = beam.flexure_design.bottom
     assert (bottom.layers[0].n, bottom.layers[0].d_b.to("mm").magnitude) == (2, 20)
     # A single layer: the public API only lists layers that carry bars.
     assert len(bottom.layers) == 1
     assert bottom.A_s.to("cm**2").magnitude == pytest.approx(6.28, rel=1e-3)
+    top = beam.flexure_design.top
+    assert [(layer.n, layer.d_b.to("mm").magnitude) for layer in top.layers] == [(2, 12)]
 
     check_results = node.check_flexure()
     assert check_results.iloc[1]["Position"] == "Bottom"
-    assert check_results.iloc[1]["ØMn"] == pytest.approx(41.73, rel=1e-3)
+    assert check_results.iloc[1]["ØMn"] == pytest.approx(49.84, rel=1e-3)
     assert check_results.iloc[1]["DCR"] <= 1.0
+    # Past A_s_max but inside the cap the top steel extends: doubly reinforced,
+    # not over-reinforced.
+    assert "As_above_max" not in [warning.code for warning in node.warnings]
+
+
+def test_design_flexure_ACI_318_19_gap_past_cap_negative_moment_upgrades_bottom() -> None:
+    """
+    El mismo caso con Mu = -40 kN·m: la traccion arriba pasa el tope (2Ø20)
+    y pide abajo compresion, mas que las 2Ø10 = 1.57 cm² que la cara inferior
+    tomo en su primer pase (el 1.8‰ de b·h, sin momento positivo). La
+    conciliacion rediseña la cara inferior: 2Ø12. Abajo no rige el vibrador,
+    y con barras mas finas d' = 2.5 + 0.8 + 0.6 = 3.9 cm, f's sube y la
+    compresion requerida baja a ~2.1 cm², que 2Ø12 = 2.26 cm² cubre.
+    ØMn = 49.8 kN·m.
+    """
+    beam = RectangularBeam(
+        label="picard_gap_top",
+        concrete=Concrete_ACI_318_19(name="C35", f_c=35 * MPa),
+        steel_bar=SteelBar(name="ADN 500", f_y=500 * MPa),
+        width=15 * cm,
+        height=25 * cm,
+        c_c=2.5 * cm,
+    )
+    beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=20 * cm)
+    node = Node(section=beam, forces=Forces(label="Mu-40", M_y=-40 * kNm))
+    node.design_flexure()
+
+    flexure = beam.flexure_design
+    assert [(layer.n, layer.d_b.to("mm").magnitude) for layer in flexure.top.layers] == [(2, 20)]
+    assert [(layer.n, layer.d_b.to("mm").magnitude) for layer in flexure.bottom.layers] == [(2, 12)]
+
+    check_results = node.check_flexure()
+    assert check_results.iloc[1]["Position"] == "Top"
+    assert check_results.iloc[1]["ØMn"] == pytest.approx(49.84, rel=1e-3)
+    assert node.warnings == ()
+
+
+def test_design_flexure_CIRSOC_201_25_narrow_web_gives_the_most_that_fits() -> None:
+    """
+    Viga 12x30 cm, H25, ADN 420, c_c = 2.5 cm, Mu = +40 kN·m.
+
+    Ancho libre = 12 - 2·(2.5 + 0.8) = 5.4 cm: dos barras por capa, y como
+    mucho Ø12 (54 - 2·16 = 22 mm < 30 mm del vibrador descarta el Ø16). Lo
+    mas que entra es 2Ø12 + 2Ø12 = 4.52 cm², por debajo de lo que pide el
+    momento (5.13 cm² de traccion, con compresion). Ni pasando el tope hay
+    una combinacion que alcance, asi que el diseño deja el maximo que entra
+    -- antes de corregir el redondeo de la separacion eran 4Ø10 = 3.14 cm²,
+    DCR 1.53 -- y el DCR > 1 dice que la seccion no alcanza.
+    """
+    beam = RectangularBeam(
+        label="101",
+        concrete=Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=12 * cm,
+        height=30 * cm,
+        c_c=25 * mm,
+    )
+    node = Node(section=beam, forces=[Forces(label="1.4D", V_z=50 * kN, M_y=40 * kNm)])
+    node.design()
+
+    bottom = beam.flexure_design.bottom
+    assert [(layer.n, layer.d_b.to("mm").magnitude) for layer in bottom.layers] == [(2, 12), (2, 12)]
+    assert bottom.A_s.to("cm**2").magnitude == pytest.approx(4.52, rel=1e-3)
+    assert bottom.DCR == pytest.approx(1.129, rel=1e-3)
+    assert [w.face for w in node.warnings if w.code == "As_below_required"] == ["bottom"]
 
 
 def test_design_flexure_ACI_318_19_compression_bottom_exceeds_provided_bottom() -> None:
@@ -2819,28 +2880,27 @@ def test_design_flexure_ACI_318_19_compression_bottom_exceeds_provided_bottom() 
     Mu = -80 kN·m (traccion arriba, compresion abajo).
     Ancho libre = 8.4 cm → solo 2 barras por capa.
 
-    En la iteracion 1 la seccion es doblemente armada: A_s_comp_bot = 5.02 cm²
-    frente a As,max_bot = 6.14 cm². Ninguna combinacion discreta cae en
-    [5.02, 6.14] (2Ø20 y 2Ø16+2Ø12 dan 6.28 cm²), asi que el diseñador devuelve
-    el fallback 4Ø12 = 4.52 cm² < 5.02 cm² y se dispara el re-diseño de la cara
-    inferior por compresion. En las iteraciones siguientes el fondo sube a
-    2Ø25 = 9.82 cm², que ya cubre la compresion, y el lazo cicla en la cara
-    superior hasta 2Ø20 + 2Ø20 (dos capas) = 12.57 cm².
+    La cara inferior, en su primer pase, solo lleva el 1.8‰ de b·h: no hay
+    momento positivo. La compresion que le pide la traccion de arriba es mucho
+    mas, y la conciliacion la rediseña como armadura comprimida.
 
-    Capacidad final (traccion arriba As = 12.57 cm², d = 23.45 cm;
-    compresion abajo A's = 9.82 cm², d' = 4.55 cm; β1 = 0.85, εy = 0.0021):
+    Antes el lazo terminaba en 2Ø20 + 2Ø20 = 12.57 cm² arriba sobre 2Ø25 abajo:
+    ØMn = 86.0 kN·m, pero con A_s = 12.57 > A_s_max_total = 11.78 cm² la seccion
+    no estaba controlada por traccion, y el chequeo lo tapaba recortando A_s.
+    Ahora la compresion se dimensiona para el acero colocado, y el diseño queda
+    en 2Ø25 arriba (una capa) y 2Ø25 abajo:
+
+      d = 30 - (2.5 + 0.8 + 1.25) = 25.45 cm ; d' = 4.55 cm ; β1 = 0.85
       ρmax = 0.85·0.85·25/420·(0.003/0.0081) = 0.01593
-      As,max_top = 0.01593·234.5·150 = 5.60 cm² < 12.57 cm² → sobre-armada, se
-      extiende el tope con el aporte del acero comprimido:
-        c_t = 0.003·234.5/0.0081 = 86.9 mm
-        f's = (86.9 - 45.5)/86.9·0.003·200000 = 285.7 MPa
-        f's,net = 285.7 - 0.85·25 = 264.4 MPa
-        As,max_total = 5.60 + 9.82·264.4/420 = 11.78 cm² < 12.57 → As_eff = 11.78 cm²
-      Equilibrio con acero comprimido NO fluyendo (c = 86.9 mm < d'·...):
-        a = 0.85·86.9 = 73.8 mm
-        As2 = 9.82·264.4/420 = 6.18 cm² ; As1 = 11.78 - 6.18 = 5.60 cm²
-        Mn = 560.2·420·(234.5 - 36.9) + 981.7·264.4·(234.5 - 45.5) = 95.6 kN·m
-        ØMn = 0.9·95.6 = 86.0 kN·m >= 80 kN·m → DCR = 0.93
+      A_s_max_top = 0.01593·254.5·150 = 6.08 cm² < 9.82 → hace falta compresion
+      c_t = 0.003·254.5/0.0081 = 94.3 mm ; f's = (94.3 - 45.5)/94.3·600 = 310.5 MPa
+      A_s_max_total = 6.08 + 9.82·(310.5 - 21.25)/420 = 12.84 cm² >= 9.82 ✓
+
+    Equilibrio (acero comprimido sin fluir), c = 74.8 mm, a = 63.6 mm:
+      Cc = 0.85·25·150·63.6 = 202.7 kN ; f's = 600·(74.8 - 45.5)/74.8 = 235.0 MPa
+      Cs = 982·(235.0 - 21.25) = 209.9 kN ; T = 982·420 = 412.4 kN ✓
+      Mn = 202.7·(254.5 - 31.8) + 209.9·(254.5 - 45.5) = 89.0 kN·m
+      ØMn = 0.9·89.0 = 80.1 kN·m >= 80 ; εt = 0.003·(254.5 - 74.8)/74.8 = 0.0072
     """
     beam = RectangularBeam(
         label="comp_bottom_reupgrade",
@@ -2856,17 +2916,16 @@ def test_design_flexure_ACI_318_19_compression_bottom_exceeds_provided_bottom() 
 
     assert isinstance(results, pd.DataFrame)
     assert beam._doubly_reinforced is True
-    # Traccion arriba en dos capas; la cara inferior queda armada por la
-    # compresion que impone el momento negativo.
     flexure = beam.flexure_design
-    assert flexure.top.A_s.to("cm**2").magnitude == pytest.approx(12.57, rel=1e-3)
-    assert (flexure.bottom.layers[0].n, flexure.bottom.layers[0].d_b.to("mm").magnitude) == (2, 25)
-    assert flexure.bottom.A_s.to("cm**2").magnitude == pytest.approx(9.82, rel=1e-3)
+    assert [(layer.n, layer.d_b.to("mm").magnitude) for layer in flexure.top.layers] == [(2, 25)]
+    assert [(layer.n, layer.d_b.to("mm").magnitude) for layer in flexure.bottom.layers] == [(2, 25)]
 
     check_results = node.check_flexure()
     assert check_results.iloc[1]["Position"] == "Top"
-    assert check_results.iloc[1]["ØMn"] == pytest.approx(86.00, rel=1e-3)
+    assert check_results.iloc[1]["ØMn"] == pytest.approx(80.06, rel=1e-3)
     assert check_results.iloc[1]["DCR"] <= 1.0
+    # Tension-controlled: nothing to warn about.
+    assert node.warnings == ()
 
 
 def test_check_flexure_ACI_318_19_negative_moment_no_top_steel(
@@ -2919,14 +2978,11 @@ def testing_determine_nominal_moment_ACI_318_19(
     assert beam_example_flexure_ACI._phi_M_n_top.to("kN*m").magnitude == pytest.approx(587.0589108678, rel=1e-2)
 
 
-@pytest.mark.published_example
 def test_check_flexure_ACI_318_19_over_reinforced_no_top(
     beam_example_flexure_ACI: RectangularBeam,
 ) -> None:
     """
-    Cubre la rama 3 degenerada (sobre-armada SIN acero de compresion):
-    A_s_bot > A_s_max Y A_s_top = 0 → cap A_s a A_s_max_bot;
-    double_reinf con A_s_top=0 degenera a simple.
+    Sobre-armada SIN acero de compresion: A_s_bot > A_s_max y A_s_top = 0.
 
     Ojo: la fixture RectangularBeam inicializa A_s_top = 0.22 in² como default
     (decision original de Mihdi para el dibujo de estribos). Para forzar el
@@ -2934,11 +2990,14 @@ def test_check_flexure_ACI_318_19_over_reinforced_no_top(
 
     Caso: b=12", h=24", fc=4000psi, fy=60ksi, Mu=400 kip·ft
     Armado: 6×#11 abajo (9.37 in² = 60.5 cm²), NADA arriba.
-    A_s_max_bot ≈ 4.60 in² = 29.7 cm² << 60.5 → sobre-armada
-      φMn = 0.9 × 4.60 × 60 × (21.42 - 6.77/2) / 12 ≈ 506 kN·m
+    A_s_max_bot ≈ 4.60 in² = 29.7 cm² << 60.5 → sobre-armada.
 
-    Calcpad de referencia: ACI 318-19 Beam Flexure 03_v3 - over_reinforced_no_top.cpd
-    PENDIENTE validar en ETABS o spColumn.
+    Antes se recortaba A_s a A_s_max y se mantenia phi = 0.90 (≈ 506 kN·m). Ahora
+    cuenta todo el acero, a la tension que le da su deformacion:
+      c = 13.578 in, eps_t = 0.00173 < eps_ty = 0.00207 → el acero traccionado ni
+      siquiera fluye, phi = 0.65 (controlada por compresion)
+      ØMn = 541.18 kN·m, verificado con una compatibilidad escrita aparte.
+    Y la seccion no cumple §9.3.3.1, que el aviso As_above_max reporta.
     """
     f = Forces(label="Test_over_reinforced_top_zero", M_y=400 * kip * ft)
     beam_example_flexure_ACI.set_longitudinal_rebar_bot(n1=6, d_b1=1.41 * inch)
@@ -2947,8 +3006,8 @@ def test_check_flexure_ACI_318_19_over_reinforced_no_top(
     results = node.check_flexure()
     assert results.iloc[1]["Position"] == "Bottom"
     assert results.iloc[1]["Mu"] == pytest.approx(542.33, rel=1e-3)
-    # φMn usa A_s_max_bot (4.60 in²), no los 9.37 in² reales
-    assert results.iloc[1]["ØMn"] == pytest.approx(506.4, rel=2e-2)
+    assert results.iloc[1]["ØMn"] == pytest.approx(541.18, rel=1e-3)
+    assert "As_above_max" in {w.code for w in node.warnings}
 
 
 @pytest.mark.published_example
@@ -2978,6 +3037,106 @@ def test_check_flexure_ACI_318_19_over_reinforced_but_top_redeems(
     assert results.iloc[1]["Position"] == "Bottom"
     assert results.iloc[1]["Mu"] == pytest.approx(542.33, rel=1e-3)
     assert results.iloc[1]["ØMn"] == pytest.approx(572.52, rel=1e-3)
+    # Past A_s_max, within A_s_max_eff: complies, doubly reinforced, and the
+    # report's maximum is the one it is held to, not the singly reinforced one.
+    min_max = beam_example_flexure_ACI._data_min_max_flexure
+    assert min_max["Ok?"][2] == "✅ D.R."
+    assert min_max["Max."][2] == pytest.approx(35.17, abs=0.02)
+    assert "As_above_max" not in {w.code for w in node.warnings}
+
+
+def test_check_flexure_CIRSOC_201_25_over_reinforced_reports_its_real_strength() -> None:
+    """
+    El peor caso del barrido: CIRSOC 201-25, 25x40, H20, ADN 420, Mu = -206.90 kN·m,
+    3Ø32 arriba (24.13 cm² a d = 351 mm) y 4Ø16 abajo (8.04 cm² a d' = 41 mm).
+
+    El tope de §9.3.3.1 con esa compresion es
+      A_s_max_eff = A_s_max + A_s'·f_s'/f_y = 18.72 cm² < 24.13
+    asi que la seccion no esta controlada por traccion. Por compatibilidad:
+      c = 190.8 mm ; eps_t = 0.003·(351 - 190.8)/190.8 = 0.00252 < 0.0051
+      phi = 0.65 + 0.25·(0.00252 - 0.0021)/0.003 = 0.685 ; ØMn = 196.2 kN·m
+    DCR = 206.90/196.2 = 1.055. Antes se recortaba A_s a 18.72 cm² con
+    phi = 0.90 y daba ØMn = 213.4 kN·m, DCR 0.970: aprobaba una seccion que no
+    resiste. Y el diseño de la misma seccion encuentra una que si.
+    """
+    beam = RectangularBeam(
+        label="P",
+        concrete=Concrete_CIRSOC_201_25(name="H20", f_c=20 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=25 * cm,
+        height=40 * cm,
+        c_c=25 * mm,
+    )
+    beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=15 * cm)
+    beam.set_longitudinal_rebar_top(3, 32 * mm)
+    beam.set_longitudinal_rebar_bot(4, 16 * mm)
+    assert beam._d_top.to("mm").magnitude == pytest.approx(351.0)
+    assert beam._c_mec_bot.to("mm").magnitude == pytest.approx(41.0)
+
+    node = Node(section=beam, forces=[Forces(label="M", M_y=-206.90 * kNm)])
+    node.check_flexure()
+    top = beam.flexure_checks[0].top
+    assert top.M_capacity is not None and top.A_s_max_eff is not None
+    assert top.M_capacity.to("kN*m").magnitude == pytest.approx(196.2, rel=1e-3)
+    assert top.DCR == pytest.approx(1.055, rel=2e-3)
+    assert top.A_s_max_eff.to("cm**2").magnitude == pytest.approx(18.72, rel=1e-3)
+    assert [(w.code, w.face) for w in node.warnings if w.code == "As_above_max"] == [("As_above_max", "top")]
+
+    node.design_flexure()
+    node.check_flexure()
+    assert beam.flexure_checks[0].top.DCR <= 1
+    assert node.warnings == ()
+
+
+def test_calculate_flexural_reinforcement_ACI_318_19_never_asks_for_negative_compression() -> None:
+    """
+    Seccion baja: 20x12 cm, fc = 25 MPa, fy = 420 MPa, Mu = 10 kN·m, mas de lo
+    que toma sin compresion. d ≈ 75 mm y d' ≈ 45 mm, mientras que en el limite
+    de ductilidad el eje neutro esta en c_t = 0.37·d ≈ 28 mm: la barra comprimida
+    queda debajo del eje, f_s' - 0.85·f_c <= 0, y la division daba una armadura
+    de compresion negativa. Ahora no pide ninguna, la cara no alcanza, y el
+    diseño lo dice.
+    """
+    beam = RectangularBeam(
+        label="S",
+        concrete=Concrete_ACI_318_19(name="C25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=20 * cm,
+        height=12 * cm,
+        c_c=25 * mm,
+    )
+    node = Node(section=beam, forces=[Forces(label="M", M_y=10 * kNm)])
+    node.design_flexure()
+    node.check_flexure()
+    check = beam.flexure_checks[0]
+    assert check.top.A_s_req is not None
+    assert check.top.A_s_req.magnitude == 0
+    assert check.bottom.DCR > 1
+    assert "As_below_required" in {w.code for w in node.warnings}
+
+
+def test_design_flexure_EN_1992_2004_waits_for_both_faces_to_settle() -> None:
+    """
+    El lazo de Picard corta por ciclo solo cuando se repite el PAR de armados.
+    Cortaba en cuanto una cara repetia el suyo -- lo que tambien hace una cara
+    que ya convergio mientras la otra sigue ajustando --, y en esta viga dejaba
+    la cara traccionada con un armado pensado para otra profundidad:
+    EN 1992-2004, 20x40, C20, fy = 420 MPa, M_Ed = 204.59 kN·m. Con el corte por
+    cara el diseño terminaba en DCR 1.011; esperando al par, 0.907.
+    """
+    beam = RectangularBeam(
+        label="L",
+        concrete=Concrete_EN_1992_2004(name="C20", f_c=20 * MPa),
+        steel_bar=SteelBar(name="S", f_y=420 * MPa),
+        width=20 * cm,
+        height=40 * cm,
+        c_c=25 * mm,
+    )
+    node = Node(section=beam, forces=[Forces(label="M", M_y=204.59 * kNm)])
+    node.design_flexure()
+    node.check_flexure()
+    assert beam.flexure_checks[0].bottom.DCR == pytest.approx(0.907, abs=1e-3)
+    assert node.warnings == ()
 
 
 def test_design_flexure_rebar_infeasible_does_not_crash() -> None:
@@ -3004,8 +3163,15 @@ def test_design_flexure_rebar_infeasible_does_not_crash() -> None:
         height=15 * cm,
         c_c=2 * cm,
     )
-    Node(section=section, forces=Forces(M_y=14 * kNm)).design_flexure()
-    # If we got here without raising, the contract holds.
+    node = Node(section=section, forces=Forces(M_y=14 * kNm))
+    node.design_flexure()
+    # It did not raise. And the capacity the check reports is a real one: this
+    # case used to give phi*Mn = -26.14 kN·m. It says the design fell short.
+    node.check_flexure()
+    bottom = section.flexure_checks[0].bottom
+    assert bottom.M_capacity is not None and bottom.M_capacity.magnitude > 0
+    assert bottom.DCR > 1
+    assert {w.code for w in node.warnings} & {"As_below_required", "bars_do_not_fit"}
 
 
 def test_design_flexure_ACI_318_19_zero_moment_adopts_geometric_minimum() -> None:
@@ -3040,24 +3206,19 @@ def test_design_flexure_ACI_318_19_zero_moment_adopts_geometric_minimum() -> Non
     assert beam.V_c > 0 * kN
 
 
-@pytest.mark.published_example
 def test_check_flexure_ACI_318_19_over_reinforced_with_default_top(
     beam_example_flexure_ACI: RectangularBeam,
 ) -> None:
     """
-    Cubre la rama 3 (sobre-armada CON acero de compresion presente pero
-    insuficiente): A_s_bot > A_s_max_bot + A_s_top·f_s'_net/f_y.
+    Sobre-armada CON acero de compresion presente pero insuficiente:
+    A_s_bot > A_s_max_bot + A_s_top·f_s'_net/f_y.
 
     Mismo caso que over_reinforced_no_top pero dejando el A_s_top default de la
-    fixture (0.22 in² = 1.43 cm², los estribos constructivos). El chequeo de
-    ductilidad detecta que la seccion sigue sobre-armada y capea A_s efectivo a
-    A_s_max_total = A_s_max_bot + A_s_top·f_s'_net/f_y ≈ 31 cm².
-
-    Con el cap y la contribucion del top al M_n, φMn resulta ~531 kN·m
-    (25 kN·m mas que el caso puro sin top).
-
-    Calcpad de referencia: ACI 318-19 Beam Flexure 03_v3 - over_reinforced_with_default_top.cpd
-    PENDIENTE validar en ETABS o spColumn.
+    fixture (0.22 in² = 1.43 cm²). Antes se recortaba A_s a A_s_max_total ≈ 31 cm²
+    con phi = 0.90 (≈ 531 kN·m). Ahora, con todo el acero:
+      c = 13.5 in, eps_t = 0.00177 < eps_ty → phi = 0.65, ØMn = 556.53 kN·m,
+    verificado con una compatibilidad escrita aparte, y la seccion no cumple
+    §9.3.3.1 (aviso As_above_max).
     """
     f = Forces(label="Test_over_reinforced_default_top", M_y=400 * kip * ft)
     beam_example_flexure_ACI.set_longitudinal_rebar_bot(n1=6, d_b1=1.41 * inch)
@@ -3066,7 +3227,8 @@ def test_check_flexure_ACI_318_19_over_reinforced_with_default_top(
     results = node.check_flexure()
     assert results.iloc[1]["Position"] == "Bottom"
     assert results.iloc[1]["Mu"] == pytest.approx(542.33, rel=1e-3)
-    assert results.iloc[1]["ØMn"] == pytest.approx(531.15, rel=2e-3)
+    assert results.iloc[1]["ØMn"] == pytest.approx(556.53, rel=1e-3)
+    assert "As_above_max" in {w.code for w in node.warnings}
 
 
 def test_rectangular_section_plot_components(
@@ -3236,10 +3398,16 @@ def test_low_concrete_strength_negative_sqrt() -> None:
     # Design should not crash, but DCR should be > 1
     node.design_flexure()
 
-    # The designed reinforcement should equal A_s_max due to negative sqrt_value
-    # Check that beam has bottom rebar set
+    # No tension steel alone reaches the moment, so the face is doubly
+    # reinforced: the requirement is the tension steel of the couple, past
+    # A_s_max, with compression steel on top. It used to stop at A_s_max and
+    # ask for no compression steel at all.
     bottom = beam.flexure_design.bottom
-    assert bottom.A_s_req == bottom.A_s_max
+    top = beam.flexure_design.top
+    assert bottom.A_s_req > bottom.A_s_max
+    assert top.A_s_req.to("cm**2").magnitude > 0
+    # Nothing that fits a 20 cm web carries it, and the section says so.
+    assert {(w.code, w.face) for w in node.warnings} >= {("As_below_required", "bottom")}
 
 
 def test_doubly_reinforced_ignores_max_limits() -> None:

@@ -217,10 +217,84 @@ def test_bars_that_do_not_fit_are_warned_after_a_design() -> None:
     node = Node(section=beam, forces=[Forces(label="M", M_y=200 * kNm, V_z=20 * kN)])
     node.design()
 
-    found = _by_code(node.warnings)
-    assert "bars_do_not_fit" in found
-    assert found["bars_do_not_fit"].face == "bottom"
-    assert found["bars_do_not_fit"].values == {}
+    # The moment makes it doubly reinforced, so neither the tension steel below
+    # nor the compression steel above has a layout that fits.
+    not_fitting = [w for w in node.warnings if w.code == "bars_do_not_fit"]
+    assert {w.face for w in not_fitting} == {"bottom", "top"}
+    assert all(w.values == {} for w in not_fitting)
+
+
+def test_a_design_short_of_the_moment_is_warned_until_the_bars_reach_it() -> None:
+    """A 12x30 web takes 4Ø12 at most, and 40 kNm asks for 5.18 cm² below."""
+    beam = RectangularBeam(
+        label="101",
+        concrete=mento.Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=12 * cm,
+        height=30 * cm,
+        c_c=25 * mm,
+    )
+    node = Node(section=beam, forces=[Forces(label="1.4D", V_z=50 * kN, M_y=40 * kNm)])
+    node.design()
+
+    short = _by_code(node.warnings)["As_below_required"]
+    assert short.face == "bottom"
+    assert short.values["A_s"].to("cm**2").magnitude == pytest.approx(4.52, rel=1e-3)
+    assert short.values["A_s_req"].to("cm**2").magnitude == pytest.approx(5.18, rel=1e-2)
+    mento.set_language("es")
+    assert "agrandar la sección" in _by_code(node.warnings)["As_below_required"].message
+
+    # Bars set by hand that reach the area clear it.
+    beam.set_longitudinal_rebar_bot(2, 16 * mm, 0, None, 2, 16 * mm)
+    assert "As_below_required" not in {w.code for w in node.warnings}
+
+
+def test_the_maximum_is_only_read_on_the_face_in_tension() -> None:
+    """29.45 cm² on the bottom is past A_s,max, but only a positive moment pulls it."""
+
+    def heavy_bottom() -> RectangularBeam:
+        beam = _beam()
+        beam.set_transverse_rebar(n_stirrups=1, d_b=10 * mm, s_l=20 * cm)
+        beam.set_longitudinal_rebar_bot(2, 25 * mm, 1, 25 * mm, 2, 25 * mm, 1, 25 * mm)
+        beam.set_longitudinal_rebar_top(2, 12 * mm)
+        return beam
+
+    # A negative moment makes those bars compression steel, and no moment
+    # pulls neither face: no warning, and the report row passes.
+    beam = heavy_bottom()
+    node = Node(section=beam, forces=[Forces(label="neg", M_y=-50 * kNm), Forces(label="zero", M_y=0 * kNm)])
+    node.check_flexure()
+    assert "As_above_max" not in _by_code(node.warnings)
+    assert beam._data_min_max_flexure["Ok?"][2] == "✅"
+
+    beam = heavy_bottom()
+    node = Node(section=beam, forces=[Forces(label="pos", M_y=150 * kNm)])
+    node.check_flexure()
+    over = _by_code(node.warnings)["As_above_max"]
+    assert (over.face, over.combinations) == ("bottom", ("pos",))
+    assert beam._data_min_max_flexure["Ok?"][2] == "❌"
+
+
+def test_en_holds_both_faces_to_its_maximum() -> None:
+    """EN 1992-1-1 §9.2.1.1(3) caps tension OR compression steel, so the face a
+    moment compresses is read against its 4 % too -- unlike ACI 318-19, whose
+    maximum is the ductility limit of the face in tension."""
+    beam = RectangularBeam(
+        label="E",
+        concrete=Concrete_EN_1992_2004(name="C25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="B500S", f_y=500 * MPa),
+        width=20 * cm,
+        height=40 * cm,
+        c_c=25 * mm,
+    )
+    beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=20 * cm)
+    beam.set_longitudinal_rebar_bot(2, 32 * mm, 1, 32 * mm, 2, 32 * mm, 1, 32 * mm)  # 48.3 cm² > 4 %
+    beam.set_longitudinal_rebar_top(2, 16 * mm)
+    node = Node(section=beam, forces=[Forces(label="neg", M_y=-40 * kNm)])
+    node.check_flexure()
+    over = [w for w in node.warnings if w.code == "As_above_max"]
+    assert [w.face for w in over] == ["bottom"]
+    assert over[0].combinations == ("neg",)
 
 
 # ---------------------------------------------------------------------------

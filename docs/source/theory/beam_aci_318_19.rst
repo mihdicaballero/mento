@@ -110,9 +110,32 @@ Nominal moment — doubly reinforced
 When :math:`A_s > A_{s,max}` the compression steel enters the resisting couple.
 Equilibrium is written with a **displaced-concrete correction**: the compression bar
 occupies a volume already accounted for by the :math:`0.85 f'_c a b` block, so its
-effective contribution is :math:`(f_y - 0.85 f'_c)`, not :math:`f_y`.
+effective contribution is :math:`(f'_s - 0.85 f'_c)`, not :math:`f'_s`.
 
-Assuming the compression steel yields:
+mento solves it by strain compatibility with every bar at the stress its strain
+gives it (§22.2.1.2, §20.2.2.1), the tension steel included, and nothing capped:
+
+.. math::
+
+   0.85 f'_c\, b\, \beta_1 c + A'_s\,(f'_s - 0.85 f'_c) = A_s f_s
+   \qquad
+   f_s = \min\!\left(E_s\,\varepsilon_{cu}\frac{d - c}{c},\ f_y\right),\quad
+   f'_s = \min\!\left(E_s\,\varepsilon_{cu}\frac{c - d'}{c},\ f_y\right)
+
+.. math::
+
+   M_n = 0.85 f'_c\, a\, b \left(d - \frac{a}{2}\right) + A'_s\,(f'_s - 0.85 f'_c)(d - d')
+
+and :math:`\phi` comes from the strain the tension steel reaches,
+:math:`\varepsilon_t = \varepsilon_{cu}(d - c)/c`, through Table 21.2.2 — 0.90 while
+the section is tension-controlled, down to 0.65 once :math:`\varepsilon_t \le
+\varepsilon_y`. Implemented in ``nominal_moment_strain_compatibility`` and
+``flexure_strength_reduction_factor`` (``codes/aci_318_19/equations/flexure.py``),
+dispatched by ``_nominal_moment_face_ACI_318_19``.
+
+While the compression steel keeps the section tension-controlled the tension steel
+yields, and the solution reduces to the closed form below. Assuming the compression
+steel yields as well:
 
 .. math::
 
@@ -140,6 +163,15 @@ into equilibrium:
 with :math:`f'_{s,net} = f'_s - 0.85 f'_c` used for the couple. Implemented in
 ``_determine_nominal_moment_double_reinf_ACI_318_19``.
 
+.. note::
+
+   Past :math:`A_{s,max} + A'_s f'_{s,net}/f_y` the section is no longer
+   tension-controlled. mento used to cut :math:`A_s` back to that value and keep
+   :math:`\phi = 0.90`, which credited such a section with more than it carries: a
+   25x40 CIRSOC 201-25 section with 3Ø32 over 4Ø16 at :math:`M_u = 206.9` kN·m read
+   :math:`\phi M_n = 213.4` kN·m (DCR 0.97) against the 196.2 kN·m
+   (:math:`\varepsilon_t = 0.00252`, :math:`\phi = 0.685`, DCR 1.055) it has.
+
 Required reinforcement
 ^^^^^^^^^^^^^^^^^^^^^^
 
@@ -152,9 +184,10 @@ Inverting the singly-reinforced expression for a demand :math:`M_u`:
    A_{s,calc} = \frac{0.85 f'_c b d}{f_y}
                 \left(1 - \sqrt{1 - \frac{2 R_n}{0.85 f'_c}}\right)
 
-A negative radicand means the section cannot develop :math:`M_u` as singly
-reinforced; mento then sets :math:`A_{s,calc} = A_{s,max}` so the calculation
-completes and the downstream check reports ``DCR > 1`` instead of raising.
+A negative radicand means no amount of tension steel alone develops :math:`M_u`:
+the face is designed doubly reinforced, as below. (It used to stop at
+:math:`A_{s,calc} = A_{s,max}` with no compression steel, so :math:`A_{s,req}` fell
+as the moment grew past that point.)
 
 Minimum reinforcement
 ^^^^^^^^^^^^^^^^^^^^^
@@ -195,6 +228,21 @@ compatibility with :math:`\varepsilon_t = \varepsilon_y + \varepsilon_{cu}`:
 Sections with :math:`c < c_t` are ductile. The ratio :math:`c/d` is reported in the
 results tables.
 
+§9.3.3.1 requires a beam to be tension-controlled. With compression steel on the
+other face the limit on the tension steel grows to
+
+.. math::
+
+   A_{s,max,eff} = A_{s,max} + A'_s\,\frac{f'_{s,net}}{f_y}
+
+(:math:`f'_{s,net}` at :math:`c_t`, below; a compression bar with
+:math:`f'_{s,net} \le 0` extends nothing). It is the same boundary as
+:math:`\varepsilon_t = \varepsilon_y + 0.003`, read as an area. The check reports it
+as ``A_s_max_eff`` and holds the face in tension to it: past it the section does not
+comply with §9.3.3.1, the warning ``As_above_max`` says so, and the capacity already
+carries the lower :math:`\phi` of the strain reached. The face a combination
+compresses is not held to it.
+
 Compression steel at the ductility limit
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -213,6 +261,15 @@ and corrected for displaced concrete:
    \qquad
    M_{n,t} = \rho f_y \left(d - \frac{a_{max}}{2}\right) b\, d,
    \quad a_{max} = \beta_1 c_t
+
+That is the compression steel the moment asks for. The design places whole bars, so
+the tension face usually gets more than :math:`A_{s,req}`, and it sizes the
+compression steel for the steel **placed**,
+:math:`A'_s \ge (A_s - A_{s,max})\,f_y/f'_{s,net}`, read at the depth of each
+candidate layout — see :ref:`aci-decisions`. Where :math:`f'_{s,net} \le 0` the
+compression bars sit too close to the neutral axis to help: no compression steel is
+asked for, the face is asked for :math:`A_{s,max}`, and the moment it cannot reach is
+the check's to report.
 
 Shear
 -----
@@ -374,6 +431,29 @@ The Whitney block depth at the ductility limit is taken as
 :math:`d - 0.59\rho f_y d/f'_c`, which relies on :math:`0.59 \approx 1/1.7` and loses
 roughly 0.3% of precision.
 
+A design passes its own check
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The design accepts a layout only if it carries the moment **and** leaves the face in
+tension within :math:`A_{s,max,eff}`. Three choices follow from that:
+
+- **No bars between** :math:`A_{s,req}` **and** :math:`A_{s,max}`. A narrow web can
+  jump from 4Ø12 to 2Ø20 with nothing in between. The design then takes the smallest
+  layout past :math:`A_{s,req}` and adds the compression steel that keeps it
+  tension-controlled, rather than a layout below :math:`A_{s,req}`.
+- **Compression steel is chosen by depth, not only by area.** Two layers of thin bars
+  sit deeper than one layer of thick ones, reach less stress and need more area. Each
+  candidate is read at its own centroid, and the first — in the selector's order —
+  that makes the tension face resist and stay tension-controlled is taken.
+- **The faces are chosen together.** If the iteration ends on a layout that fails,
+  every pair of the layouts it visited on the two faces is tried, and the lightest
+  pair that works is kept; failing that, the closest within the limits. The loop
+  stops early only when a *pair* of layouts repeats: one face settling while the
+  other still moves is not a cycle.
+
+When no layout that fits the width works, the design leaves the closest one and warns
+``As_below_required`` on the face that fell short: the section has to grow.
+
 Effective depth from the real bar layout
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -420,8 +500,21 @@ external source named.
      - ``test_minimum_flexural_reinforcement_ratio_ACI_318_19_Test_Etabs_05``
      - §9.6.1.2
    * - Flexure check, full section
-     - ``test_check_flexure_ACI_318_19_1`` … ``_3``
+     - ``test_check_flexure_ACI_318_19_3``
      - Calcpad, same sheet
+   * - Flexure check, past the tension-controlled limit
+     - ``test_check_flexure_ACI_318_19_1``, ``_2``,
+       ``test_check_flexure_ACI_318_19_over_reinforced_*``,
+       ``test_check_flexure_CIRSOC_201_25_over_reinforced_reports_its_real_strength``
+     - Strain compatibility written apart from mento (the Calcpad sheet capped
+       :math:`A_s` and is no longer the reference)
+   * - Design passes its own check; capacity is the section's
+     - ``test_a_design_passes_its_own_check`` (``tests/test_flexure_design_properties.py``)
+     - Sweep over width, depth, :math:`f'_c` and moment, against the same independent
+       strain compatibility
+   * - :math:`A_{s,req}` never drops as :math:`M_u` grows
+     - ``test_the_steel_asked_for_grows_with_the_moment``
+     - Monotonicity
    * - Flexure design, doubly reinforced
      - ``test_design_flexure_ACI_318_19_Test_Etabs_01``
      - ETABS, verified through :math:`\phi M_n \ge M_u`
