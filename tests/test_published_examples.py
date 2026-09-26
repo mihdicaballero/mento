@@ -10,7 +10,7 @@ document the number comes from and where in it it sits::
     Source: BEAM-01-Flexure-Rectangle ACI 318-19-v6.xlsm, sheet Flexion, row 29, column BC.
     Source: Calcpad "ACI 318-19 Beam Shear 01 - Imperial.cpd".
     Source: The Concrete Centre, "How to design concrete structures using Eurocode 2",
-    Chapter 4 (Beams), Table 5, p. 33.
+    3. Slabs, p. 3, Table 5.
 
 The test modules are read with ``ast``, as ``test_architecture_boundaries`` does,
 so a mark added without its source fails CI instead of needing to be noticed in

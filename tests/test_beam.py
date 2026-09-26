@@ -1173,8 +1173,9 @@ def test_flexure_check_EN_1992_2004_01(
     Source: Calcpad "EN 1992-1-1_2004 Beam Flexure 01 - Metric v2.cpd" for the case and
     A_s,min; A_s,req and M_Rd are re-derived by hand below with the closed form of
     The Concrete Centre's "How to design concrete structures using Eurocode 2",
-    Chapter 4 (Beams), Table 5 (z/d for singly reinforced sections), p. 33 -- the v2
-    sheet applied lambda twice to the lever arm and is not the source of those two.
+    3. Slabs (Moss and Brooker, 2006), p. 3, Figure 1 and Table 5 (z/d for singly
+    reinforced rectangular sections) -- the v2 sheet applied lambda twice to the
+    lever arm and is not the source of those two.
     """
     f = Forces(M_y=150 * kNm)
     beam_example_EN_1992_2004_01.set_transverse_rebar(n_stirrups=1, d_b=6 * mm, s_l=15 * cm)
@@ -1287,8 +1288,12 @@ def test_flexure_EN_1992_2004_matches_concise_eurocode_closed_form() -> None:
     scratch, so the test does not depend on any mento formula.
 
     Source: The Concrete Centre, "How to design concrete structures using Eurocode 2",
-    Chapter 4 (Beams), Table 5 (z/d for singly reinforced rectangular sections), p. 33;
-    the same closed form is tabulated in Concise Eurocode 2.
+    3. Slabs (Moss and Brooker, 2006), p. 3: Figure 1 (procedure for determining
+    flexural reinforcement) prints z = d/2*[1 + sqrt(1 - 3.53K)] <= 0.95d and
+    A_s = M/(f_yd*z), and Table 5 (z/d for singly reinforced rectangular sections)
+    tabulates it: K = 0.09 -> 0.913, K = 0.10 -> 0.902, which brackets the
+    z/d = 0.9069 of K = 0.0957 below. The same closed form is tabulated in Concise
+    Eurocode 2.
     """
     f_ck, f_yk = 25.0, 500.0
     b, d = 200.0, 560.0  # mm, matches beam_example_EN_1992_2004_01 with 4x16
