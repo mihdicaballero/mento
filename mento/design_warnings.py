@@ -66,10 +66,9 @@ Codes
 
     There is no code for the stirrup diameter: neither ACI 318-19, CIRSOC
     201-25 nor EN 1992-1-1 states a minimum for a stirrup placed for shear
-    alone, and the 10 mm (6 mm under CIRSOC) the design starts from is the
-    bottom of the catalogue, a preference. The minimum §9.7.6.4.2 does state
-    is for the stirrups laterally supporting compression bars, a limit of
-    its own.
+    alone, and the 10 mm (6 mm under CIRSOC) the shear catalogue starts at
+    is a preference, not a clause. The minimum §9.7.6.4.2 does state is for
+    the stirrups laterally supporting compression bars, a limit of its own.
 ``shear_exceeds_section_limit``
     The shear exceeds the most the section can carry however it is
     reinforced: under ACI 318-19 / CIRSOC 201-25 the Eq. (22.5.1.2) limit
