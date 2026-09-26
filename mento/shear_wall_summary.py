@@ -10,7 +10,7 @@ from pandas import DataFrame
 from mento.material import Concrete, SteelBar
 from mento.forces import Forces
 from mento.shear_wall import ShearWall
-from mento import mm, cm, kN, m, kNm, MPa, inch, ft
+from mento import mm, cm, kN, m, kNm, MPa, inch, ft, kip
 from mento.i18n import translate_dataframe
 from mento.node import Node
 from mento.reports.summaries import wall_summary_doc
@@ -27,6 +27,17 @@ def _wall_passes(wall: ShearWall) -> bool:
     1.0000000000000002, and that is 1.
     """
     return all(check.DCR <= 1 or math.isclose(check.DCR, 1.0) for check in wall.shear_checks) and not wall.warnings
+
+
+def _mesh_label(d_b: Any, s: Any, imperial: bool) -> str:
+    """One direction of the mesh as the summary table writes it: ``Ø10/15`` (mm/cm), ``Ø0.5/8`` (in/in).
+
+    In the units the section is detailed in: an imperial bar printed in mm and
+    cm rounds #4 @ 8 in to "Ø13/20", a bar and a spacing nobody placed.
+    """
+    if imperial:
+        return f"Ø{d_b.to('inch').magnitude:.4g}/{s.to('inch').magnitude:.4g}"
+    return f"Ø{d_b.to('mm').magnitude:.0f}/{s.to('cm').magnitude:.0f}"
 
 
 class ShearWallSummary:
@@ -65,7 +76,9 @@ class ShearWallSummary:
         self.data = data
 
     def validate_units(self, units_row: List[str]) -> None:
-        valid_units = {"m", "mm", "cm", "inch", "ft", "kN", "kNm", ""}
+        # Forces in kip and moments in kip·ft ("kipft") for an imperial wall,
+        # whose results come back in kip.
+        valid_units = {"m", "mm", "cm", "in", "inch", "ft", "kN", "kNm", "kip", "kipft", ""}
         for unit_str in units_row:
             if unit_str and unit_str not in valid_units:
                 raise ValueError(f"Invalid unit '{unit_str}' detected. Allowed units: {valid_units}")
@@ -80,6 +93,8 @@ class ShearWallSummary:
             "ft": ft,
             "kN": kN,
             "kNm": kNm,
+            "kip": kip,
+            "kipft": kip * ft,
             "MPa": MPa,
         }
         if unit_str in unit_map:
@@ -164,7 +179,14 @@ class ShearWallSummary:
     # ------------------------------------------------------------------
 
     def check(self) -> DataFrame:
+        """One row per wall: its geometry, its mesh, the governing combination and the status.
+
+        Written in the unit system of the concrete: t in cm, lw and hw in m,
+        the mesh in mm/cm and the forces in kN for a metric wall; t in in, lw
+        and hw in ft, the mesh in in and the forces in kip for an imperial one.
+        """
         results_list = []
+        imperial = self.concrete.unit_system != "metric"
 
         for node in self.nodes:
             wall: ShearWall = node.section  # type: ignore
@@ -187,8 +209,16 @@ class ShearWallSummary:
             limiting = wall.limiting_case_shear
             dcr = limiting["DCR"]
 
-            rebar_h = f"Ø{wall._d_b_h.to('mm').magnitude:.0f}/{wall._s_h.to('cm').magnitude:.0f}"
-            rebar_v = f"Ø{wall._d_b_v.to('mm').magnitude:.0f}/{wall._s_v.to('cm').magnitude:.0f}"
+            rebar_h = _mesh_label(wall._d_b_h, wall._s_h, imperial)
+            rebar_v = _mesh_label(wall._d_b_v, wall._s_v, imperial)
+            if imperial:
+                t = round(wall.thickness.to("inch").magnitude, 2)
+                lw = round(wall.length.to("ft").magnitude, 2)
+                hw = round(wall.height.to("ft").magnitude, 2)
+            else:
+                t = int(wall.thickness.to("cm").magnitude)
+                lw = round(wall.length.to("m").magnitude, 2)
+                hw = round(wall.height.to("m").magnitude, 2)
 
             # The status is the AND over every combination: the strength of each
             # one and no limit missed under any of them. `wall.warnings` already
@@ -201,9 +231,9 @@ class ShearWallSummary:
                 {
                     "Level": wall.level,
                     "Label": wall.label,
-                    "t": int(wall.thickness.to("cm").magnitude),
-                    "lw": round(wall.length.to("m").magnitude, 2),
-                    "hw": round(wall.height.to("m").magnitude, 2),
+                    "t": t,
+                    "lw": lw,
+                    "hw": hw,
                     "Horiz.": rebar_h,
                     "Vert.": rebar_v,
                     "ρt": round(float(wall._rho_t.magnitude), 5),
@@ -216,10 +246,8 @@ class ShearWallSummary:
             )
             results_list.append(results_dict)
 
-        if self.concrete.unit_system == "metric":
-            v_unit = "kN"
-        else:
-            v_unit = "kip"
+        # The mesh columns carry a unit only where both of their numbers share one.
+        v_unit, t_unit, l_unit, mesh_unit = ("kip", "in", "ft", "in") if imperial else ("kN", "cm", "m", "")
 
         units_row = pd.DataFrame(
             [
@@ -227,11 +255,11 @@ class ShearWallSummary:
                     {
                         "Level": "",
                         "Label": "",
-                        "t": "cm",
-                        "lw": "m",
-                        "hw": "m",
-                        "Horiz.": "",
-                        "Vert.": "",
+                        "t": t_unit,
+                        "lw": l_unit,
+                        "hw": l_unit,
+                        "Horiz.": mesh_unit,
+                        "Vert.": mesh_unit,
                         "ρt": "",
                         "ρl": "",
                         "Vu,max": v_unit,

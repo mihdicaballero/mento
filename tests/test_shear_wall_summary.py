@@ -565,3 +565,50 @@ class TestShearWallSummaryImperial:
         # Units row should show "kip" for imperial
         assert check_df["Vu,max"].iloc[0] == "kip"
         assert check_df["ØVn"].iloc[0] == "kip"
+
+    def test_an_imperial_summary_reads_and_prints_in_its_own_units(self):
+        """ACI 318-19 in-lb wall, 10 in × 12 ft, hw 10 ft, f'c 4000 psi, Grade 60, #4 @ 8 in E.F.
+
+        By hand (§11.5.4.3, §11.5.4.2): hw/lw = 0.83, αc = 3; Acv = 10·144 =
+        1440 in²; Vc = 3·√4000·1440 = 273.2 kip; ρt = 2·0.19635/(10·8) =
+        0.0049087, Vs = 0.0049087·60000·1440 = 424.1 kip; ØVn = 0.75·697.3 =
+        523.0 kip, under ØVn,max = 0.75·8·√4000·1440 = 546.4 kip. Vu = 100 kip,
+        DCR = 0.191.
+
+        The table printed the forces in kip and everything else in metric: t
+        25 "cm", lw 3.66 and hw 3.05 "m", and the mesh as "Ø13/20" -- 12.7 mm
+        and 20.32 cm rounded to a bar and a spacing nobody placed -- and the
+        input took no force in kip, so an imperial wall had its shears typed in
+        kN (bd94d2f already did). It now prints t in in, lw and hw in ft, the
+        mesh in in, and reads "kip" / "kipft".
+        """
+        concrete_imp = Concrete_ACI_318_19(name="C4000", f_c=4000 * psi)
+        steel_imp = SteelBar(name="G60", f_y=60 * ksi)
+        data = {
+            "Level": ["", "Level 1"],
+            "Label": ["", "W1"],
+            "Comb.": ["", "U1"],
+            "t": ["in", 10],
+            "lw": ["ft", 12],
+            "hw": ["ft", 10],
+            "cc": ["in", 1.5],
+            "Nx": ["kip", 0],
+            "Vz": ["kip", 100],
+            "My": ["kipft", 0],
+            "dbh": ["in", 0.5],
+            "sh": ["in", 8],
+            "dbv": ["in", 0.5],
+            "sv": ["in", 8],
+        }
+        summary = ShearWallSummary(concrete=concrete_imp, steel_bar=steel_imp, wall_list=pd.DataFrame(data))
+        table = summary.check()
+        units, row = table.iloc[0], table.iloc[1]
+
+        assert (units["t"], units["lw"], units["hw"]) == ("in", "ft", "ft")
+        assert (units["Horiz."], units["Vert."]) == ("in", "in")
+        assert (row["t"], row["lw"], row["hw"]) == (10, 12, 10)
+        assert (row["Horiz."], row["Vert."]) == ("Ø0.5/8", "Ø0.5/8")
+        assert row["Vu,max"] == pytest.approx(100.0)
+        assert row["ØVn"] == pytest.approx(523.0, abs=0.1)
+        assert row["DCR"] == pytest.approx(0.191, abs=1e-3)
+        assert row["Status"] == "✅"

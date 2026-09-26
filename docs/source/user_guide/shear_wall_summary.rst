@@ -48,6 +48,12 @@ The Excel file should contain the following columns:
 - **dbv**: Vertical rebar diameter in mm.
 - **sv**: Vertical rebar spacing in cm.
 
+The units above are the metric ones; the unit row of the file says which apply.
+An imperial wall (a concrete defined in psi) takes lengths in ``in`` (or ``inch``)
+and ``ft``, forces in ``kip`` and moments in ``kipft``, and ``check()`` writes its
+table in the same system: t in in, lw and hw in ft, the mesh in in (``Ø0.5/8`` is
+#4 @ 8 in) and the forces in kip.
+
 Grouping Logic
 ~~~~~~~~~~~~~~
 
