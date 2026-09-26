@@ -104,6 +104,20 @@ from the release history and are summaries rather than complete lists.
   `DesignCode.min_stirrup_for_compression_bar`; `CompressionSupport` in
   `mento.codes.check_state`; `DCR` on `RebarOption` and `StirrupOption`.
 
+### Performance
+
+- **Word reports fill their tables in linear time.** `DocumentBuilder.add_table` wrote each
+  cell through python-docx's `table.cell(i, j)`, which rebuilds the whole cell grid on every
+  call, so a table cost the square of its cell count: 500 rows × 10 columns took 244 s and
+  now take 0.7 s. The cells are read once per row, and the column widths and the verdict
+  shading do the same. The `document.xml` written is byte for byte the one before.
+- **The longitudinal bar search no longer hashes quantities.** The search dropped repeated
+  layouts with `drop_duplicates` over the diameter columns, and hashing a pint `Quantity`
+  converts it to base units: that was 42 % of the time of a one-way slab design. Repeats are
+  now skipped inside the search on a key of bar counts and diameter indices, before their
+  row is built. 200 `OneWaySlab` designs go from 20.2 s to 11.7 s; the combination table is
+  the same, row for row and in the same order.
+
 ### Fixed
 
 - **A clear spacing equal to its limit is no longer lost to rounding.** The effective width
