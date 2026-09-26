@@ -898,6 +898,41 @@ def test_shear_results_carry_the_mesh_they_were_checked_with(wall_metric: ShearW
     assert {w.code for w in wall_metric.warnings} == {"mesh_ratio_below_min"}
 
 
+def test_the_markdown_summary_drops_the_check_of_a_mesh_changed_by_hand(wall_metric: ShearWall) -> None:
+    """``shear_results`` follows ``shear_design``: no summary of a mesh nobody checked.
+
+    Reference wall with Ø10/15 E.F. both ways under Vu = 2000 kN, by hand
+    (ACI 318-19 §11.5.4.3, hw/lw = 0.875 → αc = 0.25):
+        ρt = 2·78.54/(250·150) = 0.0041888
+        ØVn = 0.75·(0.25·√25·250·4000 + 0.0041888·420·250·4000) = 0.75·(1250 + 1759.3) = 2257.0 kN
+        DCR = 2000/2257.0 = 0.886
+    Ø6/45 E.F. set by hand afterwards: ρt = 2·28.27/(250·450) = 0.00050265,
+        ØVn = 0.75·(1250 + 211.1) = 1095.8 kN, DCR = 2000/1095.8 = 1.825.
+    The summary used to print "Horizontal rebar: Ø6/45 cm E.F., ρt=0.00419 …
+    DCR=0.89": the mesh the wall carries beside the ratio and the DCR of the one
+    checked, while ``shear_design`` already raised.
+    """
+    wall_metric.set_horizontal_rebar(d_b=10 * mm, s=15 * cm)
+    wall_metric.set_vertical_rebar(d_b=10 * mm, s=15 * cm)
+    forces = [Forces(label="U1", V_z=2000 * kN)]
+    wall_metric.check_shear(forces)
+    wall_metric.shear_results
+    assert "Ø10/15 cm E.F., $\\rho_t$=0.00419" in wall_metric._md_shear_results
+    assert "$\\phi V_n$=2256.97 kN" in wall_metric._md_shear_results
+
+    wall_metric.set_horizontal_rebar(d_b=6 * mm, s=45 * cm)
+    assert wall_metric.shear_results is None
+    assert wall_metric._md_shear_results == "Shear results are not available."
+    wall_metric._md_shear_results = ""
+    assert wall_metric.results is None
+    assert wall_metric._md_shear_results == ""  # `results` shows the wall data alone
+
+    wall_metric.check_shear(forces)
+    wall_metric.shear_results
+    assert "Ø6/45 cm E.F., $\\rho_t$=0.0005" in wall_metric._md_shear_results
+    assert "$\\phi V_n$=1095.84 kN" in wall_metric._md_shear_results
+
+
 @pytest.mark.parametrize("setter", ["set_horizontal_rebar", "set_vertical_rebar"])
 def test_a_mesh_set_by_hand_drops_the_results_of_the_previous_one(wall_metric: ShearWall, setter: str) -> None:
     from mento.design_results import DesignNotRunError

@@ -207,7 +207,9 @@ class ShearWall(RectangularBeam):
 
         The shear results of the last check belong to the mesh they were
         checked with, so they are dropped: ``shear_checks`` and ``warnings``
-        are empty and ``shear_design`` raises until the next check or design.
+        are empty, ``shear_design`` raises and the notebook views
+        (``shear_results``, ``results``) show no shear until the next check or
+        design.
         """
         self._d_b_h = d_b
         self._s_h = s
@@ -216,7 +218,7 @@ class ShearWall(RectangularBeam):
         else:
             A_b = math.pi / 4 * d_b**2
             self._rho_t = (self._n_curtains * A_b / (self.thickness * s)).to("")
-        self._wall_shear_checks = []
+        self._drop_shear_results()
 
     def set_vertical_rebar(self, d_b: Quantity, s: Quantity) -> None:
         """Set distributed vertical reinforcement.
@@ -234,7 +236,18 @@ class ShearWall(RectangularBeam):
         else:
             A_b = math.pi / 4 * d_b**2
             self._rho_l = (self._n_curtains * A_b / (self.thickness * s)).to("")
+        self._drop_shear_results()
+
+    def _drop_shear_results(self) -> None:
+        """Forget the shear results of the mesh the wall carried before.
+
+        The public results (``shear_checks``) and the notebook views, which
+        read the report tables of the last :meth:`check_shear`: the markdown
+        summary printed the mesh the wall carries now beside the ρt and the
+        DCR of the one that was checked.
+        """
         self._wall_shear_checks = []
+        self._shear_wall_checked = False
 
     # ------------------------------------------------------------------
     # Shear check and design (override RectangularBeam)
