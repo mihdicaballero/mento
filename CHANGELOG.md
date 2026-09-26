@@ -149,6 +149,15 @@ from the release history and are summaries rather than complete lists.
 
 ### Fixed
 
+- **A beam's compression face is laid out without a cap an earlier check left.** With no
+  negative moment the top is asked only for the compression the bottom needs, and nothing
+  caps that; the design capped it with the `A_s_max` of the top that the last reporting
+  check had left on the section (0 on a new beam). A design redone with its final stirrup
+  searched the top under that cap: an ACI 20×25, f'c = 30 MPa, c_c = 40 mm, under
+  45.19 kN·m ended on 2Ø12 + 1Ø12 in two layers under 2Ø25 (DCR 1.206) instead of 2Ø25
+  with 2Ø32 above (DCR 0.879), and a design run after a check could differ from one run on
+  a new beam.
+
 - **A clear spacing equal to its limit is no longer lost to rounding.** The effective width
   came out of the unit conversions a hair short (12 cm − 2·(25 + 8) mm = 53.99999999999999
   mm), so two Ø12 bars sat 29.999999999999993 mm apart against the 30 mm vibrator limit and

@@ -374,6 +374,41 @@ def test_a_slab_whose_shear_puts_its_stirrups_on_and_off_ends_saying_so() -> Non
     assert [(w.code, w.face) for w in node.warnings] == designed
 
 
+def test_a_compression_face_is_searched_without_a_cap_left_by_an_earlier_check() -> None:
+    """ACI 20x25, f'c 30, c_c 40 mm, Mu = +45.19 kN·m: the top only ever carries compression.
+
+    With no negative moment the top is asked for the compression the bottom
+    needs, and nothing caps that. The design capped it anyway with the top's
+    A_s,max read off the section -- a value no round of the flexure design
+    writes there: the reporting check of the round before had left it,
+    7.05 cm². So the round redone with the final Ø10 stirrup searched the top
+    under a cap the first round never had, and the design ended on 2Ø12 +
+    1Ø12 in two layers under 2Ø25, DCR 1.206. Searched with no cap, as the
+    first round was, it ends on 2Ø25 below and 2Ø32 above, DCR 0.879, the
+    layout PR #164 designed. Neither is tension-controlled: the section is
+    too shallow for the moment, and ``As_above_max`` says so either way. A
+    design redone after a check ends where the first one did.
+    """
+    beam = RectangularBeam(
+        label="V",
+        concrete=Concrete_ACI_318_19(name="H30", f_c=30 * MPa),
+        steel_bar=SteelBar(name="S", f_y=_F_Y * MPa),
+        width=20 * cm,
+        height=25 * cm,
+        c_c=40 * mm,
+    )
+    node = Node(section=beam, forces=[Forces(label="C1", M_y=45.19488336734695 * kNm)])
+    node.design()
+
+    assert (str(beam.reinforcement.bottom), str(beam.reinforcement.top)) == ("2Ø25 mm", "2Ø32 mm")
+    assert beam.flexure_design.DCR == pytest.approx(0.879, abs=5e-4)
+    assert "As_above_max" in {w.code for w in node.warnings}
+
+    node.check()
+    node.design()
+    assert (str(beam.reinforcement.bottom), str(beam.reinforcement.top)) == ("2Ø25 mm", "2Ø32 mm")
+
+
 @pytest.mark.parametrize("code", ["ACI 318-19", "CIRSOC 201-25"])
 def test_the_steel_asked_for_grows_with_the_moment(code: str) -> None:
     """A_s,req on the tension face, and the compression it asks for, never drop as M grows.

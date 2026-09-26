@@ -508,10 +508,13 @@ def _run_flexure_design(
             if demand_top is not None:
                 self.flexure_design_results_top = _design_tension_face(A_req_top, demand_top, self._c_mec_top, "top")
             else:
-                A_cap_top = self._A_s_max_top if A_req_top <= self._A_s_max_top else None
-                self.flexure_design_results_top = _design_longitudinal_for_area(
-                    A_req_top, A_cap_top, self._c_mec_top, "top"
-                )
+                # No combination pulls the top: what it is asked for is the
+                # compression the bottom needs, which nothing caps. This read
+                # the top's A_s,max off the section, and no round of this
+                # design writes it: it was whatever the last reporting check
+                # left there, so a design redone with its final stirrup
+                # searched the top under a cap its first round never had.
+                self.flexure_design_results_top = _design_longitudinal_for_area(A_req_top, None, self._c_mec_top, "top")
 
         # --- Apply both faces (hard overwrite) -----------------------------------
         if self.flexure_design_results_bot is not None:
