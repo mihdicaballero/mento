@@ -43,10 +43,13 @@ def format_longitudinal_rebar(n: float, d_b: str, s: Optional[str] = None) -> st
     ``Ø12/17cm`` -- the same notation its grid of stirrups is written in.
 
     Takes the numbers already formatted, so each caller keeps its own precision
-    and units while the shape of the label is decided in one place.
+    and units while the shape of the label is decided in one place. The count
+    is the exception, a bare number: a whole one reads whole whatever its
+    type, since a count entered as ``2.0`` is still two bars, not "2.0Ø16".
     """
     if s is None:
-        return f"{n}Ø{d_b}"
+        count = int(n) if float(n).is_integer() else n
+        return f"{count}Ø{d_b}"
     return f"Ø{d_b}/{s}"
 
 
@@ -616,7 +619,9 @@ def _layers(beam: RectangularBeam, face: str) -> Tuple[RebarLayer, ...]:
             s = None
         if n and d_b is not None and d_b.magnitude > 0:
             # As the section counts them: whole on a beam, width / s on a slab.
-            layers.append(RebarLayer(n=n, d_b=d_b, s=s))
+            # A beam's setters store the count as given, so a 2.0 from a
+            # spreadsheet is made the 2 bars it is.
+            layers.append(RebarLayer(n=n if s is not None else int(n), d_b=d_b, s=s))
     return tuple(layers)
 
 
