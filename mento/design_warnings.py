@@ -619,9 +619,12 @@ def wall_warnings(wall: "RectangularBeam", mesh: "WallMesh", checks: Tuple["Wall
                 found.append(
                     _Raw("mesh_spacing_exceeds_max", values, None, None, float((provided.s - s_max).magnitude))
                 )
-        if check.V_u > check.V_max:
+        # As for a beam: a V_u that differs from ØVn,max by rounding alone --
+        # the limit worked out apart and passed in -- is at the limit, not past it.
+        V_max = check.V_max.to(check.V_u.units)
+        if check.V_u > V_max and not math.isclose(check.V_u.magnitude, V_max.magnitude):
             values = {"V": check.V_u, "V_max": check.V_max}
-            severity = float((check.V_u - check.V_max).magnitude)
+            severity = float((check.V_u - V_max).magnitude)
             found.append(_Raw("shear_exceeds_section_limit", values, None, label, severity))
     return [_with_units(raw, wall) for raw in found]
 

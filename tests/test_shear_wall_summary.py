@@ -1,5 +1,7 @@
 """Tests for ShearWallSummary class."""
 
+import math
+
 import pytest
 import pandas as pd
 import os
@@ -245,7 +247,7 @@ class TestShearWallSummaryCheck:
             s.check()
 
 
-def _two_combination_wall(shears, s_h=15, d_b_h=12):
+def _two_combination_wall(shears, s_h=15, d_b_h=12, s_v=20, d_b_v=10):
     """One wall, 25×400 cm, hw 3.5 m, Ø12/15 + Ø10/20 E.F., with two shear rows in the order given."""
     data = {
         "Level": ["", "L1", "L1"],
@@ -260,8 +262,8 @@ def _two_combination_wall(shears, s_h=15, d_b_h=12):
         "My": ["kNm", 0, 0],
         "dbh": ["mm", d_b_h, d_b_h],
         "sh": ["cm", s_h, s_h],
-        "dbv": ["mm", 10, 10],
-        "sv": ["cm", 20, 20],
+        "dbv": ["mm", d_b_v, d_b_v],
+        "sv": ["cm", s_v, s_v],
     }
     return pd.DataFrame(data)
 
@@ -309,6 +311,37 @@ class TestShearWallSummaryStatusSpansEveryCombination:
         assert row["Status"] == "❌"
         wall = summary.nodes[0].section
         assert [w.code for w in wall.warnings] == ["mesh_spacing_exceeds_max"]
+
+    def test_a_wall_at_its_section_limit_passes_whatever_the_rounding(self, concrete, steel):
+        """Vu = ØVn,max worked out apart, as a program feeding the summary would: ✅, no warning.
+
+        ACI 318-19 §11.5.4.2, Acv = 250·4000 = 1.0e6 mm²: ØVn,max =
+        0.75·0.66·√25·Acv = 2475 kN, which in floating point comes out
+        2475.0000000000005 kN. Ø10/10 E.F. (ρt = 2·78.54/(250·100) = 0.0062832)
+        carry 0.75·(1250 + 2638.9) = 2916.7 kN, capped at 2475; ρt,req =
+        (3300 − 1250)/(420·1000) = 0.0048810, and Ø12/15 E.F. (ρl = 0.0060319)
+        meet ρl,min = min(0.0025 + 0.8125·(0.0062832 − 0.0025), 0.0048810) =
+        0.0048810. The DCR is 1 but for the last bit, 1.0000000000000002. The
+        wall trigger compared V_u > V_max bare, where the beam's ignores a
+        difference ``math.isclose`` calls none, so the wall raised
+        ``shear_exceeds_section_limit`` and the summary's ``DCR <= 1`` made it ❌
+        (both since bd94d2f).
+        """
+        V_u = 0.75 * (0.66 * math.sqrt(25.0) * 250.0 * 4000.0) * 1e-3
+        assert V_u > 2475.0
+        wall_list = _two_combination_wall((V_u, 1000), s_h=10, d_b_h=10, s_v=15, d_b_v=12)
+        summary = ShearWallSummary(concrete=concrete, steel_bar=steel, wall_list=wall_list)
+        row = summary.check().iloc[1]
+        wall = summary.nodes[0].section
+        assert max(check.DCR for check in wall.shear_checks) > 1.0
+        assert wall.warnings == ()
+        assert row["Status"] == "✅"
+        # Past the limit by more than rounding still fails, and says why.
+        over = ShearWallSummary(
+            concrete=concrete, steel_bar=steel, wall_list=_two_combination_wall((2476, 1000), 10, 10, 15, 12)
+        )
+        assert over.check().iloc[1]["Status"] == "❌"
+        assert [w.code for w in over.nodes[0].section.warnings] == ["shear_exceeds_section_limit"]
 
 
 # ------------------------------------------------------------------

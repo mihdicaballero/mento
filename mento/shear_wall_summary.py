@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any, Dict, List, Optional, Tuple
 from collections import OrderedDict
 
@@ -21,9 +22,11 @@ def _wall_passes(wall: ShearWall) -> bool:
     Read off the public results rather than the report's flag, which holds the
     combination that ran last. The warnings cover the mesh ratios of §11.6.2,
     the spacing of §11.7 and the section limit of §11.5.4.2, each over every
-    combination; the DCR covers the strength of each one.
+    combination; the DCR covers the strength of each one, with the tolerance
+    the warnings use: a wall at exactly ØVn,max can come out at DCR
+    1.0000000000000002, and that is 1.
     """
-    return all(check.DCR <= 1 for check in wall.shear_checks) and not wall.warnings
+    return all(check.DCR <= 1 or math.isclose(check.DCR, 1.0) for check in wall.shear_checks) and not wall.warnings
 
 
 class ShearWallSummary:
