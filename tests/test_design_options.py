@@ -157,18 +157,22 @@ def test_longitudinal_alternatives_are_verified_on_the_finished_beam() -> None:
 def test_an_alternative_short_of_the_moment_on_the_finished_beam_is_dropped() -> None:
     """20x60 H25 ADN 420, Mu = 80 kNm: 2Ø16 applied (A_s,req 3.94 cm²), 1eØ10/27.
 
-    The search also ranked 2Ø10 + 1Ø10 in one layer with 2Ø10 behind, 3.93
-    cm²: enough for the 3.92 cm² its own iteration asked for, read with the
-    8 mm starter stirrup, and short of the finished beam's 3.94. Built by
+    The search ranks 2Ø10 + 1Ø10 in one layer with 2Ø10 behind, 3.93 cm²,
+    fourth: enough for the 3.92 cm² its own iteration asked for, read with
+    the 8 mm starter stirrup, and short of the finished beam's 3.94. Built by
     hand: centroid (3*5 + 2*40)/5 = 19 mm, d = 600 - 25 - 10 - 19 = 546 mm,
     a = 392.7*420/(0.85*25*200) = 38.8 mm, phi*Mn = 0.9*392.7*420*(546 -
-    19.4) = 78.2 kNm, 80/78.2 = 1.023. It used to be offered as options[2].
+    19.4) = 78.2 kNm, 80/78.2 = 1.023. With the default design_options = 3
+    it never reaches the list; asking for four, bd94d2f offered it as
+    options[3] (after 2Ø12 + 2Ø12 and 2Ø16 + 1Ø12), and it is dropped now for
+    the next row that passes, 2Ø16 + 1Ø16.
     """
-    beam = _designed([Forces(label="ELU", M_y=80 * kNm)])
+    beam = _designed([Forces(label="ELU", M_y=80 * kNm)], BeamSettings(design_options=4))
     options = beam.flexure_design.bottom.options
 
     assert str(options[0]) == "2Ø16 mm"
     assert "2Ø10 mm + 1Ø10 mm + 2Ø10 mm" not in [str(o) for o in options]
+    assert [str(o) for o in options] == ["2Ø16 mm", "2Ø12 mm + 2Ø12 mm", "2Ø16 mm + 1Ø12 mm", "2Ø16 mm + 1Ø16 mm"]
     assert all(o.section_DCR is not None and o.section_DCR <= 1.0 for o in options)
 
     beam.set_longitudinal_rebar_bot(n1=2, d_b1=10 * mm, n2=1, d_b2=10 * mm, n3=2, d_b3=10 * mm)
