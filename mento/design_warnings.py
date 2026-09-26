@@ -61,7 +61,8 @@ Codes
     The stirrups provide less than the minimum shear reinforcement.
 ``stirrup_spacing_exceeds_max``
     The stirrups are further apart than the code allows, along the member or
-    across its width.
+    across its width. ``values`` carries ``direction``, ``"l"`` (along) or
+    ``"w"`` (across).
 
     There is no code for the stirrup diameter: neither ACI 318-19, CIRSOC
     201-25 nor EN 1992-1-1 states a minimum for a stirrup placed for shear
@@ -89,6 +90,7 @@ Codes
     those clauses add only where shear reinforcement is required for
     in-plane strength -- which mento takes always, a conservative choice,
     so the spacing may exceed the limit and still be what the clause allows.
+    ``values`` carries ``direction``, ``"h"`` or ``"v"``.
 ``stirrup_spacing_exceeds_compression_support``
     The section relies on compression steel and its stirrups are further
     apart than ACI 318-19 / CIRSOC 201-25 §9.7.6.4.3 allow the stirrups that
@@ -136,7 +138,9 @@ class DesignWarning:
     ``code`` is the stable identifier (``"stirrup_spacing_exceeds_max"``);
     ``message`` the text, in the language set with :func:`mento.set_language`;
     ``values`` the numbers the message quotes, by name (``s``, ``s_max``,
-    ``A_s``, ``A_s_min`` ...), as quantities. ``face`` is ``"bottom"`` or
+    ``A_s``, ``A_s_min`` ...), as quantities -- and, for a limit read in one
+    direction, that ``direction``, which the message words in the language
+    of the day and the values keep as a code. ``face`` is ``"bottom"`` or
     ``"top"`` for a longitudinal warning and ``None`` otherwise, and
     ``combinations`` holds the labels of the load combinations the limit is
     missed under -- empty for a limit of the section alone, such as the bar
@@ -643,9 +647,11 @@ def collect(raws: List[_Raw]) -> Tuple[DesignWarning, ...]:
     for (code, face, direction), group in groups.items():
         worst = max(group, key=lambda raw: raw.severity)
         labels = tuple(dict.fromkeys(raw.combination for raw in group if raw.combination is not None))
-        values = {name: value for name, value in worst.values.items() if name != "direction"}
+        # The direction picks the template and stays in the values, where a
+        # program reads it; it is a word, not a number to print.
+        values = dict(worst.values)
         template = _MESSAGES[f"{code}_{direction}" if direction else code]
-        fields = _fields(values)
+        fields = _fields({name: value for name, value in values.items() if name != "direction"})
         if face is not None:
             fields["face"] = translate(_FACES[face])
         warnings.append(

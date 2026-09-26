@@ -463,6 +463,51 @@ def test_the_other_direction_of_each_wall_mesh_limit_is_worded_as_such() -> None
     )
 
 
+def test_a_limit_missed_in_one_direction_names_it_in_its_values() -> None:
+    """The wall above (25x150, Ø10/20 horizontal, Ø16/60 vertical, Vu = 900 kN) and the
+    80x40 beam of the leg-spacing test.
+
+    The module promises ``direction`` in the ``values`` of a wall mesh
+    warning, ``"h"`` or ``"v"``; ``collect`` dropped it with the keys the
+    message does not print, so the only place the direction survived was
+    the text -- "Horizontal…" / "Vertical…", which changes with
+    :func:`mento.set_language` (bd94d2f already did: values came out as
+    ``rho``/``rho_min`` and ``s``/``s_max``). The stirrup spacing lost its
+    ``"l"`` / ``"w"`` the same way. The wall misses the horizontal ratio
+    (0.00314 < 0.0056) and the vertical spacing (600 > 450 mm); the beam's
+    legs sit 742 mm apart across the width against 359 mm.
+    """
+    from mento import ShearWall
+    from mento.units import m
+
+    wall = ShearWall(
+        label="W",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        thickness=25 * cm,
+        length=1.5 * m,
+        height=3.0 * m,
+        c_c=20 * mm,
+    )
+    wall.set_horizontal_rebar(d_b=10 * mm, s=20 * cm)
+    wall.set_vertical_rebar(d_b=16 * mm, s=60 * cm)
+    wall.shear_check_results([Forces(label="E", V_z=900 * kN)])
+
+    found = _by_code(wall.warnings)
+    assert dict(found["mesh_ratio_below_min"].values) == {"direction": "h", "rho": 0.00314, "rho_min": 0.0056}
+    assert found["mesh_spacing_exceeds_max"].values["direction"] == "v"
+    mento.set_language("es")
+    assert _by_code(wall.warnings)["mesh_ratio_below_min"].values["direction"] == "h"
+    mento.set_language("en")
+
+    beam = _beam(width=80 * cm, height=40 * cm)
+    beam.set_longitudinal_rebar_bot(n1=4, d_b1=16 * mm)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=15 * cm)
+    node = Node(section=beam, forces=[Forces(label="V", V_z=250 * kN)])
+    node.check()
+    assert _by_code(node.warnings)["stirrup_spacing_exceeds_max"].values["direction"] == "w"
+
+
 def test_an_unlabelled_combination_is_named_by_its_position() -> None:
     """The same poorly detailed beam under the same two forces without labels.
 
