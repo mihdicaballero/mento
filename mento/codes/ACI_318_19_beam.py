@@ -352,6 +352,12 @@ def _stirrup_compression_support_ACI_318_19(
     bars on it is nothing to support. ``None`` when no face qualifies -- the
     ordinary singly reinforced beam, whose stirrups are for shear alone.
 
+    ``None`` as well for a one-way slab (and a footing, which is one), whatever
+    its compression steel: §9.7.6.4 is a beam provision, and ACI 318-19
+    §7.7.5.1 / CIRSOC 201-25 §7.7.5 send the transverse reinforcement of a
+    one-way slab to §9.7.6.2 alone. The element that may be built with no
+    stirrups (``_stirrups_optional``) is the one the clause does not reach.
+
     Two readings, both on the conservative side, where the codes do not say:
     with bars of more than one diameter on a face, 16 d_b of §9.7.6.4.3(a)
     is read on the thinnest, which buckles first, and the stirrup size on
@@ -359,6 +365,8 @@ def _stirrup_compression_support_ACI_318_19(
     Which size that is differs between the two codes and comes from the
     registry (``min_stirrup_for_compression_bar``).
     """
+    if self._stirrups_optional:
+        return None
     sec = section_floats(self)
     length = CANONICAL[sec.is_imperial]["length"]
     reinforcement = self.reinforcement

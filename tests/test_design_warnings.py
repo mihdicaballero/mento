@@ -1183,3 +1183,37 @@ def test_a_doubly_reinforced_slab_strip_owes_no_stirrups_for_its_compression_bar
 
     assert slab._compression_faces == {"top"}
     assert "stirrups_required_for_compression_support" not in _by_code(node.warnings)
+
+
+def test_a_slab_strip_with_stirrups_is_not_held_to_the_beam_bracing_limits() -> None:
+    """The same strip given Ø6 legs at 30 x 30 cm: §9.7.6.4 does not reach it either.
+
+    Read as a beam, the Ø12 on top would ask for a No. 10 (9.5 mm) stirrup
+    (§9.7.6.4.2) at no more than min(16*12, 48*6, 150) = 150 mm (§9.7.6.4.3),
+    and the check warned both. A one-way slab details its transverse
+    reinforcement to §9.7.6.2 alone (ACI 318-19 §7.7.5.1, CIRSOC 201-25
+    §7.7.5), so the code's hook has nothing to say for it, and the design of
+    a strip keeps the whole stirrup catalogue.
+    """
+    from mento import OneWaySlab
+    from mento.units import m
+
+    slab = OneWaySlab(
+        label="L1",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=1 * m,
+        height=15 * cm,
+        c_c=25 * mm,
+    )
+    slab.set_slab_longitudinal_rebar_bot(d_b1=20 * mm, s_b1=8 * cm)
+    slab.set_slab_longitudinal_rebar_top(d_b1=12 * mm, s_b1=15 * cm)
+    slab.set_slab_transverse_rebar(d_b=6 * mm, s_long=30 * cm, s_trans=30 * cm)
+    node = Node(section=slab, forces=[Forces(label="ELU", M_y=80 * kNm)])
+    node.check()
+
+    assert slab._compression_faces == {"top"}
+    assert design_code(slab.concrete).stirrup_compression_support(slab, 6 * mm) is None
+    codes = set(_by_code(node.warnings))
+    assert "stirrup_diameter_below_compression_support" not in codes
+    assert "stirrup_spacing_exceeds_compression_support" not in codes

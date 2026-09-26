@@ -521,10 +521,9 @@ def shear_warnings(beam: "RectangularBeam", label: str, state: Any) -> List[_Raw
         # whatever the shear -- so a bare doubly reinforced beam misses the
         # clause even where the concrete carries Vu. Quoted with the smallest
         # stirrup §9.7.6.4.2 allows, the one whose 48 d_b §9.7.6.4.3 reads. A
-        # slab strip is not held to it: the clause is the beams' (a one-way
-        # slab's stirrups go to §9.7.6.2 only, §7.7.5.1), and a slab is the
-        # element that may be built with no stirrups at all.
-        if support_hook is not None and not beam._stirrups_optional:
+        # slab strip is not held to it: the hook answers None for one, since
+        # the clause is the beams' (§7.7.5.1 sends a one-way slab to §9.7.6.2).
+        if support_hook is not None:
             support = support_hook(beam, beam._stirrup_d_b)
             if support is not None:
                 support = support_hook(beam, support.d_b_min)
