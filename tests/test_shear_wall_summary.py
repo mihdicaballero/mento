@@ -325,7 +325,7 @@ class TestShearWallSummaryStatusSpansEveryCombination:
         wall trigger compared V_u > V_max bare, where the beam's ignores a
         difference ``math.isclose`` calls none, so the wall raised
         ``shear_exceeds_section_limit`` and the summary's ``DCR <= 1`` made it ❌
-        (both since bd94d2f).
+        (both already in PR #164).
         """
         V_u = 0.75 * (0.66 * math.sqrt(25.0) * 250.0 * 4000.0) * 1e-3
         assert V_u > 2475.0
@@ -579,7 +579,7 @@ class TestShearWallSummaryImperial:
         25 "cm", lw 3.66 and hw 3.05 "m", and the mesh as "Ø13/20" -- 12.7 mm
         and 20.32 cm rounded to a bar and a spacing nobody placed -- and the
         input took no force in kip, so an imperial wall had its shears typed in
-        kN (bd94d2f already did). It now prints t in in, lw and hw in ft, the
+        kN (PR #164 already did). It now prints t in in, lw and hw in ft, the
         mesh in in, and reads "kip" / "kipft".
         """
         concrete_imp = Concrete_ACI_318_19(name="C4000", f_c=4000 * psi)

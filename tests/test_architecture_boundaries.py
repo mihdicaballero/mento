@@ -140,8 +140,8 @@ def test_the_warnings_take_no_quantity_from_the_report_layer() -> None:
     layer nearest the tension face, against the Table 24.3.2 cap -- is a
     quantity of the section: the beam computes it
     (``RectangularBeam._tension_bar_spacing``) and the report prints it.
-    When the beams' §24.3.2 check came in, the spacing was computed in
-    ``mento.reports.tables`` and imported from there; this keeps it out.
+    It is computed there, not in ``mento.reports.tables``, and this keeps
+    it so.
     The one report helper the warnings still read, ``_bar_spacing_row``,
     only labels the clear spacing the beam stores and the limits the element
     supplies.

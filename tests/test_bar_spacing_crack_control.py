@@ -309,7 +309,7 @@ def test_a_designed_wide_beam_keeps_its_bars_within_table_24_3_2() -> None:
     it, but between the legs of the Ø10 stirrup the design ends with, 400 -
     2*(25 + 10) = 330 mm, the two bars sit 290 mm clear and 310 mm centre to
     centre, past the 292.5 mm of Table 24.3.2 (f_s = (2/3)*420 = 280 MPa,
-    c_c = 35 mm to the bar: min(380 - 87.5, 300)). bd94d2f laid it out so,
+    c_c = 35 mm to the bar: min(380 - 87.5, 300)). PR #164 laid it out so,
     and so does the search without the cap -- the check then warns
     ``bar_spacing_exceeds_max``. With the cap the same area goes in as
     2Ø16 + 2Ø12 in one layer: (330 - 2*16 - 2*12)/3 = 91.3 mm clear, 107.3 mm
@@ -333,7 +333,7 @@ def test_a_designed_beam_reports_the_spacing_of_its_tension_bars() -> None:
     """The flexure check of a design adds the ``Maximum spacing`` row of the face in tension.
 
     A 60x50 ACI beam under 150 kN·m and 50 kN comes out as 3Ø20 with two
-    Ø10 stirrups -- bd94d2f designed it so as well, the cap has nothing to
+    Ø10 stirrups -- PR #164 designed it so as well, the cap has nothing to
     change here: 600 - 2*(25 + 10) = 530 mm between the legs, (530 - 60)/2 =
     235 mm clear and 255 mm centre to centre, inside 292.5.
     """

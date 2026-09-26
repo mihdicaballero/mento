@@ -2,10 +2,9 @@
 
 The theory pages end in a validation table that names, row by row, the test that
 pins each rule. A test renamed without its citation leaves the page vouching for
-a rule with nothing behind it: a2d7857 renamed
-``test_footing_bars_are_capped_at_300_mm`` when the cap stopped being a flat
-300 mm, fixed the citation in ``one_way_slab.rst`` and left the one in
-``footing.rst``. Reading the pages here catches the next one in CI.
+a rule with nothing behind it: ``test_footing_bars_are_capped_at_300_mm`` was
+renamed when the cap stopped being a flat 300 mm, and the citation in
+``one_way_slab.rst`` was fixed while the one in ``footing.rst`` was left. Reading the pages here catches the next one in CI.
 
 A citation is a double-backquoted literal that is a test name, ``test_…``; one
 that ends in ``*`` names a family, and needs some test that starts with it. Paths
@@ -26,7 +25,9 @@ _CITATION = re.compile(r"``(test_\w+)(\*?)``")
 def _defined_tests() -> set[str]:
     names: set[str] = set()
     for module in (ROOT / "tests").glob("test_*.py"):
-        tree = ast.parse(module.read_text(encoding="utf-8"))
+        # utf-8-sig, as in test_published_examples: a file saved with a BOM on
+        # Windows must not fail to parse.
+        tree = ast.parse(module.read_text(encoding="utf-8-sig"), filename=str(module))
         names.update(
             node.name
             for node in ast.walk(tree)
@@ -39,7 +40,7 @@ def test_every_test_the_documentation_cites_exists() -> None:
     defined = _defined_tests()
     missing = []
     for page in sorted(DOCS.rglob("*.rst")):
-        for name, family in _CITATION.findall(page.read_text(encoding="utf-8")):
+        for name, family in _CITATION.findall(page.read_text(encoding="utf-8-sig")):
             found = any(test.startswith(name) for test in defined) if family else name in defined
             if not found:
                 missing.append(f"{page.relative_to(ROOT).as_posix()}: {name}{family}")

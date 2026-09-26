@@ -150,7 +150,7 @@ def test_a_section_too_small_for_the_shear_says_so() -> None:
 
 
 def _bare_aci_beam() -> RectangularBeam:
-    """20x60, f'c 25, 2Ø12 below, 2Ø10 above, no stirrups: the review's e14."""
+    """20x60, f'c 25, 2Ø12 below, 2Ø10 above, no stirrups."""
     beam = _beam()
     beam.set_longitudinal_rebar_bot(n1=2, d_b1=12 * mm)
     beam.set_longitudinal_rebar_top(n1=2, d_b1=10 * mm)
@@ -165,7 +165,7 @@ def test_aci_section_limit_is_read_with_the_stirrups_the_code_requires() -> None
     0.00199, λs = sqrt(2/(1 + 0.004*569)) = 0.781. As the section is, row (c)
     of ACI 318-19 Table 22.5.5.1 gives V_c = 0.66*0.781*0.00199^(1/3)*sqrt(25)*
     A_cv = 36.9 kN, and Eq. (22.5.1.2) reads phi*(V_c + 0.66*sqrt(f'c)*bw*d) =
-    0.75*(36.9 + 375.5) = 309 kN: under 320 kN bd94d2f said "enlarge the
+    0.75*(36.9 + 375.5) = 309 kN: under 320 kN PR #164 said "enlarge the
     section", while 2eØ10/10 on the same section passes at DCR 0.92. Once
     the section carries the A_v,min that §9.6.3.1 requires of it anyway, rows
     (a)/(b) apply: V_c = max(0.17, 0.66*0.00199^(1/3))*sqrt(25)*A_cv = 0.85 MPa*
@@ -190,7 +190,7 @@ def test_aci_section_limit_is_read_with_the_stirrups_the_code_requires() -> None
 
 
 def _bare_en_beam(stirrups: bool = False) -> RectangularBeam:
-    """EN C25/30, 30x50, 3Ø16 below, 2Ø12 above, c_c 25 mm: the review's e15."""
+    """EN C25/30, 30x50, 3Ø16 below, 2Ø12 above, c_c 25 mm."""
     beam = RectangularBeam(
         label="V",
         concrete=Concrete_EN_1992_2004(name="C25/30", f_c=25 * MPa),
@@ -217,7 +217,7 @@ def test_en_beam_without_stirrups_is_asked_for_what_the_demand_needs() -> None:
     stirrups that V_Ed ≤ V_Rd: with cot θ = 2.5 (150 kN is far under
     V_Rd,max at 21.8°, 391 kN) that is A_sw/s = V_Ed/(z*f_ywd*cot θ) =
     150 000/(420.3*434.8*2.5) = 0.328 mm²/mm = 3.28 cm²/m, not the
-    2.40 cm²/m of Eq. (9.5N) (0.08*sqrt(25)/500*300) bd94d2f quoted whatever
+    2.40 cm²/m of Eq. (9.5N) (0.08*sqrt(25)/500*300) PR #164 quoted whatever
     the shear. Under 30 kN ≤ V_Rd,c §6.2.1(3) needs none calculated and (4)
     the minimum, which is what a beam is asked for.
     """
@@ -245,7 +245,7 @@ def test_en_section_limit_is_the_strut_at_45_degrees_with_or_without_stirrups() 
     0.54*16.67/2 = 567 kN without stirrups (ν1 = 0.6*(1 - 25/250), fcd =
     25/1.5) and 300*413.1*0.54*16.67/2 = 558 kN with 1eØ8/15, whose legs
     lower d to 459 mm. 150 kN is under both -- 1eØ8/15 carries it at DCR
-    0.50 -- so the bare section is not told to grow, as bd94d2f did by
+    0.50 -- so the bare section is not told to grow, as PR #164 did by
     quoting V_Rd,c = 61.4 kN as the most it can carry. 600 kN is past both,
     and no stirrup changes that.
     """
@@ -304,7 +304,7 @@ def test_a_thin_stirrup_placed_for_shear_alone_is_not_below_any_code_minimum(con
     steel that a stirrup has to support. ACI 318-19 §9.7.6.4.2 / CIRSOC 201-25
     §9.7.6.4.2, Tabla 9.7.6.4.2 size only the stirrups of §9.7.6.4.1, those
     laterally supporting compression reinforcement; neither code states a
-    minimum for a stirrup placed for shear. The 10 mm bd94d2f quoted as "the
+    minimum for a stirrup placed for shear. The 10 mm PR #164 quoted as "the
     minimum" is the bottom of mento's ACI catalogue -- a design preference,
     which stays one -- and the 6 mm of the CIRSOC hook the bottom of its
     catalogue. The Ø6 of ``_poorly_detailed`` is not a code limit either."""
@@ -471,7 +471,7 @@ def test_a_limit_missed_in_one_direction_names_it_in_its_values() -> None:
     warning, ``"h"`` or ``"v"``; ``collect`` dropped it with the keys the
     message does not print, so the only place the direction survived was
     the text -- "Horizontal…" / "Vertical…", which changes with
-    :func:`mento.set_language` (bd94d2f already did: values came out as
+    :func:`mento.set_language` (PR #164 already did: values came out as
     ``rho``/``rho_min`` and ``s``/``s_max``). The stirrup spacing lost its
     ``"l"`` / ``"w"`` the same way. The wall misses the horizontal ratio
     (0.00314 < 0.0056) and the vertical spacing (600 > 450 mm); the beam's
@@ -511,7 +511,7 @@ def test_a_limit_missed_in_one_direction_names_it_in_its_values() -> None:
 def test_an_unlabelled_combination_is_named_by_its_position() -> None:
     """The same poorly detailed beam under the same two forces without labels.
 
-    ``Forces.label`` defaults to ``None``, and bd94d2f dropped it, so every
+    ``Forces.label`` defaults to ``None``, and PR #164 dropped it, so every
     per-combination warning came out with ``combinations == ()`` -- the value
     the docstring reserves for a limit of the section alone. Now the first
     force is ``#1`` and the second ``#2``, and only the spacing warning, which
@@ -569,7 +569,7 @@ def test_an_unlabelled_wall_combination_is_named_by_its_position() -> None:
 
 def test_a_value_just_past_its_limit_prints_with_enough_digits_to_show_it() -> None:
     """Three significant figures print 13.00 cm and 12.95 cm both as "13 cm",
-    and bd94d2f read "Stirrup spacing along the member: 13 cm exceeds the
+    and PR #164 read "Stirrup spacing along the member: 13 cm exceeds the
     maximum 13 cm." A message quotes as many digits as it takes for two
     values that differ to print differently, and no more than three where
     they already do."""
@@ -824,7 +824,7 @@ def test_the_warning_names_the_clause_minimum_and_the_one_the_face_has_to_meet()
     §9.6.1.3 relieves the face to 4/3 of it, A_s,min,eff = 2.88 cm². The
     same name cannot carry both numbers: ``flexure_design.top.A_s_min`` and
     the report's As,min column carry 3.74, so ``values["A_s_min"]`` does
-    too, and the one the face is short of -- 2.88, which bd94d2f filed under
+    too, and the one the face is short of -- 2.88, which PR #164 filed under
     ``A_s_min`` -- is ``A_s_min_eff``, which the message quotes.
     """
     beam = _cirsoc_section("beam")
@@ -876,7 +876,7 @@ def test_clear_spacing_follows_the_stirrup_whatever_the_call_order(bars_first: b
     it is (200 - 2*(25 + 8) - 48)/3 = 28.7 mm and passes. The warning is
     read off the section, so it cannot depend on whether the stirrups were
     set before or after the bars, nor wait for a reporting check to refresh
-    it: on bd94d2f the "bars then stirrups" order kept the 28.7 mm and stayed
+    it: in PR #164 the "bars then stirrups" order kept the 28.7 mm and stayed
     silent until ``check_flexure`` ran.
     """
     beam = _beam(height=50 * cm)
@@ -904,7 +904,7 @@ def test_bars_set_by_hand_that_fit_clear_the_flag_of_their_face() -> None:
     reinforced and neither the tension nor the compression steel fits), so
     the design flags both. The flag is the search's verdict on the width,
     not a property of the bars: one Ø12 set by hand has 100 - 2*(25 + 10) -
-    12 = 18 mm beside it and fits. On bd94d2f the flag outlived the bars and
+    12 = 18 mm beside it and fits. In PR #164 the flag outlived the bars and
     the face was reported as not fitting with a single bar on it; the other
     face keeps its flag until it is set too.
     """
@@ -951,7 +951,7 @@ def test_a_face_with_one_bar_has_no_clear_spacing_to_miss() -> None:
     """10x30, 1Ø12 top and bottom, 1eØ10/10. A layer with one bar leaves
     100 - 2*(25 + 10) - 12 = 18 mm beside it, which is not a distance between
     bars: there is no pair to hold to the 25 mm of ACI 318-19 §25.2.1 (30 mm
-    on top, the vibrator). bd94d2f reported both faces as "clear spacing
+    on top, the vibrator). PR #164 reported both faces as "clear spacing
     between the bars below the minimum". Two Ø12 in the same web are 100 -
     70 - 24 = 6 mm apart and are warned, as before."""
     beam = _beam(width=10 * cm, height=30 * cm)

@@ -242,8 +242,8 @@ def test_a_design_with_no_layout_ends_on_the_round_that_came_closest() -> None:
     70.4 mm, A_s,max = 0.85·25·200·0.85·70.4/420 = 6.05 cm²: the 2Ø20 lean
     on the 2Ø10 on top, whose strain at d' = 55 mm is small, and φMn =
     37.83 kN·m, DCR 1.010. Nothing fits that does better at that depth
-    (the review tried 2Ø20 under 2Ø10, 2Ø12, 2Ø16, 2Ø20 at 38.19 kN·m:
-    1.0096 to 1.0120). A design that never looked at the flexure again
+    (2Ø20 under 2Ø10, 2Ø12, 2Ø16 or 2Ø20 at 38.19 kN·m give DCR 1.0096
+    to 1.0120). A design that never looked at the flexure again
     kept 2Ø20 / 2Ø10 and said nothing, DCR 1.010 in silence. Redoing the
     flexure at the Ø10 depth ends on 3Ø12 + 3Ø10 in two layers under 2Ø25,
     DCR 1.166, and a design that kept that last round warned
@@ -344,10 +344,9 @@ def test_a_slab_whose_shear_puts_its_stirrups_on_and_off_ends_saying_so() -> Non
     it is 1 % short (13.09 < 13.25, DCR 1.010); at that depth no whole-cm
     Ø10 or Ø12 spacing lands between 13.25 and 14.02, so the design takes
     Ø10/5, which needs no stirrups and, back at 120 mm, is past A_s,max
-    (15.71 > 15.29). bd94d2f ended on Ø10/7 over a 1eØ10 grid, DCR 1.103,
-    and 4428580 on Ø10/6 over it, DCR 1.010 -- both with no warning at all,
-    a design failing its own check in silence. Since 245dc8e it ends on the
-    closer round, Ø10/5 with no stirrups, φMn = 58.54 kN·m (DCR 0.801, φ =
+    (15.71 > 15.29). PR #164 ended on Ø10/7 over a 1eØ10 grid, DCR 1.103,
+    with no warning at all, a design failing its own check in silence. It
+    now ends on the closer round, Ø10/5 with no stirrups, φMn = 58.54 kN·m (DCR 0.801, φ =
     0.88 at ε_t = 0.0049), and says what it misses: ``As_above_max`` on the
     bottom. The check run afterwards finds the same.
     """

@@ -2,8 +2,8 @@
 
 The release workflow counts the tests marked ``published_example`` and mento-web
 shows the number as "tests that reproduce a case validated outside mento". A mark
-without a traceable source makes that number wrong -- the review of PR #163 found
-18 of 56 marked tests that asserted mento's own output. So every marked test
+without a traceable source makes that number wrong, and 21 of the 52 tests once
+marked asserted mento's own output. So every marked test
 carries, in its docstring, a paragraph that starts with ``Source:`` and says which
 document the number comes from and where in it it sits::
 

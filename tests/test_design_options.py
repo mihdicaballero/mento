@@ -163,7 +163,7 @@ def test_an_alternative_short_of_the_moment_on_the_finished_beam_is_dropped() ->
     hand: centroid (3*5 + 2*40)/5 = 19 mm, d = 600 - 25 - 10 - 19 = 546 mm,
     a = 392.7*420/(0.85*25*200) = 38.8 mm, phi*Mn = 0.9*392.7*420*(546 -
     19.4) = 78.2 kNm, 80/78.2 = 1.023. With the default design_options = 3
-    it never reaches the list; asking for four, bd94d2f offered it as
+    it never reaches the list; asking for four, PR #164 offered it as
     options[3] (after 2Ø12 + 2Ø12 and 2Ø16 + 1Ø12), and it is dropped now for
     the next row that passes, 2Ø16 + 1Ø16.
     """
@@ -287,9 +287,7 @@ def test_trying_the_alternatives_leaves_the_faces_flagged_as_they_were() -> None
     drop the face's ``bars_do_not_fit`` (the search's verdict on the width no
     longer describes bars set by hand). Putting the applied bars back has to
     put the flag back too, or a face the search gave up on and that still
-    kept alternatives would lose its warning to the verification -- which it
-    did when the verification came in (the base design verified nothing, so
-    it had no such step to lose it in). Through ``design()`` the two do not
+    kept alternatives would lose its warning to the verification. Through ``design()`` the two do not
     meet today -- a face the search cannot fit keeps no table -- so the
     state is set by hand: 25x50 H25 under 120 kNm keeps two alternatives on
     the bottom, and the flag is planted on that face.
@@ -448,9 +446,8 @@ def test_an_options_ratio_is_the_sections_and_is_named_so() -> None:
     the 1eØ10/22, 0.748; the flexure governs the section at 0.993. The
     applied stirrup option carries the section's 0.993, not the shear's.
     The top face carries nothing (``top.DCR`` 0.0), and its one option --
-    no bars -- carries the section's 0.993 too. The ratio came in with the
-    verification of the alternatives under the name ``DCR``, which then
-    meant both; the options call theirs ``section_DCR``.
+    no bars -- carries the section's 0.993 too. The options call theirs
+    ``section_DCR``, so that it is not read as the shear's or the face's.
     """
     beam = RectangularBeam(
         label="V",
@@ -563,9 +560,9 @@ def test_a_full_design_verifies_the_alternatives_once(forces: list[Forces], monk
 
     ``design_flexure`` verifies them on the section it leaves, which is right
     when it is called alone; inside ``design()`` any such pass would be
-    overwritten by the one on the finished section, and when the
-    verification came in it ran on every flexure pass -- the 20x60 under +150
-    / -40 kNm twice, a design that redoes its flexure (20x60 H25 has none, so
+    overwritten by the one on the finished section. Run on every flexure
+    pass, it would verify the 20x60 under +150 / -40 kNm twice, and a design
+    that redoes its flexure (20x60 H25 has none, so
     the 20x50 of ``_settle_design`` stands for it: 150 kNm and 250 kN) three
     times. A guard on the cost, not on a result: the options are the same
     either way.

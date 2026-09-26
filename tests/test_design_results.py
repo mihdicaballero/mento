@@ -149,12 +149,11 @@ def test_a_whole_bar_count_given_as_a_float_reads_as_a_whole_number(beam: Rectan
     """A count entered as ``2.0`` -- a spreadsheet cell, a numpy float -- is still 2 bars.
 
     ``set_longitudinal_rebar_bot(2.0, 16 mm, 1.0, 12 mm)`` stores the counts
-    as given. bd94d2f read a beam's count into its layer as ``int(n)`` and
-    printed "2Ø16 mm + 1Ø12 mm"; 5effe4f passes the count through as it
-    comes, for the bars per metre of a slab strip, and the same beam read
+    as given. The layers pass the count through as it comes, for the bars
+    per metre of a slab strip, and read that way the same beam would print
     "2.0Ø16 mm + 1.0Ø12 mm". A beam is detailed by a whole number of bars
-    (see :class:`RebarLayer`), so its layers carry one again. The label
-    itself printed a float count with its decimals already in bd94d2f
+    (see :class:`RebarLayer`), so its layers carry a whole count. The label
+    itself printed a float count with its decimals in PR #164
     (``format_longitudinal_rebar(2.0, "16")`` -> "2.0Ø16"): a whole count
     now reads whole whatever its type. A slab layer keeps its fractional
     count and its spacing label.
