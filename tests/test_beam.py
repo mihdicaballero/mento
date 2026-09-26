@@ -1788,7 +1788,11 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_05() -> None:
     bajo respecto a la sección (As_calc < As_min), por lo que el mínimo
     normativo de ACI 318-19 gobierna el diseño. Se verifica además que
     la sección es simple (sin acero de compresión) y que el flag A_s_bool
-    está activo, indicando que se aplicó la regla del 4/3 de ACI 9.6.1.3.
+    queda apagado: la regla del 4/3 de ACI 9.6.1.3 no alivia nada, porque
+    4/3·As_calc no es menor que As_min. A mano (d = 27.5"):
+      Rn = 2400/(0.9·16·27.5²) = 0.2204 ksi ; ρ = 0.085·(1 − √(1 − 2·0.2204/5.1)) = 0.003756
+      As_calc = 0.003756·16·27.5 = 1.653 in² ; 4/3·As_calc = 2.204 in²
+      As_min = max(3√6000, 200)/60000·16·27.5 = 1.7041 in² (§9.6.1.2) → gobierna As_min
 
     Source: BEAM-01-Flexure-Rectangle ACI 318-19-v6.xlsm, sheet Flexion, row 31 (Test_Etabs_05), column BC (A_s,min
     governs: column V = column R).
@@ -1819,7 +1823,7 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_05() -> None:
     assert A_s_final.to("cm**2").magnitude == pytest.approx(11.00, rel=1e-2)
     # Sección simple: sin acero de compresión
     assert A_s_comp.to("cm**2").magnitude == pytest.approx(0.0, abs=0.01)
-    # Flag 4/3 activo porque As_calc < As_min
+    # Flag 4/3 apagado: 4/3·As_calc = 2.204 in² no es menor que As_min, que gobierna
     assert A_s_bool is False
 
 

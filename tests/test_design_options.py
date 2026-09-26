@@ -475,9 +475,9 @@ def test_an_options_ratio_is_the_sections_and_is_named_so() -> None:
 def test_the_applied_stirrups_keep_their_dcr_when_nothing_passes() -> None:
     """20x60 H25 with Vu 450 kN is past the section limit of §22.5.1.2 however it is stirruped.
 
-    Designed with 2Ø20 + 1Ø16 (centroid 9.4 mm in) and a Ø10 stirrup, d =
-    600 - 25 - 10 - 9.4 = 555.6 mm and phi*Vmax = 0.75*(0.17 + 0.66)*sqrt(25)
-    *200*555.6 = 346 kN. No alternative can carry 450 kN, so none is offered;
+    Designed with 2Ø20 + 1Ø16 (centroid (628.3*10 + 201.1*8)/829.4 = 9.5 mm
+    in) and a Ø10 stirrup, d = 600 - 25 - 10 - 9.5 = 555.5 mm and phi*Vmax =
+    0.75*(0.17 + 0.66)*sqrt(25)*200*555.5 = 346 kN. No alternative can carry 450 kN, so none is offered;
     the applied layout stays first, with the 450/346 = 1.30 that says why.
     """
     beam = _designed([Forces(label="1.2D+1.6L", V_z=450 * kN, M_y=150 * kNm)])
