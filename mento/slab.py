@@ -411,8 +411,9 @@ class Footing(OneWaySlab):
       a two-way footing gets the flat 0.0018*Ag.
       CIRSOC 201-25 prints the same chain: §13.3.2.1 → §7.6.1 (the ratio sits
       in an unnumbered paragraph there), §13.3.3.1 → §8.6.1.1, §24.4.3.2.
-    * EN 1992-1-1 takes the larger of the halved geometric minimum of a
-      foundation and the crack-control minimum of §7.3.2(2). The second governs
+    * Under EN 1992-1-1, the larger of the halved geometric minimum of a
+      foundation (EHE-08 Tabla 42.3.5, note (1): EN prints none) and the
+      crack-control minimum of §7.3.2(2). The second governs
       the thin footings, not the thick ones: its ratio goes with k/2, and k
       decays from 1.00 to 0.65 between 300 and 800 mm of depth.
 

@@ -85,8 +85,12 @@ one.
 Geometric minimum
 ^^^^^^^^^^^^^^^^^
 
-The non-fragility minimum of §9.2.1.1 is halved per direction for a foundation and
-written on the gross section:
+EN 1992-1-1 prints no minimum of its own for a foundation: §9.8.1 (pile caps) and
+§9.8.2.1 (column and wall footings) ask only for a minimum bar diameter
+(:math:`\phi_{min}`, 8 mm recommended). mento takes the foundation minimum of the
+Spanish code, EHE-08 Tabla 42.3.5, note (1) — half the geometric minimum of a slab
+(2.0 ‰ with :math:`f_y = 400` MPa, 1.8 ‰ with 500 MPa, of the gross section) in each
+direction — as detailing practice under EN, written on the gross section:
 
 .. math::
 
@@ -362,8 +366,9 @@ relieves, §9.6.1.2, the beam minimum, which is not the one that governs here �
 :math:`1.8\text{‰}\,b\,h` floor mento adds to a beam under ACI (see
 :ref:`aci-decisions`) is the code minimum itself on a slab or a footing.
 
-**Steel grades between the EN anchors are interpolated.** The halved geometric
-minimum is tabulated at :math:`f_{yk} = 400` and 500 MPa only. mento interpolates
+**Steel grades between the anchors of the table are interpolated.** The halved
+geometric minimum is tabulated at :math:`f_{yk} = 400` and 500 MPa only (EHE-08 Tabla
+42.3.5). mento interpolates
 linearly between them and holds the value flat outside, rather than extrapolating a
 rule the source does not state.
 
@@ -423,7 +428,7 @@ Validation
      - EN 1992-1-1 §7.3.2(2)
    * - :math:`\rho_{geo}` at and between the anchors
      - ``test_en_foundation_min_reinforcement_ratio``
-     - EN 1992-1-1 §9.2.1.1, §9.8.1
+     - EHE-08 Tabla 42.3.5, note (1)
    * - Eq. (7.1) as written
      - ``test_en_crack_control_min_reinforcement_is_equation_7_1``
      - EN 1992-1-1 §7.3.2(2)

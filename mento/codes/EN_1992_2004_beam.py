@@ -383,7 +383,8 @@ def _minimum_flexural_reinforcement_area_EN_1992_2004(self: "RectangularBeam", d
     here the soil goes on carrying it. Two rules take its place, and the larger
     governs:
 
-    * the halved geometric minimum of a foundation, on the gross section; and
+    * the halved geometric minimum of a foundation, on the gross section --
+      EHE-08 Tabla 42.3.5, note (1), since EN 1992-1-1 prints none; and
     * the crack-control minimum of §7.3.2(2), which sizes the steel that has to
       carry the tension the concrete releases at the instant it cracks.
 

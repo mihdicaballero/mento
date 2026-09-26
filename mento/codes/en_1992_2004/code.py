@@ -163,8 +163,9 @@ def _max_bar_spacing_slab(section: "RectangularBeam") -> Any:
 
     A footing is detailed more tightly than 9.3.1.1(3) alone would ask: a slab
     on the ground is thick, so 3h stops binding long before the bars are close
-    enough to spread the bearing pressure into them, and 9.8.2.1 practice caps
-    them at 300 mm.
+    enough to spread the bearing pressure into them, and practice caps them at
+    300 mm -- EN 1992-1-1 §9.8.2.1 does not print it; EHE-08 art. 58.8.2 does
+    (bars "no distará más de 30 cm").
     """
     limit = min(400 * mm, _MAX_BAR_SPACING_ON_SOIL) if section.support == "soil" else 400 * mm
     return min(3 * section.height, limit)
