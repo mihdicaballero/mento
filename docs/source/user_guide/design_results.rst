@@ -170,8 +170,10 @@ if the beam carries both moments and the shear with it, within the code's limits
 reinforcement (tension-controlled under ACI 318-19 / CIRSOC 201-25, the 4 % of EN
 1992-1-1) and on its stirrups. The bars set the effective depth the shear is read at as
 well, so a layout in two layers, or of thicker bars, lowers the section's shear limit and
-can tighten the stirrup spacing it allows. The option's ``DCR`` says at what ratio. A
-footing offers none, because its mat is chosen as a whole.
+can tighten the stirrup spacing it allows. The option's ``section_DCR`` says at what
+ratio: the worst of the whole section with that layout, both faces and the shear, not the
+ratio of the face it is listed under. A footing offers none, because its mat is chosen as a
+whole.
 
 .. code-block:: python
 
@@ -194,8 +196,9 @@ governs they share one spacing (``1eØ10/13``, ``1eØ12/13``, ``1eØ16/13``); wh
 governs, a lighter bar sits closer and a heavier one further apart. Every alternative is
 built on the finished section and checked there -- shear and flexure, since a heavier
 stirrup lowers the effective depth -- and only the ones the section passes with are kept, so
-the list answers "what if I use the bar I have". Each option carries its ``DCR``, the worst
-ratio of the section built with it, and its ``functional``, what it adds in steel: the excess
+the list answers "what if I use the bar I have". Each option carries its ``section_DCR``, the
+worst ratio of the section built with it -- flexure included, so not always the shear's -- and
+its ``functional``, what it adds in steel: the excess
 of ``A_v`` over what the section asks for with that bar, plus one per extra closed stirrup.
 
 How many are kept is a setting, three by default:

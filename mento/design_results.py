@@ -96,12 +96,15 @@ class RebarOption:
     search did not score -- a footing mat, which is chosen afterwards and as a
     whole.
 
-    ``DCR`` is the worst demand-capacity ratio of the finished section with
-    this layout on its face and the other face as applied -- flexure and
-    shear, both faces, every combination the design was run for. The bars
-    set the depth the shear is read at too, so a layout that sits deeper
-    lowers the section's shear limit and can tighten its stirrup spacing
-    limit. An alternative is only offered when that ratio is at most 1, the
+    ``section_DCR`` is the worst demand-capacity ratio of the finished
+    section with this layout on its face and the other face as applied --
+    flexure and shear, both faces, every combination the design was run
+    for. It is the section's, not the face's: ``flexure_design.top.DCR`` is
+    the top face's ratio, while ``flexure_design.top.options[0].section_DCR``
+    may be the bottom's, or the shear's. The bars set the depth the shear
+    is read at too, so a layout that sits deeper lowers the section's shear
+    limit and can tighten its stirrup spacing limit. An alternative is only
+    offered when that ratio is at most 1, the
     bars fit beside the stirrups the design finished with, the section keeps
     within the code's limits on its reinforcement, and its stirrups within
     theirs -- the compression bars the layout relies on included; the applied
@@ -112,7 +115,7 @@ class RebarOption:
     layers: Tuple[RebarLayer, ...]
     A_s: Quantity
     functional: Optional[float] = None
-    DCR: Optional[float] = None
+    section_DCR: Optional[float] = None
 
     @property
     def n_bars(self) -> float:
@@ -440,10 +443,11 @@ class FlexureFaceDesign:
     first; ``options[0]`` is the one applied. The rest were each built on
     the finished section -- the stirrups the design ended with, the other
     face as applied -- and kept only if the section carries both moments
-    with it, within the code's limits on its reinforcement; each carries the
-    ``DCR`` it was kept at. A footing offers none: its mat is chosen as a
-    whole, module and both bars together, and no row of the per-face search
-    is that mat with one thing changed. Empty when the face was not
+    and the shear with it, within the code's limits on its reinforcement and
+    its stirrups; each carries the ``section_DCR`` it was kept at -- the
+    section's worst ratio, not this face's ``DCR``. A footing offers none:
+    its mat is chosen as a whole, module and both bars together, and no row
+    of the per-face search is that mat with one thing changed. Empty when the face was not
     designed, or when its bars were changed by hand after the design.
 
     ``M_capacity`` is the design moment resistance of the face as reinforced
@@ -504,9 +508,10 @@ class StirrupOption:
     asks for with this stirrup on it, ``A_v / A_v_req - 1``, plus one for
     every stirrup beyond the fewest any option needs.
 
-    ``DCR`` is the worst demand-capacity ratio of the finished section built
-    with this option -- shear and flexure, both faces, every combination the
-    design was run for. A stirrup is not only shear: a heavier one sits the
+    ``section_DCR`` is the worst demand-capacity ratio of the finished
+    section built with this option -- shear and flexure, both faces, every
+    combination the design was run for -- so it need not be the shear's:
+    ``shear_design.DCR`` is. A stirrup is not only shear: a heavier one sits the
     bars deeper, which lowers the effective depth and with it the section's
     shear limit and its moment capacity. An alternative is only offered when
     that ratio is at most 1 and the section misses no limit with it; the
@@ -520,7 +525,7 @@ class StirrupOption:
     A_v: Quantity
     functional: float
     layout: str = STIRRUPS
-    DCR: Optional[float] = None
+    section_DCR: Optional[float] = None
 
     @property
     def n_legs(self) -> int:
@@ -560,8 +565,10 @@ class ShearDesign:
     the widest spacing with the fewest legs that covers the demand read at
     the depth that bar gives the section. Only the ones the finished section
     passes with are kept, shear and flexure, so a drawing can take any of
-    them for the bar at hand; each carries its ``DCR``. Empty when the
-    stirrups were not designed, or were changed by hand afterwards.
+    them for the bar at hand; each carries its ``section_DCR``, the worst of
+    the section built with it, flexure included -- not always this result's
+    ``DCR``, which is the shear's. Empty when the stirrups were not
+    designed, or were changed by hand afterwards.
     """
 
     n_stirrups: int

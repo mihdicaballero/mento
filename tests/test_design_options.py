@@ -137,10 +137,10 @@ def test_longitudinal_alternatives_are_verified_on_the_finished_beam() -> None:
     options = flexure.bottom.options
 
     assert [str(o) for o in options] == ["2Ø20 mm + 1Ø16 mm", "2Ø20 mm + 1Ø20 mm", "2Ø25 mm"]
-    assert options[0].DCR == pytest.approx(max(flexure.DCR, beam.shear_design.DCR))
-    assert all(o.DCR is not None and o.DCR <= 1.0 for o in options)
-    assert [round(o.DCR, 3) for o in options] == [0.930, 0.887, 0.891]  # type: ignore[arg-type]
-    assert all(o.DCR == options[0].DCR for o in flexure.top.options)  # the bottom governs all three
+    assert options[0].section_DCR == pytest.approx(max(flexure.DCR, beam.shear_design.DCR))
+    assert all(o.section_DCR is not None and o.section_DCR <= 1.0 for o in options)
+    assert [round(o.section_DCR, 3) for o in options] == [0.930, 0.887, 0.891]  # type: ignore[arg-type]
+    assert all(o.section_DCR == options[0].section_DCR for o in flexure.top.options)  # the bottom governs all three
 
     for option, layout in (
         (options[1], dict(n1=2, d_b1=20 * mm, n2=1, d_b2=20 * mm)),
@@ -151,7 +151,7 @@ def test_longitudinal_alternatives_are_verified_on_the_finished_beam() -> None:
         rebuilt.set_longitudinal_rebar_top(n1=2, d_b1=12 * mm, n2=1, d_b2=10 * mm)
         rebuilt.set_transverse_rebar(n_stirrups=1, d_b=10 * mm, s_l=13 * cm)
         Node(section=rebuilt, forces=TWO_FACES).check()
-        assert max(rebuilt.flexure_design.DCR, rebuilt.shear_design.DCR) == pytest.approx(option.DCR)
+        assert max(rebuilt.flexure_design.DCR, rebuilt.shear_design.DCR) == pytest.approx(option.section_DCR)
 
 
 def test_an_alternative_short_of_the_moment_on_the_finished_beam_is_dropped() -> None:
@@ -169,7 +169,7 @@ def test_an_alternative_short_of_the_moment_on_the_finished_beam_is_dropped() ->
 
     assert str(options[0]) == "2Ø16 mm"
     assert "2Ø10 mm + 1Ø10 mm + 2Ø10 mm" not in [str(o) for o in options]
-    assert all(o.DCR is not None and o.DCR <= 1.0 for o in options)
+    assert all(o.section_DCR is not None and o.section_DCR <= 1.0 for o in options)
 
     beam.set_longitudinal_rebar_bot(n1=2, d_b1=10 * mm, n2=1, d_b2=10 * mm, n3=2, d_b3=10 * mm)
     Node(section=beam, forces=[Forces(label="ELU", M_y=80 * kNm)]).check()
@@ -200,7 +200,7 @@ def test_a_compression_face_alternative_that_fails_the_other_face_is_dropped() -
 
     assert str(top[0]) == "2Ø25 mm + 1Ø20 mm"
     assert "2Ø32 mm" not in [str(o) for o in top]
-    assert all(o.DCR is not None and o.DCR <= 1.0 for o in top)
+    assert all(o.section_DCR is not None and o.section_DCR <= 1.0 for o in top)
 
     beam.set_longitudinal_rebar_top(n1=2, d_b1=32 * mm)
     Node(section=beam, forces=forces).check()
@@ -234,8 +234,8 @@ def test_a_longitudinal_alternative_past_the_shear_limit_of_its_section_is_dropp
     assert str(beam.reinforcement.transverse) == "1eØ10 mm/5 cm"
     assert "2Ø10 mm + 2Ø10 mm" not in [str(o) for o in options]
     assert [str(o) for o in options[:2]] == ["2Ø10 mm", "2Ø12 mm"]
-    assert [round(o.DCR, 3) for o in options[:2]] == [0.994, 0.999]  # type: ignore[arg-type]
-    assert all(o.DCR is not None and o.DCR <= 1.0 for o in options)
+    assert [round(o.section_DCR, 3) for o in options[:2]] == [0.994, 0.999]  # type: ignore[arg-type]
+    assert all(o.section_DCR is not None and o.section_DCR <= 1.0 for o in options)
 
     beam.set_longitudinal_rebar_bot(n1=2, d_b1=10 * mm, n3=2, d_b3=10 * mm)
     Node(section=beam, forces=forces).check()
@@ -268,8 +268,8 @@ def test_an_en_alternative_that_lowers_the_shear_resistance_past_the_demand_is_d
     assert str(top[0]) == "2Ø20 mm"
     assert str(beam.reinforcement.transverse) == "1eØ6 mm/37 cm"
     assert not {"2Ø25 mm", "2Ø16 mm + 2Ø12 mm"} & {str(o) for o in top}
-    assert all(o.DCR is not None and o.DCR <= 1.0 for o in top)
-    assert top[0].DCR == pytest.approx(beam.shear_design.DCR)
+    assert all(o.section_DCR is not None and o.section_DCR <= 1.0 for o in top)
+    assert top[0].section_DCR == pytest.approx(beam.shear_design.DCR)
 
     beam.set_longitudinal_rebar_top(n1=2, d_b1=25 * mm)
     Node(section=beam, forces=forces).check()
@@ -325,7 +325,7 @@ def test_a_footing_offers_no_alternatives() -> None:
         assert len(face.options) == 1
         assert face.options[0].layers == face.layers
         assert face.options[0].functional is None
-        assert face.options[0].DCR == pytest.approx(flexure.DCR)
+        assert face.options[0].section_DCR == pytest.approx(flexure.DCR)
 
 
 def test_slab_options_read_as_spacings() -> None:
@@ -378,8 +378,8 @@ def test_the_alternatives_are_the_other_bars_each_at_its_own_spacing() -> None:
     # The functional says what each heavier bar costs in steel, over the demand
     # read at that bar's own depth: 2 mm deeper per size, so a little more.
     assert [round(option.functional, 2) for option in options] == [0.18, 0.69, 1.98]
-    assert all(option.DCR is not None and option.DCR <= 1.0 for option in options)
-    assert [round(option.DCR, 2) for option in options] == [0.93, 0.93, 0.94]  # type: ignore[arg-type]
+    assert all(option.section_DCR is not None and option.section_DCR <= 1.0 for option in options)
+    assert [round(option.section_DCR, 2) for option in options] == [0.93, 0.93, 0.94]  # type: ignore[arg-type]
 
 
 def test_an_alternative_past_the_shear_limit_of_its_own_section_is_dropped() -> None:
@@ -404,7 +404,7 @@ def test_an_alternative_past_the_shear_limit_of_its_own_section_is_dropped() -> 
     options = beam.shear_design.options
 
     assert [str(o) for o in options] == ["1eØ10 mm/8 cm", "1eØ12 mm/11 cm"]
-    assert [round(o.DCR, 3) for o in options] == [0.994, 0.998]  # type: ignore[arg-type]
+    assert [round(o.section_DCR, 3) for o in options] == [0.994, 0.998]  # type: ignore[arg-type]
     assert [row.d_b.to("mm").magnitude for row in beam.shear_design_results.itertuples()] == [10, 12, 16]
 
 
@@ -431,8 +431,38 @@ def test_an_alternative_that_lowers_the_flexural_capacity_past_the_moment_is_dro
 
     assert str(beam.reinforcement.bottom) == "2Ø20 mm"
     assert [str(o) for o in options] == ["1eØ10 mm/22 cm", "1eØ12 mm/22 cm"]
-    assert [round(o.DCR, 3) for o in options] == [0.993, 0.998]  # type: ignore[arg-type]
-    assert options[0].DCR == pytest.approx(beam.flexure_design.DCR)
+    assert [round(o.section_DCR, 3) for o in options] == [0.993, 0.998]  # type: ignore[arg-type]
+    assert options[0].section_DCR == pytest.approx(beam.flexure_design.DCR)
+
+
+def test_an_options_ratio_is_the_sections_and_is_named_so() -> None:
+    """The same 20x50 under 100 kNm and 120 kN: each result says whose ratio it carries.
+
+    ``shear_design.DCR`` is the shear's, 120 kN against phi*(Vc + Vs) with
+    the 1eØ10/22, 0.748; the flexure governs the section at 0.993. The
+    applied stirrup option carries the section's 0.993, not the shear's.
+    The top face carries nothing (``top.DCR`` 0.0), and its one option --
+    no bars -- carries the section's 0.993 too. One field name used to mean
+    both, ``DCR``; the options call theirs ``section_DCR``.
+    """
+    beam = RectangularBeam(
+        label="V",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=20 * cm,
+        height=50 * cm,
+        c_c=25 * mm,
+    )
+    Node(section=beam, forces=[Forces(label="ELU", V_z=120 * kN, M_y=100 * kNm)]).design()
+    shear, flexure = beam.shear_design, beam.flexure_design
+
+    assert shear.DCR == pytest.approx(0.748, abs=0.0005)
+    assert flexure.DCR == pytest.approx(0.993, abs=0.0005)
+    assert shear.options[0].section_DCR == pytest.approx(flexure.DCR)
+    assert str(flexure.top) == "no reinforcement" and flexure.top.DCR == 0.0
+    assert [o.section_DCR for o in flexure.top.options] == [pytest.approx(0.993, abs=0.0005)]
+    assert not hasattr(shear.options[0], "DCR")
+    assert not hasattr(flexure.top.options[0], "DCR")
 
 
 def test_the_applied_stirrups_keep_their_dcr_when_nothing_passes() -> None:
@@ -448,8 +478,8 @@ def test_the_applied_stirrups_keep_their_dcr_when_nothing_passes() -> None:
 
     assert len(options) == 1
     assert (options[0].d_b, options[0].s_l) == (beam.shear_design.d_b, beam.shear_design.s_l)
-    assert options[0].DCR == pytest.approx(beam.shear_design.DCR)
-    assert options[0].DCR == pytest.approx(1.30, abs=0.005)
+    assert options[0].section_DCR == pytest.approx(beam.shear_design.DCR)
+    assert options[0].section_DCR == pytest.approx(1.30, abs=0.005)
     assert "shear_exceeds_section_limit" in [w.code for w in beam.warnings]
 
 

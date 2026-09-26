@@ -561,8 +561,8 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         layout that makes the section rely on its compression steel owes that
         steel stirrups of its own (§9.7.6.4). The ones that pass are offered,
         best first, up to the number the settings ask for, each with its
-        ``DCR``. The applied layout is first whatever its verdict, with its
-        own. Then the face is put back. Run after a flexure design, and again
+        ``section_DCR``. The applied layout is first whatever its verdict,
+        with its own. Then the face is put back. Run after a flexure design, and again
         once the shear design has settled the stirrups the section is built
         with.
 
@@ -577,7 +577,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
             # A design records at least the layout each face carries, so there
             # is always a first option to judge.
             options: Tuple[RebarOption, ...] = getattr(self, f"_flexure_options_{suffix}")
-            kept = [replace(options[0], DCR=self._section_verdict(forces, (face,)).DCR)]
+            kept = [replace(options[0], section_DCR=self._section_verdict(forces, (face,)).DCR)]
             pool: Tuple[Tuple[RebarOption, Dict[str, Any]], ...] = getattr(self, f"_flexure_option_pool_{suffix}")
             if pool:
                 snapshot = self._longitudinal_snapshot(suffix)
@@ -588,7 +588,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
                     apply(row)
                     verdict = self._section_verdict(forces, (face,))
                     if verdict.passes:
-                        kept.append(replace(option, DCR=verdict.DCR))
+                        kept.append(replace(option, section_DCR=verdict.DCR))
                 self._restore_longitudinal(snapshot)
             setattr(self, f"_flexure_options_{suffix}", tuple(kept))
         self._infeasible_faces = infeasible
@@ -637,7 +637,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         be offered and fail when built: 1eØ16/11 on a 25x50 whose Ø10 cage
         passes, past the section limit by 0.7 %. The rows the section does
         not pass with are dropped; the applied one is kept whatever its
-        verdict, with its ``DCR`` saying so.
+        verdict, with its ``section_DCR`` saying so.
         """
         rows = [row for _, row in table.iterrows()]
         if not rows:
@@ -656,7 +656,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
                 A_v=row["A_v"],
                 functional=float(row["functional"]),
                 layout=layout,
-                DCR=DCR,
+                section_DCR=DCR,
             )
 
         options = []
