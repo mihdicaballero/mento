@@ -1,5 +1,5 @@
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, Optional, Dict, Tuple
+from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING, Any, Callable, FrozenSet, NamedTuple, Optional, Dict, Tuple
 
 if TYPE_CHECKING:
     from matplotlib.figure import Figure
@@ -19,6 +19,7 @@ from mento.units import mm, inch, kN, m, cm, dimensionless
 from mento.design_warnings import (
     DesignWarning,
     collect,
+    combination_label,
     flexure_warnings,
     shear_warnings,
     shortfall_warnings,
@@ -45,6 +46,28 @@ from mento.design_results import (
     capture_flexure_check,
     capture_shear_check,
 )
+
+
+class _Verdict(NamedTuple):
+    """What values-only checks of the section as it stands found, over every combination.
+
+    ``DCR`` is the worst ratio checked; ``clean`` says the checks left no
+    warning and the reinforcement keeps within the code's limits; and
+    ``compression_faces`` are the faces some combination relies on as
+    compression steel (see :meth:`RectangularBeam._compression_face_of`), which
+    the stirrups of that section have to brace. ``fits`` says the bars of
+    the faces judged fit the width -- no spacing warning -- whatever else
+    the checks found.
+    """
+
+    DCR: float
+    clean: bool
+    compression_faces: FrozenSet[str] = frozenset()
+    fits: bool = True
+
+    @property
+    def passes(self) -> bool:
+        return self.clean and self.DCR <= 1.0
 
 
 class _DesignCodeAttributes:
@@ -237,9 +260,13 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         self._alpha: float = math.radians(90)
         self._V_s_req: Quantity = 0 * kN
         # What the last design found besides what it applied, best first, and
-        # the faces it could not fit a layout on. See design_results.
+        # the faces it could not fit a layout on. See design_results. The pool
+        # behind each face's options holds the rows of the search still to be
+        # verified on the finished section, each with the row it is built from.
         self._flexure_options_b: Tuple[RebarOption, ...] = ()
         self._flexure_options_t: Tuple[RebarOption, ...] = ()
+        self._flexure_option_pool_b: Tuple[Tuple[RebarOption, Dict[str, Any]], ...] = ()
+        self._flexure_option_pool_t: Tuple[Tuple[RebarOption, Dict[str, Any]], ...] = ()
         self._shear_options: Tuple[StirrupOption, ...] = ()
         self._infeasible_faces: set[str] = set()
         # The faces the last design could not bring up to what they need, as
@@ -260,6 +287,10 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         self._shear_checked = False  # Tracks if shear check or design has been done
         self._flexure_checked = False  # Tracks if shear check or design has been done
         self._doubly_reinforced = False  # Tracks if doubly reinforced section is used
+        # The faces whose bars some combination of the last flexure check
+        # relied on as compression steel: what the stirrups have to support
+        # (ACI 318-19 / CIRSOC 201-25 §9.7.6.4.1). See _note_compression_face.
+        self._compression_faces: set[str] = set()
 
         # Initialize default concrete beam attributes
         self._initialize_code_attributes()
@@ -296,6 +327,17 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
 
     def _initialize_longitudinal_rebar_attributes(self) -> None:
         """Initialize all rebar-related attributes with default values."""
+        # The bar counts are typed as floats: a beam's is a whole number of
+        # bars, a slab strip's is width / s, the bars per strip its spacing
+        # gives, which need not be (see mento.slab._bars_at_spacing).
+        self._n1_b: float
+        self._n2_b: float
+        self._n3_b: float
+        self._n4_b: float
+        self._n1_t: float
+        self._n2_t: float
+        self._n3_t: float
+        self._n4_t: float
         # Bottom rebar defaults
         self._n2_b, self._d_b2_b = 0, 0 * mm
         self._n3_b, self._d_b3_b = 0, 0 * mm
@@ -391,6 +433,16 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
                 layers.append(RebarLayer(n=n, d_b=d_b))
         return tuple(layers)
 
+    #: Rows of the search a face keeps back for verification, as a multiple of
+    #: the options it will show: dropping the ones the finished section fails
+    #: with still leaves the number asked for, in most cases.
+    _OPTION_POOL_FACTOR = 3
+    #: Rounds a full design may redo its flexure with the stirrup the shear
+    #: design chose, when that stirrup moved the bars past what they carry.
+    #: One is what it takes when a layout exists; the bound is for a section
+    #: that has none, which then ends on a repeated state anyway.
+    _DESIGN_ROUNDS = 3
+
     def _record_longitudinal_options(self, face: str, design: Any, table: Any) -> None:
         """Keep the layouts the search ranked for one face, the applied one first.
 
@@ -401,7 +453,13 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         something after the search changed it (a footing mat is chosen as a
         whole, after both faces). The rest follow in the order the search
         ranked them, skipping any that would be laid out the same as one
-        already kept.
+        already kept -- but they are not offered from here. The search ranks
+        them by area against the requirement of its own iteration, read with
+        the starter stirrup, and the section they end up on is another: the
+        stirrup the shear design picks sits the bars deeper, and a doubly
+        reinforced face's bars are the other face's compression steel. So the
+        rows are pooled, and :meth:`_verify_longitudinal_options` builds each
+        on the finished section before it is kept.
 
         Args:
             face: ``"b"`` or ``"t"``.
@@ -418,36 +476,168 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
 
         applied = self.reinforcement.bottom if face == "b" else self.reinforcement.top
         area_unit = applied.A_s.units
-        options = [
-            RebarOption(
-                layers=applied.layers,
-                A_s=applied.A_s,
-                functional=(
-                    functional(design) if design is not None and self._option_layers(design) == applied.layers else None
-                ),
-            )
-        ]
-        limit = int(self.settings.design_options)
+        first = RebarOption(
+            layers=applied.layers,
+            A_s=applied.A_s,
+            functional=(
+                functional(design) if design is not None and self._option_layers(design) == applied.layers else None
+            ),
+        )
+        pool: list[Tuple[RebarOption, Dict[str, Any]]] = []
+        seen = [first.layers]
+        limit = int(self.settings.design_options) * self._OPTION_POOL_FACTOR
         if table is not None and not table.empty:
             for _, row in table.iterrows():
-                if len(options) >= limit:
+                if len(pool) + 1 >= limit:
                     break
                 layers = self._option_layers(row)
-                if any(option.layers == layers for option in options):
+                if layers in seen:
                     continue
+                seen.append(layers)
                 A_s = sum((layer.A_s for layer in layers), 0 * area_unit)
-                options.append(RebarOption(layers=layers, A_s=A_s.to(area_unit), functional=functional(row)))
-        setattr(self, f"_flexure_options_{face}", tuple(options))
+                option = RebarOption(layers=layers, A_s=A_s.to(area_unit), functional=functional(row))
+                pool.append((option, dict(row)))
+        setattr(self, f"_flexure_options_{face}", (first,))
+        setattr(self, f"_flexure_option_pool_{face}", tuple(pool))
 
-    def _record_transverse_options(self, table: DataFrame) -> None:
+    def _longitudinal_snapshot(self, face: str) -> Dict[str, Any]:
+        """The bars of one face as attributes, to put back after trying another layout.
+
+        Counts and diameters on a beam; on a slab the spacings as well, since
+        its counts are derived from them.
+        """
+        names = [f"_{kind}{index}_{face}" for index in (1, 2, 3, 4) for kind in ("n", "d_b", "s_b")]
+        return {name: getattr(self, name) for name in names if hasattr(self, name)}
+
+    def _restore_longitudinal(self, snapshot: Dict[str, Any]) -> None:
+        for name, value in snapshot.items():
+            setattr(self, name, value)
+        self._update_longitudinal_rebar_attributes()
+
+    def _flexure_verdict(self, forces: list[Forces], faces: Tuple[str, ...]) -> _Verdict:
+        """The flexure of the section as it stands, under ``forces``.
+
+        The worst ratio over both faces and every combination. It passes when
+        that ratio is at most 1, the bars of ``faces`` (``"bot"``/``"top"``)
+        fit, the check leaves no steel-area warning, and the face each
+        combination puts in tension keeps within the code's limit on its
+        reinforcement -- the registry's ``flexure_admissible``, tension-
+        controlled under ACI 318-19 / CIRSOC 201-25 §9.3.3.1 and the 4 % of
+        EN 1992-1-1 §9.2.1.1(3), the same limit the design holds its own
+        layout to. It also names the faces the section relies on as
+        compression steel. Values-only checks, so the section is not written
+        to.
+        """
+        admissible = design_code(self.concrete).flexure_admissible
+        names = tuple("bottom" if face == "bot" else "top" for face in faces)
+        worst = 0.0
+        fits = not any(raw.face in names for raw in spacing_warnings(self))
+        clean = fits
+        compression: set[str] = set()
+        for force in forces:
+            state = self._run_flexure_check(force, report=False)
+            check = capture_flexure_check(self, force.label, state)
+            worst = max(worst, check.bottom.DCR, check.top.DCR)
+            clean = clean and not flexure_warnings(self, force.label, state)
+            tension = "bot" if force._M_y > 0 * kN * m else "top" if force._M_y < 0 * kN * m else None
+            if tension is not None and admissible is not None and not admissible(self, tension):
+                clean = False
+            braced = self._compression_face_of(force, state)
+            if braced is not None:
+                compression.add(braced)
+        return _Verdict(worst, clean, frozenset(compression), fits)
+
+    def _verify_longitudinal_options(self, forces: list[Forces]) -> None:
+        """Keep, of each face's pooled alternatives, those the finished section passes with.
+
+        Each is built on the section as the design left it -- its stirrups,
+        the other face as applied -- and judged by :meth:`_section_verdict`
+        under every combination: flexure and shear. The bars set the depth
+        the shear is read at as much as the moment's, ``d = min(d_bot,
+        d_top)``, so a layout in two layers, or of thicker bars, lowers the
+        section's shear limit and can halve its stirrup spacing limit (ACI
+        318-19 Table 9.7.6.2.2): an ACI 12x25 whose 2Ø10 carry 78 kN at
+        shear DCR 0.994 was offered 2Ø10 + 2Ø10, DCR 1.085 once built. And a
+        layout that makes the section rely on its compression steel owes that
+        steel stirrups of its own (§9.7.6.4). The ones that pass are offered,
+        best first, up to the number the settings ask for, each with its
+        ``section_DCR``. The applied layout is first whatever its verdict,
+        with its own. Then the face is put back. Run after a flexure design, and again
+        once the shear design has settled the stirrups the section is built
+        with.
+
+        The rows go on through the public setters, which clear the face's
+        ``bars_do_not_fit`` -- right for bars set by hand, wrong for a layout
+        the design only tries -- so the faces the search gave up on are put
+        back with the bars.
+        """
+        limit = int(self.settings.design_options)
+        infeasible = set(self._infeasible_faces)
+        for face, suffix in (("bot", "b"), ("top", "t")):
+            # A design records at least the layout each face carries, so there
+            # is always a first option to judge.
+            options: Tuple[RebarOption, ...] = getattr(self, f"_flexure_options_{suffix}")
+            kept = [replace(options[0], section_DCR=self._section_verdict(forces, (face,)).DCR)]
+            pool: Tuple[Tuple[RebarOption, Dict[str, Any]], ...] = getattr(self, f"_flexure_option_pool_{suffix}")
+            if pool:
+                snapshot = self._longitudinal_snapshot(suffix)
+                apply = self._apply_longitudinal_design_bot if suffix == "b" else self._apply_longitudinal_design_top
+                for option, row in pool:
+                    if len(kept) >= limit:
+                        break
+                    apply(row)
+                    verdict = self._section_verdict(forces, (face,))
+                    if verdict.passes:
+                        kept.append(replace(option, section_DCR=verdict.DCR))
+                self._restore_longitudinal(snapshot)
+            setattr(self, f"_flexure_options_{suffix}", tuple(kept))
+        self._infeasible_faces = infeasible
+
+    def _section_verdict(self, forces: list[Forces], faces: Tuple[str, ...] = ("bot", "top")) -> _Verdict:
+        """The section as it stands, under ``forces``: flexure and shear.
+
+        The worst of shear and flexure, both faces, over every combination;
+        it passes when that ratio is at most 1, the shear check leaves no
+        warning and the flexure passes :meth:`_flexure_verdict` with the bars
+        of ``faces`` -- both by default, since a stirrup changes the width
+        left to the bars as much as their depth. The shear warnings read the
+        compression steel of this section, not of the last reporting check:
+        a layout tried here can make the section rely on its compression bars,
+        or stop relying on them, and the stirrups owe them lateral support
+        (ACI 318-19 / CIRSOC 201-25 §9.7.6.4) only in the first case.
+        Values-only checks, so nothing is written to the section and the
+        results of the last reporting check stay what they were -- which is
+        what lets a design try a layout on the section and take it off again.
+        """
+        flexure = self._flexure_verdict(forces, faces)
+        worst, clean = flexure.DCR, flexure.clean
+        braced = self._compression_faces
+        self._compression_faces = set(flexure.compression_faces)
+        try:
+            for force in forces:
+                shear_state = self._run_shear_check(force, report=False)
+                worst = max(worst, capture_shear_check(self, force.label, shear_state).DCR)
+                clean = clean and not shear_warnings(self, force.label, shear_state)
+        finally:
+            self._compression_faces = braced
+        return _Verdict(worst, clean, flexure.compression_faces, flexure.fits)
+
+    def _record_transverse_options(self, table: DataFrame, forces: list[Forces]) -> None:
         """Keep the stirrup layouts the search found, the applied one first.
 
         The applied layout is the first row of the ranked table. The
-        alternatives after it are the same cage in a heavier bar, in order of
-        diameter: that is the substitution a drawing actually makes -- the bar
-        the yard has -- and it is why an option carrying the same stirrups at
-        the same spacing with a thicker bar is kept rather than passed over for
-        adding steel.
+        alternatives are the other rows -- one per bar diameter the code
+        offers, lighter and heavier alike -- in order of diameter, and each is
+        built on the finished section and checked there before it is kept:
+        shear and flexure, under every combination of the design. A stirrup
+        is not only shear. A heavier one sits the longitudinal bars deeper,
+        which raises the ``A_v`` the section needs, lowers its shear limit
+        (ACI 318-19 / CIRSOC 201-25 §22.5.1.2, EN 1992-1-1 V_Rd,max) and
+        lowers its moment capacity, so a row sized for the shear alone could
+        be offered and fail when built: 1eØ16/11 on a 25x50 whose Ø10 cage
+        passes, past the section limit by 0.7 %. The rows the section does
+        not pass with are dropped; the applied one is kept whatever its
+        verdict, with its ``section_DCR`` saying so.
         """
         rows = [row for _, row in table.iterrows()]
         if not rows:
@@ -457,7 +647,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         alternatives.sort(key=lambda row: row["d_b"].to("mm").magnitude)
         layout = self.reinforcement.transverse.layout
 
-        def option(row: Any) -> StirrupOption:
+        def option(row: Any, DCR: float) -> StirrupOption:
             return StirrupOption(
                 n_stirrups=int(row["n_stir"]),
                 d_b=row["d_b"],
@@ -466,10 +656,18 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
                 A_v=row["A_v"],
                 functional=float(row["functional"]),
                 layout=layout,
+                section_DCR=DCR,
             )
 
-        chosen = [applied] + alternatives
-        self._shear_options = tuple(option(row) for row in chosen[: int(self.settings.design_options)])
+        options = []
+        for row in [applied] + alternatives:
+            self._apply_transverse_design(row)
+            verdict = self._section_verdict(forces)
+            if row is applied or verdict.passes:
+                options.append(option(row, verdict.DCR))
+        # Back to the layout the design applied, whatever was tried last.
+        self._apply_transverse_design(applied)
+        self._shear_options = tuple(options[: int(self.settings.design_options)])
 
     def _design_start_stirrup(self) -> Quantity:
         """The stirrup diameter a design starts from, whatever ran before it.
@@ -493,10 +691,23 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         self._stirrup_d_b = self._design_start_stirrup()
         self._stirrup_s_l = 0 * cm
         self._A_v = 0 * cm**2 / m
+        self._shear_options = ()
+        self._reset_longitudinal_for_design()
+
+    def _reset_longitudinal_for_design(self) -> None:
+        """Return the bars and what a flexure design left about them to where one starts.
+
+        The stirrups are kept: this is what a design that has to redo its
+        flexure at the depth of the stirrup it settled on starts from (see
+        :meth:`_settle_design`), and what :meth:`_reset_for_design` does once
+        it has put the starter stirrup back.
+        """
         self._doubly_reinforced = False
+        self._compression_faces = set()
         self._flexure_options_b = ()
         self._flexure_options_t = ()
-        self._shear_options = ()
+        self._flexure_option_pool_b = ()
+        self._flexure_option_pool_t = ()
         self._infeasible_faces = set()
         self._short_faces = {}
         self._initialize_longitudinal_rebar_attributes()
@@ -544,7 +755,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
             self._stirrup_d_b = d_b
             self._stirrup_s_l = s_l
             self._A_v = 0 * cm**2 / m
-            self._update_effective_heights()
+            self._update_stirrup_dependents()
             return
 
         # Every non-empty reinforcement configuration must be strictly positive.
@@ -568,7 +779,21 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         # Calculate the transverse reinforcement area per unit length.
         self._A_v = A_vs / s_l
 
-        # Recalculate effective depths using the new stirrup diameter.
+        self._update_stirrup_dependents()
+
+    def _update_stirrup_dependents(self) -> None:
+        """Recompute what the stirrup diameter enters into.
+
+        The legs sit between the cover and the longitudinal bars, so a
+        thicker stirrup narrows the clear space those bars have across the
+        width as well as lowering the effective depths. The clear space used
+        to be recomputed only when the bars were set, so stirrups set after
+        them -- or changed later -- left ``clear_spacing_below_min`` reading a
+        stale value until a reporting check happened to refresh it, and the
+        answer depended on the order of the calls. Everything that follows
+        from the stirrup goes through here.
+        """
+        self._calculate_min_clear_spacing()
         self._update_effective_heights()
 
     def _leg_spacing_across_width(self) -> Quantity:
@@ -629,6 +854,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         self._d_b3_b = d_b3 if d_b3 is not None else 0 * L
         self._n4_b = n4
         self._d_b4_b = d_b4 if d_b4 is not None else 0 * L
+        self._face_set_by_hand("bot")
         self._update_longitudinal_rebar_attributes()
 
     def set_longitudinal_rebar_top(
@@ -651,7 +877,22 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         self._d_b3_t = d_b3 if d_b3 is not None else 0 * L
         self._n4_t = n4
         self._d_b4_t = d_b4 if d_b4 is not None else 0 * L
+        self._face_set_by_hand("top")
         self._update_longitudinal_rebar_attributes()
+
+    def _face_set_by_hand(self, face: str) -> None:
+        """A face given bars is no longer the face the search gave up on.
+
+        ``bars_do_not_fit`` records, per face, that the last design found no
+        layout that fits the width. That is the search's verdict on the
+        width, not a property of whatever bars the face carries: bars set by
+        hand afterwards are a different section, which the spacing check
+        judges on its own. The design itself sets the flag after it has
+        applied its layout -- through these same setters -- so it survives
+        the design and goes with the first hand-set bars. ``face`` is
+        ``"bot"`` or ``"top"``.
+        """
+        self._infeasible_faces.discard(face)
 
     def _calculate_longitudinal_rebar_area(self) -> None:
         """Calculate total rebar area (robust to None or zero diameters)."""
@@ -682,6 +923,66 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
             + area(self._n4_t, self._d_b4_t)
         )
 
+    def _layer_clear_spacing(self, n_a: int, d_a: Quantity, n_b: int, d_b: Quantity) -> Quantity:
+        """The clear distance between the bars of one layer, spread evenly between the stirrup legs.
+
+        Parameters:
+            n_a (int): Number of bars in the first group of the layer.
+            d_a (Quantity): Diameter of bars in the first group of the layer.
+            n_b (int): Number of bars in the second group of the layer.
+            d_b (Quantity): Diameter of bars in the second group of the layer.
+
+        Returns:
+            Quantity: Clear spacing for the given layer -- for a layer of one
+            bar, the room left beside it.
+        """
+        effective_width = self.width - 2 * (self.c_c + self._stirrup_d_b)
+        total_bars = n_a + n_b
+        if total_bars <= 1:
+            return effective_width - max(d_a, d_b)  # Clear space for one bar
+        total_bar_width = n_a * d_a + n_b * d_b
+        return (effective_width - total_bar_width) / (total_bars - 1)
+
+    def _tension_bar_spacing(self, face: str) -> Optional[Tuple[Quantity, Quantity]]:
+        """The centre-to-centre spacing of the bars nearest ``face``, and the most the code allows it.
+
+        ACI 318-19 §9.7.2.2 / CIRSOC 201-25 art. 9.7.2.2 send the bars closest to
+        the tension face of a beam to Table 24.3.2, a crack-control cap on their
+        spacing, which the code supplies through ``max_bar_spacing_tension``. A
+        slab carries the same cap inside its own spacing row (§7.7.2.2, folded
+        into ``OneWaySlab._max_bar_spacing``), and a code without the hook --
+        EN 1992-1-1 controls cracking through §7.3.3 instead -- has nothing of
+        this kind to report, so both answer ``None``; so does a face with no bars.
+
+        A beam is detailed by a bar count, so the spacing is read off the layer
+        nearest the face the way the section spreads it: the bars evenly spaced
+        between the stirrup legs (:meth:`_layer_clear_spacing`), which puts
+        adjacent centres one clear distance and two half-diameters apart -- the
+        larger bar of the layer, on the safe side where it mixes two. With a
+        single bar nearest the face there is no pair to measure, and §24.3.3
+        compares the width of the face against the same limit instead. The
+        report's §24.3.2 rows and ``bar_spacing_exceeds_max`` both read this.
+        ``face`` is ``"b"`` or ``"t"``.
+        """
+        if getattr(self, f"_s_b1_{face}", None) is not None:
+            return None
+        limit_of = design_code(self.concrete).max_bar_spacing_tension
+        if limit_of is None:
+            return None
+        # The two groups of the layer nearest the face; one with no bars, or
+        # bars of no size, counts for nothing.
+        nearest = []
+        for group in (1, 2):
+            n, d_b = getattr(self, f"_n{group}_{face}"), getattr(self, f"_d_b{group}_{face}")
+            nearest.append((n, d_b) if n > 0 and d_b is not None and d_b.magnitude > 0 else (0, 0 * self.width))
+        (n_a, d_a), (n_b, d_b) = nearest
+        if n_a + n_b == 0:
+            return None
+        limit: Quantity = limit_of(self)
+        if n_a + n_b == 1:
+            return self.width, limit
+        return self._layer_clear_spacing(n_a, d_a, n_b, d_b) + max(d_a, d_b), limit
+
     def _calculate_min_clear_spacing(self) -> None:
         """
         Calculates the maximum clear spacing between bars for the bottom rebar layers.
@@ -689,26 +990,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         Returns:
             Quantity: The maximum clear spacing between bars in either the first or second layer.
         """
-
-        def layer_clear_spacing(n_a: int, d_a: Quantity, n_b: int, d_b: Quantity) -> Quantity:
-            """
-            Helper function to calculate clear spacing for a given layer.
-
-            Parameters:
-                n_a (int): Number of bars in the first group of the layer.
-                d_a (Quantity): Diameter of bars in the first group of the layer.
-                n_b (int): Number of bars in the second group of the layer.
-                d_b (Quantity): Diameter of bars in the second group of the layer.
-
-            Returns:
-                Quantity: Clear spacing for the given layer.
-            """
-            effective_width = self.width - 2 * (self.c_c + self._stirrup_d_b)
-            total_bars = n_a + n_b
-            if total_bars <= 1:
-                return effective_width - max(d_a, d_b)  # Clear space for one bar
-            total_bar_width = n_a * d_a + n_b * d_b
-            return (effective_width - total_bar_width) / (total_bars - 1)
+        layer_clear_spacing = self._layer_clear_spacing
 
         # AVAIABLE CLEAR SPACING FOR BOTTOM BARS
         # Calculate clear spacing for each layer
@@ -810,6 +1092,21 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         -------
         DataFrame
             A DataFrame summarizing the flexural design results for all forces.
+
+        The alternatives kept for each face are verified on the section it
+        leaves (see :meth:`_verify_longitudinal_options`).
+        """
+        all_results = self._design_flexure(forces)
+        self._verify_longitudinal_options(forces)
+        return all_results
+
+    def _design_flexure(self, forces: list[Forces]) -> DataFrame:
+        """:meth:`design_flexure` without verifying the alternatives.
+
+        What :meth:`design` runs: its alternatives are judged once, on the
+        finished section, and a verification on the section a flexure pass
+        leaves -- with the starter stirrup, or one a later round replaces --
+        would be work thrown away.
         """
         # Initialize limiting cases
         max_M_y_top = 0 * kN * m  # For negative M_y (top reinforcement design)
@@ -828,8 +1125,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         design_code(self.concrete).design_flexure(self, max_M_y_bot, max_M_y_top)
 
         # Check flexural capacity for all forces with the assigned reinforcement
-        all_results = self.check_flexure(forces)
-        return all_results
+        return self.check_flexure(forces)
 
     @property
     def flexure_checks(self) -> Tuple[FlexureCheck, ...]:
@@ -860,12 +1156,68 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         """
         self._flexure_checks = []
         self._flexure_warnings = []
-        for force in forces:
+        self._compression_faces = set()
+        for position, force in enumerate(forces, 1):
             state = self._run_flexure_check(force, report=False)
             self._flexure_checks.append(capture_flexure_check(self, force.label, state))
-            self._flexure_warnings.extend(flexure_warnings(self, force.label, state))
+            self._flexure_warnings.extend(flexure_warnings(self, combination_label(force.label, position), state))
+            self._note_compression_face(force, state)
         self._flexure_checked = True
         return tuple(self._flexure_checks)
+
+    def _note_compression_face(self, force: Forces, state: Any) -> None:
+        """Record the face ``force`` relies on as compression steel, for the stirrups' sake.
+
+        ACI 318-19 / CIRSOC 201-25 §9.7.6.4.1 ask for lateral support of the
+        compression reinforcement wherever it is required. The flexure check
+        knows when: a combination whose moment needs compression steel
+        (``doubly_reinforced`` on its state), or whose tension steel is
+        admissible only through it (past A_s,max, within A_s,max,eff), relies
+        on the face opposite the one it puts in tension (see
+        :meth:`_compression_face_of`). The shear design and the shear warnings read
+        the faces so recorded through the code's ``stirrup_compression_support``.
+        A code whose state does not say (EN 1992-1-1) records nothing.
+        """
+        face = self._compression_face_of(force, state)
+        if face is not None:
+            self._compression_faces.add(face)
+
+    @staticmethod
+    def _compression_face_of(force: Forces, state: Any) -> Optional[str]:
+        """The face ``force`` relies on as compression steel, per its flexure ``state``, if any.
+
+        The face opposite the one the moment puts in tension, when the
+        combination relies on compression steel: its moment needs it to be
+        carried (``doubly_reinforced``), or the tension steel placed is past
+        A_s,max of the singly reinforced section and complies with ACI 318-19
+        / CIRSOC 201-25 §9.3.3.1 only through the compression steel opposite
+        it, which lifts the limit to A_s,max,eff -- the face the report marks
+        "D.R.". The design reaches the second on purpose, where the catalogue
+        has nothing between the area asked for and A_s,max (see
+        ``_design_tension_face``): a CIRSOC 40x80 H30 under 1196.5 kN·m takes
+        11Ø25 = 54.00 cm² against A_s,max = 53.88 cm², and its two Ø10 on top
+        are what make that admissible. ``None`` otherwise, and for a code
+        whose state does not say.
+        """
+        if not hasattr(state, "doubly_reinforced") or force._M_y == 0 * kN * m:
+            return None
+        tension = "bot" if force._M_y > 0 * kN * m else "top"
+        relies = bool(state.doubly_reinforced)
+        if not relies:
+            # Past A_s,max and within A_s,max,eff: the face complies through the
+            # compression steel. Past A_s,max,eff it does not comply at all, and
+            # ``As_above_max`` says so.
+            A_s = state.A_s_tension
+            A_s_max, A_s_max_eff = getattr(state, f"A_s_max_{tension}"), getattr(state, f"A_s_max_eff_{tension}")
+            relies = (
+                A_s_max > 0
+                and A_s > A_s_max
+                and not math.isclose(A_s, A_s_max)
+                and (A_s <= A_s_max_eff or math.isclose(A_s, A_s_max_eff))
+            )
+        if not relies:
+            return None
+        return "top" if tension == "bot" else "bot"
 
     def shear_check_results(self, forces: list[Forces]) -> Tuple[ShearCheck, ...]:
         """Check shear and return one result per combination, building no report.
@@ -877,10 +1229,10 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         """
         self._shear_checks = []
         self._shear_warnings = []
-        for force in forces:
+        for position, force in enumerate(forces, 1):
             state = self._run_shear_check(force, report=False)
             self._shear_checks.append(capture_shear_check(self, force.label, state))
-            self._shear_warnings.extend(shear_warnings(self, force.label, state))
+            self._shear_warnings.extend(shear_warnings(self, combination_label(force.label, position), state))
         self._shear_checked = True
         return tuple(self._shear_checks)
 
@@ -929,9 +1281,11 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         self._flexure_results_detailed_list: Dict[Any, Dict[str, Any]] = {}  # Store detailed results by force ID
         self._flexure_checks = []
         self._flexure_warnings = []
+        self._compression_faces = set()
 
-        for force in forces:
+        for position, force in enumerate(forces, 1):
             state = self._run_flexure_check(force, report=True)
+            self._note_compression_face(force, state)
             result = self._flexure_report_row
             self._flexure_results_list.append(result)
 
@@ -948,7 +1302,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
             # attributes it left on the beam -- those describe the last
             # combination only, and are on their way out with them.
             self._flexure_checks.append(capture_flexure_check(self, force.label, state))
-            self._flexure_warnings.extend(flexure_warnings(self, force.label, state))
+            self._flexure_warnings.extend(flexure_warnings(self, combination_label(force.label, position), state))
 
             # Extract the DCR values for top and bottom from the results
             current_dcr_top = self._DCRb_top
@@ -1034,13 +1388,6 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         """
         return self.mode == "slab"
 
-    #: Passes of the stirrup design over its own diameter. The effective depth
-    #: depends on the stirrup, and the stirrup on the demand read at that depth,
-    #: so the design is repeated with the diameter it chose until it chooses the
-    #: same one. It settles in two passes; the cap only stops a pair of
-    #: diameters that keep trading places.
-    _STIRRUP_DESIGN_PASSES = 3
-
     def _shear_demand(self, forces: list[Forces]) -> Tuple[Quantity, Quantity]:
         """The governing ``(A_v_req, V_s_req)`` over the combinations, at the current depth."""
         max_A_v_req = 0 * cm**2 / m
@@ -1054,45 +1401,84 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
                 max_V_s_req = self._V_s_req
         return max_A_v_req, max_V_s_req
 
+    def _compression_faces_under(self, forces: list[Forces]) -> set[str]:
+        """The faces the section as it stands relies on as compression steel under ``forces``.
+
+        Values-only flexure checks, one per combination (see
+        :meth:`_compression_face_of`); nothing is written to the section.
+        """
+        faces: set[str] = set()
+        for force in forces:
+            face = self._compression_face_of(force, self._run_flexure_check(force, report=False))
+            if face is not None:
+                faces.add(face)
+        return faces
+
+    def _stirrup_demand(self, forces: list[Forces], braced: set[str]) -> Tuple[Quantity, Quantity]:
+        """What the section as it stands asks of its stirrups: read once per diameter the search tries.
+
+        The governing ``(A_v_req, V_s_req)`` of :meth:`_shear_demand`, and the
+        compression bars the stirrups have to brace, left in
+        ``_compression_faces`` for the code's ``stirrup_compression_support``
+        to read -- the diameter floor of ACI 318-19 / CIRSOC 201-25 §9.7.6.4.2
+        and the spacing cap of §9.7.6.4.3. Both move with the depth the
+        stirrup gives the bars. A section singly reinforced at the depth of
+        the starter stirrup can rely on its compression bars at the depth of
+        a heavier one: an ACI 15x50 H40 under 211.5 kNm asks 14.94 cm² against
+        A_s,max = 14.98 cm² with Ø8, and its 16.10 cm² are past the 14.92 of
+        the Ø10 the shear design picks, so the Ø10 has to brace the 2Ø10 on
+        top at 150 mm. Read off the last flexure check alone, the stirrups
+        were spaced at 210. ``braced`` -- the faces that check found -- stay
+        braced whatever the depth, the conservative side.
+        """
+        self._compression_faces = braced | self._compression_faces_under(forces)
+        return self._shear_demand(forces)
+
     # Factory method to select the shear design method
     def design_shear(self, forces: list[Forces]) -> DataFrame:
         """Design the stirrups for the worst of ``forces``, then check them all.
 
         The design starts from the stirrup diameter a first design assumes, not
         from the one the section carries, so it gives the same stirrups however
-        many times it runs. It then repeats itself with the diameter it chose
-        until the choice holds, so the demand and the spacing limits are read at
-        the effective depth the finished section has.
+        many times it runs. The effective depth depends on the stirrup, and the
+        demand and the spacing limits on the effective depth, so the search
+        sizes every bar diameter it offers at the depth that diameter gives
+        (:meth:`~mento.rebar.Rebar._transverse_rebar_beam`): what it applies
+        was chosen against the section it makes, and passes its own check by
+        construction. The design used to be re-run with the diameter it chose
+        until the choice held, and a pair of diameters that kept trading places
+        -- 8 → 10 → 8 -- left the last one applied against the demand of the
+        other.
         """
         self._shear_options = ()
         self._stirrup_d_b = self._design_start_stirrup()
         self._update_longitudinal_rebar_attributes()
+        braced = set(self._compression_faces)
 
-        for _ in range(self._STIRRUP_DESIGN_PASSES):
-            max_A_v_req, max_V_s_req = self._shear_demand(forces)
+        max_A_v_req, max_V_s_req = self._shear_demand(forces)
 
-            if self._stirrups_optional and max_A_v_req <= 0 * cm**2 / m:
-                # No combination asks for shear reinforcement and the code does not
-                # impose a minimum here, so the section is built without stirrups.
-                self._clear_transverse_rebar_design()
-                self._update_longitudinal_rebar_attributes()
-                return self.check_shear(forces)
-
-            section_rebar = Rebar(self)
-            self.shear_design_results = section_rebar.transverse_rebar(max_A_v_req, max_V_s_req, self._alpha)
-            self._best_rebar_design = section_rebar.transverse_rebar_design
-            chosen = self._best_rebar_design["d_b"]
-            if chosen == self._stirrup_d_b:
-                break
-            self._stirrup_d_b = chosen
+        if self._stirrups_optional and max_A_v_req <= 0 * cm**2 / m:
+            # No combination asks for shear reinforcement and the code does not
+            # impose a minimum here, so the section is built without stirrups.
+            self._clear_transverse_rebar_design()
             self._update_longitudinal_rebar_attributes()
+            return self.check_shear(forces)
+
+        section_rebar = Rebar(self)
+        self.shear_design_results = section_rebar.transverse_rebar(
+            max_A_v_req, max_V_s_req, self._alpha, demand=lambda: self._stirrup_demand(forces, braced)
+        )
+        self._best_rebar_design = section_rebar.transverse_rebar_design
 
         self._stirrup_s_l = self._best_rebar_design["s_l"]
         self._stirrup_s_w = self._best_rebar_design["s_w"]
         self._stirrup_s_max_l = self._best_rebar_design["s_max_l"]
         self._stirrup_s_max_w = self._best_rebar_design["s_max_w"]
         self._apply_transverse_design(self._best_rebar_design)
-        self._record_transverse_options(self.shear_design_results)
+        # The search left the faces of the last diameter it tried; the check
+        # reads the ones of the stirrup applied.
+        self._compression_faces = braced | self._compression_faces_under(forces)
+        self._record_transverse_options(self.shear_design_results, forces)
 
         # Update longitudinal rebar attributes
         self._update_longitudinal_rebar_attributes()
@@ -1110,7 +1496,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         self._shear_checks = []
         self._shear_warnings = []
 
-        for force in forces:
+        for position, force in enumerate(forces, 1):
             state = self._run_shear_check(force, report=True)
             result = self._shear_report_row
             self._shear_results_list.append(result)
@@ -1126,7 +1512,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
             # As in check_flexure: the value of the check, not the beam's
             # attributes afterwards.
             self._shear_checks.append(capture_shear_check(self, force.label, state))
-            self._shear_warnings.extend(shear_warnings(self, force.label, state))
+            self._shear_warnings.extend(shear_warnings(self, combination_label(force.label, position), state))
 
             # Check if this result is the limiting case
             current_dcr = result["DCR"][0]
@@ -1165,11 +1551,128 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
 
         Starts from the reinforcement a first design would, whatever the
         section carried before, so the same forces always give the same bars.
+        The flexure is designed first, at the depth of the starter stirrup;
+        the shear design then chooses the stirrup, and if that moved the bars
+        past what they carry the flexure is designed again with it
+        (:meth:`_settle_design`). The longitudinal alternatives are verified
+        last, on the section the shear design finished: its stirrup sets the
+        depth the bars sit at.
         """
         self._reset_for_design()
-        self.design_flexure(forces)
+        self._design_flexure(forces)
         self.design_shear(forces)
+        self._settle_design(forces)
         self.check_flexure(forces)
+        self._verify_longitudinal_options(forces)
+
+    def _settle_design(self, forces: list[Forces]) -> None:
+        """Redo the flexure with the stirrup the shear design chose, until the pair holds.
+
+        The flexure design sizes the bars at the depth of the starter stirrup
+        and the shear design then picks one of its own, which moves them. A
+        heavier stirrup sinks them: an ACI 318-19 20x50 with f'c = 25 MPa under
+        150 kN·m gets 2Ø25 at the Ø8 depth (d = 454.5 mm, φMn = 150.7 kN·m)
+        and 1eØ10 for 250 kN, after which d = 452.5 mm and φMn = 149.9 kN·m:
+        DCR 1.0005 and nothing to warn about, since the search never saw a
+        shortfall. A lighter one lifts them, and under EN 1992-1-1 lifts
+        A_s,min with d (§9.2.1.1(1)): a 30x80 under 30 kN·m gets 2Ø12 + 1Ø10 =
+        3.047 cm² against 3.045 at the Ø8 depth, then 1eØ6 and 3.054 required,
+        so the design warned ``As_below_min`` on its own bars. It also narrows
+        or widens what is left between the legs for the bars to fit.
+
+        So when the section as the shear design left it fails
+        :meth:`_flexure_verdict`, the flexure is designed again from the
+        placeholder bars with that stirrup on the section, and the stirrups
+        again for the new bars, until the pair passes or comes back to a
+        state already seen -- which means no layout passes at that depth
+        either. Bounded by ``_DESIGN_ROUNDS``; a design that passes at once
+        does nothing here, and the sequence is a function of the forces, so
+        ``design()`` still gives the same bars every time.
+
+        When no round passes, the section ends with the round that came
+        closest -- one whose bars fit the width before one whose bars do not,
+        then the smallest flexure DCR -- not with the last: a later round is
+        designed from a different depth and need not be better. An ACI 20x25
+        with c_c = 40 mm under 38.2 kN·m gets 2Ø20 at the Ø8 depth, DCR
+        1.010 with the 1eØ10 the shear picks, and its second round, at the
+        Ø10 depth, landed on 3Ø12 + 3Ø10 in two layers under 2Ø25, DCR 1.166.
+        Bars that do not fit are no layout at all, however strong: an ACI
+        12x25 under -21.3 kN·m gets 2Ø12 + 2Ø10 on top at the Ø8 width, DCR
+        0.907, which the Ø10 leaves 26 mm apart where the vibrator needs 30,
+        and keeps the 2Ø10 + 2Ø10 of the next round, DCR 1.092. The round
+        kept is re-run (its result is a function of the stirrup it started
+        from), and :meth:`_record_shortfall` makes sure the face that fails
+        says so.
+        """
+        verdict = self._flexure_verdict(forces, ("bot", "top"))
+        if verdict.passes:
+            return
+        # Each round's verdict, with the stirrup it started from (None: the
+        # starter stirrup of the first).
+        rounds: list[Tuple[_Verdict, Optional[Tuple[int, Quantity, Quantity]]]] = [(verdict, None)]
+        seen = {self._design_state()}
+        for _ in range(self._DESIGN_ROUNDS):
+            start = (self._stirrup_n, self._stirrup_d_b, self._stirrup_s_l)
+            self._redesign_from(start, forces)
+            verdict = self._flexure_verdict(forces, ("bot", "top"))
+            if verdict.passes:
+                return
+            rounds.append((verdict, start))
+            state = self._design_state()
+            if state in seen:
+                break
+            seen.add(state)
+        last = len(rounds) - 1
+        closest = min(range(len(rounds)), key=lambda i: (not rounds[i][0].fits, rounds[i][0].DCR, i != last))
+        if closest != last:
+            self._redesign_from(rounds[closest][1], forces)
+        self._record_shortfall(forces)
+
+    def _redesign_from(self, stirrup: Optional[Tuple[int, Quantity, Quantity]], forces: list[Forces]) -> None:
+        """One design round: the flexure at the depth of ``stirrup``, then the stirrups for its bars.
+
+        ``stirrup`` is ``(n_stirrups, d_b, s_l)`` to put on the section first,
+        or ``None`` for the starter stirrup a first design assumes.
+        """
+        if stirrup is None:
+            self._reset_for_design()
+        else:
+            self.set_transverse_rebar(*stirrup)
+            self._reset_longitudinal_for_design()
+        self._design_flexure(forces)
+        self.design_shear(forces)
+
+    def _record_shortfall(self, forces: list[Forces]) -> None:
+        """Make a design that ends short of a moment say so, on the face that is short.
+
+        The flexure design records the faces it could not bring up to what
+        they need at the depth it was run at; the stirrups move that depth
+        afterwards, so the section it ends on can fail a face the design
+        never saw short -- the 2Ø20 of an ACI 20x25 carry 38.2 kN·m at the Ø8
+        depth and not at the Ø10 one. Each face some combination leaves past
+        DCR 1 and the design did not record is recorded here, with the
+        ``A_s_req`` the check finds for it: ``As_below_required`` then says
+        what is short, and a design never fails its own check in silence.
+        """
+        needed: Dict[str, Quantity] = {}
+        for force in forces:
+            check = capture_flexure_check(self, force.label, self._run_flexure_check(force, report=False))
+            for face, result in (("bot", check.bottom), ("top", check.top)):
+                if result.DCR > 1.0 and result.A_s_req is not None:
+                    needed[face] = max(needed[face], result.A_s_req) if face in needed else result.A_s_req
+        for face, A_s_req in needed.items():
+            if face not in self._short_faces:
+                self._short_faces[face] = (A_s_req, getattr(self, f"_A_s_{face}"))
+
+    def _design_state(self) -> Tuple[float, ...]:
+        """The reinforcement on the section as numbers, to tell one design round from another."""
+
+        def value(x: Any) -> float:
+            return float(x.to("mm").magnitude) if hasattr(x, "to") else float(x)
+
+        bars = [self._longitudinal_snapshot(face) for face in ("b", "t")]
+        longitudinal = tuple(value(v) for snapshot in bars for _, v in sorted(snapshot.items()))
+        return longitudinal + (float(self._stirrup_n), value(self._stirrup_d_b), value(self._stirrup_s_l))
 
     def check(self, forces: list[Forces]) -> None:
         """

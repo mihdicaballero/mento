@@ -19,6 +19,7 @@ from mento.design_results import (
     ShearDesign,
     envelope_flexure_face,
     envelope_shear,
+    format_longitudinal_rebar,
 )
 
 pytestmark = pytest.mark.filterwarnings("ignore::UserWarning")
@@ -142,6 +143,30 @@ def test_reinforcement_str_says_so_when_there_are_no_stirrups(beam: RectangularB
 
 def test_rebar_layer_str_is_the_engineering_shorthand() -> None:
     assert str(RebarLayer(n=2, d_b=12 * mm)) == "2Ø12 mm"
+
+
+def test_a_whole_bar_count_given_as_a_float_reads_as_a_whole_number(beam: RectangularBeam) -> None:
+    """A count entered as ``2.0`` -- a spreadsheet cell, a numpy float -- is still 2 bars.
+
+    ``set_longitudinal_rebar_bot(2.0, 16 mm, 1.0, 12 mm)`` stores the counts
+    as given. The layers pass the count through as it comes, for the bars
+    per metre of a slab strip, and read that way the same beam would print
+    "2.0Ø16 mm + 1.0Ø12 mm". A beam is detailed by a whole number of bars
+    (see :class:`RebarLayer`), so its layers carry a whole count. The label
+    itself printed a float count with its decimals in PR #164
+    (``format_longitudinal_rebar(2.0, "16")`` -> "2.0Ø16"): a whole count
+    now reads whole whatever its type. A slab layer keeps its fractional
+    count and its spacing label.
+    """
+    beam.set_longitudinal_rebar_bot(2.0, 16 * mm, 1.0, 12 * mm)
+
+    bottom = beam.reinforcement.bottom
+    assert str(bottom) == "2Ø16 mm + 1Ø12 mm"
+    assert [type(layer.n) for layer in bottom.layers] == [int, int]
+    assert bottom.n_bars == 3
+    assert str(RebarLayer(n=2.0, d_b=16 * mm)) == "2Ø16 mm"
+    assert format_longitudinal_rebar(2.0, "16") == "2Ø16"
+    assert str(RebarLayer(n=100 / 12, d_b=10 * mm, s=12 * cm)) == "Ø10 mm/12 cm"
 
 
 def test_a_layer_detailed_by_a_spacing_reads_as_one_bar_at_that_spacing() -> None:

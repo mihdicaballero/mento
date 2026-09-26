@@ -4,8 +4,6 @@ from dataclasses import dataclass
 import math
 import warnings
 
-import numpy as np
-
 from mento.beam import RectangularBeam
 from mento.design_results import RebarLayer
 from mento.codes.registry import design_code
@@ -20,16 +18,25 @@ if TYPE_CHECKING:
     from mento.units import Quantity
 
 
-def _bars_at_spacing(spacing: Quantity, width: Quantity) -> int:
+def _bars_at_spacing(spacing: Quantity, width: Quantity) -> float:
     """How many bars a strip of ``width`` carries at a centre-to-centre ``spacing``.
+
+    ``width / spacing``, and not a whole number. A strip is a slice of a slab
+    that goes on past both of its edges, so what it carries is the bars per
+    metre the spacing gives, and its steel is that many bar areas: a metre of
+    Ø10/12 carries 8.33 bars, 6.54 cm². Rounding the count up credited it
+    with 9 bars, 7.07 cm², 8 % more than the spacing puts in any metre --
+    which let a face designed to its minimum fall short of it with no
+    warning, and overstated its capacity by as much. (Nor is 9 what an
+    isolated metre holds: nine bars at 12 cm span 96 cm centre to centre,
+    and a metre has 95 between its covers.)
 
     The one place the count-from-spacing rule lives, so that a spacing chosen
     for a given number of bars can be checked against the count it produces.
     """
     if spacing == 0 * mm:
-        return 0  # Default to 0 bars if spacing is zero
-    # Round up to ensure full bars (e.g., 3.2 bars → 4 bars)
-    return int(np.ceil((width.to("cm").magnitude / spacing.to("cm").magnitude)))  # Returns dimensionless count
+        return 0.0  # no spacing, no bars
+    return float((width / spacing).to("dimensionless").magnitude)
 
 
 @dataclass
@@ -45,9 +52,10 @@ class OneWaySlab(RectangularBeam):
     §9.7.6.2. What is particular to a slab is the detailing: the bar spacing of
     ACI 318-19 §7.7.2.3 / CIRSOC 201-25 §7.7.2.3 (see :meth:`_max_bar_spacing`)
     and the minimum flexural reinforcement, which ACI 318-19 §7.6.1.1 /
-    CIRSOC 201-25 §7.6.1 put at 0.0018*Ag in both codes. That minimum is sized
-    with the beam rule of §9.6.1.2 instead, which is the conservative side of
-    it; the difference is a known open point and is not settled here.
+    CIRSOC 201-25 §7.6.1 put at 0.0018*Ag on the gross section in both codes,
+    with none of the 4/3 relief of §9.6.1.3, which relieves the beam minimum of
+    §9.6.1.2 and no other (see ``_minimum_flexural_reinforcement_area_ACI_318_19``
+    in ``codes/ACI_318_19_beam.py`` and the theory page *One-way slab*).
     """
 
     def __post_init__(self) -> None:
@@ -197,9 +205,23 @@ class OneWaySlab(RectangularBeam):
         own hook, so the number is the one the section's code prints; see
         ``mento.codes.aci_318_19.code._max_bar_spacing_slab`` and
         ``_max_bar_spacing_slab_cirsoc``.
+
+        ACI 318-19 and CIRSOC 201-25 put a second cap beside that one, and it
+        is the one that governs the ordinary slab: §7.7.2.2 sends the bars
+        nearest the tension face to Table 24.3.2, the crack-control limit of
+        §24.3.2 -- 300 mm with ADN 420 or Grade 60 and (2/3)*f_y, less with a
+        stronger steel or a deeper cover (hook ``max_bar_spacing_tension``).
+        Without it a 12 cm ACI slab under 7.5 kN·m was detailed Ø10/34: inside
+        the 3h = 36 cm of §7.7.2.3 and past the 300 mm of §24.3.2. The two are
+        taken together here, and on both faces: §24.3.2 is written on the
+        tension face, but which face that is changes with the combination,
+        and a slab is detailed once. Where a face is never in tension the
+        cap costs nothing on the strips it decides -- a face that light is
+        governed by its minimum area, which asks closer bars anyway.
         """
-        limit = design_code(self.concrete).max_bar_spacing_slab
-        return None if limit is None else cast("Quantity", limit(self))
+        code = design_code(self.concrete)
+        limits = [hook(self) for hook in (code.max_bar_spacing_slab, code.max_bar_spacing_tension) if hook is not None]
+        return None if not limits else cast("Quantity", min(limits))
 
     def _min_bar_spacing(self) -> Quantity | None:
         """The smallest spacing the design code asks for between the flexural bars.
@@ -215,30 +237,30 @@ class OneWaySlab(RectangularBeam):
         return None if limit is None else cast("Quantity | None", limit(self))
 
     def _spacing_for_bars(self, n: int) -> Quantity:
-        """The spacing that puts ``n`` bars across the strip, as it would be drawn.
+        """The spacing that puts at least ``n`` bars on the strip, as it would be drawn.
 
         The exact answer is ``width / n``, which is rarely a number anyone
-        details to, so it is rounded to the whole centimetre (inch). Rounding up
-        is what usually keeps the layout the search chose -- the count comes
-        back as ``ceil(width / s)``, so a slightly wider spacing still asks for
-        the same ``n`` bars, while a narrower one would silently add one -- but
-        it is checked rather than assumed, because it does not always hold. The
-        result is then capped at what the code allows between the bars of a
-        slab, which only ever asks for more of them.
+        details to, so it is rounded to the whole centimetre (inch) -- and
+        down, never up. The search chose ``n`` bars for the steel they add up
+        to, and a strip at spacing ``s`` carries ``width / s`` of them (see
+        :func:`_bars_at_spacing`): any spacing past ``width / n`` carries
+        fewer, and so less steel than the search chose. Rounding up did just
+        that -- 7 Ø10 in a metre became Ø10/15, 6.67 bars, and a face designed
+        to its minimum came out 3 % below it -- while the count was rounded up
+        as well, so nothing showed. Rounding down only ever adds steel, and by
+        less than one bar in the strip. The result is then capped at what the
+        code allows between the bars of a slab, which only ever asks for more
+        of them.
         """
         if n <= 0:
             return 0 * cm
         unit = cm if self.concrete.unit_system == "metric" else inch
         exact = (self.width / n).to(unit).magnitude
-        spacing = math.ceil(exact) * unit
-        if _bars_at_spacing(spacing, self.width) < n:
-            # Rounding up costs a bar once the bars are close enough that a whole
-            # centimetre spans more than one of them -- from about eleven bars in
-            # a metre. Round down there instead: that can only ask for more bars
-            # than the design chose, never fewer, so the strip is never detailed
-            # with less steel than it needs. (The floor is only ever zero at a
-            # spacing below one centimetre, where the bars would already overlap.)
-            spacing = max(math.floor(exact), 1) * unit
+        # A whole answer is kept whole: the division arrives through unit
+        # conversions, and 25 can come out a hair under 25. The floor is only
+        # ever below one unit at a spacing where the bars would overlap, which
+        # the search never asks for.
+        spacing = max(math.floor(exact + 1e-9), 1) * unit
         limit = self._max_bar_spacing()
         if limit is not None:
             # The area the search asked for is not the only thing the layout has
@@ -319,6 +341,7 @@ class OneWaySlab(RectangularBeam):
         self._s_b1_b = s_b1 if s_b1 != 0 * mm else self._s_b1_b
         self._d_b3_b = d_b3 if d_b3 != 0 * mm else self._d_b3_b
         self._s_b3_b = s_b3 if s_b3 != 0 * mm else self._s_b3_b
+        self._face_set_by_hand("bot")
         self._calculate_longitudinal_rebars()
         self._update_longitudinal_rebar_attributes()
 
@@ -342,11 +365,18 @@ class OneWaySlab(RectangularBeam):
         self._s_b1_t = s_b1 if s_b1 != 0 * mm else self._s_b1_t
         self._d_b3_t = d_b3 if d_b3 != 0 * mm else self._d_b3_t
         self._s_b3_t = s_b3 if s_b3 != 0 * mm else self._s_b3_t
+        self._face_set_by_hand("top")
         self._calculate_longitudinal_rebars()
         self._update_longitudinal_rebar_attributes()
 
     def _calculate_longitudinal_rebars(self) -> None:
-        """Calculate the total rebar area for a slab, given spacing and slab width."""
+        """The bars each layer puts on the strip, from its spacing and the width.
+
+        Bars per strip, ``width / s``, not a whole number -- see
+        :func:`_bars_at_spacing`. The beam's area and centroid then follow from
+        these counts as they do from a beam's, so the steel of the strip is
+        the bar area times the bars per metre, which is what a slab carries.
+        """
 
         # --- BOTTOM REBAR ---
         self._n1_b = _bars_at_spacing(self._s_b1_b, self.width)
@@ -375,11 +405,15 @@ class Footing(OneWaySlab):
       As,min = 0.0018*Ag on the gross section, with none of the 4/3 relief
       §9.6.1.3 gives a beam. That is the same ratio as the shrinkage and
       temperature reinforcement of §24.4.3.2. A footing spanning two ways goes
-      by §13.3.3.1 to Chapter 8, and §8.6.1.1 repeats the 0.0018*Ag.
+      by §13.3.3.1 to Chapter 8, and §8.6.1.1 reads "0.0018*Ag, or as defined
+      in 8.6.1.2": the second is the minimum over the two-way shear critical
+      section around a column, Eq. (8.6.1.2), which is not implemented here --
+      a two-way footing gets the flat 0.0018*Ag.
       CIRSOC 201-25 prints the same chain: §13.3.2.1 → §7.6.1 (the ratio sits
       in an unnumbered paragraph there), §13.3.3.1 → §8.6.1.1, §24.4.3.2.
-    * EN 1992-1-1 takes the larger of the halved geometric minimum of a
-      foundation and the crack-control minimum of §7.3.2(2). The second governs
+    * Under EN 1992-1-1, the larger of the halved geometric minimum of a
+      foundation (EHE-08 Tabla 42.3.5, note (1): EN prints none) and the
+      crack-control minimum of §7.3.2(2). The second governs
       the thin footings, not the thick ones: its ratio goes with k/2, and k
       decays from 1.00 to 0.65 between 300 and 800 mm of depth.
 
@@ -437,6 +471,20 @@ class Footing(OneWaySlab):
     #: lightest first, so the first is almost always the answer; the budget only
     #: bounds the cost when the lightest ones do not verify.
     _MAT_CANDIDATES = 12
+
+    def _record_longitudinal_options(self, face: str, design: Any, table: Any) -> None:
+        """A footing offers no alternatives: its mat is chosen as a whole.
+
+        The rows the search ranks for one face are layouts of that face
+        alone, and the mat that replaces them is chosen for both faces at
+        once -- one module, the top at ``s`` or ``2s``, a bar each -- after
+        the faces were designed (:meth:`_finalize_longitudinal_design`). No
+        row is the mat with one thing changed, so none is an alternative to
+        it: offered as they came, 509 of 540 footings ended with a mat first
+        and unrelated per-face rows after it, some of which fail when built.
+        Only what the footing carries is reported, with its ``DCR``.
+        """
+        super()._record_longitudinal_options(face, design, None)
 
     def _finalize_longitudinal_design(
         self,
@@ -521,7 +569,10 @@ class Footing(OneWaySlab):
             """The lightest bar that covers ``needed`` at ``spacing``, or None."""
             if needed <= 0:
                 return (0.0, 0.0)
-            n = math.ceil(width / spacing)
+            # The bars per strip the spacing gives, as the strip is counted
+            # (see _bars_at_spacing): a mat counted in whole bars covered a
+            # face its spacing did not.
+            n = width / spacing
             covering = [(n * area, d) for d, area in bars if spacing - d >= clear and n * area >= needed]
             return min(covering) if covering else None
 

@@ -1,4 +1,5 @@
 import math
+from dataclasses import replace
 from mento.units import Quantity
 from typing import TYPE_CHECKING, Tuple, cast
 
@@ -141,6 +142,13 @@ def _calculate_max_shear_strength_EN_1992_2004(self: "RectangularBeam", st: ENSh
         theta_min: float = math.radians(21.8)
         cot_theta_min: float = 1 / math.tan(theta_min)
         V_Rd_max_min_angle = shear_eq.max_shear_resistance(alpha_cw, b_w, z, nu_1, f_cd, theta_min)
+        # The maximum strut angle θ = 45° (cot(θ) = 1.0), where cot θ + tan θ
+        # is least and Eq. (6.9) is largest: the most the section can carry
+        # however it is reinforced, §6.2.1(6). Kept apart from V_Rd_max,
+        # which is the strut at the angle the demand fixes.
+        theta_max: float = math.radians(45)
+        V_Rd_max_max_angle = shear_eq.max_shear_resistance(alpha_cw, b_w, z, nu_1, f_cd, theta_max)
+        st.section_shear_limit = V_Rd_max_max_angle
 
         if st.V_Ed_1 <= V_Rd_max_min_angle:
             # If within the minimum angle
@@ -149,10 +157,6 @@ def _calculate_max_shear_strength_EN_1992_2004(self: "RectangularBeam", st: ENSh
             st.V_Rd_max = V_Rd_max_min_angle
             st.max_shear_ok = True
         else:
-            # Check the maximum strut angle θ = 45° (cot(θ) = 1.0)
-            theta_max: float = math.radians(45)
-            V_Rd_max_max_angle = shear_eq.max_shear_resistance(alpha_cw, b_w, z, nu_1, f_cd, theta_max)
-
             if st.V_Ed_1 > V_Rd_max_max_angle:
                 st.theta = theta_max
                 st.cot_theta = 1 / math.tan(st.theta)
@@ -185,6 +189,40 @@ def _calculate_required_shear_reinforcement_EN_1992_2004(self: "RectangularBeam"
     st.V_Rd = min(st.V_Rd_s, st.V_Rd_max)
 
 
+def _stirrups_a_bare_section_needs_EN_1992_2004(self: "RectangularBeam", st: ENShearCheckState) -> None:
+    """A_v,req, and the section limit, of a section that carries no stirrups.
+
+    EN 1992-1-1 §6.2.1(3): where V_Ed <= V_Rd,c no calculated shear
+    reinforcement is necessary, and (4) asks for the minimum of §9.2.2 all
+    the same -- zero where the member may omit it, which the initialisation
+    already settled in ``A_v_min``. §6.2.1(5): where V_Ed > V_Rd,c, enough
+    that V_Ed <= V_Rd, which is the truss of §6.2.3 at the angle the demand
+    asks for -- what the section will be checked with once it has stirrups,
+    and what ``stirrups_required`` has to quote. The check used to quote the
+    minimum whatever the shear, so a bare section under 300 kN was asked for
+    the same 2.4 cm²/m as one under 30 kN.
+
+    The strut limit of §6.2.1(6) does not depend on the stirrups either:
+    a bare section that stays under V_Rd,max at 45° is short of stirrups,
+    not of concrete, so ``shear_exceeds_section_limit`` reads that limit and
+    not V_Rd,c, which is what it used to be handed.
+
+    The truss is read on a copy of the state: what the report prints for a
+    bare section -- no strut angle, V_Rd = V_Rd,c -- describes the section as
+    it is and stays as it is.
+    """
+    truss = replace(st)
+    _calculate_max_shear_strength_EN_1992_2004(self, truss)
+    st.section_shear_limit = truss.section_shear_limit
+    if st.V_Ed_2 <= st.V_Rd_c:
+        st.A_v_req = st.A_v_min
+        return
+    st.A_v_req = max(
+        shear_eq.required_shear_reinforcement(st.V_Ed_2, truss.z, st.f_ywd, truss.cot_theta),
+        st.A_v_min,
+    )
+
+
 def _check_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> ENShearCheckState:
     """Run the EN shear check for one combination and return what it found.
 
@@ -207,12 +245,10 @@ def _check_shear_EN_1992_2004(self: "RectangularBeam", force: Forces) -> ENShear
     if self._stirrup_n == 0:
         # The assumed stirrup diameter stays: see the note in the ACI check.
         st.V_Rd_c = _shear_without_rebar_EN_1992_2004(self, st)
-        # According to EN1992-1-1 §6.2.1(4) minimum shear reinforcement should nevertheless be provided
-        # according to EN1992-1-1 §9.2.2. The minimum shear reinforcement may be omitted in members where
-        # transverse redistribution of loads is possible (such as slabs) and members of minor importance
-        # which do not contribute significantly to the overall resistance and stability of the structure.
-        st.A_v_req = st.A_v_min
-        # Maximum shear capacity is the same as the concrete capacity
+        # The stirrups the demand needs: the minimum of §9.2.2 under V_Rd,c
+        # (§6.2.1(3)-(4)), the truss of §6.2.3 past it (§6.2.1(5)).
+        _stirrups_a_bare_section_needs_EN_1992_2004(self, st)
+        # The capacity of the section as it is: the concrete alone.
         st.V_Rd = st.V_Rd_c
         st.V_Rd_max = st.V_Rd
         st.max_shear_ok = st.V_Ed_1 <= st.V_Rd_max
@@ -318,6 +354,24 @@ def _min_max_flexural_reinforcement_ratio_EN_1992_2004(
 _K_C_BENDING = 0.4
 
 
+def _maximum_flexural_reinforcement_area_EN_1992_2004(self: "RectangularBeam") -> float:
+    """A_s,max of either face -- EN 1992-1-1 §9.2.1.1(3).
+
+    "The cross-sectional area of tension or compression reinforcement should
+    not exceed As,max outside lap locations", with 0,04 Ac the recommended
+    value, and Ac is the cross-sectional area of the concrete (§1.6): b*h
+    for a rectangle, the same for both faces. mento used to write it on
+    b*d, about 10 % tighter than the clause and a different limit on each
+    face.
+
+    Returns:
+        A_s,max (mm²).
+    """
+    _, rho_max = _min_max_flexural_reinforcement_ratio_EN_1992_2004(self)
+    sec = section_floats(self)
+    return rho_max * sec.width * sec.height
+
+
 def _minimum_flexural_reinforcement_area_EN_1992_2004(self: "RectangularBeam", d: float) -> float:
     """A_s,min on the tension face, for the way this element is supported.
 
@@ -329,7 +383,8 @@ def _minimum_flexural_reinforcement_area_EN_1992_2004(self: "RectangularBeam", d
     here the soil goes on carrying it. Two rules take its place, and the larger
     governs:
 
-    * the halved geometric minimum of a foundation, on the gross section; and
+    * the halved geometric minimum of a foundation, on the gross section --
+      EHE-08 Tabla 42.3.5, note (1), since EN 1992-1-1 prints none; and
     * the crack-control minimum of §7.3.2(2), which sizes the steel that has to
       carry the tension the concrete releases at the instant it cracks.
 
@@ -413,14 +468,13 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
     ``A_s,nec / A_s,prov`` reads the second, since a face governed by its
     minimum carries little of the stress the minimum is sized for.
     """
-    _, rho_max = _min_max_flexural_reinforcement_ratio_EN_1992_2004(self)
     # ADR-0005 boundary: convert once, compute in floats (N, mm, MPa, N·mm),
     # re-apply units on the way out.
     sec = section_floats(self)
     b = sec.width
     d_mm = d
     A_s_min = _minimum_flexural_reinforcement_area_EN_1992_2004(self, d_mm)
-    A_s_max = rho_max * d_mm * b
+    A_s_max = _maximum_flexural_reinforcement_area_EN_1992_2004(self)
 
     # Constants and material properties
     if isinstance(self.concrete, Concrete_EN_1992_2004):
@@ -550,9 +604,6 @@ def _determine_nominal_moment_EN_1992_2004(self: "RectangularBeam", st: ENFlexur
     Returns:
         None
     """
-    # Calculate minimum and maximum reinforcement ratios
-    [_, rho_max] = _min_max_flexural_reinforcement_ratio_EN_1992_2004(self)
-
     # For positive moments (tension in the bottom), set minimum reinforcement
     # accordingly. The minimum is asked for as an area rather than a ratio: the
     # rules that apply to a member on the ground are written on the gross
@@ -562,14 +613,14 @@ def _determine_nominal_moment_EN_1992_2004(self: "RectangularBeam", st: ENFlexur
 
     # Calculate minimum and maximum bottom reinforcement areas
     st.A_s_min_bot = _minimum_flexural_reinforcement_area_EN_1992_2004(self, sec.d_bot) if tension_at_bottom else 0.0
-    st.A_s_max_bot = rho_max * sec.d_bot * sec.width
+    st.A_s_max_bot = _maximum_flexural_reinforcement_area_EN_1992_2004(self)
     # Determine the nominal moment for positive moments
     st.M_Rd_bot = _simple_determine_nominal_moment_EN_1992_2004(
         self, sec.A_s_bot, sec.d_bot, sec.A_s_top, sec.c_mec_top
     )
     # Determine capacity for negative moment (tension at the top)
     st.A_s_min_top = 0.0 if tension_at_bottom else _minimum_flexural_reinforcement_area_EN_1992_2004(self, sec.d_top)
-    st.A_s_max_top = rho_max * sec.d_top * sec.width
+    st.A_s_max_top = st.A_s_max_bot
     st.M_Rd_top = _simple_determine_nominal_moment_EN_1992_2004(
         self, sec.A_s_top, sec.d_top, sec.A_s_bot, sec.c_mec_bot
     )
@@ -619,15 +670,23 @@ def _flexure_within_maximum_EN_1992_2004(self: "RectangularBeam") -> bool:
     EN 1992-1-1 §9.2.1.1(3): "The cross-sectional area of tension or
     compression reinforcement should not exceed A_s,max" -- either face,
     whichever does what, so the face in tension does not matter. Held against
-    the same ``rho_max*b*d`` the check reports the limit as. A design that
+    the same 0.04*b*h the check reports the limit as
+    (:func:`_maximum_flexural_reinforcement_area_EN_1992_2004`). A design that
     reached the moment past it would hand back a section the check warns about.
     """
     sec = section_floats(self)
-    _, rho_max = _min_max_flexural_reinforcement_ratio_EN_1992_2004(self)
-    within = True
-    for A_s, d in ((sec.A_s_bot, sec.d_bot), (sec.A_s_top, sec.d_top)):
-        within = within and A_s <= rho_max * d * sec.width * (1 + 1e-9)
-    return within
+    A_s_max = _maximum_flexural_reinforcement_area_EN_1992_2004(self)
+    return max(sec.A_s_bot, sec.A_s_top) <= A_s_max * (1 + 1e-9)
+
+
+def _flexure_admissible_EN_1992_2004(self: "RectangularBeam", face: str) -> bool:
+    """The registry's ``flexure_admissible`` hook: :func:`_flexure_within_maximum_EN_1992_2004`.
+
+    ``face`` does not enter, because EN 1992-1-1 §9.2.1.1(3) caps the bars of
+    either face whatever they do; the hook takes it so that every code answers
+    the same question in the same shape.
+    """
+    return _flexure_within_maximum_EN_1992_2004(self)
 
 
 def _required_areas_EN_1992_2004(

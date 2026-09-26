@@ -19,6 +19,7 @@ __all__ = [
     "max_reinforcement_ratio",
     "min_reinforcement_ratio",
     "shrinkage_and_temperature_ratio",
+    "max_bar_spacing_crack_control",
     "neutral_axis_at_ductility_limit",
     "compression_steel_net_stress",
     "flexural_resistance_factor",
@@ -119,6 +120,42 @@ def shrinkage_and_temperature_ratio() -> float:
         A_s,min/(b*h), dimensionless: 0.0018.
     """
     return 0.0018
+
+
+def max_bar_spacing_crack_control(f_s: float, c_c: float, *, is_imperial: bool = False) -> float:
+    """Maximum spacing of the bars nearest the tension face — ACI 318-19 Table 24.3.2 / CIRSOC 201-25 Tabla 24.3.2.
+
+    The crack-control limit §24.3.2 puts on the bonded reinforcement closest
+    to the tension face of a nonprestressed one-way slab or beam, which
+    §7.7.2.2 (slabs) and §9.7.2.2 (beams) send there in both codes. For
+    deformed bars or wires, the lesser of::
+
+        380 * (280 / f_s) - 2.5 * c_c        and        300 * (280 / f_s)     [mm, MPa]
+        15 * (40,000 / f_s) - 2.5 * c_c      and        12 * (40,000 / f_s)   [in, psi]
+
+    Read off the printed table: ACI 318-19 SI p. 462, in-lb p. 462;
+    CIRSOC 201-25 Cap. 24-435. The rows for prestressed reinforcement are not
+    carried, since mento designs none.
+
+    Args:
+        f_s: Stress in the bars nearest the tension face at service loads
+            (MPa, or psi). §24.3.2.1 lets it be taken as (2/3)*f_y in place
+            of a calculation from the unfactored moment, which is what a
+            caller with factored loads only can do: 280 MPa (40,000 psi) for
+            Grade 420 (60).
+        c_c: Least distance from the surface of those bars to the tension
+            face (mm, or in): the clear cover to the stirrup plus the stirrup.
+        is_imperial: Whether ``f_s`` and ``c_c`` are in psi and inches.
+
+    Returns:
+        s_max (mm, or in). With Grade 420 steel and 25 mm of cover to the
+        bars, 380 - 62.5 = 317.5 against 300: the second term governs, and
+        every slab and beam of that grade is held to 300 mm unless its cover
+        passes 32 mm.
+    """
+    if is_imperial:
+        return min(15.0 * (40_000.0 / f_s) - 2.5 * c_c, 12.0 * (40_000.0 / f_s))
+    return min(380.0 * (280.0 / f_s) - 2.5 * c_c, 300.0 * (280.0 / f_s))
 
 
 def neutral_axis_at_ductility_limit(d: float, epsilon_y: float) -> float:

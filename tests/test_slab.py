@@ -112,11 +112,13 @@ def test_longitudinal_rebar_spacing_updates_counts() -> None:
 
     # A slab only ever fills positions 1 and 3, so the layers of a face are
     # position 1 first and position 3 second, with the empty ones omitted.
+    # The count is the bars per strip the spacing gives, width / s, and is
+    # not rounded: a strip is a slice of a slab that goes on past its edges.
     bottom = slab.reinforcement.bottom
     top = slab.reinforcement.top
-    assert bottom.layers[0].n == 4  # ceil(120/30)
-    assert bottom.layers[1].n == 5  # ceil(120/25)
-    assert top.layers[0].n == 3  # ceil(120/40)
+    assert bottom.layers[0].n == pytest.approx(4)  # 120/30
+    assert bottom.layers[1].n == pytest.approx(4.8)  # 120/25
+    assert top.layers[0].n == pytest.approx(3)  # 120/40
     assert len(top.layers) == 1  # position 3 spacing left as default zero
 
     # ensure defaults are preserved when zero values are provided
@@ -126,7 +128,8 @@ def test_longitudinal_rebar_spacing_updates_counts() -> None:
     assert slab._s_b1_t == previous_spacing
 
 
-@pytest.mark.published_example
+# Not published_example: the cited Calcpad sheet gives phi*Vc = 23.92 kN (it omits the
+# lambda_s <= 1 cap); 21.39 kN is the corrected value, not the sheet's.
 def test_shear_check_ACI_318_19_1(slab_example_ACI_318_19: OneWaySlab) -> None:
     # Example from Two-Way Flat Plate Concrete Floor System Analysis and Design (ACI 318-14) adjusted to ACI 318-19.
     # With guidance from CRSI Design Guide on ACI 318-19
@@ -142,23 +145,31 @@ def test_shear_check_ACI_318_19_1(slab_example_ACI_318_19: OneWaySlab) -> None:
     # (ACI 318-19 Eq. 22.5.5.1.3). The factor only ever reduces V_c; the
     # reference sheet omitted the cap, which gave lambda_s = 1.118 and
     # phi*V_c = 23.92 kN instead of 21.39 kN.
+    #
+    # The 21.39 kN counted #4 @ 10 in on a 12 in strip as two whole bars,
+    # 0.393 in². A foot of that slab carries 1.2 bars, 0.236 in²/ft (the
+    # 0.24 in²/ft of any bar table), so rho_w = 0.236/(12*6.0) = 0.00327 and
+    # Table 22.5.5.1(c): V_c = 8*1.0*1.0*0.00327^(1/3)*sqrt(4000)*12*6.0
+    # = 8*0.1485*63.25*72 = 5409 lb; phi = 0.75 -> 4057 lb = 18.04 kN.
     assert results.iloc[1]["Av,min"] == pytest.approx(0, rel=1e-3)
     assert results.iloc[1]["Av,req"] == pytest.approx(0, rel=1e-3)
     assert results.iloc[1]["Av"] == pytest.approx(0, rel=1e-3)
-    assert results.iloc[1]["ØVc"] == pytest.approx(21.39, rel=1e-3)
+    assert results.iloc[1]["ØVc"] == pytest.approx(18.04, rel=1e-3)
     assert results.iloc[1]["ØVs"] == pytest.approx(0, rel=1e-3)
-    assert results.iloc[1]["ØVn"] == pytest.approx(21.39, rel=1e-3)
-    # phi*V_max = phi_v*(V_c + 0.66*lambda*sqrt(f_c)*A_cv) carries V_c, so it
-    # drops by the same 2.53 kN: 145.45 -> 142.93.
-    assert results.iloc[1]["ØVmax"] == pytest.approx(142.93, rel=1e-3)
-    assert results.iloc[1]["DCR"] == pytest.approx(0.317, rel=1e-2)
+    assert results.iloc[1]["ØVn"] == pytest.approx(18.04, rel=1e-3)
+    # phi*V_max = phi_v*(V_c + 8*lambda*sqrt(f_c)*b_w*d) carries V_c:
+    # 0.75*(5409 + 8*63.25*72) lb = 0.75*41 839 lb = 31 379 lb = 139.58 kN.
+    assert results.iloc[1]["ØVmax"] == pytest.approx(139.58, rel=1e-3)
+    # 1.52 kip / 4.057 kip = 0.375.
+    assert results.iloc[1]["DCR"] == pytest.approx(0.375, rel=1e-2)
 
     # Assert non-numeric values directly
     assert results.iloc[1]["Vu≤ØVmax"] is True
     assert results.iloc[1]["Vu≤ØVn"] is True
 
 
-@pytest.mark.published_example
+# Not published_example until the cited Calcpad sheet carries the slab minimum: it was
+# written with the beam one (5.63 / 4.25 cm²), so it does not give these numbers yet.
 def test_check_flexure_ACI_318_19_1(slab_example_ACI_318_19_metric: OneWaySlab) -> None:
     # Testing the check of the reinforced slab with simple reinforcement
     # See calcpad: ACI 318-19 Slab Flexure 01 - Metric.cpd
@@ -184,7 +195,8 @@ def test_check_flexure_ACI_318_19_1(slab_example_ACI_318_19_metric: OneWaySlab) 
     assert results.iloc[1]["DCR"] == pytest.approx(0.573, rel=1e-5)
 
 
-@pytest.mark.published_example
+# Not published_example until the cited Calcpad sheet carries the slab minimum: it was
+# written with the beam one (5.63 cm²), so it does not give these numbers yet.
 def test_check_flexure_ACI_318_19_2(slab_example_ACI_318_19_metric: OneWaySlab) -> None:
     # Testing the check of the reinforced slab with simple reinforcement
     # See calcpad: ACI 318-19 Slab Flexure 01 - Metric.cpd
@@ -598,24 +610,28 @@ def test_a_designed_slab_is_detailed_by_a_spacing_not_by_a_bar_count() -> None:
 
 
 def test_the_spacing_a_design_leaves_is_one_that_can_be_drawn() -> None:
-    """Rounded to the centimetre, and up, so the bars the search chose stay."""
+    """Rounded to the centimetre, and down, so the steel the search chose stays."""
     slab = _designed_slab(Concrete_ACI_318_19(name="H25", f_c=25 * MPa), V_z=0 * kN)
 
     spacing = slab._s_b1_b.to("cm").magnitude
     assert spacing == pytest.approx(round(spacing))
-    n = slab.reinforcement.bottom.layers[0].n
-    # Rounding up cannot cost a bar: n bars at width/n rounded up still ask for n.
-    assert spacing >= slab.width.to("cm").magnitude / n
+    # The row the search chose is a whole number of bars; the strip carries at
+    # least that many, so at least the steel the search picked them for.
+    row = slab.flexure_design_results_bot
+    assert slab.reinforcement.bottom.layers[0].n >= int(row["n_1"]) + int(row["n_2"])
+    assert slab.reinforcement.bottom.A_s >= row["total_as"]
     assert slab.reinforcement.bottom.A_s >= slab.flexure_design.bottom.A_s_req
 
 
-def test_a_spacing_is_never_rounded_into_fewer_bars_than_the_design_chose() -> None:
-    """Rounding up is the rule, but it does not always hold.
+def test_a_spacing_is_never_rounded_into_less_steel_than_the_design_chose() -> None:
+    """Rounded down, never up: a wider spacing is fewer bars in every metre.
 
-    ``ceil(width / n)`` normally asks for the same ``n`` bars back. Once the
-    bars are close enough that a whole centimetre spans more than one of them
-    -- from about eleven in a metre -- rounding up drops one, so the spacing is
-    checked against the count it produces and rounded down instead.
+    The search chose ``n`` bars for the steel they add up to. A strip at
+    spacing ``s`` carries ``width / s`` of them, so any spacing past
+    ``width / n`` carries less steel than the search chose -- which is what
+    rounding up did: 6 bars in a metre became 17 cm, 5.88 bars, and a face
+    designed to its minimum came out 2 % below it. Rounding down only ever
+    adds steel, and by less than one bar in the strip.
     """
     slab = OneWaySlab(
         label="Slab spacing",
@@ -626,13 +642,211 @@ def test_a_spacing_is_never_rounded_into_fewer_bars_than_the_design_chose() -> N
         c_c=20 * mm,
     )
 
-    # 100/6 = 16.7 -> 17 cm, and 17 cm still asks for 6 bars.
-    assert slab._spacing_for_bars(6).to("cm").magnitude == 17
-    # 100/11 = 9.1 -> 10 cm would only ask for 10, so it rounds the other way.
+    # 100/6 = 16.7 -> 16 cm: 6.25 bars in the metre, not the 5.88 of 17 cm.
+    assert slab._spacing_for_bars(6).to("cm").magnitude == 16
+    # 100/11 = 9.1 -> 9 cm.
     assert slab._spacing_for_bars(11).to("cm").magnitude == 9
+    # 100/4 = 25 exactly: a whole answer is kept whole.
+    assert slab._spacing_for_bars(4).to("cm").magnitude == 25
     for n in range(1, 30):
         assert _bars_at_spacing(slab._spacing_for_bars(n), slab.width) >= n
     assert slab._spacing_for_bars(0).magnitude == 0
+
+
+##########################################################
+# THE STEEL OF A STRIP IS BARS PER METRE
+##########################################################
+
+
+def test_the_steel_of_a_strip_is_the_bar_area_times_the_bars_per_metre() -> None:
+    """Ø10/12 on a metre of slab is 6.545 cm²/m, not nine bars.
+
+    A strip is a slice of a slab that goes on past both of its edges, so it
+    carries width/s bars: 100/12 = 8.333 of them, and 8.333 x 0.7854 cm²
+    = 6.545 cm². Counting the bars that cover the strip, ceil(100/12) = 9,
+    credited it with 7.069 cm² -- 8 % more steel than the spacing puts in
+    any metre of it. (Nor is nine what an isolated metre holds: nine bars at
+    12 cm span 96 cm centre to centre, and between its covers a metre has 95.)
+    """
+    slab = OneWaySlab(
+        label="Slab per metre",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=20 * cm,
+        c_c=25 * mm,
+    )
+    slab.set_slab_longitudinal_rebar_bot(d_b1=10 * mm, s_b1=12 * cm)
+
+    bottom = slab.reinforcement.bottom
+    assert bottom.A_s.to("cm**2").magnitude == pytest.approx(6.545, abs=5e-4)
+    assert bottom.layers[0].n == pytest.approx(100 / 12)
+    assert bottom.n_bars == pytest.approx(100 / 12)
+    # One number for the steel, wherever it is read from.
+    assert bottom.layers[0].A_s.to("cm**2").magnitude == pytest.approx(bottom.A_s.to("cm**2").magnitude)
+    assert _bars_at_spacing(12 * cm, 100 * cm) == pytest.approx(100 / 12)
+    assert _bars_at_spacing(0 * cm, 100 * cm) == 0
+
+
+def test_a_slab_designed_to_its_minimum_reaches_it_in_every_metre() -> None:
+    """CIRSOC 201-25 §7.6.1: A_s,min = 0.0018*b*h = 0.0018*100*30 = 5.40 cm².
+
+    The search asks for 7 Ø10 (5.50 cm²), and the strip used to be detailed
+    at ceil(100/7) = 15 cm -- 6.67 bars a metre, 5.24 cm²/m, 3 % short of the
+    minimum -- while being counted as ceil(100/15) = 7 bars, 5.50 cm², so
+    nothing warned. Rounded down to 14 cm the strip carries 7.14 bars,
+    7.14 x 0.7854 = 5.61 cm²/m, and the minimum is met.
+    """
+    slab = OneWaySlab(
+        label="Slab minimum",
+        concrete=Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=30 * cm,
+        c_c=25 * mm,
+    )
+    Node(section=slab, forces=Forces(label="C1", M_y=5 * kNm)).design()
+
+    bottom = slab.reinforcement.bottom
+    assert slab.flexure_design.bottom.A_s_min.to("cm**2").magnitude == pytest.approx(5.40, rel=1e-3)
+    assert bottom.layers[0].d_b == 10 * mm
+    assert bottom.layers[0].s.to("cm").magnitude == 14
+    assert bottom.A_s.to("cm**2").magnitude == pytest.approx(5.61, abs=5e-3)
+    assert bottom.A_s >= slab.flexure_design.bottom.A_s_min
+    assert "As_below_min" not in {w.code for w in slab.warnings}
+
+
+def test_a_designed_slab_carries_its_moment_with_the_steel_of_a_metre() -> None:
+    """CIRSOC 100x25, c_c 25 mm, Mu = 80 kN·m.
+
+    The design used to leave Ø12/12 and report it as 9 bars, 10.18 cm², DCR
+    0.995. In a metre Ø12/12 is 8.33 bars, 9.42 cm²: with d = 250 - 25 - 6 =
+    219 mm, a = 942*420/(0.85*25*1000) = 18.6 mm, phi*Mn = 0.9*942*420*
+    (219 - 9.3) = 74.7 kN·m, DCR 1.071 -- the section did not carry its
+    moment. Ø12/11 carries 9.09 bars, 10.28 cm²: a = 20.3 mm, phi*Mn =
+    0.9*1028*420*(219 - 10.2) = 81.1 kN·m, DCR 0.986.
+    """
+    slab = OneWaySlab(
+        label="Slab moment",
+        concrete=Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=25 * cm,
+        c_c=25 * mm,
+    )
+    Node(section=slab, forces=Forces(label="C1", M_y=80 * kNm)).design()
+
+    bottom = slab.reinforcement.bottom
+    layer = bottom.layers[0]
+    assert (layer.d_b, layer.s.to("cm").magnitude) == (12 * mm, 11)
+    assert bottom.A_s.to("cm**2").magnitude == pytest.approx(10.28, abs=5e-3)
+    assert slab.flexure_design.bottom.DCR == pytest.approx(0.986, abs=2e-3)
+    assert slab.flexure_design.bottom.DCR <= 1
+
+
+##########################################################
+# THE SLAB MINIMUM BELONGS TO THE TENSION FACE
+##########################################################
+
+
+def test_a_face_nothing_puts_in_tension_has_no_minimum() -> None:
+    """ACI 318-19 §7.6.1.1 / CIRSOC 201-25 §7.6.1 is a flexural minimum, and
+    R7.6.1.1 / C 7.6.1 place it at the face in tension due to the loads.
+
+    A cantilever strip, 100x20 with c_c 25 mm, carries top bars only. Under
+    the hogging combination the top face owes 0.0018*100*20 = 3.60 cm² and
+    the bottom face, in compression, nothing. Under a combination of shear
+    alone no face is in tension, so neither owes anything -- the bottom used
+    to be asked for the 3.60 cm² all the same, and warned for carrying none.
+    """
+    slab = OneWaySlab(
+        label="Cantilever",
+        concrete=Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=20 * cm,
+        c_c=25 * mm,
+    )
+    slab.set_slab_longitudinal_rebar_top(d_b1=10 * mm, s_b1=15 * cm)
+    node = Node(section=slab, forces=[Forces(label="M-", M_y=-20 * kNm, V_z=30 * kN), Forces(label="V", V_z=30 * kN)])
+    node.check_flexure()
+
+    hogging, shear_only = slab._flexure_checks
+    assert hogging.top.A_s_min.to("cm**2").magnitude == pytest.approx(3.60, rel=1e-3)
+    assert hogging.bottom.A_s_min.magnitude == 0
+    assert shear_only.top.A_s_min.magnitude == 0
+    assert shear_only.bottom.A_s_min.magnitude == 0
+    assert "As_below_min" not in {w.code for w in node.warnings}
+    # The minimum is kept where a moment does put a face in tension.
+    assert Node(section=slab, forces=[Forces(label="M-", M_y=-20 * kNm)]).check_flexure().iloc[1][
+        "As,min"
+    ] == pytest.approx(3.60, rel=1e-3)
+
+
+def test_a_slab_designed_for_span_and_shear_alone_is_not_warned_on_its_bare_top() -> None:
+    """The design leaves the top of a sagging strip empty, as nothing pulls it;
+    the shear-only combination used to ask that same face for 3.60 cm²."""
+    slab = OneWaySlab(
+        label="Sagging",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=20 * cm,
+        c_c=25 * mm,
+    )
+    node = Node(section=slab, forces=[Forces(label="span", M_y=20 * kNm), Forces(label="shear only", V_z=30 * kN)])
+    node.design()
+
+    assert slab.reinforcement.top.layers == ()
+    assert node.warnings == ()
+    assert slab.flexure_design.top.A_s_min.magnitude == 0
+    assert slab.flexure_design.bottom.A_s_min.to("cm**2").magnitude == pytest.approx(3.60, rel=1e-3)
+
+
+def test_a_slab_designed_for_shear_alone_still_gets_its_detailing_steel() -> None:
+    """With no moment the code asks nothing, and the check says so: A_s,min = 0.
+
+    The design still places the 1.8 permille of the gross section it gives a
+    beam in the same case -- the studio's floor, not a clause, and on a slab
+    the same 3.60 cm² as §7.6.1.1 -- because a strip with no bars has no
+    shear strength either: V_c goes with rho_w**(1/3) in Table 22.5.5.1.
+    """
+    slab = OneWaySlab(
+        label="Shear only",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=20 * cm,
+        c_c=25 * mm,
+    )
+    node = Node(section=slab, forces=[Forces(label="shear only", V_z=30 * kN)])
+    node.design()
+
+    bottom = slab.flexure_design.bottom
+    assert bottom.A_s_min.magnitude == 0
+    assert bottom.A_s_req.to("cm**2").magnitude == pytest.approx(3.60, rel=1e-3)
+    assert slab.reinforcement.bottom.A_s >= bottom.A_s_req
+    assert node.warnings == ()
+
+
+def test_a_slab_is_drawn_with_the_whole_bars_that_cover_the_strip() -> None:
+    """A metre of Ø10/12 carries 8.33 bars and is drawn with 9."""
+    from matplotlib.patches import Circle
+
+    slab = OneWaySlab(
+        label="Slab drawn",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=20 * cm,
+        c_c=25 * mm,
+    )
+    slab.set_slab_longitudinal_rebar_bot(d_b1=10 * mm, s_b1=12 * cm)
+    slab.plot()
+
+    circles = [p for p in slab._ax.patches if isinstance(p, Circle)]
+    assert len(circles) == 9
+    assert "9Ø10" in [t.get_text() for t in slab._ax.texts]
 
 
 def test_an_imperial_slab_is_designed_to_a_whole_inch_spacing() -> None:
@@ -712,15 +926,25 @@ def test_a_hogging_slab_is_designed_on_its_top_face_by_a_spacing() -> None:
 @pytest.mark.parametrize(
     ("concrete", "height", "expected_cm"),
     [
-        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), 12 * cm, 36),  # 3h governs
-        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), 25 * cm, 45),  # 450 mm governs
+        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), 8 * cm, 24),  # 3h governs
+        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), 12 * cm, 30),  # §24.3.2 governs, not 3h = 36
+        (Concrete_ACI_318_19(name="H25", f_c=25 * MPa), 25 * cm, 30),  # §24.3.2 governs, not 450 mm
         (Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa), 8 * cm, 24),  # 3h governs
         (Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa), 12 * cm, 30),  # 300 mm governs
         (Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa), 25 * cm, 30),  # 300 mm governs
         (Concrete_EN_1992_2004(name="C25", f_c=25 * MPa), 12 * cm, 36),  # 3h governs
         (Concrete_EN_1992_2004(name="C25", f_c=25 * MPa), 25 * cm, 40),  # 400 mm governs
     ],
-    ids=["ACI_3h", "ACI_450mm", "CIRSOC_3h", "CIRSOC_300mm_12cm", "CIRSOC_300mm_25cm", "EN_3h", "EN_400mm"],
+    ids=[
+        "ACI_3h",
+        "ACI_24_3_2_12cm",
+        "ACI_24_3_2_25cm",
+        "CIRSOC_3h",
+        "CIRSOC_300mm_12cm",
+        "CIRSOC_300mm_25cm",
+        "EN_3h",
+        "EN_400mm",
+    ],
 )
 def test_the_code_caps_how_far_apart_the_bars_of_a_slab_may_sit(
     concrete: Concrete_ACI_318_19 | Concrete_EN_1992_2004, height: Quantity, expected_cm: float
@@ -728,9 +952,12 @@ def test_the_code_caps_how_far_apart_the_bars_of_a_slab_may_sit(
     """ACI 318-19 7.7.2.3 is 3h or 450 mm, CIRSOC 201-25 art. 7.7.2.3 is 3h or
     300 mm, EN 1992-1-1 9.3.1.1(3) is 3h or 400 mm.
 
-    The 300 mm of CIRSOC bites from 100 mm of thickness up, so the two codes
-    that share every other clause of Chapter 7 part company on the ordinary
-    slab: 36 cm against 30 cm at h = 12 cm."""
+    Under ACI 318-19 and CIRSOC 201-25 a second cap sits beside that one:
+    §7.7.2.2 sends the bars nearest the tension face to Table 24.3.2, which
+    with ADN 420, f_s = (2/3)*f_y = 280 MPa and 20 mm of cover gives
+    min(380 - 50, 300) = 300 mm. So the 450 mm of ACI never governs a slab of
+    that grade, and the two codes agree from 10 cm of thickness up; only EN,
+    which controls cracking through §7.3.3 instead, keeps 36 cm at h = 12."""
     slab = OneWaySlab(
         label="Slab s_max",
         concrete=concrete,
@@ -746,25 +973,26 @@ def test_the_code_caps_how_far_apart_the_bars_of_a_slab_may_sit(
 def test_a_design_is_never_spaced_beyond_the_code_maximum() -> None:
     """Area alone is not a layout.
 
-    A light strip needs so little steel that the search covers it with the two
-    bars it starts from, which on a metre of slab is a bar every half metre:
-    the area is there and most of the slab is not reinforced. The spacing is
-    capped at what the code allows, which only ever adds bars.
+    A light strip needs so little steel that the search covers it with a few
+    bars -- 3 Ø10 for the 1.80 cm² minimum of a 10 cm slab, which spread over
+    a metre is a bar every 33 cm: the area is there and most of the slab is
+    not reinforced. The spacing is capped at what the code allows, 3h = 30 cm,
+    which only ever adds bars: 3.33 in the metre, 2.62 cm².
     """
     slab = OneWaySlab(
         label="Slab lightly loaded",
         concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
         steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
         width=100 * cm,
-        height=12 * cm,
+        height=10 * cm,
         c_c=20 * mm,
     )
     Node(section=slab, forces=Forces(label="C1", M_y=2 * kNm)).design()
 
     s_max = slab._max_bar_spacing()
-    assert s_max.to("cm").magnitude == 36  # 3h on a 12 cm slab
-    assert slab._s_b1_b <= s_max
-    assert slab.reinforcement.bottom.layers[0].n == _bars_at_spacing(s_max, slab.width)
+    assert s_max.to("cm").magnitude == 30  # 3h on a 10 cm slab
+    assert slab._s_b1_b == s_max
+    assert slab.reinforcement.bottom.layers[0].n == pytest.approx(_bars_at_spacing(s_max, slab.width))
     assert slab.reinforcement.bottom.A_s >= slab.flexure_design.bottom.A_s_req
 
 
@@ -787,8 +1015,8 @@ def test_a_cirsoc_design_is_never_spaced_beyond_300_mm() -> None:
 
     s_max = slab._max_bar_spacing()
     assert s_max.to("cm").magnitude == 30  # art. 7.7.2.3, not the 36 cm of 3h
-    assert slab._s_b1_b <= s_max
-    assert slab.reinforcement.bottom.layers[0].n == _bars_at_spacing(s_max, slab.width)
+    assert slab._s_b1_b == s_max
+    assert slab.reinforcement.bottom.layers[0].n == pytest.approx(_bars_at_spacing(s_max, slab.width))
     assert slab.reinforcement.bottom.A_s >= slab.flexure_design.bottom.A_s_req
 
 
@@ -809,7 +1037,9 @@ def test_a_slab_spaced_beyond_the_code_maximum_fails_the_check() -> None:
     rows = slab._data_min_max_flexure
     assert rows["Check"][3] == "Bar spacing bottom"
     assert rows["Value"][3] == pytest.approx(600)
-    assert rows["Max."][3] == pytest.approx(450)
+    # min(3h = 750, 450) of §7.7.2.3, and then the 300 mm of §24.3.2 through
+    # §7.7.2.2: min(380 - 2.5*25, 300) with f_s = 280 MPa.
+    assert rows["Max."][3] == pytest.approx(300)
     assert rows["Ok?"][3] == "❌"
     assert slab._all_flexure_checks_passed is False
 

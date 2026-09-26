@@ -11,6 +11,12 @@ wall's private attributes::
     wall.mesh.vertical.rho                             # the vertical ratio
     wall.shear_design.DCR                              # governing combination
     wall.shear_checks[0].V_capacity                    # ØVn of one combination
+    wall.shear_checks[0].mesh                          # the mesh it was checked with
+
+A result is a value of the check: each one carries the mesh it was formed
+with, so a design never pairs one mesh with the DCR of another. A mesh set by
+hand afterwards belongs to no check yet, and the wall drops the results until
+the next one runs.
 
 Forces and lengths are pint quantities in the section's unit system;
 reinforcement ratios are plain floats.
@@ -80,16 +86,21 @@ class WallMesh:
 class WallShearCheck:
     """The in-plane shear result of one load combination.
 
-    ``V_capacity`` is the design shear strength ``ØVn`` the ``DCR`` was formed
-    from, already capped by ``ØVn,max`` (``V_max``), the most the section can
-    carry however it is reinforced. ``rho_t_req`` is the horizontal ratio the
-    combination needs, never below ``rho_t_min``; ``rho_l_min`` the vertical
-    minimum it leads to (ACI 318-19 / CIRSOC 201-25 §11.6.2). ``rho_t`` and
-    ``rho_l`` are the ratios the mesh provides, and ``s_h_max`` / ``s_v_max``
-    the spacing limits of §11.7.
+    ``mesh`` is the reinforcement the combination was checked with -- the
+    wall's own at the time, kept here so the result stays whole once the wall
+    changes. ``V_capacity`` is the design shear strength ``ØVn`` the ``DCR``
+    was formed from, already capped by ``ØVn,max`` (``V_max``), the most the
+    section can carry however it is reinforced. ``rho_t_req`` is the
+    horizontal ratio the combination needs, never below ``rho_t_min``;
+    ``rho_l_min`` the vertical minimum of ACI 318-19 / CIRSOC 201-25
+    §11.6.2(a) -- Eq. (11.6.2) with the ``rho_t`` provided, capped by
+    ``rho_t_req``, so it depends on the mesh as much as on the combination.
+    ``rho_t`` and ``rho_l`` are the ratios that mesh provides, and
+    ``s_h_max`` / ``s_v_max`` the spacing limits of §11.7.
     """
 
     label: str
+    mesh: WallMesh
     V_u: Quantity
     N_u: Quantity
     V_capacity: Quantity
@@ -108,10 +119,13 @@ class WallShearCheck:
 class WallShearDesign:
     """The wall's mesh and what the checked combinations demanded of it.
 
-    ``rho_t_req``, ``rho_l_min`` and ``DCR`` are the envelope over every
-    combination checked; ``V_capacity`` is the ``ØVn`` of the combination
-    that governs, so the DCR is the ratio it was. The spacing limits depend
-    on the geometry alone and are the same for every combination.
+    ``mesh`` is the one the combinations were checked with, read off the
+    checks themselves rather than off the wall, so the ``DCR`` next to it is
+    its own. ``rho_t_req``, ``rho_l_min`` and ``DCR`` are the envelope over
+    every combination checked; ``V_capacity`` is the ``ØVn`` of the
+    combination that governs, so the DCR is the ratio it was. The spacing
+    limits depend on the geometry alone and are the same for every
+    combination.
     """
 
     mesh: WallMesh
@@ -141,9 +155,14 @@ def build_mesh(wall: ShearWall) -> WallMesh:
 
 
 def capture_wall_shear_check(wall: ShearWall, label: str, state: Any) -> WallShearCheck:
-    """The result of the combination just checked, read off its state."""
+    """The result of the combination just checked, read off its state.
+
+    The mesh is read off the wall here, at the check, and kept on the result:
+    it is the one the state was computed with.
+    """
     return WallShearCheck(
         label=label,
+        mesh=build_mesh(wall),
         V_u=state.V_u,
         N_u=state.N_u,
         V_capacity=min(state.phi_V_n_wall, state.phi_V_n_max_wall),
@@ -169,17 +188,22 @@ def _governing(checks: Sequence[WallShearCheck]) -> Optional[WallShearCheck]:
 def build_wall_shear_design(wall: ShearWall) -> WallShearDesign:
     """The public shear result of ``wall``.
 
+    Built from the checks alone -- their mesh, their envelope -- so it cannot
+    pair the mesh the wall carries now with the DCR of another.
+
     Raises:
-        DesignNotRunError: if no shear check or design has been run yet.
+        DesignNotRunError: if no shear check or design has been run yet, or
+            the mesh was changed by hand since the last one.
     """
     checks: Tuple[WallShearCheck, ...] = tuple(getattr(wall, "_wall_shear_checks", ()))
     governing = _governing(checks)
     if governing is None:
         raise DesignNotRunError(
-            "No shear results yet. Run node.design() or node.check_shear() before reading shear_design."
+            "No shear results for the mesh the wall carries. "
+            "Run node.design() or node.check_shear() before reading shear_design."
         )
     return WallShearDesign(
-        mesh=build_mesh(wall),
+        mesh=governing.mesh,
         rho_t_req=max(check.rho_t_req for check in checks),
         rho_t_min=max(check.rho_t_min for check in checks),
         rho_l_min=max(check.rho_l_min for check in checks),

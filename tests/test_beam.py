@@ -335,7 +335,7 @@ def test_set_transverse_rebar_defaults_clear_stirrups_imperial(
     assert stirrups.A_v.to("inch**2/ft").magnitude == 0
 
 
-@pytest.mark.published_example
+# Not published_example: no source is cited for these numbers (the sibling tests cite a Calcpad sheet).
 def test_shear_check_EN_1992_2004_rebar_1(
     beam_example_EN_1992_2004_01: RectangularBeam,
 ) -> None:
@@ -362,7 +362,7 @@ def test_shear_check_EN_1992_2004_rebar_1(
     assert results.iloc[1]["VEd,2≤VRd"] is True
 
 
-@pytest.mark.published_example
+# Not published_example: no source is cited for these numbers (the sibling tests cite a Calcpad sheet).
 def test_shear_check_EN_1992_2004_rebar_2(
     beam_example_EN_1992_2004_01: RectangularBeam,
 ) -> None:
@@ -389,7 +389,7 @@ def test_shear_check_EN_1992_2004_rebar_2(
     assert results.iloc[1]["VEd,2≤VRd"] is False
 
 
-@pytest.mark.published_example
+# Not published_example: no source is cited for these numbers (the sibling tests cite a Calcpad sheet).
 def test_shear_check_EN_1992_2004_rebar_3(
     beam_example_EN_1992_2004_01: RectangularBeam,
 ) -> None:
@@ -420,7 +420,10 @@ def test_shear_check_EN_1992_2004_rebar_3(
 def test_shear_check_EN_1992_2004_no_rebar_1(
     beam_example_EN_1992_2004_01: RectangularBeam,
 ) -> None:
-    # Example from "EN 1992-1-1_2004 Beam Shear 01 - Metric.cpd"
+    """A beam with no stirrups at all under a shear V_Rd,c carries alone.
+
+    Source: Calcpad "EN 1992-1-1_2004 Beam Shear 01 - Metric.cpd".
+    """
     f = Forces(V_z=30 * kN)
     beam_example_EN_1992_2004_01.set_longitudinal_rebar_bot(n1=4, d_b1=16 * mm)
     # The reference example has no stirrups at all, so say so: the section no
@@ -449,7 +452,7 @@ def test_shear_check_EN_1992_2004_no_rebar_1(
     assert results.iloc[1]["VEd,2≤VRd"] is True
 
 
-@pytest.mark.published_example
+# Not published_example: no source is cited for these numbers (the sibling tests cite a Calcpad sheet).
 def test_shear_check_EN_1992_2004_no_rebar_2(
     beam_example_EN_1992_2004_01: RectangularBeam,
 ) -> None:
@@ -480,7 +483,7 @@ def test_shear_check_EN_1992_2004_no_rebar_2(
     assert results.iloc[1]["VEd,2≤VRd"] is True
 
 
-@pytest.mark.published_example
+# Not published_example: no source is cited for these numbers (the sibling tests cite a Calcpad sheet).
 def test_shear_check_EN_1992_2004_no_rebar_3(
     beam_example_EN_1992_2004_01: RectangularBeam,
 ) -> None:
@@ -512,7 +515,7 @@ def test_shear_check_EN_1992_2004_no_rebar_3(
     assert results.iloc[1]["VEd,2≤VRd"] is True
 
 
-@pytest.mark.published_example
+# Not published_example: no source is cited for these numbers (the sibling tests cite a Calcpad sheet).
 def test_shear_design_EN_1992_2004_1(
     beam_example_EN_1992_2004_01: RectangularBeam,
 ) -> None:
@@ -538,7 +541,7 @@ def test_shear_design_EN_1992_2004_1(
     assert results.iloc[1]["VEd,2≤VRd"] is True
 
 
-@pytest.mark.published_example
+# Not published_example: no source is cited for these numbers (the sibling tests cite a Calcpad sheet).
 def test_shear_check_ACI_318_19_1(beam_example_imperial: RectangularBeam) -> None:
     f = Forces(V_z=37.727 * kip, N_x=0 * kip)
     beam_example_imperial.set_transverse_rebar(n_stirrups=1, d_b=0.5 * inch, s_l=6 * inch)
@@ -560,7 +563,7 @@ def test_shear_check_ACI_318_19_1(beam_example_imperial: RectangularBeam) -> Non
     assert results.iloc[1]["Vu≤ØVn"] is True
 
 
-@pytest.mark.published_example
+# Not published_example: no source is cited for these numbers (the sibling tests cite a Calcpad sheet).
 def test_shear_check_ACI_318_19_2(beam_example_imperial: RectangularBeam) -> None:
     f = Forces(V_z=37.727 * kip, N_x=20 * kip)
     beam_example_imperial.set_transverse_rebar(n_stirrups=1, d_b=0.5 * inch, s_l=6 * inch)
@@ -586,7 +589,10 @@ def test_shear_check_ACI_318_19_2(beam_example_imperial: RectangularBeam) -> Non
 def test_shear_check_ACI_318_19_no_rebar_1(
     beam_example_imperial: RectangularBeam,
 ) -> None:
-    # Tested with "ACI 318-19 Beam Shear 01 - Imperial.cpd" for beam that needs rebar
+    """A beam with no stirrups under a shear that needs them (V_u > phi*V_c).
+
+    Source: Calcpad "ACI 318-19 Beam Shear 01 - Imperial.cpd", the case that needs rebar.
+    """
     f = Forces(V_z=8 * kip, N_x=0 * kip)
     beam_example_imperial.set_longitudinal_rebar_bot(n1=2, d_b1=0.625 * inch)
     # The reference example has no stirrups at all, so say so: the section no
@@ -617,7 +623,10 @@ def test_shear_check_ACI_318_19_no_rebar_1(
 def test_shear_check_ACI_318_19_no_rebar_2(
     beam_example_imperial: RectangularBeam,
 ) -> None:
-    # Tested with "ACI 318-19 Beam Shear 01 - Imperial.cpd" for beem that doesn't need rebar
+    """A beam with no stirrups under a shear that does not need them.
+
+    Source: Calcpad "ACI 318-19 Beam Shear 01 - Imperial.cpd", the case that does not need rebar.
+    """
     f = Forces(V_z=6 * kip, N_x=0 * kip)
     beam_example_imperial.set_longitudinal_rebar_bot(n1=2, d_b1=0.625 * inch)
     # The reference example has no stirrups at all, so say so: the section no
@@ -711,7 +720,10 @@ def test_shear_check_lifts_the_cap_with_min_web_reinforcement() -> None:
 
 @pytest.mark.published_example
 def test_shear_design_ACI_318_19(beam_example_imperial: RectangularBeam) -> None:
-    # Tested with "ACI 318-19 Beam Shear 01 - Imperial.cpd" for beem that needs rebar
+    """Stirrup design for the beam that needs rebar.
+
+    Source: Calcpad "ACI 318-19 Beam Shear 01 - Imperial.cpd", the case that needs rebar.
+    """
     f = Forces(V_z=37.727 * kip, N_x=0 * kip)
     beam_example_imperial.set_longitudinal_rebar_bot(n1=2, d_b1=0.625 * inch)
     node = Node(section=beam_example_imperial, forces=f)
@@ -1156,7 +1168,15 @@ def test_min_legs_along_width() -> None:
 def test_flexure_check_EN_1992_2004_01(
     beam_example_EN_1992_2004_01: RectangularBeam,
 ) -> None:
-    # Example from Calcpad EN 1992-1-1_2004 Beam Flexure 01 - Metric v2
+    """Singly reinforced check: 20x60, C25/B500S, 4Ø16, M_Ed = 150 kN·m.
+
+    Source: Calcpad "EN 1992-1-1_2004 Beam Flexure 01 - Metric v2.cpd" for the case and
+    A_s,min; A_s,req and M_Rd are re-derived by hand below with the closed form of
+    The Concrete Centre's "How to design concrete structures using Eurocode 2",
+    3. Slabs (Moss and Brooker, 2006), p. 3, Figure 1 and Table 5 (z/d for singly
+    reinforced rectangular sections) -- the v2 sheet applied lambda twice to the
+    lever arm and is not the source of those two.
+    """
     f = Forces(M_y=150 * kNm)
     beam_example_EN_1992_2004_01.set_transverse_rebar(n_stirrups=1, d_b=6 * mm, s_l=15 * cm)
     beam_example_EN_1992_2004_01.set_longitudinal_rebar_bot(n1=4, d_b1=16 * mm)
@@ -1187,7 +1207,8 @@ def test_flexure_check_EN_1992_2004_01(
     assert results.iloc[1]["DCR"] == pytest.approx(0.861, rel=1e-3)
 
 
-@pytest.mark.published_example
+# Not published_example: the cited Calcpad sheet no longer gives these numbers; they were
+# re-baselined to mento's own output (dd0df9f) with no derivation outside mento.
 def test_flexure_check_EN_1992_2004_02(
     beam_example_EN_1992_2004_01: RectangularBeam,
 ) -> None:
@@ -1231,7 +1252,8 @@ def test_flexure_check_EN_1992_2004_03(
     assert results.iloc[1]["As,req top"] == pytest.approx(0, rel=1e-3)
 
 
-@pytest.mark.published_example
+# Not published_example: the Concrete Centre case of Lecture 3 p. 14 (C30/B500S, +370 kN·m,
+# 23.07 / 4.27 cm²) was replaced by C60/B400S at -370 kN·m, and 25.85 cm² is mento's output.
 def test_flexure_check_EN_1992_2004_04(
     beam_example_EN_1992_2004_03: RectangularBeam,
 ) -> None:
@@ -1264,6 +1286,14 @@ def test_flexure_EN_1992_2004_matches_concise_eurocode_closed_form() -> None:
     That closed form is the inversion of ``z = d - 0.4x`` with the EC2
     rectangular block (lambda = 0.8, eta = 1.0). It is computed here from
     scratch, so the test does not depend on any mento formula.
+
+    Source: The Concrete Centre, "How to design concrete structures using Eurocode 2",
+    3. Slabs (Moss and Brooker, 2006), p. 3: Figure 1 (procedure for determining
+    flexural reinforcement) prints z = d/2*[1 + sqrt(1 - 3.53K)] <= 0.95d and
+    A_s = M/(f_yd*z), and Table 5 (z/d for singly reinforced rectangular sections)
+    tabulates it: K = 0.09 -> 0.913, K = 0.10 -> 0.902, which brackets the
+    z/d = 0.9069 of K = 0.0957 below. The same closed form is tabulated in Concise
+    Eurocode 2.
     """
     f_ck, f_yk = 25.0, 500.0
     b, d = 200.0, 560.0  # mm, matches beam_example_EN_1992_2004_01 with 4x16
@@ -1290,7 +1320,8 @@ def test_flexure_EN_1992_2004_matches_concise_eurocode_closed_form() -> None:
     assert results.iloc[1]["As,req bot"] == pytest.approx(A_s_ref, rel=2e-3)
 
 
-@pytest.mark.published_example
+# Not published_example: a unit test of an internal function, whose expectation is built
+# from mento's own attributes.
 def test_compression_zone_limits_EN_1992_2004_are_expressed_on_the_neutral_axis() -> None:
     """The ductility limits are on x_u/d; the block depth is lambda times that.
 
@@ -1636,9 +1667,19 @@ def test_check_flexure_ACI_318_19_2(beam_example_flexure_ACI: RectangularBeam) -
 
 @pytest.mark.published_example
 def test_check_flexure_ACI_318_19_3(beam_example_flexure_ACI: RectangularBeam) -> None:
-    # Simple bending check (Mu pequeño → sección simple, no cae en doble armadura).
-    # Calcpad de referencia: ACI 318-19 Beam Flexure 03_v3 - test_3.cpd
-    # Como es caso simple, no se ve afectado por los fixes de rama D ni displaced concrete.
+    """Simple bending check: Mu pequeño → sección simple, no cae en doble armadura.
+
+    Como es caso simple no lo tocan los fixes de doble armadura ni el displaced
+    concrete, y el bloque de Whitney se rehace a mano (b = 12", d = 24 - 1.5 -
+    0.375 - 1.41/2 = 21.42", A_s = 2#11 = 3.1229 in²):
+      a = A_s·f_y/(0.85·f'c·b) = 3.1229·60/(0.85·4·12) = 4.5925"
+      Mn = 3.1229·60·(21.42 - 4.5925/2) = 3583.3 kip·in ; ØMn = 0.9·Mn = 364.37 kN·m
+      A_s,min = max(3√4000, 200)/60000·12·21.42 = 0.8568 in² = 5.53 cm²  (§9.6.1.2)
+      A_s,req: 60·A_s·(21.42 - 0.7353·A_s) = 200·12/0.9 → A_s = 2.249 in² = 14.51 cm²
+
+    Source: Calcpad "ACI 318-19 Beam Flexure 03_v3 - test_3.cpd"; the numbers above
+    are the hand check of that sheet.
+    """
     f = Forces(label="Test_03", M_y=200 * kip * ft)
     beam_example_flexure_ACI.set_longitudinal_rebar_bot(n1=2, d_b1=1.41 * inch)
     beam_example_flexure_ACI.set_longitudinal_rebar_top(n1=2, d_b1=0.75 * inch)
@@ -1752,7 +1793,14 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_05() -> None:
     bajo respecto a la sección (As_calc < As_min), por lo que el mínimo
     normativo de ACI 318-19 gobierna el diseño. Se verifica además que
     la sección es simple (sin acero de compresión) y que el flag A_s_bool
-    está activo, indicando que se aplicó la regla del 4/3 de ACI 9.6.1.3.
+    queda apagado: la regla del 4/3 de ACI 9.6.1.3 no alivia nada, porque
+    4/3·As_calc no es menor que As_min. A mano (d = 27.5"):
+      Rn = 2400/(0.9·16·27.5²) = 0.2204 ksi ; ρ = 0.085·(1 − √(1 − 2·0.2204/5.1)) = 0.003756
+      As_calc = 0.003756·16·27.5 = 1.653 in² ; 4/3·As_calc = 2.204 in²
+      As_min = max(3√6000, 200)/60000·16·27.5 = 1.7041 in² (§9.6.1.2) → gobierna As_min
+
+    Source: BEAM-01-Flexure-Rectangle ACI 318-19-v6.xlsm, sheet Flexion, row 31 (Test_Etabs_05), column BC (A_s,min
+    governs: column V = column R).
     """
 
     concrete = Concrete_ACI_318_19(name="fc6000", f_c=6000 * psi)
@@ -1780,7 +1828,7 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_05() -> None:
     assert A_s_final.to("cm**2").magnitude == pytest.approx(11.00, rel=1e-2)
     # Sección simple: sin acero de compresión
     assert A_s_comp.to("cm**2").magnitude == pytest.approx(0.0, abs=0.01)
-    # Flag 4/3 activo porque As_calc < As_min
+    # Flag 4/3 apagado: 4/3·As_calc = 2.204 in² no es menor que As_min, que gobierna
     assert A_s_bool is False
 
 
@@ -1799,6 +1847,9 @@ def test_maximum_flexural_reinforcement_ratio_ACI_318_19_Test_Etabs_05() -> None
 
     Excel col S: As_max = 10.4288 in²
     → ρ_max = As_max / (b × d) = 10.4288 / (16 × 27.5) = 0.02370
+
+    Source: BEAM-01-Flexure-Rectangle ACI 318-19-v6.xlsm, sheet Flexion, row 31 (Test_Etabs_05), column S (A_s,max =
+    10.4288 in²).
     """
     from mento.codes.ACI_318_19_beam import _maximum_flexural_reinforcement_ratio_ACI_318_19
 
@@ -1836,6 +1887,9 @@ def test_minimum_flexural_reinforcement_ratio_ACI_318_19_Test_Etabs_05() -> None
 
     Excel col R: As_min = 1.7041 in²
     → ρ_min = As_min / (b × d) = 1.7041 / (16 × 27.5) = 0.003873
+
+    Source: BEAM-01-Flexure-Rectangle ACI 318-19-v6.xlsm, sheet Flexion, row 31 (Test_Etabs_05), column R (A_s,min =
+    1.7041 in²).
     """
     from mento.codes.ACI_318_19_beam import _minimum_flexural_reinforcement_ratio_ACI_318_19
 
@@ -1872,6 +1926,9 @@ def test_determine_nominal_moment_simple_reinf_ACI_318_19_Test_Etabs_03() -> Non
     Con As_req=2.2386 in² (diseñado para Mu=200 kip·ft):
       a = 3.292"  →  Mn = 222.24 kip·ft  →  φMn = 200.02 kip·ft ≈ Mu
     Verifica que la fórmula del bloque de Whitney está bien implementada.
+
+    Source: BEAM-01-Flexure-Rectangle ACI 318-19-v6.xlsm, sheet Flexion, row 29 (Test_Etabs_03), columns BC (A_s =
+    2.2386 in²) and E (Mu = 200 kip·ft): with ETABS's steel, phi*Mn reproduces Mu.
     """
 
     concrete = Concrete_ACI_318_19(name="fc4000", f_c=4000 * psi)
@@ -1912,6 +1969,8 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_03() -> None:
     gobierna directamente sin intervención de la regla del 4/3.
     Se confirma además que A_s_bool es False porque la regla del 4/3
     no aplica cuando As_calc > As_min.
+
+    Source: BEAM-01-Flexure-Rectangle ACI 318-19-v6.xlsm, sheet Flexion, row 29 (Test_Etabs_03), column BC.
     """
 
     concrete = Concrete_ACI_318_19(name="fc4000", f_c=4000 * psi)
@@ -1957,6 +2016,9 @@ def test_determine_nominal_moment_double_reinf_ACI_318_19_Test_Etabs_01() -> Non
     Verifica que esa rama está correctamente implementada.
 
     Resultado esperado: Mn ≈ 222.6 kip·ft → φMn ≈ 200 kip·ft ≈ Mu.
+
+    Source: BEAM-01-Flexure-Rectangle ACI 318-19-v6.xlsm, sheet Flexion, row 27 (Test_Etabs_01), columns BC/BE (A_s =
+    3.0045, A_s' = 0.7628 in²) and E (Mu = 200 kip·ft): phi*Mn reproduces Mu.
     """
 
     concrete = Concrete_ACI_318_19(name="fc2500", f_c=2500 * psi)
@@ -1996,6 +2058,8 @@ def test_calculate_flexural_reinforcement_ACI_318_19_doubly_reinforced_Test_Etab
     Complemento de los casos simples (Test_Etabs_03 y Test_Etabs_05):
     verifica que _calculate_flexural_reinforcement_ACI_318_19 detecta
     correctamente el caso doblemente armado y calcula ambos aceros.
+
+    Source: BEAM-01-Flexure-Rectangle ACI 318-19-v6.xlsm, sheet Flexion, row 27 (Test_Etabs_01), columns BC and BE.
     """
 
     concrete = Concrete_ACI_318_19(name="fc2500", f_c=2500 * psi)
@@ -2034,6 +2098,8 @@ def test_calculate_flexural_reinforcement_ACI_318_19_doubly_reinforced_yielding_
     Sección doblemente armada. Acero de compresión PLASTIFICA (εs' > εy).
     c_t=8.737", εs'=0.00214 > εy=0.00207 → fsprima = fy = 60000 psi.
     Excel/ETABS: As_req = 5.5828 in², As_comp = 0.5647 in²
+
+    Source: BEAM-01-Flexure-Rectangle ACI 318-19-v6.xlsm, sheet Flexion, row 49 (Test_Etabs_23), columns BC and BE.
     """
 
     concrete = Concrete_ACI_318_19(name="fc4000", f_c=4000 * psi)
@@ -2061,6 +2127,9 @@ def test_determine_nominal_moment_double_reinf_ACI_318_19_Test_Etabs_23_yielding
     Acero compresión PLASTIFICA → rama de plastificación.
     εs' = 0.00214 > εy = 0.00207 → fsprima = fy.
     φMn ≈ Mu = 500 kip·ft (ETABS validado).
+
+    Source: BEAM-01-Flexure-Rectangle ACI 318-19-v6.xlsm, sheet Flexion, row 49 (Test_Etabs_23), columns BC/BE (A_s =
+    5.5828, A_s' = 0.5647 in²) and E (Mu = 500 kip·ft): phi*Mn reproduces Mu.
     """
 
     concrete = Concrete_ACI_318_19(name="fc4000", f_c=4000 * psi)
@@ -2085,6 +2154,8 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_04() -> None:
     Sección simple. Testea β₁=0.80 (fc=5000 psi).
     As_calc gobierna sobre As_min (1.6604 > 1.5556 in²).
     Excel/ETABS: As_req = 1.6604 in², As_comp = 0.
+
+    Source: BEAM-01-Flexure-Rectangle ACI 318-19-v6.xlsm, sheet Flexion, row 30 (Test_Etabs_04), column BC.
     """
 
     concrete = Concrete_ACI_318_19(name="fc5000", f_c=5000 * psi)
@@ -2107,12 +2178,14 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_04() -> None:
 # ---------------------------------------------------------------------------
 # ETABS-validated required-steel tests
 # ---------------------------------------------------------------------------
-# Source: C:\Users\juanp\Desktop\BEAM-01-Flexure-Rectangle ACI 318-19-v6.xlsm,
-# sheet "Flexion", columns BC (As inf / ETABS validated) and BE (As sup / ETABS
-# validated). Each Test_Etabs_XX case corresponds to a row where the user's
-# hand calculation matched ETABS at 100%. These tests verify that Mento's
-# _calculate_flexural_reinforcement_ACI_318_19 returns the same A_s_final
-# and A_s_comp as ETABS for each case.
+# Source: BEAM-01-Flexure-Rectangle ACI 318-19-v6.xlsm (JPR's spreadsheet, not
+# public), sheet "Flexion", rows 27-49: one row per Test_Etabs_XX with its
+# geometry, materials and Mu in columns C to H, and the ETABS run in columns
+# BC (As inf) and BE (As sup); column BD is the ratio hand calculation / ETABS,
+# 1.0000 on every row used here. A marked test reproduces columns BC/BE of its
+# row. Test_Etabs_07 to _10 and _18 are not marked: mento adopts 4/3*A_s,calc
+# (ACI 318-19 §9.6.1.3) or its own geometric floor where ETABS applies A_s,min,
+# so their expected value is mento's, not ETABS's -- each says so.
 
 
 @pytest.mark.published_example
@@ -2123,6 +2196,8 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_02() -> None:
     ETABS validated: A_s_final = 3.4090 in², A_s_comp = 1.1701 in².
     Note: the spreadsheet uses d_prima = 2.5" (d_prima_conocido column), not
     the 0.1*h default of 1.8".
+
+    Source: BEAM-01-Flexure-Rectangle ACI 318-19-v6.xlsm, sheet Flexion, row 28 (Test_Etabs_02), columns BC and BE.
     """
 
     concrete = Concrete_ACI_318_19(name="fc3000", f_c=3000 * psi)
@@ -2146,6 +2221,8 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_06() -> None:
     """
     Test_Etabs_06: b=16", h=30", fc=7000psi, fy=60ksi, Mu=200 kip.ft
     Simple section, ETABS validated: A_s_final = 1.8407 in², A_s_comp = 0.
+
+    Source: BEAM-01-Flexure-Rectangle ACI 318-19-v6.xlsm, sheet Flexion, row 32 (Test_Etabs_06), column BC.
     """
 
     concrete = Concrete_ACI_318_19(name="fc7000", f_c=7000 * psi)
@@ -2164,7 +2241,8 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_06() -> None:
     assert A_s_comp.to("inch**2").magnitude == pytest.approx(0.0, abs=1e-3)
 
 
-@pytest.mark.published_example
+# Not published_example: it pins mento's 4/3*A_s,calc of ACI 318-19 §9.6.1.3, not ETABS's A_s,min
+# (sheet Flexion, column BC = 2.2137 in²).
 def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_07() -> None:
     """
     Test_Etabs_07: b=18", h=30", fc=8000psi, fy=60ksi, Mu=200 kip.ft, simple.
@@ -2191,7 +2269,8 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_07() -> None:
     assert A_s_bool is True  # 4/3 rule was applied
 
 
-@pytest.mark.published_example
+# Not published_example: it pins mento's 4/3*A_s,calc of ACI 318-19 §9.6.1.3, not ETABS's A_s,min
+# (sheet Flexion, column BC = 2.6089 in²).
 def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_08() -> None:
     """
     Test_Etabs_08: b=20", h=30", fc=9000psi, fy=60ksi, Mu=200 kip.ft, simple.
@@ -2217,7 +2296,8 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_08() -> None:
     assert A_s_bool is True  # 4/3 rule was applied
 
 
-@pytest.mark.published_example
+# Not published_example: it pins mento's 4/3*A_s,calc of ACI 318-19 §9.6.1.3, not ETABS's A_s,min
+# (sheet Flexion, column BC = 4.02 in²).
 def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_09() -> None:
     """
     Test_Etabs_09: b=24", h=36", fc=10000psi, fy=60ksi, Mu=200 kip.ft, simple.
@@ -2243,7 +2323,8 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_09() -> None:
     assert A_s_bool is True  # 4/3 rule was applied
 
 
-@pytest.mark.published_example
+# Not published_example: it pins mento's 4/3*A_s,calc of ACI 318-19 §9.6.1.3, not ETABS's A_s,min
+# (sheet Flexion, column BC = 4.2162 in²).
 def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_10() -> None:
     """
     Test_Etabs_10: b=24", h=36", fc=11000psi, fy=60ksi, Mu=200 kip.ft, simple.
@@ -2274,6 +2355,8 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_11() -> None:
     """
     Test_Etabs_11: b=24", h=20", fc=12000psi, fy=60ksi, Mu=200 kip.ft
     Simple section, ETABS validated: A_s_final = 2.5865 in², A_s_comp = 0.
+
+    Source: BEAM-01-Flexure-Rectangle ACI 318-19-v6.xlsm, sheet Flexion, row 37 (Test_Etabs_11), column BC.
     """
 
     concrete = Concrete_ACI_318_19(name="fc12000", f_c=12000 * psi)
@@ -2300,6 +2383,8 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_12() -> None:
     ETABS validated: A_s_final = 1.9373 in², A_s_comp = 0.1719 in².
     Note: the spreadsheet uses d_prima = 2.5" (d_prima_conocido column), not
     the 0.1*h default of 2.4".
+
+    Source: BEAM-01-Flexure-Rectangle ACI 318-19-v6.xlsm, sheet Flexion, row 38 (Test_Etabs_12), columns BC and BE.
     """
 
     concrete = Concrete_ACI_318_19(name="fc2500", f_c=2500 * psi)
@@ -2327,6 +2412,8 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_13() -> None:
     """
     Test_Etabs_13: b=10", h=24", fc=3000psi, fy=75ksi, Mu=200 kip.ft
     Simple section, ETABS validated: A_s_final = 1.9009 in², A_s_comp = 0.
+
+    Source: BEAM-01-Flexure-Rectangle ACI 318-19-v6.xlsm, sheet Flexion, row 39 (Test_Etabs_13), column BC.
     """
 
     concrete = Concrete_ACI_318_19(name="fc3000", f_c=3000 * psi)
@@ -2350,6 +2437,8 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_14() -> None:
     """
     Test_Etabs_14: b=10", h=24", fc=4000psi, fy=75ksi, Mu=200 kip.ft
     Simple section, ETABS validated: A_s_final = 1.8245 in², A_s_comp = 0.
+
+    Source: BEAM-01-Flexure-Rectangle ACI 318-19-v6.xlsm, sheet Flexion, row 40 (Test_Etabs_14), column BC.
     """
 
     concrete = Concrete_ACI_318_19(name="fc4000", f_c=4000 * psi)
@@ -2373,6 +2462,8 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_15() -> None:
     """
     Test_Etabs_15: b=14", h=18", fc=5000psi, fy=75ksi, Mu=200 kip.ft
     Simple section, ETABS validated: A_s_final = 2.5605 in², A_s_comp = 0.
+
+    Source: BEAM-01-Flexure-Rectangle ACI 318-19-v6.xlsm, sheet Flexion, row 41 (Test_Etabs_15), column BC.
     """
 
     concrete = Concrete_ACI_318_19(name="fc5000", f_c=5000 * psi)
@@ -2396,6 +2487,8 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_16() -> None:
     """
     Test_Etabs_16: b=14", h=20", fc=6000psi, fy=75ksi, Mu=200 kip.ft
     Simple section, ETABS validated: A_s_final = 2.1735 in², A_s_comp = 0.
+
+    Source: BEAM-01-Flexure-Rectangle ACI 318-19-v6.xlsm, sheet Flexion, row 42 (Test_Etabs_16), column BC.
     """
 
     concrete = Concrete_ACI_318_19(name="fc6000", f_c=6000 * psi)
@@ -2419,6 +2512,8 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_17() -> None:
     """
     Test_Etabs_17: b=14", h=19", fc=7000psi, fy=75ksi, Mu=200 kip.ft
     Simple section, ETABS validated: A_s_final = 2.2991 in², A_s_comp = 0.
+
+    Source: BEAM-01-Flexure-Rectangle ACI 318-19-v6.xlsm, sheet Flexion, row 43 (Test_Etabs_17), column BC.
     """
 
     concrete = Concrete_ACI_318_19(name="fc7000", f_c=7000 * psi)
@@ -2437,7 +2532,8 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_17() -> None:
     assert A_s_comp.to("inch**2").magnitude == pytest.approx(0.0, abs=1e-3)
 
 
-@pytest.mark.published_example
+# Not published_example: it pins mento's geometric floor 0.0018*b*h, not ETABS's A_s,min
+# (sheet Flexion, column BC = 3.2915 in²).
 def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_18() -> None:
     """
     Test_Etabs_18: b=16", h=60", fc=8000psi, fy=75ksi, Mu=200 kip.ft, simple.
@@ -2470,6 +2566,8 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_19() -> None:
     """
     Test_Etabs_19: b=16", h=15", fc=9000psi, fy=75ksi, Mu=200 kip.ft
     Simple section, ETABS validated: A_s_final = 3.0764 in², A_s_comp = 0.
+
+    Source: BEAM-01-Flexure-Rectangle ACI 318-19-v6.xlsm, sheet Flexion, row 45 (Test_Etabs_19), column BC.
     """
 
     concrete = Concrete_ACI_318_19(name="fc9000", f_c=9000 * psi)
@@ -2493,6 +2591,8 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_20() -> None:
     """
     Test_Etabs_20: b=20", h=12", fc=10000psi, fy=75ksi, Mu=200 kip.ft
     Simple section (shallow, wide). ETABS validated: A_s_final = 4.1408 in², A_s_comp = 0.
+
+    Source: BEAM-01-Flexure-Rectangle ACI 318-19-v6.xlsm, sheet Flexion, row 46 (Test_Etabs_20), column BC.
     """
 
     concrete = Concrete_ACI_318_19(name="fc10000", f_c=10000 * psi)
@@ -2527,6 +2627,8 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_22() -> None:
     """
     Test_Etabs_22: b=26", h=12", fc=12000psi, fy=75ksi, Mu=200 kip.ft
     Simple section (shallow, very wide). ETABS validated: A_s_final = 3.9783 in², A_s_comp = 0.
+
+    Source: BEAM-01-Flexure-Rectangle ACI 318-19-v6.xlsm, sheet Flexion, row 48 (Test_Etabs_22), column BC.
     """
 
     concrete = Concrete_ACI_318_19(name="fc12000", f_c=12000 * psi)
@@ -2545,7 +2647,8 @@ def test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_22() -> None:
     assert A_s_comp.to("inch**2").magnitude == pytest.approx(0.0, abs=1e-3)
 
 
-@pytest.mark.published_example
+# Not published_example: it asserts A_s >= 19.0 cm² and phi*Mn >= Mu from mento's own check;
+# ETABS asks for 19.38 cm² (sheet Flexion, row 27, column BC) and the design passes below it.
 def test_design_flexure_ACI_318_19_Test_Etabs_01() -> None:
     """
     Test_Etabs_01: b=12", h=20", fc=2500psi, fy=60ksi, Mu=200 kip·ft.
@@ -2592,7 +2695,7 @@ def test_design_flexure_ACI_318_19_Test_Etabs_01() -> None:
     assert phi_Mn >= 271.0
 
 
-@pytest.mark.published_example
+# Not published_example: the spreadsheet has no negative-moment row; nothing external is asserted.
 def test_design_flexure_ACI_318_19_negative_moment_doubly_reinforced() -> None:
     """
     Mirror of Test_Etabs_01 with NEGATIVE moment: b=12", h=20", fc=2500psi,
@@ -2840,17 +2943,20 @@ def test_design_flexure_ACI_318_19_gap_past_cap_negative_moment_upgrades_bottom(
     assert node.warnings == ()
 
 
-def test_design_flexure_CIRSOC_201_25_narrow_web_gives_the_most_that_fits() -> None:
+def test_design_flexure_CIRSOC_201_25_narrow_web_fits_the_bars_its_stirrup_leaves_room_for() -> None:
     """
-    Viga 12x30 cm, H25, ADN 420, c_c = 2.5 cm, Mu = +40 kN·m.
+    Viga 12x30 cm, H25, ADN 420, c_c = 2.5 cm, Mu = +40 kN·m, Vu = 50 kN.
 
-    Ancho libre = 12 - 2·(2.5 + 0.8) = 5.4 cm: dos barras por capa, y como
-    mucho Ø12 (54 - 2·16 = 22 mm < 30 mm del vibrador descarta el Ø16). Lo
-    mas que entra es 2Ø12 + 2Ø12 = 4.52 cm², por debajo de lo que pide el
-    momento (5.13 cm² de traccion, con compresion). Ni pasando el tope hay
-    una combinacion que alcance, asi que el diseño deja el maximo que entra
-    -- antes de corregir el redondeo de la separacion eran 4Ø10 = 3.14 cm²,
-    DCR 1.53 -- y el DCR > 1 dice que la seccion no alcanza.
+    Con el estribo de arranque de 8 mm el ancho libre es 12 - 2·(2.5 + 0.8) =
+    5.4 cm: dos barras por capa y como mucho Ø12 (54 - 2·16 = 22 mm < 25 mm
+    de separacion libre, §25.2.1). Lo mas que entraba era 2Ø12 + 2Ø12 =
+    4.52 cm², por debajo de los 5.13 cm² que pide el momento, y el diseño
+    quedaba con DCR 1.129 y ``As_below_required``. Pero el diseño de corte
+    elige 1eØ6/12 para 50 kN, y con el Ø6 el ancho libre es 5.8 cm: 2Ø16
+    entran (58 - 32 = 26 mm ≥ 25 mm). El diseño completo rehace la flexion
+    con el estribo con el que termina y deja 2Ø16 + 2Ø12 = 6.28 cm² abajo
+    sobre 2Ø12 arriba: DCR 0.803, sin avisos. Antes quedaba con la seccion
+    declarada corta por un estribo que no lleva.
     """
     beam = RectangularBeam(
         label="101",
@@ -2864,10 +2970,41 @@ def test_design_flexure_CIRSOC_201_25_narrow_web_gives_the_most_that_fits() -> N
     node.design()
 
     bottom = beam.flexure_design.bottom
-    assert [(layer.n, layer.d_b.to("mm").magnitude) for layer in bottom.layers] == [(2, 12), (2, 12)]
-    assert bottom.A_s.to("cm**2").magnitude == pytest.approx(4.52, rel=1e-3)
-    assert bottom.DCR == pytest.approx(1.129, rel=1e-3)
-    assert [w.face for w in node.warnings if w.code == "As_below_required"] == ["bottom"]
+    assert beam._stirrup_d_b.to("mm").magnitude == pytest.approx(6.0)
+    assert [(layer.n, layer.d_b.to("mm").magnitude) for layer in bottom.layers] == [(2, 16), (2, 12)]
+    assert bottom.A_s.to("cm**2").magnitude == pytest.approx(6.283, rel=1e-3)
+    assert bottom.DCR == pytest.approx(0.803, rel=1e-3)
+    assert node.warnings == ()
+
+
+def test_design_flexure_CIRSOC_201_25_narrow_web_gives_the_most_that_fits() -> None:
+    """
+    Viga 12x30 cm, H25, ADN 420, c_c = 2.5 cm, Mu = +60 kN·m, Vu = 50 kN.
+
+    Con el 1eØ6/12 que elige el corte el ancho libre es 5.8 cm: dos barras
+    por capa y como mucho Ø16 (58 - 2·16 = 26 mm ≥ 25 mm de §25.2.1; el Ø20
+    dejaria 18). Lo mas que entra es 2Ø16 + 2Ø16 = 8.04 cm², por debajo de
+    los 8.14 cm² que pide el momento (con compresion: arriba pide 7.27 y
+    entran 2Ø12 + 2Ø12 = 4.52). Ni pasando el tope hay una combinacion que
+    alcance, asi que el diseño deja el maximo que entra y lo dice:
+    ``As_below_required`` en las dos caras, DCR 1.137.
+    """
+    beam = RectangularBeam(
+        label="101",
+        concrete=Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=12 * cm,
+        height=30 * cm,
+        c_c=25 * mm,
+    )
+    node = Node(section=beam, forces=[Forces(label="1.4D", V_z=50 * kN, M_y=60 * kNm)])
+    node.design()
+
+    bottom = beam.flexure_design.bottom
+    assert [(layer.n, layer.d_b.to("mm").magnitude) for layer in bottom.layers] == [(2, 16), (2, 16)]
+    assert bottom.A_s.to("cm**2").magnitude == pytest.approx(8.042, rel=1e-3)
+    assert bottom.DCR == pytest.approx(1.137, rel=1e-3)
+    assert "bottom" in [w.face for w in node.warnings if w.code == "As_below_required"]
 
 
 def test_design_flexure_ACI_318_19_compression_bottom_exceeds_provided_bottom() -> None:
@@ -3025,9 +3162,15 @@ def test_check_flexure_ACI_318_19_over_reinforced_but_top_redeems(
       Top: 2×#6  (0.88 in² = 5.70 cm²)   → A_s_max_total ≈ 35.17 cm²
       A_s_bot (32.69) <= A_s_max_total (35.17) → rama 2 → double_reinf con A_s real.
 
-    ØMn ≈ 572.5 kN·m.
-    Calcpad de referencia: ACI 318-19 Beam Flexure 03_v3 - over_reinforced_but_top_redeems.cpd
-    PENDIENTE validar en ETABS o spColumn.
+    Compatibilidad de deformaciones escrita aparte (ACI 318-19 §22.2, con el hormigón
+    desplazado descontado en el acero comprimido), d = 21.49", d' = 2.25":
+      c = 7.325" ; a = 0.85·c = 6.226" ; f's = f_y (la barra de arriba plastifica)
+      eps_t = 0.003·(21.49 - 7.325)/7.325 = 0.0058 ≥ 0.005 → Ø = 0.90 (Tabla 21.2.2)
+      Mn = 469.19 kip·ft = 636.13 kN·m ; ØMn = 572.52 kN·m
+    Sin corrida de ETABS ni spColumn todavía.
+
+    Source: Calcpad "ACI 318-19 Beam Flexure 03_v3 - over_reinforced_but_top_redeems.cpd";
+    the strain compatibility above is the hand check of that sheet.
     """
     f = Forces(label="Test_over_but_top_redeems", M_y=400 * kip * ft)
     beam_example_flexure_ACI.set_longitudinal_rebar_bot(n1=4, d_b1=1.27 * inch)

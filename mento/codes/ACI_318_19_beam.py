@@ -14,13 +14,14 @@ the two still agree.
 """
 
 from mento.units import Quantity
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Optional, cast
 import warnings
 # from devtools import debug
 
 from mento.codes.flexure_design import _FaceDemand, _run_flexure_design
 from mento.codes.aci_318_19.equations import flexure as flexure_eq
 from mento.codes.check_state import (
+    CompressionSupport,
     FlexureCheckState,
     ShearCheckState,
     apply_shear_state,
@@ -126,7 +127,7 @@ def _calculate_concrete_shear_strength_aci(self: "RectangularBeam", st: ShearChe
     # Axial stress influence
     st.sigma_Nu = shear_eq.axial_stress_influence(st.N_u, sec.A_x, sec.f_c)
     # Table 22.5.5.1 uses the defined minimum, even where demand waives it.
-    has_min_rebar = sec.A_v >= _minimum_shear_reinforcement_aci(self)
+    has_min_rebar = _carries_minimum_stirrups_aci(self)
 
     if not has_min_rebar and not sec.is_imperial and st.A_s_tension == 0.0:
         warnings.warn(
@@ -134,7 +135,29 @@ def _calculate_concrete_shear_strength_aci(self: "RectangularBeam", st: ShearChe
             UserWarning,
         )
 
-    st.k_c_min = shear_eq.concrete_shear_stress(
+    st.k_c_min, st.V_c = _concrete_shear_strength_aci(self, st, has_min_rebar=has_min_rebar)
+    st.phi_V_c = self.concrete.phi_v * st.V_c
+
+
+def _carries_minimum_stirrups_aci(self: "RectangularBeam") -> bool:
+    """Whether the section holds the A_v,min of Table 9.6.3.4: the criteria column of Table 22.5.5.1."""
+    return bool(section_floats(self).A_v >= _minimum_shear_reinforcement_aci(self))
+
+
+def _concrete_shear_strength_aci(
+    self: "RectangularBeam", st: ShearCheckState, *, has_min_rebar: bool
+) -> tuple[float, float]:
+    """``(k_c, V_c)`` of Table 22.5.5.1 for the row ``has_min_rebar`` selects.
+
+    Rows (a)/(b) with A_v >= A_v,min, row (c) without; the ceiling of
+    §22.5.5.1.1 and the cap on sqrt(f'c) of §22.5.3.1, lifted by §22.5.3.2
+    for a beam carrying the minimum, go with the row. Split from
+    :func:`_calculate_concrete_shear_strength_aci` so the same table can be
+    read for a section other than the one as it is: the section limit asks
+    what V_c becomes once the minimum stirrups are in.
+    """
+    sec = section_floats(self)
+    k_c = shear_eq.concrete_shear_stress(
         sec.f_c,
         self.concrete.lambda_factor,
         st.rho_w,
@@ -155,26 +178,42 @@ def _calculate_concrete_shear_strength_aci(self: "RectangularBeam", st: ShearChe
         )
         * st.A_cv
     )
-    st.V_c = min(V_cmax, max(0.0, st.k_c_min * st.A_cv))
-    st.phi_V_c = self.concrete.phi_v * st.V_c
+    return k_c, min(V_cmax, max(0.0, k_c * st.A_cv))
 
 
 def _calculate_max_shear_capacity_aci(self: "RectangularBeam", st: ShearCheckState) -> None:
-    """Maximum total shear capacity (V_max).
+    """Maximum total shear capacity (V_max), and the limit of the section itself.
 
     V_u <= phi*(V_c + 0.66*sqrt(f'c)*b_w*d), the section-size limit of
     ACI 318-19 §22.5.1.2, Eq. (22.5.1.2) / CIRSOC 201-25 §22.5.1.2,
     ec. (22.5.1.2); 8*sqrt(f'c)*b_w*d in psi. phi_v = 0.75, ACI 318-19
     Table 21.2.1(b) / CIRSOC 201-25 Tabla 21.2.1(b).
+
+    ``phi_V_max`` reads the V_c of the section as it is, which is what the
+    report prints beside V_u. That V_c is not fixed by the dimensions alone:
+    Table 22.5.5.1 moves from row (c) to rows (a)/(b) once A_v >= A_v,min,
+    and §22.5.3.2 lifts the cap on sqrt(f'c) with it, so a section short of
+    the minimum has a lower phi*V_max than the same section with the
+    stirrups §9.6.3.1 requires of it anyway. ``section_shear_limit`` is the
+    limit with those stirrups in -- the most the section can carry however
+    it is reinforced, the one number that says the section has to grow --
+    and coincides with ``phi_V_max`` once the section carries A_v,min. A
+    20x60 with 2Ø12 and no stirrups under 320 kN was told to enlarge the
+    section at phi*V_max = 309 kN when 2eØ10/10 on it carries the load at
+    DCR 0.92: its limit is 354 kN.
     """
     sec = section_floats(self)
-    V_max = (
-        st.V_c
-        + shear_eq.shear_stress_capacity_increment(sec.f_c, self.concrete.lambda_factor, is_imperial=sec.is_imperial)
+    increment = (
+        shear_eq.shear_stress_capacity_increment(sec.f_c, self.concrete.lambda_factor, is_imperial=sec.is_imperial)
         * st.A_cv
     )
-    st.phi_V_max = self.concrete.phi_v * V_max
+    st.phi_V_max = self.concrete.phi_v * (st.V_c + increment)
     st.max_shear_ok = st.V_u <= st.phi_V_max
+    if _carries_minimum_stirrups_aci(self):
+        V_c_reinforced = st.V_c
+    else:
+        _, V_c_reinforced = _concrete_shear_strength_aci(self, st, has_min_rebar=True)
+    st.section_shear_limit = self.concrete.phi_v * (V_c_reinforced + increment)
 
 
 def _minimum_shear_reinforcement_aci(self: "RectangularBeam") -> float:
@@ -296,6 +335,70 @@ def _calculate_rebar_spacing_aci(self: "RectangularBeam", st: ShearCheckState) -
         st.stirrup_s_max_l,
         st.stirrup_s_max_w,
     ) = max_stirrup_spacing_ACI_318_19(self, st.V_s_req, st.A_cv)
+
+
+def _stirrup_compression_support_ACI_318_19(
+    self: "RectangularBeam", d_b_stirrup: Quantity
+) -> Optional[CompressionSupport]:
+    """The stirrups the section owes its compression bars — ACI 318-19 §9.7.6.4 / CIRSOC 201-25 §9.7.6.4.
+
+    §9.7.6.4.1 of both codes asks for lateral support of the longitudinal
+    compression reinforcement, wherever it is required, by closed stirrups
+    per §9.7.6.4.2 through §9.7.6.4.4. This reads the first two: the size of
+    §9.7.6.4.2 and the spacing of §9.7.6.4.3. §9.7.6.4.4 is not checked --
+    every corner and alternate compression bar enclosed by a stirrup corner
+    of at most 135°, and no bar farther than 150 mm clear along the stirrup
+    from an enclosed one (ACI 318-19 SI p. 148; CIRSOC 201-25 Cap. 9 p. 179
+    reads 15 d_b of the stirrup or 150 mm) -- because the section does not
+    say which bars the legs enclose: a wide compression face whose middle
+    bars sit far from the corners passes it silently. Which bars are
+    compression reinforcement is the flexure check's to say: a combination
+    that needs compression steel to carry its moment (``doubly_reinforced``),
+    or whose tension steel is admissible only through it (past A_s,max,
+    within A_s,max,eff: the report's "D.R."), relies on the face opposite its
+    tension face (``RectangularBeam._compression_face_of``), and the last flexure check
+    or design leaves those faces in ``_compression_faces``. A face with no
+    bars on it is nothing to support. ``None`` when no face qualifies -- the
+    ordinary singly reinforced beam, whose stirrups are for shear alone.
+
+    ``None`` as well for a one-way slab (and a footing, which is one), whatever
+    its compression steel: §9.7.6.4 is a beam provision, and ACI 318-19
+    §7.7.5.1 / CIRSOC 201-25 §7.7.5 send the transverse reinforcement of a
+    one-way slab to §9.7.6.2 alone. The element that may be built with no
+    stirrups (``_stirrups_optional``) is the one the clause does not reach.
+
+    Two readings, both on the conservative side, where the codes do not say:
+    with bars of more than one diameter on a face, 16 d_b of §9.7.6.4.3(a)
+    is read on the thinnest, which buckles first, and the stirrup size on
+    the thickest, since §9.7.6.4.2 / Tabla 9.7.6.4.2 climb with the bar.
+    Which size that is differs between the two codes and comes from the
+    registry (``min_stirrup_for_compression_bar``).
+    """
+    if self._stirrups_optional:
+        return None
+    sec = section_floats(self)
+    length = CANONICAL[sec.is_imperial]["length"]
+    reinforcement = self.reinforcement
+    diameters = []
+    faces = []
+    for face, bars in (("bot", reinforcement.bottom), ("top", reinforcement.top)):
+        if face in self._compression_faces and bars.layers:
+            faces.append(face)
+            diameters.extend(layer.d_b for layer in bars.layers)
+    if not faces:
+        return None
+    thinnest, thickest = min(diameters), max(diameters)
+    s_max = shear_eq.max_stirrup_spacing_for_compression_support(
+        thinnest.to(length).magnitude, d_b_stirrup.to(length).magnitude, min(sec.width, sec.height)
+    )
+    minimum_for = design_code(self.concrete).requires("min_stirrup_for_compression_bar")
+    return CompressionSupport(
+        s_max=to_display(s_max, "length", sec.is_imperial),
+        d_b_min=minimum_for(self.concrete, thickest),
+        d_b_comp_spacing=thinnest,
+        d_b_comp_diameter=thickest,
+        faces=tuple(faces),
+    )
 
 
 def _check_shear_ACI_318_19(self: "RectangularBeam", force: Forces) -> ShearCheckState:
@@ -676,8 +779,16 @@ def _minimum_flexural_reinforcement_area_ACI_318_19(self: "RectangularBeam", M_u
       can still carry the moment that cracked it.
     * A one-way slab is designed under Chapter 7, whose minimum is the same
       ACI 318-19 §7.6.1.1 / CIRSOC 201-25 §7.6.1 described next: 0.0018*Ag on
-      the gross section, with or without a moment, since it is also the
-      shrinkage and temperature steel of §24.4.3.2 the slab carries anyway.
+      the gross section. It is a flexural minimum, and it belongs to the
+      tension face: R7.6.1.1 / C 7.6.1 place it "as close as practicable to
+      the face of the concrete in tension due to applied loads", against the
+      shrinkage and temperature steel of §24.4.3.2, which shares its ratio
+      but runs perpendicular to the flexural bars (§24.4.1) and may be split
+      between the faces. So a face nothing puts in tension has no minimum:
+      with no moment the answer is zero on both faces, as it is for a beam,
+      and not 0.0018*Ag on each of them (0.0036*Ag on a slab whose one
+      combination is shear alone, and a warning on a face the design left
+      bare because nothing pulled it).
     * A member supported on the ground is designed under Chapter 13:
       ACI 318-19 §13.3.2.1 / CIRSOC 201-25 §13.3.2.1 send a one-way shallow
       foundation to Chapters 7 and 9, and it is Chapter 7's slab minimum that
@@ -687,7 +798,9 @@ def _minimum_flexural_reinforcement_area_ACI_318_19(self: "RectangularBeam", M_u
       temperature reinforcement of §24.4.3.2, which is the equation this branch
       calls, and it is written on the gross section ``b * h``, so ``d`` does
       not enter it. A two-way isolated footing goes to Chapter 8 instead
-      (§13.3.3.1 → §8.6.1.1), with the same 0.0018*Ag.
+      (§13.3.3.1 → §8.6.1.1), which reads "0.0018*Ag, or as defined in
+      8.6.1.2" -- the minimum over the two-way shear critical section of
+      Eq. (8.6.1.2), not implemented here: it gets the flat 0.0018*Ag.
 
     Neither §9.6.1.1(b) nor §13.3.1.2 is the source of this: §9.6.1.1 is a
     single sentence with no items in either code, and §13.3.1.2 is the rule
@@ -695,7 +808,8 @@ def _minimum_flexural_reinforcement_area_ACI_318_19(self: "RectangularBeam", M_u
 
     Args:
         M_u: Factored moment on the face (N·mm, or lb·in). Only its being zero
-            matters: with no moment there is no flexural minimum to satisfy.
+            matters: with no moment there is no flexural minimum to satisfy,
+            on a slab as on a beam.
         d: Effective depth of the tension reinforcement (mm, or in).
 
     Returns:
@@ -703,6 +817,8 @@ def _minimum_flexural_reinforcement_area_ACI_318_19(self: "RectangularBeam", M_u
     """
     sec = section_floats(self)
     if _slab_minimum_applies(self):
+        if M_u == 0:
+            return 0.0
         rho_st = flexure_eq.shrinkage_and_temperature_ratio()
         return rho_st * sec.width * sec.height
     return _minimum_flexural_reinforcement_ratio_ACI_318_19(self, M_u) * d * sec.width
@@ -788,11 +904,26 @@ def _calculate_flexural_reinforcement_ACI_318_19(
     # 1.8‰ of the gross section: a geometric floor of this studio's own, not a
     # requirement of either code. ACI 318-19 §9.6.1.1 / CIRSOC 201-25 §9.6.1.1
     # ask for A_s,min only where the analysis calls for tension steel, and the
-    # 4/3 relief of §9.6.1.3 carries no floor in either book. Beams only: a
-    # slab goes by Case S below.
+    # 4/3 relief of §9.6.1.3 carries no floor in either book. On a beam it
+    # only ever enters through the 4/3 rule or with no moment (Case 0); on a
+    # slab it is the same number as the minimum of §7.6.1.1, and only enters
+    # with no moment.
     A_s_geo_min = (1.8 / (1000)) * sec.width * sec.height
 
-    if _slab_minimum_applies(self):
+    if M_u == 0:
+        # Case 0:
+        # No flexural demand (e.g. a shear-only load combination). Neither code
+        # requires flexural minimum steel here -- ACI 318-19 §9.6.1.1 /
+        # CIRSOC 201-25 §9.6.1.1 for a beam, and §7.6.1.1 / §7.6.1 for a slab,
+        # whose minimum belongs to the face in tension (R7.6.1.1 / C 7.6.1) --
+        # so A_s_min is zero, but leaving A_s = 0 is not a buildable layout:
+        # the section still needs detailing steel, and rho_w = 0 collapses V_c
+        # to zero in the shear provisions (Table 22.5.5.1). Adopt the
+        # geometric minimum, which is this studio's criterion. Slabs included:
+        # a strip designed for shear alone is still given its 1.8‰, and the
+        # check reports a zero minimum against it.
+        A_s_final = A_s_geo_min
+    elif _slab_minimum_applies(self):
         # Case S:
         # A_s_min above is already the 0.0018*Ag of ACI 318-19 §7.6.1.1 /
         # CIRSOC 201-25 §7.6.1, the ratio §24.4.3.2 writes for shrinkage and
@@ -801,20 +932,8 @@ def _calculate_flexural_reinforcement_ACI_318_19(
         # both). The 4/3 relief of
         # §9.6.1.3 belongs to the clause it relieves, §9.6.1.2, which is a
         # beam clause and not the one governing here, so the minimum stands as
-        # written. With M_u = 0, A_s_calc is zero and this is the minimum
-        # itself, which is also what the section needs for detailing and for
-        # rho_w in the shear provisions.
+        # written.
         A_s_final = max(A_s_calc, A_s_min)
-    elif M_u == 0:
-        # Case 0:
-        # No flexural demand (e.g. a shear-only load combination). Neither code
-        # requires flexural minimum steel here -- ACI 318-19 §9.6.1.1 /
-        # CIRSOC 201-25 §9.6.1.1 -- so rho_min, and therefore
-        # A_s_min, is zero, but leaving A_s = 0 is not a buildable layout: the
-        # section still needs detailing steel, and rho_w = 0 collapses V_c to
-        # zero in the shear provisions (Table 22.5.5.1). Adopt the geometric
-        # minimum, which is this studio's criterion.
-        A_s_final = A_s_geo_min
     elif A_s_calc >= A_s_min:
         # Case 1:
         # The required steel already exceeds the §9.6.1.2 minimum.

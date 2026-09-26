@@ -144,6 +144,39 @@ def _bar_spacing_row(
     )
 
 
+def _append_max_bar_spacing_rows(self: "RectangularBeam", M: Quantity) -> None:
+    """Add a beam's §24.3.2 rows to the flexure limits table, the tension face held to the cap.
+
+    "Maximum spacing top" and "Maximum spacing bottom", each carrying the
+    centre-to-centre spacing of the layer nearest the face against the
+    crack-control cap of ACI 318-19 / CIRSOC 201-25 §24.3.2 (see
+    :meth:`~mento.beam.RectangularBeam._tension_bar_spacing`). The cap is printed on both faces and
+    checked on the one the combination puts in tension, the way
+    :func:`_drop_max_off_tension_face` treats A_s,max: the clause is written
+    on the bars closest to the face in tension, and a combination pulls one
+    face or the other. A slab, whose spacing row already carries the cap,
+    and a code without it add nothing, so their tables keep their four rows.
+    :func:`mento.design_warnings.flexure_warnings` reads the same row.
+    """
+    table = self._data_min_max_flexure
+    for face, label in (("t", "Maximum spacing top"), ("b", "Maximum spacing bottom")):
+        row = self._tension_bar_spacing(face)
+        if row is None:
+            continue
+        value, limit = row
+        in_tension = M.magnitude > 0 if face == "b" else M.magnitude < 0
+        within = value <= limit or math.isclose(value.to("mm").magnitude, limit.to("mm").magnitude)
+        ok = within or not in_tension
+        table["Check"].append(label)
+        table["Unit"].append("mm")
+        table["Value"].append(_shown_mm(value))
+        table["Min."].append("")
+        table["Max."].append(_shown_mm(limit))
+        table["Ok?"].append("✅" if ok else "❌")
+        if not ok:
+            self._all_flexure_checks_passed = False
+
+
 def _shown_mm(value: Quantity | None) -> Any:
     """A limit in millimetres for the report tables, blank where there is none."""
     return "" if value is None else round(value.to("mm").magnitude, 2)
@@ -606,6 +639,7 @@ def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
         ],
         "Ok?": checks,
     }
+    _append_max_bar_spacing_rows(self, self._M_u)
     check_DCR_top = "✅" if self._DCRb_top < 1 else "❌"
     check_DCR_bot = "✅" if self._DCRb_bot < 1 else "❌"
     long_rebar_top = _longitudinal_rebar_rows(self, "t")
@@ -1026,6 +1060,9 @@ def _initialize_dicts_EN_1992_2004_flexure(self: "RectangularBeam") -> None:
         ],
         "Ok?": checks,
     }
+    # EN 1992-1-1 registers no such cap (it controls cracking through §7.3.3),
+    # so this adds nothing; it is here so a code that does gets the rows.
+    _append_max_bar_spacing_rows(self, self._M_Ed)
     check_DCR_top = "✅" if self._DCRb_top < 1 else "❌"
     check_DCR_bot = "✅" if self._DCRb_bot < 1 else "❌"
     long_rebar_top = _longitudinal_rebar_rows(self, "t")

@@ -47,8 +47,13 @@ ACI 318-19 and CIRSOC 201-25
 that answers there is Chapter 7's: §7.6.1.1 (CIRSOC 201-25 §7.6.1, an unnumbered
 paragraph under that heading), the same ratio as the shrinkage and temperature
 reinforcement of §24.4.3.2. A footing spanning two ways goes by §13.3.3.1 to §8.6.1.1,
-which repeats it. It is written on the **gross** section, so the effective depth does
-not enter it, and it is one ratio for every steel grade:
+which reads "0.0018 A\ :sub:`g`, or as defined in 8.6.1.2": the second is the minimum a
+two-way slab carries over the width of the shear critical section around a column when
+the punching stress exceeds :math:`\phi 2 \lambda_s \lambda \sqrt{f'_c}` (Eq. 8.6.1.2);
+mento does not implement it, so a two-way footing gets the flat 0.0018 A\ :sub:`g` here
+(CIRSOC 201-25 §8.6.1.1 and §8.6.1.2 read the same). It is written on the **gross**
+section, so the effective depth does not enter it, and it is one ratio for every steel
+grade:
 
 .. math::
 
@@ -80,8 +85,12 @@ one.
 Geometric minimum
 ^^^^^^^^^^^^^^^^^
 
-The non-fragility minimum of §9.2.1.1 is halved per direction for a foundation and
-written on the gross section:
+EN 1992-1-1 prints no minimum of its own for a foundation: §9.8.1 (pile caps) and
+§9.8.2.1 (column and wall footings) ask only for a minimum bar diameter
+(:math:`\phi_{min}`, 8 mm recommended). mento takes the foundation minimum of the
+Spanish code, EHE-08 Tabla 42.3.5, note (1) — half the geometric minimum of a slab
+(2.0 ‰ with :math:`f_y = 400` MPa, 1.8 ‰ with 500 MPa, of the gross section) in each
+direction — as detailing practice under EN, written on the gross section:
 
 .. math::
 
@@ -204,10 +213,15 @@ registry:
      - Reason
    * - Maximum
      - 300 mm, in place of the slab's
-       :math:`\min(3h,\ 450\,/\,400\ \text{mm})`
+       :math:`\min(3h,\ 450\,/\,400\ \text{mm})`; under ACI 318-19 and CIRSOC 201-25
+       also the crack-control cap of Table 24.3.2 with the footing's own cover,
+       :math:`380 - 2.5\,c_c` mm with ADN 420 (255 mm at 50 mm of cover)
      - A footing is thick, so :math:`3h` stops binding long before the bars are close
        enough to spread the bearing pressure into them. ACI §7.7.2.3 and
-       EN §9.3.1.1(3) still apply; the 300 mm cap is simply always the smaller.
+       EN §9.3.1.1(3) still apply; the 300 mm cap is simply always the smaller. And
+       §13.3.2.1 sends a one-way footing to Chapter 7, whose §7.7.2.2 sends the bars
+       nearest the tension face to Table 24.3.2 (see :doc:`one_way_slab`); with the
+       deep cover of a member cast against the ground that cap is the tightest of all.
    * - Minimum
      - 100 mm
      - EN detailing practice for foundations, applied under both codes: nothing about
@@ -352,8 +366,9 @@ relieves, §9.6.1.2, the beam minimum, which is not the one that governs here �
 :math:`1.8\text{‰}\,b\,h` floor mento adds to a beam under ACI (see
 :ref:`aci-decisions`) is the code minimum itself on a slab or a footing.
 
-**Steel grades between the EN anchors are interpolated.** The halved geometric
-minimum is tabulated at :math:`f_{yk} = 400` and 500 MPa only. mento interpolates
+**Steel grades between the anchors of the table are interpolated.** The halved
+geometric minimum is tabulated at :math:`f_{yk} = 400` and 500 MPa only (EHE-08 Tabla
+42.3.5). mento interpolates
 linearly between them and holds the value flat outside, rather than extrapolating a
 rule the source does not state.
 
@@ -413,7 +428,7 @@ Validation
      - EN 1992-1-1 §7.3.2(2)
    * - :math:`\rho_{geo}` at and between the anchors
      - ``test_en_foundation_min_reinforcement_ratio``
-     - EN 1992-1-1 §9.2.1.1, §9.8.1
+     - EHE-08 Tabla 42.3.5, note (1)
    * - Eq. (7.1) as written
      - ``test_en_crack_control_min_reinforcement_is_equation_7_1``
      - EN 1992-1-1 §7.3.2(2)
@@ -437,7 +452,7 @@ Validation
        ``test_a_footing_still_carries_its_moment``
      - Internal consistency
    * - Spacing bounds, and a design inside them
-     - ``test_footing_bars_are_capped_at_300_mm``,
+     - ``test_footing_bars_are_capped_by_the_ground_practice_and_table_24_3_2``,
        ``test_footing_bars_are_floored_at_100_mm``,
        ``test_a_designed_footing_stays_inside_the_spacing_range``,
        ``test_the_floor_is_what_holds_the_footing_apart``
@@ -458,6 +473,7 @@ Validation
      - Detailing practice
    * - The mat never undoes the design
      - ``test_matching_the_mat_never_undoes_the_design``,
+       ``test_the_mat_covers_each_face_in_every_metre``,
        ``test_the_mat_keeps_each_face_within_the_spacing_range``,
        ``test_a_footing_reinforced_on_one_face_gets_no_second_grid``,
        ``test_a_slab_still_details_its_faces_independently``

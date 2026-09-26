@@ -119,13 +119,19 @@ per face. Read it through ``reinforcement`` (what the slab carries, at any time)
     str(bottom)                 # 'Ø12 mm/17 cm'
     bottom.layers[0].d_b        # 12 mm
     bottom.layers[0].s.to("cm") # 17 cm
-    bottom.n_bars               # 6 bars across the strip
-    bottom.A_s.to("cm**2")      # 6.79 cm² placed
+    bottom.n_bars               # 5.88, the bars a metre of the strip carries: 100/17
+    bottom.A_s.to("cm**2")      # 6.65 cm² placed, 5.88 × 1.13 cm²
 
-The spacing is rounded to the whole centimetre (inch, in imperial), so it is one that can
-be detailed, and never to fewer bars than the design called for. It is also capped at the
+The count is ``width / s`` and need not be whole: a strip is a slice of a slab that goes
+on past its edges, so its steel is the bar area times the bars per metre the spacing
+gives, not the whole bars that would cover it. The spacing is rounded down to the whole
+centimetre (inch, in imperial), so it is one that can be detailed and never carries less
+steel than the design called for. It is also capped at the
 maximum the design code allows between the bars of a slab — ``min(3h, 450 mm)`` under
-ACI 318-19 §7.7.2.3, ``min(3h, 400 mm)`` under EN 1992-1-1 §9.3.1.1(3) — so a lightly
+ACI 318-19 §7.7.2.3 and, through §7.7.2.2, the crack-control cap of Table 24.3.2, which
+is 300 mm with ADN 420 or Grade 60 and 25 mm of cover; ``min(3h, 300 mm)`` under
+CIRSOC 201-25 art. 7.7.2.3 with the same Tabla 24.3.2; ``min(3h, 400 mm)`` under
+EN 1992-1-1 §9.3.1.1(3) — so a lightly
 loaded strip is not detailed as a few widely spaced bars that merely add up to the area.
 A check reports that limit too, next to the spacing, in the flexure results table. See
 :ref:`user_guide/design_results` for the rest of that view.
