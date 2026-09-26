@@ -33,6 +33,7 @@ from mento import (
     RectangularBeam,
     SteelBar,
 )
+from mento.slab import OneWaySlab
 from mento.units import MPa, cm, kN, kNm, mm
 
 _F_Y = 420.0
@@ -325,6 +326,53 @@ def test_the_design_rounds_are_bounded_and_end_on_the_closest(monkeypatch: pytes
     assert str(beam.reinforcement.bottom) == "2Ø20 mm"
     assert beam.flexure_design.bottom.DCR == pytest.approx(1.010, abs=0.0005)
     assert [w.face for w in node.warnings if w.code == "As_below_required"] == ["bottom"]
+
+
+def test_a_slab_whose_shear_puts_its_stirrups_on_and_off_ends_saying_so() -> None:
+    """ACI 318-19 one-way slab 100x15, f'c 20 MPa, ADN 420, c_c 25 mm, Mu = 46.9 kN·m, Vu = 60 kN.
+
+    A slab strip may carry no stirrups at all, so its depth jumps by a whole
+    bar when the shear design adds or drops them: d = 150 - 25 - 5 = 120 mm
+    bare, 110 mm over a Ø10 grid. With tension-controlled
+    c <= 0.003/(0.003 + 0.0051)·d, A_s,req / A_s,max are 11.76 / 15.29 cm²
+    at 120 mm and 13.25 / 14.02 cm² at 110 mm. And the bars decide the
+    stirrups: without them φVc = 0.75·0.66·ρw^(1/3)·√20·1000·120 (Table
+    22.5.5.1(c), λs = 1) is 58.9 kN with Ø10/6 = 13.09 cm² (ρw = 0.01091),
+    short of 60, and 62.6 kN with Ø10/5 = 15.71 cm² (ρw = 0.01309).
+
+    So there is no pair that holds: Ø10/6 needs the grid, and over the grid
+    it is 1 % short (13.09 < 13.25, DCR 1.010); at that depth no whole-cm
+    Ø10 or Ø12 spacing lands between 13.25 and 14.02, so the design takes
+    Ø10/5, which needs no stirrups and, back at 120 mm, is past A_s,max
+    (15.71 > 15.29). bd94d2f ended on Ø10/7 over a 1eØ10 grid, DCR 1.103,
+    and 4428580 on Ø10/6 over it, DCR 1.010 -- both with no warning at all,
+    a design failing its own check in silence. Since 245dc8e it ends on the
+    closer round, Ø10/5 with no stirrups, φMn = 58.54 kN·m (DCR 0.801, φ =
+    0.88 at ε_t = 0.0049), and says what it misses: ``As_above_max`` on the
+    bottom. The check run afterwards finds the same.
+    """
+    slab = OneWaySlab(
+        label="L",
+        concrete=Concrete_ACI_318_19(name="H20", f_c=20 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=15 * cm,
+        c_c=25 * mm,
+    )
+    node = Node(section=slab, forces=[Forces(label="U", M_y=46.9 * kNm, V_z=60 * kN)])
+    node.design()
+    designed = [(w.code, w.face) for w in node.warnings]
+
+    assert str(slab.reinforcement.bottom) == "Ø10 mm/5 cm"
+    assert str(slab.reinforcement.transverse) == "no stirrups"
+    bottom = slab.flexure_design.bottom
+    assert bottom.DCR == pytest.approx(0.801, abs=0.0005)
+    assert bottom.A_s.to("cm**2").magnitude == pytest.approx(15.71, abs=0.005)
+    assert bottom.A_s_max.to("cm**2").magnitude == pytest.approx(15.29, abs=0.005)
+    assert ("As_above_max", "bottom") in designed
+
+    node.check()
+    assert [(w.code, w.face) for w in node.warnings] == designed
 
 
 @pytest.mark.parametrize("code", ["ACI 318-19", "CIRSOC 201-25"])
