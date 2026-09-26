@@ -2,6 +2,7 @@
 
 *An intuitive tool for structural engineers to design concrete elements efficiently.*
 
+[![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-ea4aaa?logo=githubsponsors)](https://github.com/sponsors/mihdicaballero)
 [![Tests](https://github.com/mihdicaballero/mento/actions/workflows/tests.yml/badge.svg)][tests]
 [![Docs](https://readthedocs.org/projects/mento-docs/badge/?version=latest)](https://mento-docs.readthedocs.io/en/latest/?badge=latest)
 [![codecov](https://codecov.io/github/mihdicaballero/mento/graph/badge.svg?token=9X81ZRKMCX)](https://codecov.io/github/mihdicaballero/mento)
@@ -44,6 +45,15 @@ to a reviewer.
 mento is also, as far as we know, the only open source package that implements
 **CIRSOC 201-2025**, the Argentinian concrete design standard.
 
+#### Support mento
+
+mento is built and maintained in the time left over from consulting work. If it saves you a spreadsheet or a few hours, consider sponsoring its development:
+
+- [GitHub Sponsors](https://github.com/sponsors/mihdicaballero) — monthly tiers from $5, or one-time contributions.
+- [Ko-fi](https://ko-fi.com/mentoapp) — one-off support, no account needed.
+
+Sponsorship funds the roadmap below: punching shear, columns, and full EN 1992 coverage. Sponsors are listed in this README, and Partner sponsors get their logo on [mentocalc.com](https://mentocalc.com). For sponsored features with a defined scope, see the next section.
+
 #### Using mento at your company?
 
 mento is free and open-source under MIT. If your team wants help going further, we offer a few things on top:
@@ -55,6 +65,20 @@ mento is free and open-source under MIT. If your team wants help going further, 
 If any of that is useful for your team, fill out [this form](https://forms.gle/QoDzczQToLa78jMo7) and we'll follow up.
 
 Not looking for anything? A ⭐ on the repo or feedback in [Discussions](https://github.com/mihdicaballero/mento/discussions) is also genuinely appreciated.
+
+#### Sponsors
+
+Thanks to the people and companies supporting mento's development.
+
+**Partners**
+
+<!-- Partner logos go here -->
+
+**Supporters**
+
+<!-- Supporter names go here -->
+
+[Become a sponsor →](https://github.com/sponsors/mihdicaballero)
 
 #### Roadmap
 The development is structured around key milestones, with ongoing tasks that aim to enhance functionality and compliance with design standards:
