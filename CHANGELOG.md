@@ -12,7 +12,104 @@ from the release history and are summaries rather than complete lists.
 
 ## [Unreleased]
 
+### Added
+
+- **A design keeps its alternatives.** `beam.flexure_design.bottom.options` and
+  `.top.options` are tuples of `RebarOption` — `layers` (the same `RebarLayer` objects the
+  applied bars are read as), `A_s` and the `functional` the search ranks by — and
+  `beam.shear_design.options` a tuple of `StirrupOption` (`n_stirrups`, `d_b`, `s_l`, `s_w`,
+  `A_v`, `functional`). They come best first, and `options[0]` is the layout the section
+  carries: the search's ranked table used to be dropped after its first row, and is now
+  kept with the mechanical cover the design finished on. The stirrup alternatives are the
+  same cage in each heavier bar, in order of diameter — `1eØ10/13`, `1eØ12/13`,
+  `1eØ16/13` — which is the substitution a drawing makes when that is the bar at hand;
+  `functional` says what each one adds in steel, the excess of `A_v` over the requirement
+  plus one per extra stirrup. Which layout is built is unchanged: fewest stirrups first,
+  least steel among those. How many options are kept is `BeamSettings(design_options=3)`.
+  A check reports none, and a face changed by hand after the design drops its own.
+
+- **Detailing limits are reported as data.** `beam.warnings` and `node.warnings` are tuples
+  of `DesignWarning` with a stable `code` (`As_below_min`, `As_above_max`,
+  `clear_spacing_below_min`, `bar_spacing_below_min`, `bar_spacing_exceeds_max`,
+  `bars_do_not_fit`, `stirrups_required`, `Av_below_min`, `stirrup_spacing_exceeds_max`,
+  `stirrup_diameter_below_min`, `shear_exceeds_section_limit`), a `message` in the language
+  of `mento.set_language`, the `values` it quotes as quantities, the `face` and the
+  `combinations` it occurs under. They are the limit rows the detailed reports mark with
+  ❌, which until now were only text. A warning does not change a DCR.
+
+- **A wall's mesh and shear results are readable as data.** `wall.mesh` is a `WallMesh`
+  with `.horizontal` and `.vertical` `MeshDirection`s (`d_b`, `s`, `rho`, `n_curtains`,
+  `A_s` per unit length); `wall.shear_checks` holds one `WallShearCheck` per combination
+  (`V_u`, `V_capacity` = ØVn, `V_max` = ØVn,max, `rho_t`, `rho_t_req`, `rho_l`, `rho_l_min`,
+  `s_h_max`, `s_v_max`, `DCR`), and `wall.shear_design` a `WallShearDesign` with the mesh and
+  the envelope. `wall.shear_check_results(forces)` returns the per-combination results
+  without building the report, and `wall.warnings` reports the mesh limits missed with the
+  new codes `mesh_ratio_below_min` and `mesh_spacing_exceeds_max`, plus
+  `shear_exceeds_section_limit` against ØVn,max.
+
+- **The minimum a face has to meet, `A_s_min_eff`.** `FlexureFaceCheck` and
+  `FlexureFaceDesign` carry it next to `A_s_min`: under ACI 318-19 and CIRSOC 201-25 it is
+  the smaller of `A_s_min` and 4/3·`A_s_calc`, the relief of §9.6.1.3; under EN 1992-1-1,
+  and on a member on the ground, it is `A_s_min` itself. A designed face can sit below
+  `A_s_min` and comply; it cannot sit below `A_s_min_eff`.
+
+- **The release workflow publishes a test count.** After uploading to PyPI it attaches
+  `stats.json` (`{"tests": N}`) to the GitHub Release and sends a `mento-release`
+  `repository_dispatch` to `mihdicaballero/mento-web`. `N` counts the tests marked
+  `published_example`: the 56 that reproduce a case validated outside mento — the Calcpad
+  sheets of the ACI and EN beam and slab cases, The Concrete Centre's Eurocode 2 guides,
+  and the ETABS and spreadsheet cross-checks of the flexure suite (`Test_Etabs_01` to
+  `_23`). With nothing marked the workflow falls back to the whole suite. The dispatch needs the repository secret
+  `MENTO_WEB_DISPATCH_TOKEN`, a token with `Contents: read and write` on mento-web; without
+  it the step warns and the release goes on.
+
+### Fixed
+
+- **`As_below_min` no longer fires on a face the 4/3 relief covers, and fires when it does
+  not.** The warning read the flag that says the *requirement* adopted 4/3·A_s_calc, so it
+  stayed silent on bars checked by hand between A_s_calc and 4/3·A_s_calc. It now compares
+  the steel provided against `A_s_min_eff`, and quotes that minimum. The detailed flexure
+  report marks a face the relief covers `✅ 9.6.1.3` instead of the bare article number.
+
+- **`ShearWall` no longer answers as the beam it inherits from.** `shear_design`,
+  `shear_checks` and `shear_check_results` described stirrups the wall does not have and
+  DCRs that were not its own (7.37 and 15.6 for a wall whose check gives 0.58); they now
+  return the wall's results. `reinforcement`, `flexure_design`, `flexure_checks` and
+  `flexure_check_results` raise `NotImplementedError` pointing to `wall.mesh`.
+
+- **The stirrup spacing limit halves at 0.33√f'c·bw·d, not 0.083.** ACI 318-19 /
+  CIRSOC 201-25 Table 9.7.6.2.2 halves the limits once the nominal `Vs,req = (Vu − φVc)/φ`
+  passes `0.33·√f'c·bw·d` (4·√f'c·bw·d in psi), with no λ. 1.2.0 compared `Vu − φVc`
+  against `0.083·λ·√f'c·bw·d`, the threshold of §9.6.3.1, so an ordinary beam was held to
+  d/4: a 20×60 beam of f'c = 25 MPa under Vu = 120 kN now gets d/2 in the check and the
+  design alike. (#161)
+
+- **`design()` gives the same result every time.** It read the stirrup diameter the
+  previous run had left on the section, so a second run on the same beam could detail
+  1eØ10/27 after 1eØ10/28. A design now starts from the same state however it is called
+  — the stirrup the settings assume and the placeholder bars — and the shear design
+  repeats itself with the diameter it chose until the choice holds, so the demand and the
+  limits are read at the depth the finished beam has. Each stirrup diameter is also tried
+  against the spacing limits of the section it would make: the first design used to pick
+  28 cm at the depth of the 8 mm starter stirrup, past the 27.95 cm limit of the beam
+  once its Ø10 was placed.
+
 ### Changed
+
+- **A one-way slab takes the slab minimum, 0.0018·Ag, under ACI 318-19 and CIRSOC 201-25.**
+  `OneWaySlab` used the beam minimum of §9.6.1.2, ρmin·b·d, and the 4/3 relief of
+  §9.6.1.3 that goes with it. A one-way slab is designed under Chapter 7, and its minimum
+  is §7.6.1.1 (CIRSOC §7.6.1): 0.0018·b·h on the gross section, which §9.6.1.3 does not
+  relieve — the same clause a `Footing` already reached through §13.3.2.1. A 100×20 strip
+  with ADN 420 goes from As,min = 5.63 cm² to 3.60 cm², and a face whose moment asks for
+  less than that is now designed to the minimum itself rather than to 4/3·A_s,calc. The
+  Calcpad sheet "ACI 318-19 Slab Flexure 01 - Metric" was written with the beam minimum
+  and needs the same update. EN 1992-1-1 is unchanged.
+
+- **The slab and footing minimum is 0.0018·Ag for every steel grade.** mento scaled it as
+  0.0018·420/f_y with a 0.0014 floor, the Table 7.6.1.1 / 24.4.3.2 of ACI 318-14. ACI 318-19
+  withdrew that reduction (R24.4.3.2) and CIRSOC 201-25 prints the flat ratio as well. With
+  ADN 420 or Grade 60 nothing changes; a B500S footing goes from 1.51‰ to 1.8‰.
 
 - **mento runs on pint 0.26.** The cap added after 0.26 broke CI is lifted and the
   dependency is `pint>=0.24` again. pint 0.26 types every arithmetic result as

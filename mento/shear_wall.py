@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import TYPE_CHECKING, Dict, List, NoReturn, Optional, Tuple
 
 if TYPE_CHECKING:
     from matplotlib.figure import Figure
@@ -17,6 +17,15 @@ from mento.settings import BeamSettings
 from mento.units import cm, dimensionless, kN, mm
 
 from mento.codes.registry import design_code
+from mento.design_warnings import DesignWarning, collect, wall_warnings
+from mento.wall_results import (
+    WallMesh,
+    WallShearCheck,
+    WallShearDesign,
+    build_mesh,
+    build_wall_shear_design,
+    capture_wall_shear_check,
+)
 from mento.plots.walls import plot_wall_elevation
 from mento.reports import walls as wall_reports
 
@@ -150,6 +159,9 @@ class ShearWall(RectangularBeam):
         self._s_h_max: Quantity = 0 * mm
         self._s_v_max: Quantity = 0 * mm
 
+        # One public result per combination of the last check (wall_results)
+        self._wall_shear_checks: List[WallShearCheck] = []
+
         # Status flags
         self._shear_wall_checked: bool = False
         self._all_wall_shear_checks_passed: bool = False
@@ -202,6 +214,7 @@ class ShearWall(RectangularBeam):
         self._shear_results_detailed_list: Dict = {}
         max_dcr: float = 0.0
         self._limiting_case_shear_details = None
+        self._wall_shear_checks = []
 
         for force in forces:
             code = design_code(self.concrete)
@@ -209,6 +222,7 @@ class ShearWall(RectangularBeam):
             # The report tables read the wall, so the state is applied here
             # and not on a values-only path.
             code.requires("apply_wall_shear_state")(self, state)
+            self._wall_shear_checks.append(capture_wall_shear_check(self, force.label, state))
             result = wall_reports.build_wall_shear_report(self, force)
 
             self._shear_results_list.append(result)
@@ -233,6 +247,19 @@ class ShearWall(RectangularBeam):
         self._shear_wall_checked = True
         self._shear_checked = True
         return all_results
+
+    def shear_check_results(self, forces: list[Forces]) -> Tuple[WallShearCheck, ...]:  # type: ignore[override]
+        """Check shear and return one result per combination, building no report.
+
+        The same numbers as :meth:`check_shear`, without the report tables;
+        nothing is written to the wall but the results themselves.
+        """
+        code = design_code(self.concrete)
+        self._wall_shear_checks = [
+            capture_wall_shear_check(self, force.label, code.requires("check_shear_wall")(self, force))
+            for force in forces
+        ]
+        return tuple(self._wall_shear_checks)
 
     def design_shear(self, forces: list[Forces]) -> DataFrame:
         """Design the horizontal (shear) mesh and the minimum vertical mesh.
@@ -291,6 +318,67 @@ class ShearWall(RectangularBeam):
     def design(self, forces: list[Forces]) -> None:
         """Complete design for a shear wall: shear only (no flexure in Phase 0)."""
         self.design_shear(forces)
+
+    # ------------------------------------------------------------------
+    # Results — the mesh and the shear results, as plain data
+    # ------------------------------------------------------------------
+
+    @property
+    def mesh(self) -> WallMesh:
+        """The distributed reinforcement this wall carries now, as plain data.
+
+        Readable at any time -- it describes the section, not a result::
+
+            wall.mesh.horizontal.d_b, wall.mesh.horizontal.s, wall.mesh.horizontal.rho
+            wall.mesh.vertical.A_s     # per unit length, both curtains
+        """
+        return build_mesh(self)
+
+    @property
+    def shear_checks(self) -> Tuple[WallShearCheck, ...]:  # type: ignore[override]
+        """One immutable shear result per combination of the last check."""
+        return tuple(self._wall_shear_checks)
+
+    @property
+    def shear_design(self) -> WallShearDesign:  # type: ignore[override]
+        """The mesh and the envelope of the last shear check or design.
+
+        Raises:
+            DesignNotRunError: if no shear check or design has been run.
+        """
+        return build_wall_shear_design(self)
+
+    @property
+    def warnings(self) -> Tuple[DesignWarning, ...]:  # type: ignore[override]
+        """The mesh limits the wall misses under the last check, as data.
+
+        Empty until a check or design has run. See :mod:`mento.design_warnings`.
+        """
+        return collect(wall_warnings(self, self.mesh, tuple(self._wall_shear_checks)))
+
+    def _not_a_beam(self, name: str) -> NoReturn:
+        raise NotImplementedError(
+            f"ShearWall has no {name}: it is reinforced with a distributed mesh. "
+            "Read wall.mesh, wall.shear_design and wall.shear_checks instead."
+        )
+
+    @property
+    def reinforcement(self) -> NoReturn:  # type: ignore[override]
+        """Not available on a wall: see :attr:`mesh`."""
+        self._not_a_beam("beam reinforcement")
+
+    @property
+    def flexure_design(self) -> NoReturn:  # type: ignore[override]
+        """Not available on a wall: flexure is not implemented (Phase 0)."""
+        self._not_a_beam("flexure design")
+
+    @property
+    def flexure_checks(self) -> NoReturn:  # type: ignore[override]
+        """Not available on a wall: flexure is not implemented (Phase 0)."""
+        self._not_a_beam("flexure checks")
+
+    def flexure_check_results(self, forces: list[Forces]) -> NoReturn:  # type: ignore[override]
+        self._not_a_beam("flexure check")
 
     def check_flexure(self, forces: list[Forces]) -> DataFrame:  # type: ignore[override]
         raise NotImplementedError("Flexure check is not implemented for ShearWall (Phase 0).")

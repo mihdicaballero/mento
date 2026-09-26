@@ -126,6 +126,7 @@ def test_longitudinal_rebar_spacing_updates_counts() -> None:
     assert slab._s_b1_t == previous_spacing
 
 
+@pytest.mark.published_example
 def test_shear_check_ACI_318_19_1(slab_example_ACI_318_19: OneWaySlab) -> None:
     # Example from Two-Way Flat Plate Concrete Floor System Analysis and Design (ACI 318-14) adjusted to ACI 318-19.
     # With guidance from CRSI Design Guide on ACI 318-19
@@ -157,6 +158,7 @@ def test_shear_check_ACI_318_19_1(slab_example_ACI_318_19: OneWaySlab) -> None:
     assert results.iloc[1]["Vu≤ØVn"] is True
 
 
+@pytest.mark.published_example
 def test_check_flexure_ACI_318_19_1(slab_example_ACI_318_19_metric: OneWaySlab) -> None:
     # Testing the check of the reinforced slab with simple reinforcement
     # See calcpad: ACI 318-19 Slab Flexure 01 - Metric.cpd
@@ -170,14 +172,19 @@ def test_check_flexure_ACI_318_19_1(slab_example_ACI_318_19_metric: OneWaySlab) 
     assert results.iloc[1]["Label"] == "Slab 03"
     assert results.iloc[1]["Comb."] == "C1"
     assert results.iloc[1]["Position"] == "Bottom"
-    assert results.iloc[1]["As,min"] == pytest.approx(5.63, rel=1e-2)
-    assert results.iloc[1]["As,req bot"] == pytest.approx(4.25, rel=1e-3)
+    # The slab minimum of ACI 318-19 §7.6.1.1, 0.0018*b*h, not the beam one of
+    # §9.6.1.2 the Calcpad sheet was first written with (5.63 cm²).
+    assert results.iloc[1]["As,min"] == pytest.approx(3.60, rel=1e-3)
+    # A_s_calc is below the minimum and §9.6.1.3 does not relieve a slab, so the
+    # minimum itself is required -- not 4/3 of A_s_calc (4.25 cm²).
+    assert results.iloc[1]["As,req bot"] == pytest.approx(3.60, rel=1e-3)
     assert results.iloc[1]["As,req top"] == pytest.approx(0, rel=1e-3)
     assert results.iloc[1]["As"] == pytest.approx(5.65, rel=1e-2)
     assert results.iloc[1]["Mu"] == pytest.approx(20, rel=1e-5)
     assert results.iloc[1]["DCR"] == pytest.approx(0.573, rel=1e-5)
 
 
+@pytest.mark.published_example
 def test_check_flexure_ACI_318_19_2(slab_example_ACI_318_19_metric: OneWaySlab) -> None:
     # Testing the check of the reinforced slab with simple reinforcement
     # See calcpad: ACI 318-19 Slab Flexure 01 - Metric.cpd
@@ -191,7 +198,9 @@ def test_check_flexure_ACI_318_19_2(slab_example_ACI_318_19_metric: OneWaySlab) 
     assert results.iloc[1]["Label"] == "Slab 03"
     assert results.iloc[1]["Comb."] == "C1"
     assert results.iloc[1]["Position"] == "Bottom"
-    assert results.iloc[1]["As,min"] == pytest.approx(5.63, rel=1e-2)
+    # The slab minimum of ACI 318-19 §7.6.1.1, 0.0018*b*h, not the beam one of
+    # §9.6.1.2 the Calcpad sheet was first written with (5.63 cm²).
+    assert results.iloc[1]["As,min"] == pytest.approx(3.60, rel=1e-3)
     assert results.iloc[1]["As,req bot"] == pytest.approx(8.22, rel=1e-3)
     assert results.iloc[1]["As,req top"] == pytest.approx(0, rel=1e-3)
     assert results.iloc[1]["As"] == pytest.approx(5.65, rel=1e-2)
@@ -399,7 +408,7 @@ def _slab_needing_stirrups(concrete_cls) -> OneWaySlab:
 @pytest.mark.parametrize(
     ("concrete_cls", "d_b", "s_l", "s_w", "A_v"),
     [
-        pytest.param(Concrete_ACI_318_19, 10 * mm, 7 * cm, 15 * cm, 74.80, id="ACI-318-19"),
+        pytest.param(Concrete_ACI_318_19, 10 * mm, 8 * cm, 16 * cm, 61.36, id="ACI-318-19"),
         pytest.param(Concrete_EN_1992_2004, 6 * mm, 12 * cm, 12 * cm, 19.63, id="EN-1992-2004"),
     ],
 )

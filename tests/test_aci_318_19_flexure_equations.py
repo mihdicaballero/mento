@@ -66,6 +66,7 @@ def test_min_reinforcement_ratio_si(f_c, f_y, expected, governing):
     assert eq.min_reinforcement_ratio(f_c, f_y, ACI_FY_CAP_SI) == pytest.approx(expected, rel=1e-12)
 
 
+@pytest.mark.published_example
 def test_min_reinforcement_ratio_us_matches_the_validated_case():
     # Test_Etabs_05 in the beam suite: f_c = 6000 psi, f_y = 60 ksi.
     # 3*sqrt(6000)/60000 = 0.003873, which governs over 200/60000 = 0.003333.

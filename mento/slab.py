@@ -7,6 +7,7 @@ import warnings
 import numpy as np
 
 from mento.beam import RectangularBeam
+from mento.design_results import RebarLayer
 from mento.codes.registry import design_code
 from mento.units import m, mm, cm, inch
 
@@ -139,6 +140,25 @@ class OneWaySlab(RectangularBeam):
 
         # Update effective heights
         self._update_effective_heights()
+
+    def _design_start_stirrup(self) -> Quantity:
+        """A slab strip starts a design with no stirrups, the way it is built."""
+        return self._zero_diameter()
+
+    def _option_layers(self, design: Any) -> tuple[RebarLayer, ...]:
+        """The layers a row of the search would put on a face of the strip.
+
+        A slab spreads each layer of the row over the strip as one diameter at
+        a spacing -- :meth:`_apply_longitudinal_design` -- so an option reads
+        the way the applied layout does: the bar count the spacing gives, the
+        diameter, and the spacing.
+        """
+        layers = []
+        for first, second in ((1, 2), (3, 4)):
+            d_b, spacing = self._layer_from_design(design, first, second)
+            if d_b.magnitude > 0 and spacing.magnitude > 0:
+                layers.append(RebarLayer(n=_bars_at_spacing(spacing, self.width), d_b=d_b, s=spacing))
+        return tuple(layers)
 
     def _leg_spacing_across_width(self) -> Quantity:
         """The transverse spacing the strip was detailed with.
@@ -342,14 +362,13 @@ class Footing(OneWaySlab):
     """A spread footing or raft: a one-way slab bearing directly on the ground.
 
     Everything about it is a :class:`OneWaySlab` -- the same flexure and shear
-    checks, the same reinforcement given as diameter and spacing -- with one
-    difference, and it is a difference the design codes make rather than this
-    class: the minimum longitudinal reinforcement.
+    checks, the same reinforcement given as diameter and spacing -- and, under
+    ACI 318-19 and CIRSOC 201-25, the same minimum longitudinal reinforcement,
+    reached by another road. Under EN 1992-1-1 the minimum is where they differ.
 
-    A member spanning between supports is given a minimum sized to keep it from
-    failing the instant it cracks. A member on the ground cannot fail that way,
-    because the soil goes on carrying it, so the codes send a footing somewhere
-    else for its minimum:
+    A beam is given a minimum sized to keep it from failing the instant it
+    cracks. A member on the ground cannot fail that way, because the soil goes
+    on carrying it, so the codes send a footing somewhere else for its minimum:
 
     * ACI 318-19 §13.3.2.1 sends a one-way shallow foundation to Chapters 7
       and 9, and it is Chapter 7 that applies: §7.6.1.1 asks for

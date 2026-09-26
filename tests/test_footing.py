@@ -58,24 +58,9 @@ def _design(section, M_y=50 * kNm):  # type: ignore[no-untyped-def]
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "f_y, expected",
-    [
-        (420.0, 0.0018),  # the reference grade the table is written at
-        (500.0, 0.0018 * 420 / 500),  # scales inversely above it
-        (420.0 / 0.7, 0.0014),  # would scale below the floor, so the floor holds
-        (700.0, 0.0014),
-    ],
-)
-def test_aci_shrinkage_and_temperature_ratio(f_y: float, expected: float) -> None:
-    """ACI 318-19 Table 24.4.3.2, metric."""
-    assert aci_flexure.shrinkage_and_temperature_ratio(f_y) == pytest.approx(expected)
-
-
-def test_aci_shrinkage_and_temperature_ratio_imperial() -> None:
-    """The same table, anchored at 60 ksi instead of 420 MPa."""
-    assert aci_flexure.shrinkage_and_temperature_ratio(60000.0, is_imperial=True) == pytest.approx(0.0018)
-    assert aci_flexure.shrinkage_and_temperature_ratio(75000.0, is_imperial=True) == pytest.approx(0.00144)
+def test_aci_shrinkage_and_temperature_ratio() -> None:
+    """ACI 318-19 §7.6.1.1 / §24.4.3.2: 0.0018 flat, whatever the steel grade."""
+    assert aci_flexure.shrinkage_and_temperature_ratio() == pytest.approx(0.0018)
 
 
 @pytest.mark.parametrize(
@@ -122,22 +107,23 @@ def test_aci_footing_minimum_is_the_gross_section_rule() -> None:
     assert footing._A_s_min_bot.to("cm**2").magnitude == pytest.approx(expected.to("cm**2").magnitude)
 
 
-def test_aci_footing_minimum_is_lower_than_the_slab_minimum() -> None:
-    """The whole point of the exemption: §9.6.1.1(b) relieves a member on the
-    ground of the flexural minimum a slab spanning between supports carries."""
+def test_aci_footing_takes_the_slab_minimum() -> None:
+    """A member on the ground reaches the slab minimum through §13.3.2.1: both
+    carry the 0.0018*Ag of ACI 318-19 §7.6.1.1, not the beam one of §9.6.1.2."""
     concrete = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
     steel = SteelBar(name="ADN 420", f_y=420 * MPa)
     footing = _design(_strip(Footing, concrete, steel, "Z1"))
     slab = _design(_strip(OneWaySlab, concrete, steel, "L1"))
 
-    assert footing._A_s_min_bot < slab._A_s_min_bot
+    assert footing._A_s_min_bot.to("cm**2").magnitude == pytest.approx(slab._A_s_min_bot.to("cm**2").magnitude)
 
 
-def test_aci_footing_minimum_scales_with_the_steel_grade() -> None:
+def test_aci_footing_minimum_does_not_scale_with_the_steel_grade() -> None:
+    """The 0.0018*420/f_y of ACI 318-14 was withdrawn: 318-19 asks 0.0018*Ag for any f_y."""
     concrete = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
     footing = _design(_strip(Footing, concrete, SteelBar(name="B500S", f_y=500 * MPa), "Z1"))
 
-    expected = 0.0018 * 420 / 500 * (1000 * mm) * (600 * mm)
+    expected = 0.0018 * (1000 * mm) * (600 * mm)
     assert footing._A_s_min_bot.to("cm**2").magnitude == pytest.approx(expected.to("cm**2").magnitude)
 
 
@@ -151,7 +137,7 @@ def test_cirsoc_shares_the_aci_clause() -> None:
 
 
 def test_aci_footing_minimum_in_imperial_units() -> None:
-    """Same clause, anchored at 60 ksi, and still written on b*h."""
+    """Same clause in US customary units, still written on b*h."""
     concrete = Concrete_ACI_318_19(name="C4000", f_c=4000 * psi)
     steel = SteelBar(name="G60", f_y=60000 * psi)
     footing = Footing(

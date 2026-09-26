@@ -64,6 +64,23 @@ beam.flexure_checks, beam.shear_checks   # per-combination FlexureCheck / ShearC
 
 Reading a result before `design()` or `check()` has run raises `DesignNotRunError`.
 
+`fd.bottom.A_s_min` is the minimum as §9.6.1.2 writes it; `fd.bottom.A_s_min_eff` is the one the
+face has to meet after the 4/3 relief of §9.6.1.3 (ACI / CIRSOC). Compare `A_s` against the second.
+
+A `ShearWall` has no bars or stirrups: read `wall.mesh.horizontal` / `.vertical` (`d_b`, `s`, `rho`),
+`wall.shear_design` and `wall.shear_checks` instead.
+
+Alternatives and warnings, after a design or check:
+
+```python
+fd.bottom.options                 # RebarOption tuple, best first; options[0] is what was applied
+sd.options                        # StirrupOption tuple (n_stirrups, d_b, s_l, s_w, A_v, functional)
+node.warnings                     # DesignWarning tuple: .code (stable), .message (set_language), .values
+```
+
+`design()` starts from the same state every run, so it is safe to call it repeatedly.
+How many options are kept is `BeamSettings(design_options=3)`.
+
 ### Displaying results from CLI (not Jupyter)
 
 `node.results` uses `IPython.display.Markdown` — it only renders in Jupyter notebooks. From a terminal it produces nothing useful. Use these instead:

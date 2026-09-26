@@ -49,6 +49,7 @@ class BeamSettings:
       - minimum_longitudinal_diameter: 8 mm
       - max_longitudinal_diameter: 32 mm
       - max_bars_per_layer: 12
+      - design_options: 3
 
     Imperial Defaults:
       - clear_spacing: 1 inch
@@ -59,6 +60,12 @@ class BeamSettings:
       - minimum_longitudinal_diameter: 3/8 inch
       - max_longitudinal_diameter: 1.693 inch
       - max_bars_per_layer: 12
+      - design_options: 3
+
+    ``design_options`` is how many alternatives a design keeps per group of
+    bars -- each face of longitudinal steel and the stirrups -- for
+    ``flexure_design.bottom.options``, ``.top.options`` and
+    ``shear_design.options``. The first is always the one applied.
     """
 
     # Class-level default values (documented but not shown in hover)
@@ -71,6 +78,7 @@ class BeamSettings:
         "minimum_longitudinal_diameter": 8 * mm,
         "max_longitudinal_diameter": 32 * mm,
         "max_bars_per_layer": 12,
+        "design_options": 3,
     }
 
     _imperial_defaults: ClassVar[Dict[str, Any]] = {
@@ -82,6 +90,7 @@ class BeamSettings:
         "minimum_longitudinal_diameter": 3 / 8 * inch,
         "max_longitudinal_diameter": 1.693 * inch,
         "max_bars_per_layer": 12,
+        "design_options": 3,
     }
 
     unit_system: str = "metric"
@@ -94,6 +103,7 @@ class BeamSettings:
     minimum_longitudinal_diameter: Any = field(default=_NOT_SET)
     max_longitudinal_diameter: Any = field(default=_NOT_SET)
     max_bars_per_layer: Any = field(default=_NOT_SET)
+    design_options: Any = field(default=_NOT_SET)
 
     def __post_init__(self) -> None:
         defaults = self._imperial_defaults if self.unit_system == "imperial" else self._metric_defaults
@@ -109,6 +119,8 @@ class BeamSettings:
 
         if self.max_bars_per_layer < 1:
             raise ValueError("max_bars_per_layer must be at least 1")
+        if isinstance(self.design_options, bool) or not isinstance(self.design_options, int) or self.design_options < 1:
+            raise ValueError("design_options must be an integer of at least 1")
 
     def __str__(self) -> str:
         """Returns only the current settings, excluding class defaults."""

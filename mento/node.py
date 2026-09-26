@@ -1,4 +1,4 @@
-from typing import Union, Optional, List
+from typing import Any, List, Optional, Tuple, Union
 import pandas as pd
 
 from mento.section import Section
@@ -128,6 +128,11 @@ class Node:
 
         # Combine section label and forces into a single string
         return f"Node ID: {self.id} - {section_label}\nForces Applied:{forces_str}"
+
+    @property
+    def warnings(self) -> Tuple[Any, ...]:
+        """The detailing limits the section misses; see ``RectangularBeam.warnings``."""
+        return tuple(getattr(self.section, "warnings", ()))
 
     # Beam results for Jupyter Notebook
     @property

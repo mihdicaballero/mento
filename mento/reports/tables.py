@@ -554,17 +554,15 @@ def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
             checks.append("✅")
             continue
 
-        # Detect if fails by min or max
-        failed_min = (min_val is not None) and (curr < min_val)
-
-        if i == 0 and failed_min and getattr(self, "_A_s_bool_top", True):
-            # Position 0 -> _A_s_top vs _A_s_min_top
-            checks.append(ARTICLE_STR)
-        elif i == 2 and failed_min and getattr(self, "_A_s_bool_bot", True):
-            # Position 2 -> _A_s_bot vs _A_s_min_bot
-            checks.append(ARTICLE_STR)
+        # Below A_s_min but not below the minimum left after the 4/3 relief of
+        # ACI 318-19 / CIRSOC 201-25 §9.6.1.3: the face complies, by that
+        # article. Position 0 is the top face, position 2 the bottom one.
+        relieved_min = {0: getattr(self, "_A_s_min_eff_top", None), 2: getattr(self, "_A_s_min_eff_bot", None)}.get(i)
+        within_max = max_val is None or curr <= max_val
+        if relieved_min is not None and within_max and curr >= relieved_min:
+            checks.append(f"✅ {ARTICLE_STR}")
         else:
-            # Any other failure (includes max or no flags)
+            # Any other failure: the maximum, or short of the relieved minimum
             checks.append("❌")
 
     self._all_flexure_checks_passed = not any(check in ("❌") for check in checks)
