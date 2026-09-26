@@ -354,6 +354,24 @@ def _min_max_flexural_reinforcement_ratio_EN_1992_2004(
 _K_C_BENDING = 0.4
 
 
+def _maximum_flexural_reinforcement_area_EN_1992_2004(self: "RectangularBeam") -> float:
+    """A_s,max of either face -- EN 1992-1-1 §9.2.1.1(3).
+
+    "The cross-sectional area of tension or compression reinforcement should
+    not exceed As,max outside lap locations", with 0,04 Ac the recommended
+    value, and Ac is the cross-sectional area of the concrete (§1.6): b*h
+    for a rectangle, the same for both faces. mento used to write it on
+    b*d, about 10 % tighter than the clause and a different limit on each
+    face.
+
+    Returns:
+        A_s,max (mm²).
+    """
+    _, rho_max = _min_max_flexural_reinforcement_ratio_EN_1992_2004(self)
+    sec = section_floats(self)
+    return rho_max * sec.width * sec.height
+
+
 def _minimum_flexural_reinforcement_area_EN_1992_2004(self: "RectangularBeam", d: float) -> float:
     """A_s,min on the tension face, for the way this element is supported.
 
@@ -449,14 +467,13 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
     ``A_s,nec / A_s,prov`` reads the second, since a face governed by its
     minimum carries little of the stress the minimum is sized for.
     """
-    _, rho_max = _min_max_flexural_reinforcement_ratio_EN_1992_2004(self)
     # ADR-0005 boundary: convert once, compute in floats (N, mm, MPa, N·mm),
     # re-apply units on the way out.
     sec = section_floats(self)
     b = sec.width
     d_mm = d
     A_s_min = _minimum_flexural_reinforcement_area_EN_1992_2004(self, d_mm)
-    A_s_max = rho_max * d_mm * b
+    A_s_max = _maximum_flexural_reinforcement_area_EN_1992_2004(self)
 
     # Constants and material properties
     if isinstance(self.concrete, Concrete_EN_1992_2004):
@@ -586,9 +603,6 @@ def _determine_nominal_moment_EN_1992_2004(self: "RectangularBeam", st: ENFlexur
     Returns:
         None
     """
-    # Calculate minimum and maximum reinforcement ratios
-    [_, rho_max] = _min_max_flexural_reinforcement_ratio_EN_1992_2004(self)
-
     # For positive moments (tension in the bottom), set minimum reinforcement
     # accordingly. The minimum is asked for as an area rather than a ratio: the
     # rules that apply to a member on the ground are written on the gross
@@ -598,14 +612,14 @@ def _determine_nominal_moment_EN_1992_2004(self: "RectangularBeam", st: ENFlexur
 
     # Calculate minimum and maximum bottom reinforcement areas
     st.A_s_min_bot = _minimum_flexural_reinforcement_area_EN_1992_2004(self, sec.d_bot) if tension_at_bottom else 0.0
-    st.A_s_max_bot = rho_max * sec.d_bot * sec.width
+    st.A_s_max_bot = _maximum_flexural_reinforcement_area_EN_1992_2004(self)
     # Determine the nominal moment for positive moments
     st.M_Rd_bot = _simple_determine_nominal_moment_EN_1992_2004(
         self, sec.A_s_bot, sec.d_bot, sec.A_s_top, sec.c_mec_top
     )
     # Determine capacity for negative moment (tension at the top)
     st.A_s_min_top = 0.0 if tension_at_bottom else _minimum_flexural_reinforcement_area_EN_1992_2004(self, sec.d_top)
-    st.A_s_max_top = rho_max * sec.d_top * sec.width
+    st.A_s_max_top = st.A_s_max_bot
     st.M_Rd_top = _simple_determine_nominal_moment_EN_1992_2004(
         self, sec.A_s_top, sec.d_top, sec.A_s_bot, sec.c_mec_bot
     )
@@ -655,15 +669,13 @@ def _flexure_within_maximum_EN_1992_2004(self: "RectangularBeam") -> bool:
     EN 1992-1-1 §9.2.1.1(3): "The cross-sectional area of tension or
     compression reinforcement should not exceed A_s,max" -- either face,
     whichever does what, so the face in tension does not matter. Held against
-    the same ``rho_max*b*d`` the check reports the limit as. A design that
+    the same 0.04*b*h the check reports the limit as
+    (:func:`_maximum_flexural_reinforcement_area_EN_1992_2004`). A design that
     reached the moment past it would hand back a section the check warns about.
     """
     sec = section_floats(self)
-    _, rho_max = _min_max_flexural_reinforcement_ratio_EN_1992_2004(self)
-    within = True
-    for A_s, d in ((sec.A_s_bot, sec.d_bot), (sec.A_s_top, sec.d_top)):
-        within = within and A_s <= rho_max * d * sec.width * (1 + 1e-9)
-    return within
+    A_s_max = _maximum_flexural_reinforcement_area_EN_1992_2004(self)
+    return max(sec.A_s_bot, sec.A_s_top) <= A_s_max * (1 + 1e-9)
 
 
 def _flexure_admissible_EN_1992_2004(self: "RectangularBeam", face: str) -> bool:

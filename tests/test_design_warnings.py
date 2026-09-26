@@ -1,7 +1,7 @@
 """Structured warnings: the detailing limits a section misses, as data."""
 
 from types import MappingProxyType
-from typing import Iterator
+from typing import Any, Iterator
 
 import pytest
 
@@ -15,6 +15,7 @@ from mento import (
     RectangularBeam,
     SteelBar,
 )
+from mento.codes.registry import design_code
 from mento.units import MPa, Quantity, cm, kN, kNm, mm
 
 FORCES = [
@@ -657,6 +658,55 @@ def test_en_holds_both_faces_to_its_maximum() -> None:
     over = [w for w in node.warnings if w.code == "As_above_max"]
     assert [w.face for w in over] == ["bottom"]
     assert over[0].combinations == ("neg",)
+
+
+def test_en_reads_its_maximum_on_the_gross_section() -> None:
+    """EN 1992-1-1 §9.2.1.1(3): A_s,max = 0.04 Ac, and Ac is the concrete section, b*h (§1.6).
+
+    20x60 C30/37 B500S, 1eØ8/15, M_Ed = 200 kNm. 0.04*200*600 = 4800 mm² =
+    48.0 cm², the same on both faces. 3Ø32 + 2Ø32 + 1Ø20 = 43.35 cm² below,
+    with d = 526.2 mm, were read against 0.04*200*526.2 = 42.10 cm² -- b*d,
+    10 % tighter than the clause -- and warned ``As_above_max``; the
+    design's ``flexure_admissible`` gate, which drops alternatives and
+    decides when no layout is left, said no as well. 3Ø32 + 3Ø32 = 48.25
+    cm² is past the 48.0 and still warned.
+    """
+
+    def beam_with(*bottom: Any) -> RectangularBeam:
+        beam = RectangularBeam(
+            label="E",
+            concrete=Concrete_EN_1992_2004(name="C30", f_c=30 * MPa),
+            steel_bar=SteelBar(name="B500S", f_y=500 * MPa),
+            width=20 * cm,
+            height=60 * cm,
+            c_c=25 * mm,
+        )
+        beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=15 * cm)
+        beam.set_longitudinal_rebar_bot(*bottom)
+        beam.set_longitudinal_rebar_top(2, 12 * mm)
+        return beam
+
+    admissible = design_code(Concrete_EN_1992_2004(name="C30", f_c=30 * MPa)).flexure_admissible
+    assert admissible is not None
+    forces = [Forces(label="ELU", M_y=200 * kNm)]
+
+    beam = beam_with(3, 32 * mm, 0, None, 2, 32 * mm, 1, 20 * mm)
+    node = Node(section=beam, forces=forces)
+    node.check_flexure()
+    assert beam.flexure_design.bottom.A_s.to("cm**2").magnitude == pytest.approx(43.35, abs=0.005)
+    assert beam._d_bot.to("mm").magnitude == pytest.approx(526.2, abs=0.05)
+    assert beam.flexure_design.bottom.A_s_max == beam.flexure_design.top.A_s_max
+    assert beam.flexure_design.bottom.A_s_max.to("cm**2").magnitude == pytest.approx(48.0)
+    assert "As_above_max" not in _by_code(node.warnings)
+    assert admissible(beam, "bot")
+
+    beam = beam_with(3, 32 * mm, 0, None, 3, 32 * mm)
+    node = Node(section=beam, forces=forces)
+    node.check_flexure()
+    over = _by_code(node.warnings)["As_above_max"]
+    assert over.values["A_s"].to("cm**2").magnitude == pytest.approx(48.25, abs=0.005)
+    assert over.values["A_s_max"].to("cm**2").magnitude == pytest.approx(48.0)
+    assert not admissible(beam, "bot")
 
 
 # ---------------------------------------------------------------------------

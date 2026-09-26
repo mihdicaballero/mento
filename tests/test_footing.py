@@ -837,7 +837,7 @@ def test_a_mat_that_does_not_verify_is_passed_over(steel_b500s: SteelBar) -> Non
 
 @pytest.mark.parametrize(
     "height, M_bot, M_top",
-    [(25 * cm, 500 * kNm, -20 * kNm), (30 * cm, 100 * kNm, -600 * kNm)],
+    [(25 * cm, 500 * kNm, -20 * kNm), (30 * cm, 100 * kNm, -700 * kNm)],
     ids=["bottom-short", "top-short"],
 )
 def test_a_section_that_cannot_carry_the_moment_falls_back(steel_b500s, height, M_bot, M_top) -> None:  # type: ignore[no-untyped-def]
@@ -849,7 +849,10 @@ def test_a_section_that_cannot_carry_the_moment_falls_back(steel_b500s, height, 
 
     The bottom case used to be 200 kN·m, which the design now carries: 72.4 cm²
     a face, inside the 4 % of EN 1992-1-1 §9.2.1.1(3), DCR 0.50. At 500 kN·m
-    not even the most either face may hold is enough.
+    not even the most either face may hold is enough. The top case used to be
+    -600 kN·m, short while that 4 % was read on b*d; on the gross section,
+    0.04*1000*300 = 120 cm² a face, a mat carries it (DCR 0.94), and -700
+    kN·m is what no mat reaches.
     """
     concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
     footing = _strip(Footing, concrete, steel_b500s, "Z1", height=height)
