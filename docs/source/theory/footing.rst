@@ -452,7 +452,7 @@ Validation
        ``test_a_footing_still_carries_its_moment``
      - Internal consistency
    * - Spacing bounds, and a design inside them
-     - ``test_footing_bars_are_capped_at_300_mm``,
+     - ``test_footing_bars_are_capped_by_the_ground_practice_and_table_24_3_2``,
        ``test_footing_bars_are_floored_at_100_mm``,
        ``test_a_designed_footing_stays_inside_the_spacing_range``,
        ``test_the_floor_is_what_holds_the_footing_apart``
@@ -473,6 +473,7 @@ Validation
      - Detailing practice
    * - The mat never undoes the design
      - ``test_matching_the_mat_never_undoes_the_design``,
+       ``test_the_mat_covers_each_face_in_every_metre``,
        ``test_the_mat_keeps_each_face_within_the_spacing_range``,
        ``test_a_footing_reinforced_on_one_face_gets_no_second_grid``,
        ``test_a_slab_still_details_its_faces_independently``
