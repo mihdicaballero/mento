@@ -200,6 +200,13 @@ ES.update(
         "Steel on the {face}: A_s = {A_s} exceeds the maximum A_s,max = {A_s_max}.": (
             "Armadura en la {face}: A_s = {A_s} supera la máxima A_s,máx = {A_s_max}."
         ),
+        (
+            "The section is not tension-controlled (§{clause}): A_s = {A_s} on the {face} exceeds "
+            "A_s,max = {A_s_max}. It does not comply, even where its capacity covers the moment."
+        ): (
+            "La sección no es controlada por tracción (§{clause}): A_s = {A_s} en la {face} supera "
+            "A_s,máx = {A_s_max}. No cumple, aunque su capacidad alcance el momento."
+        ),
         "Clear spacing between the bars on the {face}: {s} is below the minimum {s_min}.": (
             "Separación libre entre las barras de la {face}: {s} es menor que la mínima {s_min}."
         ),

@@ -10,6 +10,7 @@ from mento import (
     Concrete_ACI_318_19,
     Concrete_EN_1992_2004,
     DesignWarning,
+    OneWaySlab,
     Forces,
     Node,
     RectangularBeam,
@@ -70,13 +71,13 @@ def test_each_missed_limit_is_one_warning_with_a_stable_code() -> None:
 
     assert set(found) == {
         "As_below_min",
-        "As_above_max",
+        "not_tension_controlled",
         "bars_do_not_fit",
         "Av_below_min",
         "stirrup_spacing_exceeds_max",
     }
     assert found["As_below_min"].face == "bottom"
-    assert found["As_above_max"].face == "top"
+    assert found["not_tension_controlled"].face == "top"
     assert found["bars_do_not_fit"].face == "top"
     # Only the positive moment asks the bottom face for steel.
     assert found["As_below_min"].combinations == ("1.2D+1.6L",)
@@ -672,15 +673,15 @@ def test_the_maximum_is_only_read_on_the_face_in_tension() -> None:
     beam = heavy_bottom()
     node = Node(section=beam, forces=[Forces(label="neg", M_y=-50 * kNm), Forces(label="zero", M_y=0 * kNm)])
     node.check_flexure()
-    assert "As_above_max" not in _by_code(node.warnings)
+    assert "not_tension_controlled" not in _by_code(node.warnings)
     assert beam._data_min_max_flexure["Ok?"][2] == "✅"
 
     beam = heavy_bottom()
     node = Node(section=beam, forces=[Forces(label="pos", M_y=150 * kNm)])
     node.check_flexure()
-    over = _by_code(node.warnings)["As_above_max"]
+    over = _by_code(node.warnings)["not_tension_controlled"]
     assert (over.face, over.combinations) == ("bottom", ("pos",))
-    assert beam._data_min_max_flexure["Ok?"][2] == "❌"
+    assert beam._data_min_max_flexure["Ok?"][2] == "❌ 9.3.3.1"
 
 
 def test_en_holds_both_faces_to_its_maximum() -> None:
@@ -1321,3 +1322,84 @@ def test_a_slab_strip_with_stirrups_is_not_held_to_the_beam_bracing_limits() -> 
     codes = set(_by_code(node.warnings))
     assert "stirrup_diameter_below_compression_support" not in codes
     assert "stirrup_spacing_exceeds_compression_support" not in codes
+
+
+# ---------------------------------------------------------------------------
+# A section that is not tension-controlled does not comply (§9.3.3.1)
+# ---------------------------------------------------------------------------
+
+
+def _over_reinforced() -> tuple[RectangularBeam, Node]:
+    """ACI 318-19 25x40, f'c 25, ADN 420, 3Ø25 + 3Ø25 below, nothing above, Mu = 100 kN·m.
+
+    A_s = 29.45 cm² against the tension-controlled A_s,max = 14.07 cm²: the
+    capacity, with the phi of the strain it reaches, still covers the moment
+    (DCR 0.640), but the section is not tension-controlled.
+    """
+    beam = RectangularBeam(
+        label="V",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=25 * cm,
+        height=40 * cm,
+        c_c=25 * mm,
+    )
+    beam.set_longitudinal_rebar_bot(n1=3, d_b1=25 * mm, n3=3, d_b3=25 * mm)
+    node = Node(section=beam, forces=[Forces(label="U", M_y=100 * kNm)])
+    node.check_flexure()
+    return beam, node
+
+
+def test_a_section_past_its_tension_controlled_limit_does_not_comply() -> None:
+    """The DCR stays what the capacity gives; the verdict and the warning cite §9.3.3.1."""
+    beam, node = _over_reinforced()
+    face = beam.flexure_checks[0].bottom
+
+    assert face.DCR == pytest.approx(0.640, abs=5e-4)
+    assert not face.admissible
+    assert not face.complies
+    assert not beam.flexure_checks[0].complies
+    assert not beam.flexure_design.bottom.complies
+    assert not beam.flexure_design.complies
+    assert beam.flexure_design.top.complies
+
+    (warning,) = node.warnings
+    assert (warning.code, warning.face) == ("not_tension_controlled", "bottom")
+    assert warning.values["clause"] == "9.3.3.1"
+    assert warning.values["A_s_max"].to("cm**2").magnitude == pytest.approx(14.07, abs=0.005)
+    assert "§9.3.3.1" in warning.message
+    mento.set_language("es")
+    try:
+        assert node.warnings[0].message.startswith("La sección no es controlada por tracción (§9.3.3.1)")
+    finally:
+        mento.set_language("en")
+
+
+def test_the_detailed_report_marks_the_face_with_the_article(capsys: pytest.CaptureFixture[str]) -> None:
+    """The limit row and the DCR row of the face read ❌ 9.3.3.1, although the DCR is below 1."""
+    beam, node = _over_reinforced()
+    node.flexure_results_detailed()
+    capsys.readouterr()
+
+    assert beam._data_min_max_flexure["Ok?"][2] == "❌ 9.3.3.1"
+    assert beam._data_min_max_flexure["Ok?"][0] == "✅"
+    assert not beam._flexure_all_checks
+
+
+def test_a_one_way_slab_cites_its_own_article() -> None:
+    """ACI 318-19 §7.3.3.1 holds a nonprestressed slab to a tension-controlled section."""
+    slab = OneWaySlab(
+        label="L",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=12 * cm,
+        c_c=25 * mm,
+    )
+    slab.set_slab_longitudinal_rebar_bot(d_b1=16 * mm, s_b1=5 * cm)
+    node = Node(section=slab, forces=[Forces(label="U", M_y=20 * kNm)])
+    node.check_flexure()
+
+    assert slab.flexure_checks[0].bottom.DCR < 1
+    assert not slab.flexure_design.complies
+    assert [(w.code, w.values["clause"]) for w in node.warnings] == [("not_tension_controlled", "7.3.3.1")]

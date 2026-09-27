@@ -36,6 +36,7 @@ from the release history and are summaries rather than complete lists.
 
 - **Detailing limits are reported as data.** `beam.warnings` and `node.warnings` are tuples
   of `DesignWarning` with a stable `code` (`As_below_min`, `As_above_max`,
+  `not_tension_controlled`,
   `clear_spacing_below_min`, `bar_spacing_below_min`, `bar_spacing_exceeds_max`,
   `bars_do_not_fit`, `As_below_required`, `stirrups_required`, `Av_below_min`,
   `stirrup_spacing_exceeds_max`, `stirrup_spacing_exceeds_compression_support`,
@@ -175,10 +176,22 @@ from the release history and are summaries rather than complete lists.
   exactly what it did. In a sweep of 960 ACI designs the old check had passed 32 whose real
   DCR reached 1.07.
 
-- **A section that is not tension-controlled is reported as such.** §9.3.3.1 does not
-  allow it in a beam, but a doubly reinforced section was excused from the maximum
-  altogether. The check now holds the face in tension to `A_s_max_eff` and warns
-  `As_above_max` past it; 195 of the 960 designs of that sweep had passed without it.
+- **A section that is not tension-controlled does not comply.** ACI 318-19 / CIRSOC
+  201-25 §9.3.3.1 do not allow it in a beam (§7.3.3.1 in a one-way slab), but a doubly
+  reinforced section was excused from the maximum altogether, and past it a section with
+  DCR below 1 read as passing. The check now holds the face in tension to `A_s_max_eff`,
+  and past it the section fails whatever its DCR: `FlexureFaceCheck.admissible` and
+  `FlexureFaceDesign.admissible` are False, and `complies` on the face checks, the
+  combination checks and `flexure_design` reads both the DCR and that; the detailed
+  report marks the limit row and the DCR row of the face `❌ 9.3.3.1`; `BeamSummary`
+  gives the beam ❌; and the new warning `not_tension_controlled` cites the article
+  (`values["clause"]`). The DCR keeps its value, formed with the phi of the strain the
+  section reaches. A 25×40 with 3Ø25 + 3Ø25 under 100 kN·m, DCR 0.640 against
+  A_s = 29.45 > 14.07 cm², no longer passes. A design never accepts such a layout; it
+  ends on one only when none closes, and says so. 195 of the 960 designs of that sweep
+  had passed without any mark. Under EN 1992-1-1 the maximum is the 4 % of
+  §9.2.1.1(3), a face past it is not `admissible` either, and the warning stays
+  `As_above_max`.
 
 - **A flexure design passes its own check.** The design accepts a layout only if it
   carries the moment and keeps within the code's limits — tension-controlled under
@@ -222,7 +235,7 @@ from the release history and are summaries rather than complete lists.
   neutral axis to help (f_s' − 0.85·f'c ≤ 0, a shallow section) it no longer asks for a
   negative area of them — −39 cm² — but for none.
 
-- **Under ACI 318-19 / CIRSOC 201-25, `As_above_max` is only read on the face the
+- **Under ACI 318-19 / CIRSOC 201-25, the maximum is only read on the face the
   combination puts in tension.** The bars a negative moment asks for on the bottom are
   compression steel, and a combination with no moment pulls neither face, yet both were
   held to A_s,max and warned. The detailed report skips the same check; it still prints the
@@ -295,7 +308,7 @@ from the release history and are summaries rather than complete lists.
   (b 20–60, h 40–80, 30–400 kN·m, 80 and 250 kN) 28 used to fail their own check without
   saying so — 24 past DCR 1 with no warning, 4 warning `As_below_min` on their own bars;
   with this and the stirrup fixes below none does, and every one of the 15 left past DCR 1
-  carries `As_below_required`, `As_above_max` or `shear_exceeds_section_limit`.
+  carries `As_below_required`, `not_tension_controlled` or `shear_exceeds_section_limit`.
   `design_flexure()` and `design_shear()` on their own are unchanged, and a design still
   gives the same bars every time.
 

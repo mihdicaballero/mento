@@ -238,10 +238,13 @@ other face the limit on the tension steel grows to
 (:math:`f'_{s,net}` at :math:`c_t`, below; a compression bar with
 :math:`f'_{s,net} \le 0` extends nothing). It is the same boundary as
 :math:`\varepsilon_t = \varepsilon_y + 0.003`, read as an area. The check reports it
-as ``A_s_max_eff`` and holds the face in tension to it: past it the section does not
-comply with §9.3.3.1, the warning ``As_above_max`` says so, and the capacity already
-carries the lower :math:`\phi` of the strain reached. The face a combination
-compresses is not held to it.
+as ``A_s_max_eff`` and holds the face in tension to it. Past it the section is not
+tension-controlled, which §9.3.3.1 (§7.3.3.1 for a one-way slab) does not allow, so it
+does **not comply whatever its DCR**: the capacity already carries the lower
+:math:`\phi` of the strain reached, and the DCR keeps that value, but
+``admissible`` and ``complies`` of the flexure results are False, the detailed
+report marks the face ❌ 9.3.3.1, and the warning ``not_tension_controlled`` cites the
+article. The face a combination compresses is not held to it.
 
 Compression steel at the ductility limit
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

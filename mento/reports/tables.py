@@ -590,9 +590,21 @@ def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
     singly_max = {0: self._A_s_max_top, 2: self._A_s_max_bot}
 
     ARTICLE_STR = "9.6.1.3"
+    # Past the maximum the section is not tension-controlled, which §9.3.3.1
+    # (§7.3.3.1 for a one-way slab) does not allow: the row and the DCR of
+    # that face say which article it misses.
+    tension_controlled_str = self._tension_controlled_clause
+    over_max = {
+        i: max_val is not None and curr > max_val
+        for i, (curr, max_val) in enumerate(zip(current_values, max_values))
+        if i in singly_max
+    }
 
     checks = []
     for i, (curr, min_val, max_val) in enumerate(zip(current_values, min_values, max_values)):
+        if over_max.get(i):
+            checks.append(f"❌ {tension_controlled_str}")
+            continue
         passed = (min_val is None or curr >= min_val) and (max_val is None or curr <= max_val)
         if passed:
             doubly = max_val is not None and i in singly_max and curr > singly_max[i]
@@ -610,7 +622,7 @@ def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
             # Any other failure: the maximum, or short of the relieved minimum
             checks.append("❌")
 
-    self._all_flexure_checks_passed = not any(check in ("❌") for check in checks)
+    self._all_flexure_checks_passed = not any(check.startswith("❌") for check in checks)
     self._data_min_max_flexure = {
         "Check": [
             "Min/Max As rebar top",
@@ -640,8 +652,10 @@ def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
         "Ok?": checks,
     }
     _append_max_bar_spacing_rows(self, self._M_u)
-    check_DCR_top = "✅" if self._DCRb_top < 1 else "❌"
-    check_DCR_bot = "✅" if self._DCRb_bot < 1 else "❌"
+    # A face past its tension-controlled limit does not comply whatever its
+    # DCR: it reads ❌ with the article, as its limit row does.
+    check_DCR_top = f"❌ {tension_controlled_str}" if over_max[0] else "✅" if self._DCRb_top < 1 else "❌"
+    check_DCR_bot = f"❌ {tension_controlled_str}" if over_max[2] else "✅" if self._DCRb_bot < 1 else "❌"
     long_rebar_top = _longitudinal_rebar_rows(self, "t")
     self._flexure_capacity_top = {
         "Top reinforcement check": [

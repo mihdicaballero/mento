@@ -51,6 +51,10 @@ class OneWaySlab(RectangularBeam):
     in ``codes/ACI_318_19_beam.py`` and the theory page *One-way slab*).
     """
 
+    #: ACI 318-19 / CIRSOC 201-25 §7.3.3.1 holds a nonprestressed slab to a
+    #: tension-controlled section, as §9.3.3.1 does a beam.
+    _tension_controlled_clause = "7.3.3.1"
+
     def __post_init__(self) -> None:
         super().__post_init__()
 

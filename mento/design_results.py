@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any, Optional, Sequence, Tuple
 from mento.units import Quantity
 
 from mento.codes.check_state import to_display
+from mento.design_warnings import steel_above_maximum
 
 if TYPE_CHECKING:
     from mento.beam import RectangularBeam
@@ -160,6 +161,15 @@ class FlexureFaceCheck:
     the 4 % of §9.2.1.1(3), which compression steel does not extend, and the
     two are the same.
 
+    ``admissible`` is False when the face carries more steel than that
+    maximum allows: under ACI 318-19 and CIRSOC 201-25 the section is then
+    not tension-controlled, which §9.3.3.1 (§7.3.3.1 for a one-way slab)
+    does not allow, and under EN 1992-1-1 it is past the 4 %. A face that is
+    not admissible does not comply even where its ``DCR`` is below 1:
+    ``complies`` reads both. The warning that goes with it is
+    ``not_tension_controlled`` (ACI 318-19 / CIRSOC 201-25) or
+    ``As_above_max`` (EN 1992-1-1).
+
     A field is ``None`` when the design code did not set it for this
     combination; enveloping skips those rather than treating them as zero.
     """
@@ -172,6 +182,12 @@ class FlexureFaceCheck:
     A_s_calc: Optional[Quantity] = None
     A_s_min_eff: Optional[Quantity] = None
     A_s_max_eff: Optional[Quantity] = None
+    admissible: bool = True
+
+    @property
+    def complies(self) -> bool:
+        """The face carries its moment (``DCR <= 1``) and is within its maximum steel."""
+        return self.DCR <= 1.0 and self.admissible
 
 
 @dataclass(frozen=True)
@@ -181,6 +197,11 @@ class FlexureCheck:
     label: str
     bottom: FlexureFaceCheck
     top: FlexureFaceCheck
+
+    @property
+    def complies(self) -> bool:
+        """Both faces comply under this combination."""
+        return self.bottom.complies and self.top.complies
 
 
 @dataclass(frozen=True)
@@ -250,6 +271,7 @@ def envelope_flexure_face(checks: Sequence[FlexureCheck], face: str) -> FlexureF
         A_s_calc=_worst([f.A_s_calc for f in faces]),
         A_s_min_eff=_worst([f.A_s_min_eff for f in faces]),
         A_s_max_eff=_least([f.A_s_max_eff for f in faces]),
+        admissible=all(f.admissible for f in faces),
     )
 
 
@@ -272,6 +294,7 @@ def capture_flexure_check(beam: RectangularBeam, label: str, state: Any) -> Flex
     the section afterwards.
     """
     imperial = beam.concrete.is_imperial
+    over = steel_above_maximum(beam, state)
 
     def face(suffix: str) -> FlexureFaceCheck:
         A_s_req, A_s_min, A_s_max, M_capacity, A_s_calc, A_s_min_eff, A_s_max_eff = state.face_quantities(
@@ -286,6 +309,7 @@ def capture_flexure_check(beam: RectangularBeam, label: str, state: Any) -> Flex
             A_s_calc=A_s_calc,
             A_s_min_eff=A_s_min_eff,
             A_s_max_eff=A_s_max_eff,
+            admissible=suffix not in over,
         )
 
     return FlexureCheck(label=label, bottom=face("bot"), top=face("top"))
@@ -444,6 +468,11 @@ class FlexureFaceDesign:
     -- ``ØMn`` under ACI 318-19 and CIRSOC 201-25, ``MRd`` under EN 1992-1-1
     -- as the governing combination saw it, so it is the resistance ``DCR``
     was formed from.
+
+    ``admissible`` is False when some combination found the face past its
+    maximum steel, and ``complies`` reads it with ``DCR`` -- see
+    :class:`FlexureFaceCheck`. A design never accepts a face that does not
+    comply; it ends on one only when no layout does, and warns.
     """
 
     layers: Tuple[RebarLayer, ...]
@@ -457,6 +486,12 @@ class FlexureFaceDesign:
     DCR: float
     M_capacity: Quantity
     options: Tuple[RebarOption, ...] = ()
+    admissible: bool = True
+
+    @property
+    def complies(self) -> bool:
+        """The face carries its moment (``DCR <= 1``) and is within its maximum steel."""
+        return self.DCR <= 1.0 and self.admissible
 
     @property
     def n_bars(self) -> int:
@@ -480,6 +515,11 @@ class FlexureDesign:
     def DCR(self) -> float:
         """Governing demand-to-capacity ratio of the two faces."""
         return max(self.bottom.DCR, self.top.DCR)
+
+    @property
+    def complies(self) -> bool:
+        """Both faces comply: see :attr:`FlexureFaceDesign.complies`."""
+        return self.bottom.complies and self.top.complies
 
     def __str__(self) -> str:
         return f"bottom: {self.bottom} / top: {self.top}"
@@ -635,6 +675,7 @@ def _face(beam: RectangularBeam, face: str) -> FlexureFaceDesign:
         DCR=worst.DCR,
         M_capacity=no_capacity if worst.M_capacity is None else worst.M_capacity,
         options=_current_flexure_options(beam, face),
+        admissible=worst.admissible,
     )
 
 

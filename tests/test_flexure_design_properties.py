@@ -45,6 +45,8 @@ _CONCRETES = {
 }
 #: Flags a design raises when it could not find a layout that works.
 _CANNOT = {"As_below_required", "bars_do_not_fit"}
+#: The warnings of a face past its maximum steel: ACI 318-19 / CIRSOC 201-25, EN 1992-1-1.
+_OVER = {"not_tension_controlled", "As_above_max"}
 
 
 def _independent_capacity(A_s: float, A_sp: float, d: float, dp: float, b: float, f_c: float) -> Tuple[float, float]:
@@ -129,7 +131,7 @@ def test_a_design_passes_its_own_check(code: str) -> None:
         face = check.bottom if M > 0 else check.top
         codes = {warning.code for warning in node.warnings}
         assert face.M_capacity is not None and face.M_capacity.magnitude > 0, (b_cm, h_cm, f_c, M)
-        if not codes & _CANNOT and (face.DCR > 1 + 1e-9 or "As_above_max" in codes):
+        if not codes & _CANNOT and (face.DCR > 1 + 1e-9 or codes & _OVER):
             silent.append((b_cm, h_cm, f_c, M, round(face.DCR, 3), sorted(codes)))
         if not independent:
             continue
@@ -146,7 +148,8 @@ def test_a_design_passes_its_own_check(code: str) -> None:
         if reported > phi_M_n * (1 + 1e-6):
             overstated.append((b_cm, h_cm, f_c, M, round(reported, 2), round(phi_M_n, 2)))
         if eps_t < _F_Y / _E_S + 0.003 - 1e-9:
-            assert "As_above_max" in codes, (b_cm, h_cm, f_c, M, eps_t)
+            assert "not_tension_controlled" in codes, (b_cm, h_cm, f_c, M, eps_t)
+            assert not face.complies, (b_cm, h_cm, f_c, M, eps_t)
     assert not silent, f"{code}: designs that fail their own check without saying so: {silent}"
     assert not overstated, f"{code}: capacity above strain compatibility: {overstated}"
 

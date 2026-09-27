@@ -1636,7 +1636,7 @@ def test_check_flexure_ACI_318_19_1(beam_example_flexure_ACI: RectangularBeam) -
     # que se verifico con una compatibilidad escrita aparte.
     assert results.iloc[1]["ØMn"] == pytest.approx(546.80, rel=1e-3)
     # Y lo dice: la cara traccionada supera el tope de §9.3.3.1 con su compresion.
-    over = [w for w in node.warnings if w.code == "As_above_max"]
+    over = [w for w in node.warnings if w.code == "not_tension_controlled"]
     assert [w.face for w in over] == ["bottom"]
 
 
@@ -1661,7 +1661,7 @@ def test_check_flexure_ACI_318_19_2(beam_example_flexure_ACI: RectangularBeam) -
     assert results.iloc[1]["Mu"] == pytest.approx(-542.33, rel=1e-5)
     # El espejo de test_1: eps_t = 0.00432, phi = 0.838, ØMn = 546.80 kN·m.
     assert results.iloc[1]["ØMn"] == pytest.approx(546.80, rel=1e-3)
-    over = [w for w in node.warnings if w.code == "As_above_max"]
+    over = [w for w in node.warnings if w.code == "not_tension_controlled"]
     assert [w.face for w in over] == ["top"]
 
 
@@ -2865,7 +2865,7 @@ def test_design_flexure_ACI_318_19_gap_past_cap_adds_compression_steel() -> None
     combinacion cae en [4.96, 5.22] (2Ø20 y 2Ø16+2Ø12 dan 6.28 cm²; 3Ø12 no
     entra), y el tope dejaba el fallback 4Ø12 = 4.52 cm² (ØMn = 34.0 kN·m).
     Antes se terminaba en 2Ø20 sin compresion: sobre-armada, capacidad
-    capeada en As,max (ØMn = 41.7 kN·m) y aviso As_above_max.
+    capeada en As,max (ØMn = 41.7 kN·m) y aviso not_tension_controlled.
 
     Ahora 2Ø20 abajo pide compresion arriba por el exceso sobre As,max, leida
     a la profundidad de cada candidato: 2Ø12 en una capa queda a
@@ -2908,7 +2908,7 @@ def test_design_flexure_ACI_318_19_gap_past_cap_adds_compression_steel() -> None
     assert check_results.iloc[1]["DCR"] <= 1.0
     # Past A_s_max but inside the cap the top steel extends: doubly reinforced,
     # not over-reinforced.
-    assert "As_above_max" not in [warning.code for warning in node.warnings]
+    assert "not_tension_controlled" not in [warning.code for warning in node.warnings]
 
 
 def test_design_flexure_ACI_318_19_gap_past_cap_negative_moment_upgrades_bottom() -> None:
@@ -3134,7 +3134,7 @@ def test_check_flexure_ACI_318_19_over_reinforced_no_top(
       c = 13.578 in, eps_t = 0.00173 < eps_ty = 0.00207 → el acero traccionado ni
       siquiera fluye, phi = 0.65 (controlada por compresion)
       ØMn = 541.18 kN·m, verificado con una compatibilidad escrita aparte.
-    Y la seccion no cumple §9.3.3.1, que el aviso As_above_max reporta.
+    Y la seccion no cumple §9.3.3.1, que el aviso not_tension_controlled reporta.
     """
     f = Forces(label="Test_over_reinforced_top_zero", M_y=400 * kip * ft)
     beam_example_flexure_ACI.set_longitudinal_rebar_bot(n1=6, d_b1=1.41 * inch)
@@ -3144,7 +3144,7 @@ def test_check_flexure_ACI_318_19_over_reinforced_no_top(
     assert results.iloc[1]["Position"] == "Bottom"
     assert results.iloc[1]["Mu"] == pytest.approx(542.33, rel=1e-3)
     assert results.iloc[1]["ØMn"] == pytest.approx(541.18, rel=1e-3)
-    assert "As_above_max" in {w.code for w in node.warnings}
+    assert "not_tension_controlled" in {w.code for w in node.warnings}
 
 
 @pytest.mark.published_example
@@ -3185,7 +3185,7 @@ def test_check_flexure_ACI_318_19_over_reinforced_but_top_redeems(
     min_max = beam_example_flexure_ACI._data_min_max_flexure
     assert min_max["Ok?"][2] == "✅ D.R."
     assert min_max["Max."][2] == pytest.approx(35.17, abs=0.02)
-    assert "As_above_max" not in {w.code for w in node.warnings}
+    assert "not_tension_controlled" not in {w.code for w in node.warnings}
 
 
 def test_check_flexure_CIRSOC_201_25_over_reinforced_reports_its_real_strength() -> None:
@@ -3223,7 +3223,9 @@ def test_check_flexure_CIRSOC_201_25_over_reinforced_reports_its_real_strength()
     assert top.M_capacity.to("kN*m").magnitude == pytest.approx(196.2, rel=1e-3)
     assert top.DCR == pytest.approx(1.055, rel=2e-3)
     assert top.A_s_max_eff.to("cm**2").magnitude == pytest.approx(18.72, rel=1e-3)
-    assert [(w.code, w.face) for w in node.warnings if w.code == "As_above_max"] == [("As_above_max", "top")]
+    assert [(w.code, w.face) for w in node.warnings if w.code == "not_tension_controlled"] == [
+        ("not_tension_controlled", "top")
+    ]
 
     node.design_flexure()
     node.check_flexure()
@@ -3361,7 +3363,7 @@ def test_check_flexure_ACI_318_19_over_reinforced_with_default_top(
     con phi = 0.90 (≈ 531 kN·m). Ahora, con todo el acero:
       c = 13.5 in, eps_t = 0.00177 < eps_ty → phi = 0.65, ØMn = 556.53 kN·m,
     verificado con una compatibilidad escrita aparte, y la seccion no cumple
-    §9.3.3.1 (aviso As_above_max).
+    §9.3.3.1 (aviso not_tension_controlled).
     """
     f = Forces(label="Test_over_reinforced_default_top", M_y=400 * kip * ft)
     beam_example_flexure_ACI.set_longitudinal_rebar_bot(n1=6, d_b1=1.41 * inch)
@@ -3371,7 +3373,7 @@ def test_check_flexure_ACI_318_19_over_reinforced_with_default_top(
     assert results.iloc[1]["Position"] == "Bottom"
     assert results.iloc[1]["Mu"] == pytest.approx(542.33, rel=1e-3)
     assert results.iloc[1]["ØMn"] == pytest.approx(556.53, rel=1e-3)
-    assert "As_above_max" in {w.code for w in node.warnings}
+    assert "not_tension_controlled" in {w.code for w in node.warnings}
 
 
 def test_rectangular_section_plot_components(

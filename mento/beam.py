@@ -431,6 +431,9 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
     #: One is what it takes when a layout exists; the bound is for a section
     #: that has none, which then ends on a repeated state anyway.
     _DESIGN_ROUNDS = 3
+    #: The ACI 318-19 / CIRSOC 201-25 article that holds this element to a
+    #: tension-controlled section, which not_tension_controlled quotes.
+    _tension_controlled_clause = "9.3.3.1"
 
     def _record_longitudinal_options(self, face: str, design: Any, table: Any) -> None:
         """Keep the layouts the search ranked for one face, the applied one first.

@@ -28,12 +28,16 @@ Codes
     the one the face is short of and the one the message quotes. Where
     there is no relief (EN 1992-1-1, a slab, a footing) the two are equal.
 ``As_above_max``
-    A face carries more steel than its maximum. Under ACI 318-19 and CIRSOC
-    201-25 that is the tension face past the tension-controlled limit of
-    §9.3.3.1 with the compression steel it has, ``A_s_max_eff``: the section
-    is no longer tension-controlled, and its capacity already carries the
-    lower phi of the strain it reaches. Under EN 1992-1-1 it is either face
-    past the 4 % of §9.2.1.1(3).
+    A face carries more steel than its maximum: under EN 1992-1-1, either
+    face past the 4 % of §9.2.1.1(3).
+``not_tension_controlled``
+    Under ACI 318-19 and CIRSOC 201-25, the tension face is past the
+    tension-controlled limit with the compression steel it has,
+    ``A_s_max_eff``, which §9.3.3.1 (§7.3.3.1 for a one-way slab) does not
+    allow. The section does not comply even where its DCR is below 1 -- the
+    capacity already carries the lower phi of the strain it reaches -- and
+    the flexure results say so with ``admissible`` / ``complies``. ``values``
+    carries ``clause``, the article as text.
 ``clear_spacing_below_min``
     The clear distance between the bars of a beam face is below the minimum
     its settings ask for (bar diameter, 25 mm / 1 in., vibrator on top).
@@ -188,6 +192,10 @@ _MESSAGES: Dict[str, str] = {
         "Steel on the {face}: A_s = {A_s} is below the minimum it has to meet, A_s,min,eff = {A_s_min_eff}."
     ),
     "As_above_max": "Steel on the {face}: A_s = {A_s} exceeds the maximum A_s,max = {A_s_max}.",
+    "not_tension_controlled": (
+        "The section is not tension-controlled (§{clause}): A_s = {A_s} on the {face} exceeds "
+        "A_s,max = {A_s_max}. It does not comply, even where its capacity covers the moment."
+    ),
     "clear_spacing_below_min": "Clear spacing between the bars on the {face}: {s} is below the minimum {s_min}.",
     "bar_spacing_below_min": "Bar spacing on the {face}: {s} is below the minimum {s_min}.",
     "bar_spacing_exceeds_max": "Bar spacing on the {face}: {s} exceeds the maximum {s_max}.",
@@ -318,25 +326,56 @@ def combination_label(label: Optional[str], position: int) -> str:
 # ---------------------------------------------------------------------------
 
 
+def steel_above_maximum(beam: "RectangularBeam", state: Any) -> Dict[str, Tuple[Quantity, Quantity]]:
+    """The faces one flexure combination finds past their maximum steel, with ``(A_s, limit)``.
+
+    Which maximum, and on which face, is the code's. Where it is the
+    ductility limit of the tension steel (ACI 318-19 / CIRSOC 201-25
+    §9.3.3.1, §7.3.3.1 for a one-way slab) only the face the combination
+    puts in tension is held to it -- the bars a negative moment asks for on
+    the bottom are compression steel, and a combination with no moment pulls
+    neither face -- and the limit is ``A_s_max_eff``, which the compression
+    steel opposite extends: a doubly reinforced face is judged by the strain
+    it reaches, not excused. Past it the section is not tension-controlled,
+    which those clauses do not allow, so it does not comply whatever its
+    DCR. Where the maximum caps any bars (EN 1992-1-1 §9.2.1.1(3)) both
+    faces are read against it.
+
+    Keyed ``"bot"`` / ``"top"``. The warnings and the ``admissible`` flag of
+    the flexure results both read it, so the two never disagree.
+    """
+    ductility_limit = design_code(beam.concrete).max_steel_is_ductility_limit
+    doubly = bool(getattr(state, "doubly_reinforced", False))
+    M = getattr(state, "M_u", getattr(state, "M_Ed", 0.0))
+    tension_face = "bot" if M > 0 else "top" if M < 0 else None
+    over: Dict[str, Tuple[Quantity, Quantity]] = {}
+    for suffix in ("bot", "top"):
+        A_s: Quantity = getattr(beam, f"_A_s_{suffix}")
+        if ductility_limit:
+            limit = getattr(state, f"A_s_max_eff_{suffix}")
+            applies = suffix == tension_face
+        else:
+            limit = getattr(state, f"A_s_max_{suffix}")
+            applies = not doubly
+        A_s_max = _q(limit, "area", beam).to(A_s.units)
+        if applies and A_s_max.magnitude > 0 and A_s > A_s_max and not math.isclose(A_s.magnitude, A_s_max.magnitude):
+            over[suffix] = (A_s, A_s_max)
+    return over
+
+
 def flexure_warnings(beam: "RectangularBeam", label: str, state: Any) -> List[_Raw]:
     """The steel-area limits one flexure combination finds on each face.
 
     Mirrors the limit rows of the detailed report: a face below its minimum
     warns unless the 4/3 relief of ACI 318-19 §9.6.1.3 covers it, and a face
-    above its maximum warns.
-
-    Which maximum, and on which face, is the code's. Where it is the
-    ductility limit of the tension steel (ACI 318-19 / CIRSOC 201-25
-    §9.3.3.1) only the face the combination puts in tension is held to it --
-    the bars a negative moment asks for on the bottom are compression steel,
-    and a combination with no moment pulls neither face -- and the limit is
-    ``A_s_max_eff``, which the compression steel opposite extends: a doubly
-    reinforced face is judged by the strain it reaches, not excused. Where it
-    caps any bars (EN 1992-1-1 §9.2.1.1(3)) both faces are read against it.
+    above its maximum warns (:func:`steel_above_maximum`) -- as
+    ``not_tension_controlled`` under ACI 318-19 / CIRSOC 201-25, whose
+    maximum is the tension-controlled limit, and as ``As_above_max`` under
+    EN 1992-1-1.
     """
     found: List[_Raw] = []
     ductility_limit = design_code(beam.concrete).max_steel_is_ductility_limit
-    doubly = bool(getattr(state, "doubly_reinforced", False))
+    over = steel_above_maximum(beam, state)
     M = getattr(state, "M_u", getattr(state, "M_Ed", 0.0))
     tension_face = "bot" if M > 0 else "top" if M < 0 else None
     for suffix in ("bot", "top"):
@@ -350,13 +389,6 @@ def flexure_warnings(beam: "RectangularBeam", label: str, state: Any) -> List[_R
         A_s_min = _q(getattr(state, f"A_s_min_{suffix}"), "area", beam).to(A_s.units)
         A_s_min_eff = _q(getattr(state, f"A_s_min_eff_{suffix}", getattr(state, f"A_s_min_{suffix}")), "area", beam)
         A_s_min_eff = A_s_min_eff.to(A_s.units)
-        if ductility_limit:
-            limit = getattr(state, f"A_s_max_eff_{suffix}")
-            applies = suffix == tension_face
-        else:
-            limit = getattr(state, f"A_s_max_{suffix}")
-            applies = not doubly
-        A_s_max = _q(limit, "area", beam).to(A_s.units)
         if A_s < A_s_min_eff and not math.isclose(A_s.magnitude, A_s_min_eff.magnitude):
             found.append(
                 _Raw(
@@ -367,16 +399,16 @@ def flexure_warnings(beam: "RectangularBeam", label: str, state: Any) -> List[_R
                     severity=float((A_s_min_eff - A_s).magnitude),
                 )
             )
-        if applies and A_s_max.magnitude > 0 and A_s > A_s_max and not math.isclose(A_s.magnitude, A_s_max.magnitude):
-            found.append(
-                _Raw(
-                    "As_above_max",
-                    {"A_s": A_s, "A_s_max": A_s_max},
-                    _face_name(suffix),
-                    label,
-                    severity=float((A_s - A_s_max).magnitude),
-                )
+        if suffix in over:
+            A_s_max = over[suffix][1]
+            # The clause the tension-controlled limit comes from travels with
+            # the warning as text: §9.3.3.1 for a beam, §7.3.3.1 for a slab.
+            code, values = (
+                ("not_tension_controlled", {"A_s": A_s, "A_s_max": A_s_max, "clause": beam._tension_controlled_clause})
+                if ductility_limit
+                else ("As_above_max", {"A_s": A_s, "A_s_max": A_s_max})
             )
+            found.append(_Raw(code, values, _face_name(suffix), label, severity=float((A_s - A_s_max).magnitude)))
     # The bars nearest the tension face of a beam against the crack-control
     # cap of ACI 318-19 / CIRSOC 201-25 §24.3.2, which §9.7.2.2 sends them to:
     # the spacing the report prints (:meth:`RectangularBeam._tension_bar_spacing`),
@@ -660,7 +692,9 @@ def collect(raws: List[_Raw]) -> Tuple[DesignWarning, ...]:
         # program reads it; it is a word, not a number to print.
         values = dict(worst.values)
         template = _MESSAGES[f"{code}_{direction}" if direction else code]
-        fields = _fields({name: value for name, value in values.items() if name != "direction"})
+        # A text value (the clause a limit comes from) is quoted as it is.
+        fields = _fields({n: v for n, v in values.items() if n != "direction" and not isinstance(v, str)})
+        fields.update({n: v for n, v in values.items() if n != "direction" and isinstance(v, str)})
         if face is not None:
             fields["face"] = translate(_FACES[face])
         warnings.append(

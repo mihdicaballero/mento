@@ -1576,3 +1576,42 @@ def test_the_report_prints_check_rather_than_a_subset_of_it(
     # Ending on the three DCRs and the verdict, as the wall summary does.
     assert printed[-4:] == ["DCRb,top", "DCRb,bot", "DCRv", VERDICT_COLUMN]
     assert len(printed) == len(CHECK_SUMMARY_WIDTHS)
+
+
+def test_a_beam_that_is_not_tension_controlled_fails_the_summary(
+    sample_concrete: Concrete_ACI_318_19, sample_steel: SteelBar
+) -> None:
+    """25x40 with 3Ø25 + 3Ø25 below under 100 kN·m: every DCR below 1, and still ❌.
+
+    A_s = 29.45 cm² against the tension-controlled A_s,max = 14.07 cm²:
+    ACI 318-19 §9.3.3.1 does not allow the section, whatever its capacity.
+    """
+    beam_list = pd.DataFrame(
+        {
+            "Label": ["", "over"],
+            "Comb.": ["", "ELU 1"],
+            "b": ["cm", 25],
+            "h": ["cm", 40],
+            "cc": ["mm", 25],
+            "Nx": ["kN", 0],
+            "Vz": ["kN", 20],
+            "My": ["kNm", 100],
+            "ns": ["", 1],
+            "dbs": ["mm", 10],
+            "sl": ["cm", 15],
+            "n1": ["", 3],
+            "db1": ["mm", 25],
+            "n2": ["", 0],
+            "db2": ["mm", 0],
+            "n3": ["", 3],
+            "db3": ["mm", 25],
+            "n4": ["", 0],
+            "db4": ["mm", 0],
+        }
+    )
+    summary = BeamSummary(concrete=sample_concrete, steel_bar=sample_steel, beam_list=beam_list)
+    results = summary.check()
+
+    beam = summary.nodes[0].section
+    assert max(beam._DCRb_bot, beam._DCRb_top, beam._DCRv) < 1.0
+    assert results[VERDICT_COLUMN][1] == FAIL_MARK
