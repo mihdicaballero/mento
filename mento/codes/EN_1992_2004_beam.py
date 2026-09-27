@@ -764,7 +764,9 @@ def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> ENFle
         # Calculate the design capacity ratio for the bottom side.
         if st.M_Rd_bot == 0:
             st.M_Rd_bot = _MOMENT_FLOOR
-        st.DCR_bot = round(st.M_Ed_bot / st.M_Rd_bot, 3)
+        # Unrounded: a design 0.05 % short read 1.000 and passed. The reports
+        # round when they print.
+        st.DCR_bot = st.M_Ed_bot / st.M_Rd_bot
         st.DCR_top = 0
     else:
         # For negative moments, calculate the reinforcement requirements for the top tension side.
@@ -779,7 +781,7 @@ def _check_flexure_EN_1992_2004(self: "RectangularBeam", force: Forces) -> ENFle
         # Calculate the design capacity ratio for the top side.
         if st.M_Rd_top == 0:
             st.M_Rd_top = _MOMENT_FLOOR
-        st.DCR_top = round(-st.M_Ed_top / st.M_Rd_top, 3)
+        st.DCR_top = -st.M_Ed_top / st.M_Rd_top
         st.DCR_bot = 0
 
     # Determine the maximum detailing cover dimensions for top and bottom.

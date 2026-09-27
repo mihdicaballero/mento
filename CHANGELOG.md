@@ -524,6 +524,11 @@ from the release history and are summaries rather than complete lists.
   42.1 cm² there and 44.9 cm² on top, and warned `As_above_max`; both faces now take
   48.0 cm². The check, the design and the `flexure_admissible` gate read it.
 
+- **The EN 1992-1-1 flexure DCR is no longer rounded before it is compared with 1.** It
+  was rounded to three decimals where it was computed, so a face up to 0.05 % short of its
+  moment read 1.000, passed, and the design accepted layouts that short. The reports still
+  print it to three decimals.
+
 - **mento runs on pint 0.26.** The cap added after 0.26 broke CI is lifted and the
   dependency is `pint>=0.24` again. pint 0.26 types every arithmetic result as
   `PlainQuantity`, the base class of the registry's `Quantity`, so annotating with

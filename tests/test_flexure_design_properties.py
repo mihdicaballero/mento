@@ -440,3 +440,27 @@ def test_the_steel_asked_for_grows_with_the_moment(code: str) -> None:
         # Past the singly reinforced limit the section asks for compression steel.
         assert compression[-1] > 0
         assert math.isfinite(tension[-1])
+
+
+def test_an_en_face_a_hair_short_of_its_moment_does_not_read_as_passing() -> None:
+    """EN 1992-1-1 C25/30, B500S, 20x40, 3Ø16 below, M_Ed = 1.0004·M_Rd.
+
+    The EN check rounded its flexure DCR to three decimals before comparing
+    it with 1, so a face up to 0.05 % short read 1.000 and passed, and the
+    design accepted layouts that short. The ratio is now kept as computed.
+    """
+    beam = RectangularBeam(
+        label="V",
+        concrete=Concrete_EN_1992_2004(name="C25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="B500S", f_y=500 * MPa),
+        width=20 * cm,
+        height=40 * cm,
+        c_c=25 * mm,
+    )
+    beam.set_longitudinal_rebar_bot(3, 16 * mm)
+    M_Rd = beam.flexure_check_results([Forces(label="R", M_y=1 * kNm)])[0].bottom.M_capacity
+    assert M_Rd is not None
+    check = beam.flexure_check_results([Forces(label="U", M_y=1.0004 * M_Rd)])[0].bottom
+
+    assert check.DCR == pytest.approx(1.0004, abs=1e-6)
+    assert check.DCR > 1.0
