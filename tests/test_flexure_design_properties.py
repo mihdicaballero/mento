@@ -233,40 +233,60 @@ def _short_beam() -> Tuple[RectangularBeam, Node]:
     return beam, Node(section=beam, forces=[Forces(label="U", M_y=38.2 * kNm, V_z=36.2 * kN)])
 
 
-def test_a_design_with_no_layout_ends_on_the_round_that_came_closest() -> None:
+def test_a_design_with_no_layout_says_what_it_is_short_of() -> None:
     """ACI 318-19 20x25, f'c 25, c_c 40 mm, Mu = 38.2 kN·m, Vu = 36.2 kN: no layout carries it.
 
-    At the Ø8 starter depth 2Ø20 = 6.28 cm² carry the moment. The shear
-    design picks 1eØ10/9, and at d = 250 - 40 - 10 - 10 = 190 mm the
-    tension-controlled limit is c_t = 0.003·190/(0.003 + 0.0021 + 0.003) =
-    70.4 mm, A_s,max = 0.85·25·200·0.85·70.4/420 = 6.05 cm²: the 2Ø20 lean
-    on the 2Ø10 on top, whose strain at d' = 55 mm is small, and φMn =
-    37.83 kN·m, DCR 1.010. Nothing fits that does better at that depth
-    (2Ø20 under 2Ø10, 2Ø12, 2Ø16 or 2Ø20 at 38.19 kN·m give DCR 1.0096
-    to 1.0120). A design that never looked at the flexure again
-    kept 2Ø20 / 2Ø10 and said nothing, DCR 1.010 in silence. Redoing the
-    flexure at the Ø10 depth ends on 3Ø12 + 3Ø10 in two layers under 2Ø25,
-    DCR 1.166, and a design that kept that last round warned
-    ``As_below_required`` on top quoting A_s,req = 38.4 cm², the compression
-    steel the tension face would need with bars that close to the neutral
-    axis. The design now ends on the round that came closest, 2Ø20 / 2Ø10,
-    and says what the bottom is short of at the depth it ends at: the
-    check's A_s,req = 6.36 cm².
+    The design starts at the Ø10, the smallest stirrup of the ACI 318-19
+    catalogue, and the shear design keeps it (1eØ10/8). At d = 250 - 40 -
+    10 - 10 = 190 mm the tension-controlled limit is c_t = 0.003·190/(0.003
+    + 0.0021 + 0.003) = 70.4 mm, A_s,max = 0.85·25·200·0.85·70.4/420 =
+    6.05 cm², short of what the moment asks: the flexure ends on 3Ø12 + 3Ø10
+    in two layers under 2Ø25, DCR 1.166. A redesign from the stirrup the
+    shear picked lands on the same state, so the loop stops there, and the
+    design says what the bottom is short of: A_s,req = 6.98 cm². The same
+    forces give the same bars on a second run.
     """
     beam, node = _short_beam()
     node.design()
 
-    assert str(beam.reinforcement.bottom) == "2Ø20 mm"
-    assert str(beam.reinforcement.top) == "2Ø10 mm"
+    assert str(beam.reinforcement.bottom) == "2Ø12 mm + 1Ø12 mm + 2Ø10 mm + 1Ø10 mm"
+    assert str(beam.reinforcement.top) == "2Ø25 mm"
     assert beam._stirrup_d_b.to("mm").magnitude == pytest.approx(10.0)
-    assert beam.flexure_design.bottom.DCR == pytest.approx(1.010, abs=0.0005)
-    short = [w for w in node.warnings if w.code == "As_below_required"]
-    assert [w.face for w in short] == ["bottom"]
-    assert short[0].values["A_s_req"].to("cm**2").magnitude == pytest.approx(6.36, abs=0.01)
-    assert short[0].values["A_s_req"] > short[0].values["A_s"]
+    assert beam.flexure_design.bottom.DCR == pytest.approx(1.166, abs=0.0005)
+    short = {w.face: w for w in node.warnings if w.code == "As_below_required"}
+    assert short["bottom"].values["A_s_req"].to("cm**2").magnitude == pytest.approx(6.98, abs=0.01)
+    assert short["bottom"].values["A_s_req"] > short["bottom"].values["A_s"]
 
     node.design()
-    assert str(beam.reinforcement.bottom) == "2Ø20 mm"
+    assert str(beam.reinforcement.bottom) == "2Ø12 mm + 1Ø12 mm + 2Ø10 mm + 1Ø10 mm"
+
+
+def test_a_design_that_does_not_close_goes_back_to_the_round_that_came_closest() -> None:
+    """CIRSOC 201-25 20x25, H25, ADN 420, c_c 40 mm, Mu = 43.32 kN·m, Vu = 21.8 kN.
+
+    The CIRSOC catalogue starts at Ø6, so the design starts at the Ø8 of the
+    settings. Round 0 places 2Ø16 + 1Ø16 under 2Ø32 at the Ø8 depth; the
+    shear design picks 1eØ10/9 and at that depth they leave DCR 1.171. The
+    round redesigned at the Ø10 depth ends on 2Ø12 + 1Ø12 + 2Ø12, DCR 1.340,
+    and the next one repeats it. Round 0 came closest, so it is run again
+    and kept, and the bottom says what it is short of.
+    """
+    beam = RectangularBeam(
+        label="V",
+        concrete=Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=20 * cm,
+        height=25 * cm,
+        c_c=40 * mm,
+    )
+    node = Node(section=beam, forces=[Forces(label="U", M_y=43.32 * kNm, V_z=21.8 * kN)])
+    node.design()
+
+    assert str(beam.reinforcement.bottom) == "2Ø16 mm + 1Ø16 mm"
+    assert str(beam.reinforcement.top) == "2Ø32 mm"
+    assert str(beam.reinforcement.transverse) == "1eØ10 mm/9 cm"
+    assert beam.flexure_design.bottom.DCR == pytest.approx(1.171, abs=0.0005)
+    assert "bottom" in [w.face for w in node.warnings if w.code == "As_below_required"]
 
 
 def test_a_round_whose_bars_do_not_fit_is_not_the_closest() -> None:
@@ -300,16 +320,14 @@ def test_a_round_whose_bars_do_not_fit_is_not_the_closest() -> None:
     assert short.values["A_s_req"].to("cm**2").magnitude == pytest.approx(3.50, abs=0.005)
 
 
-def test_the_design_rounds_are_bounded_and_end_on_the_closest(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The same 20x25 with a single round allowed: the loop runs out instead of repeating.
+def test_the_design_rounds_stop_on_a_repeated_state(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The same 20x25: the loop stops as soon as a round comes back to a state it has seen.
 
     Round 0 starts at the Ø10, the smallest stirrup of the ACI 318-19
-    catalogue, and ends at DCR 1.166; the one round allowed redesigns from
-    the Ø10 the shear design picked, on a state not seen before. The bound
-    stops there. Nothing closed, so one more round starts from the Ø8 of the
-    settings: its 2Ø20 / 2Ø10, placed at the Ø10 depth, leave DCR 1.010, the
-    closest, and the section stays on it (the last round run, so not run
-    again) and warns what it is short of. Three flexure passes.
+    catalogue, and ends at DCR 1.166 with the 1eØ10 the shear design keeps.
+    The redesign from that stirrup lands on the same bars, a state already
+    seen, so the loop stops there, well within its bound, and warns what
+    the section is short of. Two flexure passes, both at the Ø10 depth.
     """
     passes: List[Any] = []
     design_flexure = RectangularBeam._design_flexure
@@ -318,15 +336,14 @@ def test_the_design_rounds_are_bounded_and_end_on_the_closest(monkeypatch: pytes
         passes.append(self._stirrup_d_b.to("mm").magnitude)
         return design_flexure(self, forces)
 
-    monkeypatch.setattr(RectangularBeam, "_DESIGN_ROUNDS", 1)
     monkeypatch.setattr(RectangularBeam, "_design_flexure", counted)
     beam, node = _short_beam()
     node.design()
 
-    assert passes == [10.0, 10.0, 8.0]
-    assert str(beam.reinforcement.bottom) == "2Ø20 mm"
-    assert beam.flexure_design.bottom.DCR == pytest.approx(1.010, abs=0.0005)
-    assert [w.face for w in node.warnings if w.code == "As_below_required"] == ["bottom"]
+    assert passes == [10.0, 10.0]
+    assert str(beam.reinforcement.bottom) == "2Ø12 mm + 1Ø12 mm + 2Ø10 mm + 1Ø10 mm"
+    assert beam.flexure_design.bottom.DCR == pytest.approx(1.166, abs=0.0005)
+    assert "bottom" in [w.face for w in node.warnings if w.code == "As_below_required"]
 
 
 def test_a_slab_whose_shear_puts_its_stirrups_on_and_off_ends_saying_so() -> None:
@@ -383,12 +400,12 @@ def test_a_compression_face_is_searched_without_a_cap_left_by_an_earlier_check()
     A_s,max read off the section -- a value no round of the flexure design
     writes there: the reporting check of the round before had left it,
     7.05 cm². So the round redone with the final Ø10 stirrup searched the top
-    under a cap the first round never had, and the design ended on 2Ø12 +
-    1Ø12 in two layers under 2Ø25, DCR 1.206. Searched with no cap, as the
-    first round was, it ends on 2Ø25 below and 2Ø32 above, DCR 0.879, the
-    layout PR #164 designed. Neither is tension-controlled: the section is
-    too shallow for the moment, and ``As_above_max`` says so either way. A
-    design redone after a check ends where the first one did.
+    under a cap the first round never had, and a design redone after a check
+    ended somewhere else than the first one. Searched with no cap, the design
+    starts at the Ø10 of the ACI 318-19 catalogue and ends on 2Ø12 + 1Ø12 +
+    2Ø12 + 1Ø10 under 2Ø32, DCR 1.237, warning ``As_below_required``: the
+    section is too shallow for the moment. A design redone after a check
+    ends where the first one did.
     """
     beam = RectangularBeam(
         label="V",
@@ -401,13 +418,14 @@ def test_a_compression_face_is_searched_without_a_cap_left_by_an_earlier_check()
     node = Node(section=beam, forces=[Forces(label="C1", M_y=45.19488336734695 * kNm)])
     node.design()
 
-    assert (str(beam.reinforcement.bottom), str(beam.reinforcement.top)) == ("2Ø25 mm", "2Ø32 mm")
-    assert beam.flexure_design.DCR == pytest.approx(0.879, abs=5e-4)
-    assert "As_above_max" in {w.code for w in node.warnings}
+    designed = ("2Ø12 mm + 1Ø12 mm + 2Ø12 mm + 1Ø10 mm", "2Ø32 mm")
+    assert (str(beam.reinforcement.bottom), str(beam.reinforcement.top)) == designed
+    assert beam.flexure_design.DCR == pytest.approx(1.237, abs=5e-4)
+    assert "As_below_required" in {w.code for w in node.warnings}
 
     node.check()
     node.design()
-    assert (str(beam.reinforcement.bottom), str(beam.reinforcement.top)) == ("2Ø25 mm", "2Ø32 mm")
+    assert (str(beam.reinforcement.bottom), str(beam.reinforcement.top)) == designed
 
 
 @pytest.mark.parametrize("code", ["ACI 318-19", "CIRSOC 201-25"])

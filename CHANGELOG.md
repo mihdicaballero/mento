@@ -284,10 +284,10 @@ from the release history and are summaries rather than complete lists.
   `design()` now designs the flexure again with that stirrup on the section, and the
   stirrups again for the new bars, until the pair passes or repeats. When no round passes,
   the design ends on the one that came closest — bars that fit first, then the smallest
-  flexure DCR — and warns what it is short of: an ACI 20×25 with c_c = 40 mm under
-  38.2 kN·m and 36.2 kN keeps 2Ø20 over 2Ø10 and 1eØ10/9 at DCR 1.010, which it used to
-  leave with no warning, and now warns `As_below_required` on the bottom
-  (6.28 < 6.36 cm²). A one-way slab can have no such pair at all, since its depth jumps by
+  flexure DCR — and warns what it is short of: a CIRSOC 20×25 with c_c = 40 mm under
+  43.32 kN·m and 21.8 kN keeps the 2Ø16 + 1Ø16 under 2Ø32 of its first round at DCR 1.171
+  with the 1eØ10/9 the shear design picks, against 1.340 from the round redone at the
+  Ø10 depth, and warns `As_below_required` on the bottom. A one-way slab can have no such pair at all, since its depth jumps by
   a bar when the shear design adds or drops stirrups: an ACI 100×15 slab with f'c = 20 MPa
   under 46.9 kN·m and 60 kN needs stirrups with Ø10/6 and falls 1 % short over them, and
   needs none with Ø10/5, which is past A_s,max. It ended on Ø10/7 over a Ø10 grid at
@@ -303,11 +303,11 @@ from the release history and are summaries rather than complete lists.
   A design starts at the smallest stirrup its code's shear design can pick, never below
   `stirrup_diameter_ini`: Ø10 under ACI 318-19 in metric units, whose catalogue starts
   there, where every beam used to start at Ø8, get a Ø10 and design its flexure a second
-  time. A design that passes is 12 % faster under ACI 318-19 (0.25 → 0.22 s in a sweep of
-  216 beams), and 16 of those 216 came out with a different layout, all passing. When no
-  round closes, one more starts from `stirrup_diameter_ini`, since bars searched at
-  another depth can come out closer on a section too shallow for its moment: the 20×25
-  above keeps its DCR 1.010 that way, against 1.166 from the Ø10.
+  time at a depth no ACI beam has. A design that passes is 12 % faster under ACI 318-19
+  (0.25 → 0.22 s in a sweep of 216 beams), and 16 of those 216 came out with a different
+  layout, all passing. A design that does not close is searched at the depth it will
+  have: the 20×25 above ends on 3Ø12 + 3Ø10 under 2Ø25 at DCR 1.166, warning
+  `As_below_required`, where the Ø8 round used to land on 2Ø20 over 2Ø10 at 1.010.
 
 - **The stirrup design is sized at the depth of its own diameter.** Every bar the code
   offers is sized against the `A_v,req` and the Table 9.7.6.2.2 row read with that bar on
