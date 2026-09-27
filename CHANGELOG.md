@@ -486,6 +486,13 @@ from the release history and are summaries rather than complete lists.
 - **`clear_spacing_below_min` is not reported for a face whose layers hold one bar
   each:** there is no pair to measure.
 
+- **`As_below_required` is only raised on a face short of its moment** (DCR past 1). It
+  used to land on the compression face of a doubly reinforced design, quoting the
+  compression steel the other face would need — hundreds of cm² on a 40×25 — and on faces
+  that carried their moment but were not tension-controlled, quoting an A_s above the one
+  required. The first had nothing to add to the tension face's own warning; the second is
+  what `not_tension_controlled` says.
+
 - **A wall is held to lw/5 and lw/3 only where the concrete does not carry the shear.**
   ACI 318-19 / CIRSOC 201-25 §11.7.3.1 and §11.7.2.1 add those limits to 3h and 450 mm
   "if shear reinforcement is required for in-plane strength", which mento now reads as

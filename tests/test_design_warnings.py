@@ -627,7 +627,8 @@ def test_a_design_short_of_the_moment_is_warned_until_the_bars_reach_it() -> Non
     """A 12x30 web takes 2Ø16 + 2Ø16 = 8.04 cm² at most beside the 1eØ6 it ends with; 60 kNm asks for 8.14 below.
 
     The moment needs compression steel too, 7.27 cm² above, where 2Ø12 + 2Ø12
-    = 4.52 fit: both faces are short, and each is warned for as long as it
+    = 4.52 fit. Only the face short of its moment, the bottom, is warned --
+    the top carries no moment of its own, DCR 0 -- and for as long as it
     carries what the design left. (At 40 kNm this web used to be declared
     short because Ø16 did not fit beside the 8 mm starter stirrup; a full
     design now redoes the flexure with the stirrup the shear design chose,
@@ -645,16 +646,14 @@ def test_a_design_short_of_the_moment_is_warned_until_the_bars_reach_it() -> Non
     node.design()
 
     short = {w.face: w for w in node.warnings if w.code == "As_below_required"}
-    assert set(short) == {"bottom", "top"}
+    assert set(short) == {"bottom"}
     assert short["bottom"].values["A_s"].to("cm**2").magnitude == pytest.approx(8.04, rel=1e-3)
     assert short["bottom"].values["A_s_req"].to("cm**2").magnitude == pytest.approx(8.14, rel=1e-2)
     mento.set_language("es")
     assert "agrandar la sección" in _by_code(node.warnings)["As_below_required"].message
 
-    # Bars set by hand that reach the area clear it, face by face.
+    # Bars set by hand that reach the area clear it.
     beam.set_longitudinal_rebar_bot(2, 20 * mm, 0, None, 2, 20 * mm)
-    assert {w.face for w in node.warnings if w.code == "As_below_required"} == {"top"}
-    beam.set_longitudinal_rebar_top(2, 20 * mm, 0, None, 2, 20 * mm)
     assert "As_below_required" not in {w.code for w in node.warnings}
 
 

@@ -131,7 +131,9 @@ def test_a_design_passes_its_own_check(code: str) -> None:
         face = check.bottom if M > 0 else check.top
         codes = {warning.code for warning in node.warnings}
         assert face.M_capacity is not None and face.M_capacity.magnitude > 0, (b_cm, h_cm, f_c, M)
-        if not codes & _CANNOT and (face.DCR > 1 + 1e-9 or codes & _OVER):
+        # A face past its maximum explains itself (not_tension_controlled /
+        # As_above_max); one short of its moment needs the design to say so.
+        if (face.DCR > 1 + 1e-9 and not codes & (_CANNOT | _OVER)) or (not face.admissible and not codes & _OVER):
             silent.append((b_cm, h_cm, f_c, M, round(face.DCR, 3), sorted(codes)))
         if not independent:
             continue
@@ -390,6 +392,8 @@ def test_a_slab_whose_shear_puts_its_stirrups_on_and_off_ends_saying_so() -> Non
     assert bottom.A_s.to("cm**2").magnitude == pytest.approx(15.71, abs=0.005)
     assert bottom.A_s_max.to("cm**2").magnitude == pytest.approx(15.29, abs=0.005)
     assert ("not_tension_controlled", "bottom") in designed
+    # It carries its moment, so nothing is short of it: the article says what fails.
+    assert "As_below_required" not in {code for code, _ in designed}
 
     node.check()
     assert [(w.code, w.face) for w in node.warnings] == designed
