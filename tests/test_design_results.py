@@ -803,3 +803,54 @@ def test_a_designed_slab_reports_the_whole_bars_it_places() -> None:
     assert bottom.n_bars_placed == sum(placed_bars(layer.n) for layer in bottom.layers)
     assert bottom.n_bars_placed >= bottom.n_bars
     assert bottom.options[0].n_bars_placed == bottom.n_bars_placed
+
+
+def test_changing_the_bars_by_hand_drops_the_results_until_the_next_check() -> None:
+    """The results of the last design described the old section: they go, and a check brings them back.
+
+    A design's own placements keep them, and the reinforcement, which reads
+    the section as it is, is always there.
+    """
+    from mento import OneWaySlab
+
+    beam = RectangularBeam(
+        label="V",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=20 * cm,
+        height=50 * cm,
+        c_c=25 * mm,
+    )
+    forces = [Forces(label="U", M_y=100 * kNm, V_z=100 * kN)]
+    node = Node(section=beam, forces=forces)
+    node.design()
+    assert beam.flexure_checks and beam.shear_checks
+
+    beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=30 * cm)
+    with pytest.raises(DesignNotRunError):
+        beam.flexure_design
+    with pytest.raises(DesignNotRunError):
+        beam.shear_design
+    assert beam.flexure_checks == () and beam.shear_checks == ()
+    assert str(beam.reinforcement.transverse) == "1eØ8 mm/30 cm"
+
+    node.check()
+    assert beam.flexure_design.DCR > 0 and beam.shear_design.DCR > 0
+
+    slab = OneWaySlab(
+        label="L",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=20 * cm,
+        c_c=25 * mm,
+    )
+    slab_node = Node(section=slab, forces=[Forces(label="U", M_y=20 * kNm)])
+    slab_node.design()
+    slab.set_slab_longitudinal_rebar_bot(d_b1=12 * mm, s_b1=20 * cm)
+    with pytest.raises(DesignNotRunError):
+        slab.flexure_design
+    slab_node.design()
+    slab.set_slab_transverse_rebar(d_b=8 * mm, s_long=20 * cm, s_trans=20 * cm)
+    with pytest.raises(DesignNotRunError):
+        slab.shear_design

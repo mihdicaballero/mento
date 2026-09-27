@@ -55,8 +55,8 @@ Codes
     A design found no layout that fits the section and carries the moment, so
     it left the closest it found, and the section has to grow. It quotes the
     area the face was asked for and the one it was given, and stays while the
-    face carries what the design left: bars set by hand afterwards are the
-    check's to judge. Only a face whose DCR is past 1 carries it; one that
+    design's results last: bars set by hand drop it. Only a face whose DCR is
+    past 1 carries it; one that
     carries its moment but is not tension-controlled gets
     ``not_tension_controlled`` instead.
 ``stirrups_required``
@@ -493,8 +493,8 @@ def shortfall_warnings(beam: "RectangularBeam") -> List[_Raw]:
     """The faces the last design could not bring up to what they need.
 
     The design records, per face, the area it asked for and the one it left.
-    The warning holds while the face still carries that one: bars changed by
-    hand afterwards are a different section, which the check judges.
+    Bars or stirrups changed by hand afterwards are a different section, and
+    the setters drop the record with the rest of the design's results.
 
     Only a face that is short of its moment is reported: one whose DCR, the
     worst over the combinations checked, is past 1. A face at or below it
@@ -506,10 +506,8 @@ def shortfall_warnings(beam: "RectangularBeam") -> List[_Raw]:
     """
     found: List[_Raw] = []
     checks = getattr(beam, "_flexure_checks", ())
-    for suffix, (needed, placed) in sorted(getattr(beam, "_short_faces", {}).items()):
+    for suffix, (needed, _placed) in sorted(getattr(beam, "_short_faces", {}).items()):
         A_s: Quantity = getattr(beam, f"_A_s_{suffix}")
-        if not math.isclose(A_s.magnitude, placed.to(A_s.units).magnitude):
-            continue
         if checks and max(getattr(check, _face_name(suffix)).DCR for check in checks) <= 1.0:
             continue
         found.append(_Raw("As_below_required", {"A_s": A_s, "A_s_req": needed.to(A_s.units)}, _face_name(suffix)))

@@ -1,5 +1,6 @@
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any, Callable, FrozenSet, NamedTuple, Optional, Dict, Tuple
+from typing import TYPE_CHECKING, Any, Callable, FrozenSet, Iterator, NamedTuple, Optional, Dict, Tuple
 
 if TYPE_CHECKING:
     from matplotlib.figure import Figure
@@ -286,6 +287,8 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         self._c_d_bot: float = 0
         self._shear_checked = False  # Tracks if shear check or design has been done
         self._flexure_checked = False  # Tracks if shear check or design has been done
+        # Depth of design calls in progress: their own bar placements keep the results.
+        self._designing = 0
         self._doubly_reinforced = False  # Tracks if doubly reinforced section is used
         # The faces whose bars some combination of the last flexure check
         # relied on as compression steel: what the stirrups have to support
@@ -733,13 +736,54 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
     # SET LONGITUDINAL AND TRANSVERSE REBAR AND UPDATE ATTRIBUTES
     ##########################################################
 
+    @contextmanager
+    def _design_in_progress(self) -> Iterator[None]:
+        """Mark a design running, so the bars it places do not drop its results."""
+        self._designing = getattr(self, "_designing", 0) + 1
+        try:
+            yield
+        finally:
+            self._designing -= 1
+
+    def _drop_results(self) -> None:
+        """Forget the results of the reinforcement the section carried before.
+
+        Called by the public setters: bars or stirrups changed by hand are a
+        different section, and the flexure and shear results of the last check
+        or design -- ``flexure_design``, ``shear_design``, the per-combination
+        checks, the warnings they raised and the notebook views -- described
+        the old one. Both go, whichever setter was called: the stirrup sets
+        the effective depth the flexure is computed at, and the bars set the
+        depth and the ratio the shear is. They come back with the next check
+        or design. A design's own placements keep them, since the design is
+        what produces them. So do the design's own verdicts, the faces it
+        could not bring up to their moment (``As_below_required``) or fit
+        (``bars_do_not_fit``). What reads the section as it is now -- the
+        reinforcement, the bar spacing -- is not a result and stays.
+        """
+        if getattr(self, "_designing", 0):
+            return
+        self._flexure_checked = False
+        self._shear_checked = False
+        self._flexure_checks = []
+        self._flexure_warnings = []
+        self._shear_checks = []
+        self._shear_warnings = []
+        # What the last design could not reach is a result of that design too.
+        self._short_faces = {}
+        self._infeasible_faces = set()
+
     def set_transverse_rebar(
         self,
         n_stirrups: int = 0,
         d_b: Quantity = 0 * mm,
         s_l: Quantity = 0 * cm,
     ) -> None:
-        """Set transverse reinforcement or clear it with an all-zero input."""
+        """Set transverse reinforcement or clear it with an all-zero input.
+
+        Drops the flexure and shear results of the last check or design (see
+        :meth:`_drop_results`).
+        """
 
         # Reject booleans and non-integer stirrup counts.
         if isinstance(n_stirrups, bool) or not isinstance(n_stirrups, Integral):
@@ -766,6 +810,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
             self._stirrup_s_l = s_l
             self._A_v = 0 * cm**2 / m
             self._update_stirrup_dependents()
+            self._drop_results()
             return
 
         # Every non-empty reinforcement configuration must be strictly positive.
@@ -790,6 +835,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         self._A_v = A_vs / s_l
 
         self._update_stirrup_dependents()
+        self._drop_results()
 
     def _update_stirrup_dependents(self) -> None:
         """Recompute what the stirrup diameter enters into.
@@ -866,6 +912,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         self._d_b4_b = d_b4 if d_b4 is not None else 0 * L
         self._face_set_by_hand("bot")
         self._update_longitudinal_rebar_attributes()
+        self._drop_results()
 
     def set_longitudinal_rebar_top(
         self,
@@ -889,6 +936,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         self._d_b4_t = d_b4 if d_b4 is not None else 0 * L
         self._face_set_by_hand("top")
         self._update_longitudinal_rebar_attributes()
+        self._drop_results()
 
     def _face_set_by_hand(self, face: str) -> None:
         """A face given bars is no longer the face the search gave up on.
@@ -1106,8 +1154,9 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         The alternatives kept for each face are verified on the section it
         leaves (see :meth:`_verify_longitudinal_options`).
         """
-        all_results = self._design_flexure(forces)
-        self._verify_longitudinal_options(forces)
+        with self._design_in_progress():
+            all_results = self._design_flexure(forces)
+            self._verify_longitudinal_options(forces)
         return all_results
 
     def _design_flexure(self, forces: list[Forces]) -> DataFrame:
@@ -1460,6 +1509,11 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         -- 8 → 10 → 8 -- left the last one applied against the demand of the
         other.
         """
+        with self._design_in_progress():
+            return self._design_shear(forces)
+
+    def _design_shear(self, forces: list[Forces]) -> DataFrame:
+        """:meth:`design_shear` without marking a design in progress."""
         self._shear_options = ()
         self._stirrup_d_b = self._design_start_stirrup()
         self._update_longitudinal_rebar_attributes()
@@ -1568,12 +1622,13 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         last, on the section the shear design finished: its stirrup sets the
         depth the bars sit at.
         """
-        self._reset_for_design()
-        self._design_flexure(forces)
-        self.design_shear(forces)
-        self._settle_design(forces)
-        self.check_flexure(forces)
-        self._verify_longitudinal_options(forces)
+        with self._design_in_progress():
+            self._reset_for_design()
+            self._design_flexure(forces)
+            self.design_shear(forces)
+            self._settle_design(forces)
+            self.check_flexure(forces)
+            self._verify_longitudinal_options(forces)
 
     def _settle_design(self, forces: list[Forces]) -> None:
         """Redo the flexure with the stirrup the shear design chose, until the pair holds.

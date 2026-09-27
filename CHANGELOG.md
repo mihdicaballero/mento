@@ -486,6 +486,15 @@ from the release history and are summaries rather than complete lists.
 - **`clear_spacing_below_min` is not reported for a face whose layers hold one bar
   each:** there is no pair to measure.
 
+- **Changing a beam's or slab's reinforcement by hand drops its results.** The setters
+  (`set_longitudinal_rebar_bot/top`, `set_transverse_rebar` and the slab's) left
+  `flexure_design`, `shear_design`, the per-combination checks and the warnings describing
+  the section as it was checked: set a lighter stirrup after a design and `shear_design`
+  still showed the old one. They now drop them, as the wall's setters do, until the next
+  check or design, which raises `DesignNotRunError` meanwhile; the design's own placements
+  keep them. The design's verdicts go with them: `As_below_required` and `bars_do_not_fit`
+  used to clear face by face, and now clear with any change.
+
 - **`As_below_required` is only raised on a face short of its moment** (DCR past 1). It
   used to land on the compression face of a doubly reinforced design, quoting the
   compression steel the other face would need — hundreds of cm² on a 40×25 — and on faces

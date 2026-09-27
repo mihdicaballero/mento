@@ -216,6 +216,11 @@ How many are kept is a setting, three by default:
 The options belong to the design that produced them. A check alone reports none, and
 changing the bars by hand afterwards clears the options of what was changed.
 
+Changing the bars or the stirrups by hand drops every result of the last check or design
+— ``flexure_design`` and ``shear_design`` raise ``DesignNotRunError``, the per-combination
+checks and the warnings they raised are empty — until the next check or design: they
+described the section as it was. ``reinforcement`` always reads the section as it is.
+
 A design depends only on its inputs. It starts from the same state every time — the
 stirrup diameter the settings assume, the placeholder bars — so running it again, or after
 setting reinforcement by hand, gives the same result.

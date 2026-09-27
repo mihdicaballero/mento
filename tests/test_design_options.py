@@ -23,6 +23,7 @@ from mento import (
     SteelBar,
     StirrupOption,
 )
+from mento.design_results import DesignNotRunError
 from mento.rebar import Rebar
 from mento.units import MPa, cm, kN, kNm, m, mm
 
@@ -110,10 +111,17 @@ def test_options_are_empty_before_any_design() -> None:
 
 
 def test_options_are_dropped_once_the_bars_are_changed_by_hand() -> None:
+    """Bars set by hand drop the results until the next check; the face left alone keeps its options."""
     beam = _designed(TWO_FACES)
     beam.set_longitudinal_rebar_bot(n1=4, d_b1=25 * mm)
     beam.set_transverse_rebar(n_stirrups=2, d_b=12 * mm, s_l=10 * cm)
 
+    with pytest.raises(DesignNotRunError):
+        beam.flexure_design
+    with pytest.raises(DesignNotRunError):
+        beam.shear_design
+
+    beam.check(TWO_FACES)
     assert beam.flexure_design.bottom.options == ()
     assert beam.flexure_design.top.options != ()  # untouched face keeps its own
     assert beam.shear_design.options == ()

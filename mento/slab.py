@@ -152,6 +152,7 @@ class OneWaySlab(RectangularBeam):
 
         # Update effective heights
         self._update_effective_heights()
+        self._drop_results()
 
     def _design_start_stirrup(self) -> Quantity:
         """A slab strip starts a design with no stirrups, the way it is built."""
@@ -348,6 +349,7 @@ class OneWaySlab(RectangularBeam):
         self._face_set_by_hand("bot")
         self._calculate_longitudinal_rebars()
         self._update_longitudinal_rebar_attributes()
+        self._drop_results()
 
     def set_slab_longitudinal_rebar_top(
         self,
@@ -372,6 +374,7 @@ class OneWaySlab(RectangularBeam):
         self._face_set_by_hand("top")
         self._calculate_longitudinal_rebars()
         self._update_longitudinal_rebar_attributes()
+        self._drop_results()
 
     def _calculate_longitudinal_rebars(self) -> None:
         """The bars each layer puts on the strip, from its spacing and the width.

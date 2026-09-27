@@ -899,14 +899,14 @@ def test_clear_spacing_follows_the_stirrup_whatever_the_call_order(bars_first: b
     assert beam._available_s_bot.to("mm").magnitude == pytest.approx(28.67, abs=0.01)
 
 
-def test_bars_set_by_hand_that_fit_clear_the_flag_of_their_face() -> None:
+def test_bars_set_by_hand_clear_the_flag_the_design_left() -> None:
     """A 10x30 web finds no layout for 80 kNm on either face (it is doubly
     reinforced and neither the tension nor the compression steel fits), so
     the design flags both. The flag is the search's verdict on the width,
     not a property of the bars: one Ø12 set by hand has 100 - 2*(25 + 10) -
     12 = 18 mm beside it and fits. In PR #164 the flag outlived the bars and
-    the face was reported as not fitting with a single bar on it; the other
-    face keeps its flag until it is set too.
+    the face was reported as not fitting with a single bar on it. Bars set by
+    hand now drop every result of the design, both flags with them.
     """
     beam = _beam(width=10 * cm, height=30 * cm)
     node = Node(section=beam, forces=[Forces(label="U", V_z=20 * kN, M_y=80 * kNm)])
@@ -917,9 +917,8 @@ def test_bars_set_by_hand_that_fit_clear_the_flag_of_their_face() -> None:
 
     assert not_fitting() == {"bottom", "top"}
     beam.set_longitudinal_rebar_bot(n1=1, d_b1=12 * mm)
-    assert not_fitting() == {"top"}
-    beam.set_longitudinal_rebar_top(n1=1, d_b1=12 * mm)
     assert not_fitting() == set()
+    beam.set_longitudinal_rebar_top(n1=1, d_b1=12 * mm)
     # A design run again reads the width again, and flags it again.
     node.design()
     assert not_fitting() == {"bottom", "top"}
@@ -942,8 +941,6 @@ def test_slab_bars_set_by_hand_clear_the_flag_of_their_face() -> None:
     )
     slab._infeasible_faces = {"bot", "top"}
     slab.set_slab_longitudinal_rebar_bot(d_b1=12 * mm, s_b1=15 * cm)
-    assert slab._infeasible_faces == {"top"}
-    slab.set_slab_longitudinal_rebar_top(d_b1=12 * mm, s_b1=15 * cm)
     assert slab._infeasible_faces == set()
 
 
