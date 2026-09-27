@@ -29,9 +29,11 @@ class BeamSettings:
     is first computed, before a stirrup has been chosen: neither code states a
     minimum stirrup diameter for a beam, and the 8 mm is simply a bar of the
     local catalogue (CIRSOC 201-25 §20.2.1.3, Tabla 20.2.1, which starts at
-    6 mm). It sits between the two diameters a design then settles on -- 10 mm
-    under ACI 318-19 in metric units, 6 mm under CIRSOC 201-25 -- so the
-    effective depth shifts slightly once the stirrup is chosen.
+    6 mm). A design never starts below the smallest stirrup its code's
+    catalogue offers, so under ACI 318-19 in metric units, whose catalogue
+    starts at 10 mm, it starts at 10 mm; under CIRSOC 201-25 and EN 1992-1-1
+    it starts at 8 mm, and the effective depth shifts slightly once the
+    stirrup is chosen.
     ``minimum_longitudinal_diameter``, ``max_longitudinal_diameter``,
     ``max_diameter_diff`` and ``max_bars_per_layer`` bound the search, and are
     the engineer's choice.

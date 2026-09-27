@@ -300,6 +300,15 @@ from the release history and are summaries rather than complete lists.
   `design_flexure()` and `design_shear()` on their own are unchanged, and a design still
   gives the same bars every time.
 
+  A design starts at the smallest stirrup its code's shear design can pick, never below
+  `stirrup_diameter_ini`: Ø10 under ACI 318-19 in metric units, whose catalogue starts
+  there, where every beam used to start at Ø8, get a Ø10 and design its flexure a second
+  time. A design that passes is 12 % faster under ACI 318-19 (0.25 → 0.22 s in a sweep of
+  216 beams), and 16 of those 216 came out with a different layout, all passing. When no
+  round closes, one more starts from `stirrup_diameter_ini`, since bars searched at
+  another depth can come out closer on a section too shallow for its moment: the 20×25
+  above keeps its DCR 1.010 that way, against 1.166 from the Ø10.
+
 - **The stirrup design is sized at the depth of its own diameter.** Every bar the code
   offers is sized against the `A_v,req` and the Table 9.7.6.2.2 row read with that bar on
   the section, so the applied layout passes its own check by construction. The design

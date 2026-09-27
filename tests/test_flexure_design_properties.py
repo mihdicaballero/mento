@@ -303,12 +303,13 @@ def test_a_round_whose_bars_do_not_fit_is_not_the_closest() -> None:
 def test_the_design_rounds_are_bounded_and_end_on_the_closest(monkeypatch: pytest.MonkeyPatch) -> None:
     """The same 20x25 with a single round allowed: the loop runs out instead of repeating.
 
-    Round 0 (the Ø8 depth) leaves DCR 1.010 with the Ø10 stirrup; the one
-    round allowed redesigns at the Ø10 depth and ends past it, 1.166, on a
-    state not seen before. The bound stops there, and the section is not
-    left on that round: round 0 is run again (its result is a function of
-    the stirrup it starts from) and the design warns what it is short of.
-    Three flexure passes: round 0, round 1, and round 0 again.
+    Round 0 starts at the Ø10, the smallest stirrup of the ACI 318-19
+    catalogue, and ends at DCR 1.166; the one round allowed redesigns from
+    the Ø10 the shear design picked, on a state not seen before. The bound
+    stops there. Nothing closed, so one more round starts from the Ø8 of the
+    settings: its 2Ø20 / 2Ø10, placed at the Ø10 depth, leave DCR 1.010, the
+    closest, and the section stays on it (the last round run, so not run
+    again) and warns what it is short of. Three flexure passes.
     """
     passes: List[Any] = []
     design_flexure = RectangularBeam._design_flexure
@@ -322,7 +323,7 @@ def test_the_design_rounds_are_bounded_and_end_on_the_closest(monkeypatch: pytes
     beam, node = _short_beam()
     node.design()
 
-    assert passes == [8.0, 10.0, 8.0]
+    assert passes == [10.0, 10.0, 8.0]
     assert str(beam.reinforcement.bottom) == "2Ø20 mm"
     assert beam.flexure_design.bottom.DCR == pytest.approx(1.010, abs=0.0005)
     assert [w.face for w in node.warnings if w.code == "As_below_required"] == ["bottom"]

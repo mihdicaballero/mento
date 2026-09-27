@@ -673,11 +673,18 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         """The stirrup diameter a design starts from, whatever ran before it.
 
         A beam assumes the one its settings name until the shear design picks
-        one; a slab starts with none.
+        one, but never less than the smallest the shear design can pick: the
+        flexure is sized at the depth of this stirrup, and a starter the
+        catalogue does not offer is one the shear design always replaces,
+        after which :meth:`_settle_design` redoes the flexure at the new
+        depth. ACI 318-19 in metric starts its catalogue at Ø10 against the
+        Ø8 of the settings, which made that second round the rule there. A
+        slab starts with none.
         """
-        return self.settings.stirrup_diameter_ini
+        catalogue = design_code(self.concrete).transverse_rebar(Rebar(self), 0 * kN, self._alpha)[0]
+        return max(self.settings.stirrup_diameter_ini, min(catalogue))
 
-    def _reset_for_design(self) -> None:
+    def _reset_for_design(self, starter: Optional[Quantity] = None) -> None:
         """Return the reinforcement to where a first design starts.
 
         A design reads the section it runs on -- the stirrup diameter sets the
@@ -686,9 +693,12 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         first one's answer and could land somewhere else: 1eØ10/28 and then
         1eØ10/27 on the same beam. Starting every design from the same state is
         what makes it a function of its inputs.
+
+        ``starter`` replaces the stirrup a first design assumes; see
+        :meth:`_settle_design` for the one round that uses it.
         """
         self._stirrup_n = 0
-        self._stirrup_d_b = self._design_start_stirrup()
+        self._stirrup_d_b = self._design_start_stirrup() if starter is None else starter
         self._stirrup_s_l = 0 * cm
         self._A_v = 0 * cm**2 / m
         self._shear_options = ()
@@ -1607,9 +1617,10 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         verdict = self._flexure_verdict(forces, ("bot", "top"))
         if verdict.passes:
             return
-        # Each round's verdict, with the stirrup it started from (None: the
-        # starter stirrup of the first).
-        rounds: list[Tuple[_Verdict, Optional[Tuple[int, Quantity, Quantity]]]] = [(verdict, None)]
+        # Each round's verdict, with the stirrup it started from and the
+        # starter diameter of a first design (None: the design's own).
+        Start = Tuple[Optional[Tuple[int, Quantity, Quantity]], Optional[Quantity]]
+        rounds: list[Tuple[_Verdict, Start]] = [(verdict, (None, None))]
         seen = {self._design_state()}
         for _ in range(self._DESIGN_ROUNDS):
             start = (self._stirrup_n, self._stirrup_d_b, self._stirrup_s_l)
@@ -1617,25 +1628,46 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
             verdict = self._flexure_verdict(forces, ("bot", "top"))
             if verdict.passes:
                 return
-            rounds.append((verdict, start))
+            rounds.append((verdict, (start, None)))
             state = self._design_state()
             if state in seen:
                 break
             seen.add(state)
+        # The design starts at the smallest stirrup the shear design can pick
+        # (:meth:`_design_start_stirrup`), which spares the second round most
+        # designs needed from the Ø8 of the settings. When nothing closes, that
+        # Ø8 is one more depth to search from: the bars it finds are placed at
+        # the depth of the stirrup the shear design then picks, and on a
+        # section too shallow for its moment they can come out closer than any
+        # round searched at that depth. An ACI 20x25 with c_c = 40 mm under
+        # 38.2 kN·m ends at DCR 1.010 from the Ø8 and 1.166 from the Ø10.
+        starter = self.settings.stirrup_diameter_ini
+        if starter != self._design_start_stirrup():
+            self._redesign_from(None, forces, starter=starter)
+            verdict = self._flexure_verdict(forces, ("bot", "top"))
+            if verdict.passes:
+                return
+            rounds.append((verdict, (None, starter)))
         last = len(rounds) - 1
         closest = min(range(len(rounds)), key=lambda i: (not rounds[i][0].fits, rounds[i][0].DCR, i != last))
         if closest != last:
-            self._redesign_from(rounds[closest][1], forces)
+            self._redesign_from(rounds[closest][1][0], forces, starter=rounds[closest][1][1])
         self._record_shortfall(forces)
 
-    def _redesign_from(self, stirrup: Optional[Tuple[int, Quantity, Quantity]], forces: list[Forces]) -> None:
+    def _redesign_from(
+        self,
+        stirrup: Optional[Tuple[int, Quantity, Quantity]],
+        forces: list[Forces],
+        starter: Optional[Quantity] = None,
+    ) -> None:
         """One design round: the flexure at the depth of ``stirrup``, then the stirrups for its bars.
 
         ``stirrup`` is ``(n_stirrups, d_b, s_l)`` to put on the section first,
-        or ``None`` for the starter stirrup a first design assumes.
+        or ``None`` for the starter stirrup a first design assumes -- or
+        ``starter``, when given.
         """
         if stirrup is None:
-            self._reset_for_design()
+            self._reset_for_design(starter)
         else:
             self.set_transverse_rebar(*stirrup)
             self._reset_longitudinal_for_design()
