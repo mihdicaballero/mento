@@ -247,19 +247,11 @@ ES.update(
         "Vertical wall mesh: ρl = {rho} is below the minimum ρl,min = {rho_min}.": (
             "Malla vertical del muro: ρl = {rho} es menor que la mínima ρl,mín = {rho_min}."
         ),
-        (
-            "Horizontal wall mesh spacing: {s} exceeds the limit mento applies, {s_max} "
-            "(§11.7.3.1 with lw/5 taken always: conservative)."
-        ): (
-            "Separación de la malla horizontal del muro: {s} supera el límite que aplica mento, {s_max} "
-            "(§11.7.3.1 con lw/5 siempre: conservador)."
+        ("Horizontal wall mesh spacing: {s} exceeds the maximum {s_max} (§11.7.3.1; lw/5 where Vu > φVc)."): (
+            "Separación de la malla horizontal del muro: {s} supera la máxima {s_max} (§11.7.3.1; lw/5 donde Vu > φVc)."
         ),
-        (
-            "Vertical wall mesh spacing: {s} exceeds the limit mento applies, {s_max} "
-            "(§11.7.2.1 with lw/3 taken always: conservative)."
-        ): (
-            "Separación de la malla vertical del muro: {s} supera el límite que aplica mento, {s_max} "
-            "(§11.7.2.1 con lw/3 siempre: conservador)."
+        ("Vertical wall mesh spacing: {s} exceeds the maximum {s_max} (§11.7.2.1; lw/3 where Vu > φVc)."): (
+            "Separación de la malla vertical del muro: {s} supera la máxima {s_max} (§11.7.2.1; lw/3 donde Vu > φVc)."
         ),
         (
             "Stirrup spacing along the member: {s} exceeds the {s_max} that lateral support of the "

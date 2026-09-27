@@ -173,6 +173,11 @@ Spacing limits
    \qquad
    s_{v,max} = \min\left(\frac{l_w}{3},\ 3t,\ 450\ \text{mm}\right)
 
+The :math:`l_w/5` and :math:`l_w/3` terms apply "if shear reinforcement is required for
+in-plane strength", which mento reads as :math:`V_u > \phi V_c` for the combination;
+where the concrete alone carries the shear the limits are :math:`\min(3t,\ 450\ \text{mm})`
+both ways. The design meshes the wall to the tightest limit over its combinations.
+
 Implementation decisions
 ------------------------
 

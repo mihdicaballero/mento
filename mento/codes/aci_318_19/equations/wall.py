@@ -185,42 +185,52 @@ def min_vertical_reinforcement_ratio(hw_lw: float, rho_t: float, rho_t_req: floa
     return max(MIN_REINFORCEMENT_RATIO, min(rho_l_eq, rho_t_req))
 
 
-def max_horizontal_spacing(l_w: float, thickness: float, *, is_imperial: bool = False) -> float:
+def max_horizontal_spacing(
+    l_w: float, thickness: float, *, is_imperial: bool = False, shear_reinforcement_required: bool = True
+) -> float:
     """Maximum horizontal bar spacing — ACI 318-19 §11.7.3.1 / CIRSOC 201-25 §11.7.3.1.
 
     The spacing of the transverse reinforcement in a cast-in-place wall: both
     codes cap it at the lesser of 3h and 450 mm (18 in.), and add that s shall
     not exceed l_w/5 *where shear reinforcement is required for in-plane
-    strength*. mento applies the l_w/5 always, which is the conservative
-    reading. Precast walls (§11.7.3.2 in both) are out of scope.
+    strength* -- where the concrete alone does not carry the shear, Vu > φVc.
+    Precast walls (§11.7.3.2 in both) are out of scope.
 
     Args:
         l_w: Wall length (mm, or in).
         thickness: Wall thickness — the h of the clause (mm, or in).
+        shear_reinforcement_required: Whether Vu > φVc, which brings in l_w/5.
 
     Returns:
-        min(l_w/5, 3*t, 450 mm or 18 in).
+        min(l_w/5, 3*t, 450 mm or 18 in), or min(3*t, 450 mm or 18 in) where
+        no shear reinforcement is required.
     """
     absolute_cap = 18.0 if is_imperial else 450.0
-    return min(l_w / 5, 3 * thickness, absolute_cap)
+    limit = min(3 * thickness, absolute_cap)
+    return min(l_w / 5, limit) if shear_reinforcement_required else limit
 
 
-def max_vertical_spacing(l_w: float, thickness: float, *, is_imperial: bool = False) -> float:
+def max_vertical_spacing(
+    l_w: float, thickness: float, *, is_imperial: bool = False, shear_reinforcement_required: bool = True
+) -> float:
     """Maximum vertical bar spacing — ACI 318-19 §11.7.2.1 / CIRSOC 201-25 §11.7.2.1.
 
     The spacing of the longitudinal reinforcement in a cast-in-place wall: both
     codes cap it at the lesser of 3h and 450 mm (18 in.), and add that s shall
     not exceed l_w/3 *where shear reinforcement is required for in-plane
-    strength*. As in :func:`max_horizontal_spacing`, mento applies the l_w/3
-    always. Precast walls (§11.7.2.2 in both) are out of scope.
+    strength*, Vu > φVc, as in :func:`max_horizontal_spacing`. Precast walls
+    (§11.7.2.2 in both) are out of scope.
 
     Args:
         l_w: Wall length (mm, or in).
         thickness: Wall thickness — the h of the clause (mm, or in).
+        shear_reinforcement_required: Whether Vu > φVc, which brings in l_w/3.
 
     Returns:
-        min(l_w/3, 3*t, 450 mm or 18 in). Looser than the horizontal limit
+        min(l_w/3, 3*t, 450 mm or 18 in), or min(3*t, 450 mm or 18 in) where
+        no shear reinforcement is required. Looser than the horizontal limit
         because the horizontal bars are the ones resisting in-plane shear.
     """
     absolute_cap = 18.0 if is_imperial else 450.0
-    return min(l_w / 3, 3 * thickness, absolute_cap)
+    limit = min(3 * thickness, absolute_cap)
+    return min(l_w / 3, limit) if shear_reinforcement_required else limit

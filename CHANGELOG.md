@@ -472,8 +472,13 @@ from the release history and are summaries rather than complete lists.
 - **`clear_spacing_below_min` is not reported for a face whose layers hold one bar
   each:** there is no pair to measure.
 
-- **`mesh_spacing_exceeds_max` says the limit is the one mento applies** (§11.7.3.1 /
-  §11.7.2.1 with lw/5 and lw/3 taken always, a conservative choice), not the clause's.
+- **A wall is held to lw/5 and lw/3 only where the concrete does not carry the shear.**
+  ACI 318-19 / CIRSOC 201-25 §11.7.3.1 and §11.7.2.1 add those limits to 3h and 450 mm
+  "if shear reinforcement is required for in-plane strength", which mento now reads as
+  Vu > φVc for the combination; it applied them always. An ACI 20×100 wall under 100 kN,
+  below φVc = 127.5 kN, is no longer ❌ for a 25 cm spacing against lw/5 = 20 cm. The wall
+  design meshes to the tightest limit over its combinations, and
+  `mesh_spacing_exceeds_max` quotes the clause and when lw/5 or lw/3 enters.
 
 - **A combination with no label is named `#n` by its position** in `combinations`; an
   empty tuple now means a limit of the section alone, as documented.

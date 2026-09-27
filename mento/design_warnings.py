@@ -87,12 +87,10 @@ Codes
     below ρl,min of ACI 318-19 / CIRSOC 201-25 §11.6.2. ``values`` carries
     ``direction``, ``"h"`` or ``"v"``.
 ``mesh_spacing_exceeds_max``
-    The bars of a wall mesh are further apart than the limit mento applies:
-    the lesser of 3h and 450 mm (18 in.) of ACI 318-19 / CIRSOC 201-25
-    §11.7.2.1 (vertical) and §11.7.3.1 (horizontal), and the lw/3 and lw/5
-    those clauses add only where shear reinforcement is required for
-    in-plane strength -- which mento takes always, a conservative choice,
-    so the spacing may exceed the limit and still be what the clause allows.
+    The bars of a wall mesh are further apart than ACI 318-19 / CIRSOC
+    201-25 §11.7.2.1 (vertical) and §11.7.3.1 (horizontal) allow: the lesser
+    of 3h and 450 mm (18 in.), and lw/3 and lw/5 where shear reinforcement is
+    required for in-plane strength, read as Vu > φVc for the combination.
     ``values`` carries ``direction``, ``"h"`` or ``"v"``.
 ``stirrup_spacing_exceeds_compression_support``
     The section relies on compression steel and its stirrups are further
@@ -212,12 +210,10 @@ _MESSAGES: Dict[str, str] = {
     "mesh_ratio_below_min_h": "Horizontal wall mesh: ρt = {rho} is below the required ρt = {rho_min}.",
     "mesh_ratio_below_min_v": "Vertical wall mesh: ρl = {rho} is below the minimum ρl,min = {rho_min}.",
     "mesh_spacing_exceeds_max_h": (
-        "Horizontal wall mesh spacing: {s} exceeds the limit mento applies, {s_max} "
-        "(§11.7.3.1 with lw/5 taken always: conservative)."
+        "Horizontal wall mesh spacing: {s} exceeds the maximum {s_max} (§11.7.3.1; lw/5 where Vu > φVc)."
     ),
     "mesh_spacing_exceeds_max_v": (
-        "Vertical wall mesh spacing: {s} exceeds the limit mento applies, {s_max} "
-        "(§11.7.2.1 with lw/3 taken always: conservative)."
+        "Vertical wall mesh spacing: {s} exceeds the maximum {s_max} (§11.7.2.1; lw/3 where Vu > φVc)."
     ),
     "stirrup_spacing_exceeds_compression_support": (
         "Stirrup spacing along the member: {s} exceeds the {s_max} that lateral support of the "

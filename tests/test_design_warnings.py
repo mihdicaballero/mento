@@ -354,41 +354,43 @@ def test_slab_bar_spacing_limits_are_warned() -> None:
     assert ("bar_spacing_below_min", "top") in found
 
 
-def test_wall_mesh_spacing_names_the_limit_as_mentos_own() -> None:
-    """ACI 318-19 wall 25x150, hw = 3 m, Ø16/40 both ways, Vu = 100 kN (DCR 0.14).
+def test_wall_mesh_spacing_takes_lw_over_5_only_where_the_shear_needs_steel() -> None:
+    """ACI 318-19 wall 25x150, hw = 3 m, H25, Ø16/40 both ways.
 
     §11.7.3.1 caps the horizontal spacing at the lesser of 3h = 750 mm and
     450 mm, and adds lw/5 = 300 mm only "if shear reinforcement is required
-    for in-plane strength", which at DCR 0.14 it is not; §11.7.2.1 does the
-    same with lw/3 = 500 mm. mento takes lw/5 and lw/3 always, so 400 mm is
-    past the 300 mm it applies horizontally and within the 450 mm vertically.
-    The message says whose limit it is, instead of "exceeds the maximum", which
-    read as the clause's.
+    for in-plane strength"; §11.7.2.1 does the same with lw/3 = 500 mm.
+    φVc = 0.75·0.17·√25·250·1500 = 239.1 kN (α_c = 0.17 at hw/lw = 2).
+    Under 100 kN the concrete carries it and 400 mm is within 450 mm both
+    ways: no warning. Under 300 kN it does not, and the horizontal mesh is
+    held to lw/5 = 300 mm; the vertical, to min(lw/3, 450) = 450 mm.
     """
     from mento import ShearWall
     from mento.units import m
 
-    wall = ShearWall(
-        label="W",
-        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
-        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
-        thickness=25 * cm,
-        length=1.5 * m,
-        height=3.0 * m,
-        c_c=20 * mm,
-    )
-    wall.set_horizontal_rebar(d_b=16 * mm, s=40 * cm)
-    wall.set_vertical_rebar(d_b=16 * mm, s=40 * cm)
-    wall.shear_check_results([Forces(label="E", V_z=100 * kN)])
+    def wall_under(V: Quantity) -> ShearWall:
+        wall = ShearWall(
+            label="W",
+            concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+            steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+            thickness=25 * cm,
+            length=1.5 * m,
+            height=3.0 * m,
+            c_c=20 * mm,
+        )
+        wall.set_horizontal_rebar(d_b=16 * mm, s=40 * cm)
+        wall.set_vertical_rebar(d_b=16 * mm, s=40 * cm)
+        wall.shear_check_results([Forces(label="E", V_z=V)])
+        return wall
 
-    spacing = [w for w in wall.warnings if w.code == "mesh_spacing_exceeds_max"]
+    assert [w for w in wall_under(100 * kN).warnings if w.code == "mesh_spacing_exceeds_max"] == []
+
+    spacing = [w for w in wall_under(300 * kN).warnings if w.code == "mesh_spacing_exceeds_max"]
     assert len(spacing) == 1
+    assert spacing[0].values["direction"] == "h"
     assert spacing[0].values["s"].to("mm").magnitude == pytest.approx(400)
     assert spacing[0].values["s_max"].to("mm").magnitude == pytest.approx(300)
-    assert spacing[0].message.startswith("Horizontal wall mesh spacing: 40 cm exceeds the limit mento applies, 30 cm")
-    assert "lw/5" in spacing[0].message
-    mento.set_language("es")
-    assert "el límite que aplica mento" in wall.warnings[0].message
+    assert "lw/5 where Vu > φVc" in spacing[0].message
 
 
 def test_stirrup_legs_too_far_apart_across_the_width_are_worded_as_such() -> None:
@@ -450,8 +452,7 @@ def test_the_other_direction_of_each_wall_mesh_limit_is_worded_as_such() -> None
         found["mesh_ratio_below_min"].message == "Horizontal wall mesh: ρt = 0.00314 is below the required ρt = 0.0056."
     )
     assert found["mesh_spacing_exceeds_max"].message == (
-        "Vertical wall mesh spacing: 60 cm exceeds the limit mento applies, 45 cm "
-        "(§11.7.2.1 with lw/3 taken always: conservative)."
+        "Vertical wall mesh spacing: 60 cm exceeds the maximum 45 cm (§11.7.2.1; lw/3 where Vu > φVc)."
     )
     mento.set_language("es")
     found = _by_code(wall.warnings)
@@ -459,8 +460,7 @@ def test_the_other_direction_of_each_wall_mesh_limit_is_worded_as_such() -> None
         "Malla horizontal del muro: ρt = 0.00314 es menor que la requerida ρt = 0.0056."
     )
     assert found["mesh_spacing_exceeds_max"].message == (
-        "Separación de la malla vertical del muro: 60 cm supera el límite que aplica mento, 45 cm "
-        "(§11.7.2.1 con lw/3 siempre: conservador)."
+        "Separación de la malla vertical del muro: 60 cm supera la máxima 45 cm (§11.7.2.1; lw/3 donde Vu > φVc)."
     )
 
 

@@ -257,17 +257,27 @@ def _calculate_spacing_limits_wall(self: "ShearWall", st: WallShearCheckState) -
         s_v,max = min(lw/3, 3t, 450 mm / 18 in)
 
     Both codes impose the lw/5 and lw/3 terms only where shear reinforcement is
-    required for in-plane strength; mento applies them always, which is
-    conservative. The precast limits — §11.7.2.2 and §11.7.3.2 in both — are
-    looser and are not offered here.
+    required for in-plane strength, which is read as the concrete alone not
+    carrying the combination, Vu > φVc: an ACI 20x100 wall under 100 kN,
+    below φVc = 127.5 kN, is held to 3t and 450 mm and not to lw/5 = 20 cm.
+    Needs ``st.V_u`` and ``st.V_c_wall`` set. The precast limits — §11.7.2.2
+    and §11.7.3.2 in both — are looser and are not offered here.
     """
     is_imperial = self.concrete.is_imperial
     _, length_unit = _wall_units(self)
     lw = self.length.to(length_unit).magnitude
     t = self.thickness.to(length_unit).magnitude
+    phi_V_c = self.concrete.phi_v * st.V_c_wall  # type: ignore[attr-defined]
+    required = bool(st.V_u > phi_V_c)
 
-    st.s_h_max = wall_eq.max_horizontal_spacing(lw, t, is_imperial=is_imperial) * length_unit
-    st.s_v_max = wall_eq.max_vertical_spacing(lw, t, is_imperial=is_imperial) * length_unit
+    st.s_h_max = (
+        wall_eq.max_horizontal_spacing(lw, t, is_imperial=is_imperial, shear_reinforcement_required=required)
+        * length_unit
+    )
+    st.s_v_max = (
+        wall_eq.max_vertical_spacing(lw, t, is_imperial=is_imperial, shear_reinforcement_required=required)
+        * length_unit
+    )
 
 
 ##########################################################
@@ -456,14 +466,19 @@ def _design_shear_wall_core(
 
     max_rho_t_req = 0.0
     state = None
+    # The spacing limits move with the combination (lw/5 and lw/3 only where
+    # Vu > φVc), so the mesh takes the tightest of them.
+    s_h_max = s_v_max = None
     for force in forces:
         state = _check_shear_ACI_318_19_wall(self, force)
         max_rho_t_req = max(max_rho_t_req, state.rho_t_req.to("").magnitude)
+        s_h_max = state.s_h_max if s_h_max is None else min(s_h_max, state.s_h_max)
+        s_v_max = state.s_v_max if s_v_max is None else min(s_v_max, state.s_v_max)
     # Designing is meant to change the wall, so the last state is applied.
     assert state is not None  # the empty-forces case raised above
     apply_wall_shear_state(self, state)
 
-    d_b_h, s_h = _select_wall_mesh(self, max_rho_t_req, self._s_h_max, transverse_bars)
+    d_b_h, s_h = _select_wall_mesh(self, max_rho_t_req, s_h_max, transverse_bars)
     self.set_horizontal_rebar(d_b_h, s_h)
 
     # ρl,min of §11.6.2(a) with the ρt the mesh just applied provides. The
@@ -471,7 +486,7 @@ def _design_shear_wall_core(
     # combinations is the value at the worst-case ρt,req; hw/lw is geometry only.
     max_rho_l_min = wall_eq.min_vertical_reinforcement_ratio(state.hw_lw, float(self._rho_t), max_rho_t_req)
 
-    d_b_v, s_v = _select_wall_mesh(self, max_rho_l_min, self._s_v_max, vertical_bars)
+    d_b_v, s_v = _select_wall_mesh(self, max_rho_l_min, s_v_max, vertical_bars)
     self.set_vertical_rebar(d_b_v, s_v)
 
 
