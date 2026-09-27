@@ -287,12 +287,11 @@ from the release history and are summaries rather than complete lists.
   flexure DCR — and warns what it is short of: a CIRSOC 20×25 with c_c = 40 mm under
   43.32 kN·m and 21.8 kN keeps the 2Ø16 + 1Ø16 under 2Ø32 of its first round at DCR 1.171
   with the 1eØ10/9 the shear design picks, against 1.340 from the round redone at the
-  Ø10 depth, and warns `As_below_required` on the bottom. A one-way slab can have no such pair at all, since its depth jumps by
+  Ø10 depth, and warns `As_below_required` on the bottom. A one-way slab's depth jumps by
   a bar when the shear design adds or drops stirrups: an ACI 100×15 slab with f'c = 20 MPa
-  under 46.9 kN·m and 60 kN needs stirrups with Ø10/6 and falls 1 % short over them, and
-  needs none with Ø10/5, which is past A_s,max. It ended on Ø10/7 over a Ø10 grid at
-  DCR 1.103 with no warning, and now ends on Ø10/5 with no stirrups, warning
-  `As_above_max` and `As_below_required`. In a sweep of 480 ACI / CIRSOC / EN designs
+  under 46.9 kN·m and 60 kN ended on Ø10/7 over a Ø10 grid at DCR 1.103 with no warning,
+  and now settles on Ø10/6 over the grid (17 bars, 13.35 cm² against 13.25 required),
+  DCR 0.994. In a sweep of 480 ACI / CIRSOC / EN designs
   (b 20–60, h 40–80, 30–400 kN·m, 80 and 250 kN) 28 used to fail their own check without
   saying so — 24 past DCR 1 with no warning, 4 warning `As_below_min` on their own bars;
   with this and the stirrup fixes below none does, and every one of the 15 left past DCR 1
@@ -375,16 +374,6 @@ from the release history and are summaries rather than complete lists.
   a CIRSOC 40×80 H30 under 1196.5 kN·m asks 51.90 cm², takes 11Ø25 = 54.00 cm² against
   A_s,max = 53.88 cm², and its 2Ø10 on top lift the limit to 55.36 cm²; set with 1eØ8/30 it
   now warns against 160 mm, and the design details 1eØ6/16 where it detailed 1eØ8/30.
-
-- **A slab strip is counted as bars per metre.** `Ø10/12` on a metre is 8.33 bars,
-  6.54 cm²/m, not the 9 bars (7.07 cm²) that covered the strip. The design rounds the
-  spacing down to the whole centimetre, so the strip never carries less steel than the
-  search chose; a CIRSOC 100×25 strip under 80 kN·m used to be reported at DCR 0.995 with a
-  real DCR of 1.071 per metre, and a 100×30 strip designed to its 5.40 cm² minimum
-  carried 5.24. The footing's mat search counted the same way and is read the same.
-  `RebarLayer.n` and the `n_bars` properties are floats now (still whole on beams), and
-  `format_longitudinal_rebar` takes a float count; a section drawing shows the whole bars
-  that cover the strip.
 
 - **A bar count that comes in as a float prints whole.** `format_longitudinal_rebar(2.0,
   "16")` printed "2.0Ø16"; it prints "2Ø16". A beam given its bars as floats —
