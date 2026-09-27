@@ -82,15 +82,16 @@ from the release history and are summaries rather than complete lists.
 - **The release workflow publishes a test count.** After uploading to PyPI it attaches
   `stats.json` (`{"tests": N}`) to the GitHub Release and sends a `mento-release`
   `repository_dispatch` to `mihdicaballero/mento-web`. `N` counts the tests marked
-  `published_example`: the 31 whose expected numbers come from a document outside mento —
-  the Calcpad sheets of the ACI and EN beam cases (kept outside the repository), The
-  Concrete Centre's *How to design concrete structures using Eurocode 2*, 3. Slabs, and
-  rows 27–49 of the ETABS/spreadsheet cross-check of the flexure suite. Each says where
+  `published_example`: the 37 whose expected numbers come from a document outside mento —
+  the Calcpad sheets of the ACI and EN beam cases (kept outside the repository), the EN
+  1992-1-1 shear calculators of eurocodeapplied.com, The Concrete Centre's *How to design
+  concrete structures using Eurocode 2*, 3. Slabs, and rows 27–49 of the ETABS/spreadsheet
+  cross-check of the flexure suite. Each says where
   in that document the number is, in a `Source:` paragraph of its docstring, and
-  `tests/test_published_examples.py` fails when one does not. 21 tests that pinned mento's
+  `tests/test_published_examples.py` fails when one does not. 15 tests that pinned mento's
   own output — among them the 4/3 rule of §9.6.1.3 and the geometric floor where ETABS
   applies A_s,min, re-baselined EN checks, the slab tests whose Calcpad sheet still carries
-  the beam minimum, and eight shear tests that cite no source — are not marked. With nothing
+  the beam minimum, and two ACI shear tests that cite no source — are not marked. With nothing
   marked the workflow publishes 0 and warns; it never publishes the size of the whole
   suite. The dispatch needs the repository secret `MENTO_WEB_DISPATCH_TOKEN`, a token with
   `Contents: read and write` on mento-web; without it the step warns and the release goes

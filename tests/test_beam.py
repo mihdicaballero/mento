@@ -335,10 +335,14 @@ def test_set_transverse_rebar_defaults_clear_stirrups_imperial(
     assert stirrups.A_v.to("inch**2/ft").magnitude == 0
 
 
-# Not published_example: no source is cited for these numbers (the sibling tests cite a Calcpad sheet).
+@pytest.mark.published_example
 def test_shear_check_EN_1992_2004_rebar_1(
     beam_example_EN_1992_2004_01: RectangularBeam,
 ) -> None:
+    """Stirrups Ø6/25 under V_Ed = 100 kN.
+
+    Source: eurocodeapplied.com, shear resistance of a reinforced concrete beam, EN 1992-1-1 §6.2.
+    """
     f = Forces(V_z=100 * kN)
     beam_example_EN_1992_2004_01.set_transverse_rebar(n_stirrups=1, d_b=6 * mm, s_l=25 * cm)
     beam_example_EN_1992_2004_01.set_longitudinal_rebar_bot(n1=4, d_b1=16 * mm)
@@ -362,10 +366,14 @@ def test_shear_check_EN_1992_2004_rebar_1(
     assert results.iloc[1]["VEd,2≤VRd"] is True
 
 
-# Not published_example: no source is cited for these numbers (the sibling tests cite a Calcpad sheet).
+@pytest.mark.published_example
 def test_shear_check_EN_1992_2004_rebar_2(
     beam_example_EN_1992_2004_01: RectangularBeam,
 ) -> None:
+    """Stirrups under V_Ed = 350 kN.
+
+    Source: eurocodeapplied.com, shear resistance of a reinforced concrete beam, EN 1992-1-1 §6.2.
+    """
     f = Forces(V_z=350 * kN)
     beam_example_EN_1992_2004_01.set_transverse_rebar(n_stirrups=1, d_b=6 * mm, s_l=25 * cm)
     beam_example_EN_1992_2004_01.set_longitudinal_rebar_bot(n1=4, d_b1=16 * mm)
@@ -389,10 +397,14 @@ def test_shear_check_EN_1992_2004_rebar_2(
     assert results.iloc[1]["VEd,2≤VRd"] is False
 
 
-# Not published_example: no source is cited for these numbers (the sibling tests cite a Calcpad sheet).
+@pytest.mark.published_example
 def test_shear_check_EN_1992_2004_rebar_3(
     beam_example_EN_1992_2004_01: RectangularBeam,
 ) -> None:
+    """Stirrups under V_Ed = 500 kN.
+
+    Source: eurocodeapplied.com, shear resistance of a reinforced concrete beam, EN 1992-1-1 §6.2.
+    """
     f = Forces(V_z=500 * kN)
     beam_example_EN_1992_2004_01.set_transverse_rebar(n_stirrups=1, d_b=6 * mm, s_l=25 * cm)
     beam_example_EN_1992_2004_01.set_longitudinal_rebar_bot(n1=4, d_b1=16 * mm)
@@ -452,10 +464,14 @@ def test_shear_check_EN_1992_2004_no_rebar_1(
     assert results.iloc[1]["VEd,2≤VRd"] is True
 
 
-# Not published_example: no source is cited for these numbers (the sibling tests cite a Calcpad sheet).
+@pytest.mark.published_example
 def test_shear_check_EN_1992_2004_no_rebar_2(
     beam_example_EN_1992_2004_01: RectangularBeam,
 ) -> None:
+    """No stirrups under V_Ed = 30 kN.
+
+    Source: eurocodeapplied.com, shear resistance of a reinforced concrete beam, EN 1992-1-1 §6.2.
+    """
     f = Forces(V_z=30 * kN)
     # The reference example has no stirrups at all, so say so: the section no
     # longer infers it from n_stirrups == 0 while still assuming the settings'
@@ -483,10 +499,14 @@ def test_shear_check_EN_1992_2004_no_rebar_2(
     assert results.iloc[1]["VEd,2≤VRd"] is True
 
 
-# Not published_example: no source is cited for these numbers (the sibling tests cite a Calcpad sheet).
+@pytest.mark.published_example
 def test_shear_check_EN_1992_2004_no_rebar_3(
     beam_example_EN_1992_2004_01: RectangularBeam,
 ) -> None:
+    """No stirrups under V_Ed = 30 kN with N_Ed = 50 kN.
+
+    Source: eurocodeapplied.com, shear resistance of a reinforced concrete beam, EN 1992-1-1 §6.2.
+    """
     f = Forces(N_x=50 * kN, V_z=30 * kN)
     beam_example_EN_1992_2004_01.set_longitudinal_rebar_bot(n1=4, d_b1=16 * mm)
     # The reference example has no stirrups at all, so say so: the section no
@@ -515,10 +535,14 @@ def test_shear_check_EN_1992_2004_no_rebar_3(
     assert results.iloc[1]["VEd,2≤VRd"] is True
 
 
-# Not published_example: no source is cited for these numbers (the sibling tests cite a Calcpad sheet).
+@pytest.mark.published_example
 def test_shear_design_EN_1992_2004_1(
     beam_example_EN_1992_2004_01: RectangularBeam,
 ) -> None:
+    """Stirrup design under V_Ed = 30 kN.
+
+    Source: eurocodeapplied.com, shear resistance of a reinforced concrete beam, EN 1992-1-1 §6.2.
+    """
     f = Forces(N_x=0 * kN, V_z=30 * kN)
     beam_example_EN_1992_2004_01.set_longitudinal_rebar_bot(n1=4, d_b1=16 * mm)
     node = Node(section=beam_example_EN_1992_2004_01, forces=f)
