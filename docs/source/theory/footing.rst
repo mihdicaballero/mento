@@ -473,6 +473,7 @@ Validation
      - Detailing practice
    * - The mat never undoes the design
      - ``test_matching_the_mat_never_undoes_the_design``,
+       ``test_the_mat_covers_each_face_in_every_metre``,
        ``test_the_mat_keeps_each_face_within_the_spacing_range``,
        ``test_a_footing_reinforced_on_one_face_gets_no_second_grid``,
        ``test_a_slab_still_details_its_faces_independently``

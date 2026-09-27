@@ -349,19 +349,27 @@ def test_the_design_rounds_stop_on_a_repeated_state(monkeypatch: pytest.MonkeyPa
     assert "bottom" in [w.face for w in node.warnings if w.code == "As_below_required"]
 
 
-def test_a_slab_whose_shear_puts_its_stirrups_on_and_off_settles_on_a_pair_that_holds() -> None:
+def test_a_slab_whose_shear_puts_its_stirrups_on_and_off_ends_saying_so() -> None:
     """ACI 318-19 one-way slab 100x15, f'c 20 MPa, ADN 420, c_c 25 mm, Mu = 46.9 kN·m, Vu = 60 kN.
 
     A slab strip may carry no stirrups at all, so its depth jumps by a whole
     bar when the shear design adds or drops them: d = 150 - 25 - 5 = 120 mm
     bare, 110 mm over a Ø10 grid. With tension-controlled
     c <= 0.003/(0.003 + 0.0051)·d, A_s,req / A_s,max are 11.76 / 15.29 cm²
-    at 120 mm and 13.25 / 14.02 cm² at 110 mm, and the bars decide whether
-    the concrete alone carries the shear (Table 22.5.5.1(c) reads ρw).
+    at 120 mm and 13.25 / 14.02 cm² at 110 mm. And the bars decide the
+    stirrups: without them φVc = 0.75·0.66·ρw^(1/3)·√20·1000·120 (Table
+    22.5.5.1(c), λs = 1) is 58.9 kN with Ø10/6 = 13.09 cm² (ρw = 0.01091),
+    short of 60, and 62.6 kN with Ø10/5 = 15.71 cm² (ρw = 0.01309).
 
-    Over the grid, Ø10/6 is ceil(100/6) = 17 bars, 13.35 cm², inside the
-    13.25 to 14.02 cm² window: the design settles there with its Ø10 grid,
-    DCR 0.994, and nothing to warn. The check run afterwards agrees.
+    So there is no pair that holds: Ø10/6 needs the grid, and over the grid
+    it is 1 % short (13.09 < 13.25, DCR 1.010); at that depth no whole-cm
+    Ø10 or Ø12 spacing lands between 13.25 and 14.02, so the design takes
+    Ø10/5, which needs no stirrups and, back at 120 mm, is past A_s,max
+    (15.71 > 15.29). PR #164 ended on Ø10/7 over a 1eØ10 grid, DCR 1.103,
+    with no warning at all, a design failing its own check in silence. It
+    now ends on the closer round, Ø10/5 with no stirrups, φMn = 58.54 kN·m (DCR 0.801, φ =
+    0.88 at ε_t = 0.0049), and says what it misses: ``not_tension_controlled`` on the
+    bottom. The check run afterwards finds the same.
     """
     slab = OneWaySlab(
         label="L",
@@ -373,18 +381,18 @@ def test_a_slab_whose_shear_puts_its_stirrups_on_and_off_settles_on_a_pair_that_
     )
     node = Node(section=slab, forces=[Forces(label="U", M_y=46.9 * kNm, V_z=60 * kN)])
     node.design()
+    designed = [(w.code, w.face) for w in node.warnings]
 
-    assert str(slab.reinforcement.bottom) == "Ø10 mm/6 cm"
+    assert str(slab.reinforcement.bottom) == "Ø10 mm/5 cm"
+    assert str(slab.reinforcement.transverse) == "no stirrups"
     bottom = slab.flexure_design.bottom
-    assert bottom.n_bars == 17
-    assert bottom.A_s.to("cm**2").magnitude == pytest.approx(13.35, abs=0.005)
-    assert bottom.A_s_req.to("cm**2").magnitude == pytest.approx(13.25, abs=0.005)
-    assert bottom.A_s_max.to("cm**2").magnitude == pytest.approx(14.02, abs=0.005)
-    assert bottom.DCR == pytest.approx(0.994, abs=0.0005)
-    assert node.warnings == ()
+    assert bottom.DCR == pytest.approx(0.801, abs=0.0005)
+    assert bottom.A_s.to("cm**2").magnitude == pytest.approx(15.71, abs=0.005)
+    assert bottom.A_s_max.to("cm**2").magnitude == pytest.approx(15.29, abs=0.005)
+    assert ("not_tension_controlled", "bottom") in designed
 
     node.check()
-    assert node.warnings == ()
+    assert [(w.code, w.face) for w in node.warnings] == designed
 
 
 def test_a_compression_face_is_searched_without_a_cap_left_by_an_earlier_check() -> None:

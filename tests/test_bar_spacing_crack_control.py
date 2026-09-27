@@ -47,7 +47,7 @@ def test_an_aci_slab_is_held_to_300_mm_by_table_24_3_2() -> None:
     min(380*1 - 62.5, 300*1) = min(317.5, 300) = 300 mm. The three Ø10 the
     search picks for the 2.26 cm² required would sit at floor(100/3) = 33 cm,
     inside the 36 cm of §7.7.2.3 and past the 30 cm of §24.3.2, so the strip
-    is detailed Ø10/30: ceil(100/30) = 4 bars, 3.14 cm².
+    is detailed Ø10/30: 3.33 bars, 2.62 cm².
     """
     slab = _slab(Concrete_ACI_318_19(name="H25", f_c=25 * MPa), 12 * cm)
     Node(section=slab, forces=Forces(label="C1", M_y=7.5 * kNm)).design()
@@ -55,7 +55,7 @@ def test_an_aci_slab_is_held_to_300_mm_by_table_24_3_2() -> None:
     assert slab._max_bar_spacing().to("mm").magnitude == pytest.approx(300.0)
     layer = slab.reinforcement.bottom.layers[0]
     assert (layer.d_b, layer.s.to("cm").magnitude) == (10 * mm, 30)
-    assert slab.reinforcement.bottom.A_s.to("cm**2").magnitude == pytest.approx(3.14, abs=5e-3)
+    assert slab.reinforcement.bottom.A_s.to("cm**2").magnitude == pytest.approx(2.62, abs=5e-3)
     assert slab.reinforcement.bottom.A_s >= slab.flexure_design.bottom.A_s_req
     assert slab.warnings == ()
 

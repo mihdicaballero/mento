@@ -742,3 +742,64 @@ def test_a_s_calc_is_enveloped_like_a_s_req() -> None:
     assert envelope_flexure_face(checks, "bottom").A_s_calc == 5 * cm**2
     assert envelope_flexure_face(checks, "top").A_s_calc is None
     assert envelope_flexure_face([], "bottom").A_s_calc is None
+
+
+def test_a_slab_layer_is_computed_per_metre_and_placed_in_whole_bars() -> None:
+    """Ø10/15 on a 1 m strip: 6.67 bars, 5.24 cm², for the strength; 7 bars to place.
+
+    A beam's layers place the bars they count.
+    """
+    from mento import OneWaySlab
+    from mento.design_results import placed_bars
+
+    slab = OneWaySlab(
+        label="L",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=20 * cm,
+        c_c=25 * mm,
+    )
+    slab.set_slab_longitudinal_rebar_bot(d_b1=10 * mm, s_b1=15 * cm)
+    bottom = slab.reinforcement.bottom
+    layer = bottom.layers[0]
+
+    assert layer.n == pytest.approx(100 / 15)
+    assert bottom.A_s.to("cm**2").magnitude == pytest.approx(5.236, abs=5e-4)
+    assert layer.n_placed == 7
+    assert bottom.n_bars_placed == 7
+    # A whole count reached through the division stays whole.
+    assert placed_bars(100 / 20) == 5
+    assert placed_bars(5.000000001) == 5
+
+    beam = RectangularBeam(
+        label="V",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=20 * cm,
+        height=50 * cm,
+        c_c=25 * mm,
+    )
+    beam.set_longitudinal_rebar_bot(n1=3, d_b1=16 * mm)
+    assert beam.reinforcement.bottom.n_bars_placed == beam.reinforcement.bottom.n_bars == 3
+
+
+def test_a_designed_slab_reports_the_whole_bars_it_places() -> None:
+    """The design result and its options place ceil(width / s) bars of each layer."""
+    from mento import OneWaySlab
+    from mento.design_results import placed_bars
+
+    slab = OneWaySlab(
+        label="L",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=20 * cm,
+        c_c=25 * mm,
+    )
+    Node(section=slab, forces=[Forces(label="U", M_y=30 * kNm)]).design()
+    bottom = slab.flexure_design.bottom
+
+    assert bottom.n_bars_placed == sum(placed_bars(layer.n) for layer in bottom.layers)
+    assert bottom.n_bars_placed >= bottom.n_bars
+    assert bottom.options[0].n_bars_placed == bottom.n_bars_placed

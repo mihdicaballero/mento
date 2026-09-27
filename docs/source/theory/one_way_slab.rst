@@ -62,9 +62,17 @@ A design is written back as a spacing
 The bar selection is the beam's, and it answers with groups of bars per layer. A
 design applied to a slab is translated back into the parameterisation above: the bars
 of a layer are spread over the design width, and the spacing is rounded to the whole
-centimetre (inch, in imperial) so that it is one that can be detailed. The rounding is
-checked against the count it produces, so it never leaves the strip with fewer bars —
-and so less steel — than the search selected.
+centimetre (inch, in imperial) so that it is one that can be detailed. It is rounded
+**down**: the strip carries :math:`b/s` bars, so a spacing wider than :math:`b/n`
+would carry fewer bars — and so less steel — than the search selected. Rounding down
+only ever adds steel, and by less than one bar in the strip.
+
+The count :math:`n = b/s` is not rounded either. A strip is a slice of a slab that goes
+on past both of its edges, so what it carries is the bars per metre its spacing gives:
+a metre of Ø10/12 carries 8.33 bars, 6.54 cm²/m, which is what every metre of that slab
+carries. Counting the whole bars that would cover the strip (9, 7.07 cm²) credited it
+with 8 % more steel than it has, and let a face designed to its minimum fall short of
+it unnoticed.
 
 Maximum bar spacing
 ^^^^^^^^^^^^^^^^^^^
@@ -213,8 +221,12 @@ Validation
      - Internal consistency
    * - Design written back as a spacing
      - ``test_a_designed_slab_is_detailed_by_a_spacing_not_by_a_bar_count``,
-       ``test_a_spacing_is_never_rounded_into_fewer_bars_than_the_design_chose``
+       ``test_a_spacing_is_never_rounded_into_less_steel_than_the_design_chose``
      - Internal consistency
+   * - Steel of a strip is bars per metre
+     - ``test_the_steel_of_a_strip_is_the_bar_area_times_the_bars_per_metre``,
+       ``test_a_slab_designed_to_its_minimum_reaches_it_in_every_metre``
+     - Internal consistency; CIRSOC 201-25 §7.6.1
    * - Crack-control spacing cap
      - ``test_an_aci_slab_is_held_to_300_mm_by_table_24_3_2``,
        ``test_a_slab_spread_past_table_24_3_2_is_warned``
