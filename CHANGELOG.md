@@ -716,9 +716,11 @@ correct the engine's output for the first and divide it back out for the second.
 - **`Footing`: a one-way slab bearing on the ground.** Everything about it is a
   `OneWaySlab`; what changes is the minimum longitudinal reinforcement, and that change is
   the design codes' rather than the class's. `Section.support` (`"free"` / `"soil"`) is
-  a ClassVar the codes read, so the clause lives in `codes/`: ACI 318-19 §9.6.1.1(b)
-  grants the exemption and §13.3.1.2 substitutes the shrinkage and temperature steel of
-  §24.4.3.2 on the gross section (CIRSOC 201-25 shares the clause); EN 1992-1-1 takes the
+  a ClassVar the codes read, so the clause lives in `codes/`: ACI 318-19 §13.3.2.1 sends a
+  one-way footing to Chapter 7, whose minimum is the shrinkage and temperature steel of
+  §24.4.3.2 on the gross section (CIRSOC 201-25 shares the clauses; this entry used to
+  cite a "§9.6.1.1(b)", which does not exist, and §13.3.1.2, which is about the depth of
+  the bottom reinforcement); EN 1992-1-1 takes the
   halved geometric minimum of a foundation on every face and, on a face that is bending,
   the larger of that and the crack-control minimum of §7.3.2(2). A footing is detailed
   between 100 and 300 mm, both faces set out at one spacing (or the top at twice the
