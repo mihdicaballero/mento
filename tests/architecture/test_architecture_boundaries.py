@@ -20,7 +20,7 @@ from mento.material import Concrete_ACI_318_19, Concrete_EN_1992_2004, SteelBar
 from mento.node import Node
 from mento.units import cm, kN, kNm, mm, MPa
 
-EQUATIONS_ROOT = Path(__file__).resolve().parent.parent / "mento" / "codes"
+EQUATIONS_ROOT = Path(__file__).resolve().parents[2] / "mento" / "codes"
 
 EQUATION_MODULES = sorted(EQUATIONS_ROOT.glob("*/equations/*.py"))
 

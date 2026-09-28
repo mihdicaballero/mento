@@ -88,7 +88,7 @@ from the release history and are summaries rather than complete lists.
   concrete structures using Eurocode 2*, 3. Slabs, and rows 27–49 of the ETABS/spreadsheet
   cross-check of the flexure suite. Each says where
   in that document the number is, in a `Source:` paragraph of its docstring, and
-  `tests/test_published_examples.py` fails when one does not. 13 tests that pinned mento's
+  `tests/architecture/test_published_examples.py` fails when one does not. 13 tests that pinned mento's
   own output — among them the 4/3 rule of §9.6.1.3 and the geometric floor where ETABS
   applies A_s,min, re-baselined EN checks, the slab tests whose Calcpad sheet still carries
   the beam minimum — are not marked. With nothing
@@ -132,7 +132,7 @@ from the release history and are summaries rather than complete lists.
   260 kN·m, is told No. 10 (9.5 mm) at 200 mm, where nothing was raised. A one-way slab is
   not held to it.
 
-- **`tests/test_docs_references.py`** fails when a page under `docs/source` cites a
+- **`tests/architecture/test_docs_references.py`** fails when a page under `docs/source` cites a
   `test_…` that `tests/` does not define.
 
 ### Performance
@@ -211,7 +211,7 @@ from the release history and are summaries rather than complete lists.
 
   In the 960-design sweep every ACI design now either passes its check or warns
   `As_below_required`, and a brute-force search finds no valid layout for any of the
-  ones that warn. `tests/test_flexure_design_properties.py` holds the property.
+  ones that warn. `tests/design/test_flexure_design_properties.py` holds the property.
 
 - **The vibrator size only spaces the top bars in a design.** The check and the warnings
   already held the bottom face to 25 mm (1 in.) and the bar diameter, but the bar search
@@ -541,6 +541,15 @@ from the release history and are summaries rather than complete lists.
   300 mm footing cap is EHE-08 art. 58.8.2, not EN §9.8.2.1. The rule is unchanged.
 
 ### Changed
+
+- **`tests/` is organised in folders, and the validated cases have their own.** The
+  suite follows the package — `architecture/`, `equations/`, `materials/`, `sections/`,
+  `elements/`, `design/`, `reports/` — and `tests/validation/` holds exactly the 39 tests
+  marked `published_example`, the ones whose numbers come from a Calcpad sheet, the
+  ETABS/spreadsheet cross-check, The Concrete Centre's guide or eurocodeapplied.com.
+  `tests/architecture/test_published_examples.py` fails if a marked test lives elsewhere or
+  an unmarked one lives there. The beam examples both folders use moved to `conftest.py`,
+  and the pint adapters of the ACI flexure functions to `tests/helpers.py`.
 
 - **A one-way slab takes the slab minimum, 0.0018·Ag, under ACI 318-19 and CIRSOC 201-25.**
   `OneWaySlab` used the beam minimum of §9.6.1.2, ρmin·b·d, and the 4/3 relief of

@@ -66,20 +66,6 @@ def test_min_reinforcement_ratio_si(f_c, f_y, expected, governing):
     assert eq.min_reinforcement_ratio(f_c, f_y, ACI_FY_CAP_SI) == pytest.approx(expected, rel=1e-12)
 
 
-@pytest.mark.published_example
-def test_min_reinforcement_ratio_us_matches_the_validated_case():
-    """Test_Etabs_05 of the beam suite: f_c = 6000 psi, f_y = 60 ksi.
-
-    3*sqrt(6000)/60000 = 0.003873, which governs over 200/60000 = 0.003333.
-
-    Source: BEAM-01-Flexure-Rectangle ACI 318-19-v6.xlsm, sheet Flexion, row 31 (Test_Etabs_05),
-    column R: A_s,min = 1.7041 in² = 0.003873 * 16 in * 27.5 in.
-    """
-    got = eq.min_reinforcement_ratio(6000.0, 60_000.0, ACI_FY_CAP_US, is_imperial=True)
-    assert got == pytest.approx(0.003873, rel=1e-4)
-    assert got == pytest.approx(3 * math.sqrt(6000.0) / 60_000.0, rel=1e-12)
-
-
 def test_min_reinforcement_ratio_us_floor_governs_at_low_fc():
     # f_c = 3000 psi: 3*sqrt(3000)/60000 = 0.002739 < 200/60000 = 0.003333
     assert eq.min_reinforcement_ratio(3000.0, 60_000.0, ACI_FY_CAP_US, is_imperial=True) == pytest.approx(

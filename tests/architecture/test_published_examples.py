@@ -27,8 +27,10 @@ from pathlib import Path
 
 import pytest
 
-TESTS_ROOT = Path(__file__).resolve().parent
-TEST_MODULES = sorted(TESTS_ROOT.glob("test_*.py"))
+TESTS_ROOT = Path(__file__).resolve().parents[1]
+TEST_MODULES = sorted(TESTS_ROOT.rglob("test_*.py"))
+#: Where the marked tests live, and only they: a reader goes straight to it.
+VALIDATION = TESTS_ROOT / "validation"
 MARK = "published_example"
 
 # Where in the document the number is. A Calcpad sheet is one computation, so
@@ -116,6 +118,27 @@ def test_each_marked_test_cites_its_source(marked: MarkedTest) -> None:
         f"{where}: the 'Source:' paragraph names no place in the document "
         f"(a .cpd sheet; sheet + row/column/cell; page, table, figure, equation or section): {source!r}"
     )
+
+
+def test_the_marked_tests_live_in_validation_and_nothing_else_does() -> None:
+    """``tests/validation/`` holds the tests that reproduce a case validated outside mento.
+
+    So a reader goes to one folder for the book, guide and Calcpad cases, and to
+    the rest of ``tests/`` for the ones written against mento itself. A marked
+    test elsewhere, or an unmarked one in there, fails.
+    """
+    misplaced = [m.id for m in MARKED if m.module.parent != VALIDATION]
+    assert misplaced == [], f"marked {MARK} outside tests/validation/: {misplaced}"
+    marked = {(m.module, m.name) for m in MARKED}
+    unmarked = [
+        f"{path.name}::{node.name}"
+        for path in sorted(VALIDATION.glob("test_*.py"))
+        for node in ast.walk(_parse(path))
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name.startswith("test_")
+        and (path, node.name) not in marked
+    ]
+    assert unmarked == [], f"tests/validation/ holds tests not marked {MARK}: {unmarked}"
 
 
 def test_ast_reading_matches_what_pytest_collects() -> None:

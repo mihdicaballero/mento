@@ -404,7 +404,7 @@ Validation
    :widths: 34 40 26
 
    * - Check
-     - Test (``tests/test_footing.py``)
+     - Test (``tests/elements/test_footing.py``)
      - Verified against
    * - :math:`\rho_{st} = 0.0018` for every steel grade
      - ``test_aci_shrinkage_and_temperature_ratio``

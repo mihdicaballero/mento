@@ -95,17 +95,21 @@ mento uses pytest. The default options in `pyproject.toml` already enable covera
 pytest
 
 # A single file, without the coverage options
-pytest tests/test_beam.py --override-ini="addopts=" -v
+pytest tests/elements/test_beam.py --override-ini="addopts=" -v
 
 # A single test
-pytest tests/test_beam.py::test_shear_check -v --override-ini="addopts="
+pytest tests/elements/test_beam.py::test_shear_check -v --override-ini="addopts="
 ```
 
 When you add code, add tests for it:
 
 - Bug fixes get a regression test that fails before your change and passes after it.
 - New features get tests in the test module matching the source module — code in
-  `mento/beam.py` is tested in `tests/test_beam.py`.
+  `mento/beam.py` is tested in `tests/elements/test_beam.py`. The folders of `tests/`
+  follow the package: `equations/`, `materials/`, `sections/`, `elements/`, `design/`,
+  `reports/`, `architecture/`.
+- A test whose numbers come from a book, a guide, a Calcpad sheet or another program goes
+  in `tests/validation/`, and only those go there (see step 5 below).
 - Prefer plain test functions over test classes.
 - Use `pytest.mark.parametrize` for families of similar cases, and fixtures instead of
   constructing the same beam or material over and over.
@@ -168,8 +172,10 @@ Before implementing a new check or design routine:
    that source and not from mento — the release counts these tests for the home page of
    mento-web, so the mark is a public claim. A marked test says where the number is, in a
    docstring paragraph that starts with `Source:` (the sheet, the row and column or cell,
-   the page or table); `tests/test_published_examples.py` checks it. A test that pins mento's
-   own output, or a reading of the code the reference does not share, is not marked.
+   the page or table), and lives in `tests/validation/`;
+   `tests/architecture/test_published_examples.py` checks both. A test that pins mento's
+   own output, or a reading of the code the reference does not share, is not marked and
+   goes with the rest.
 
 If you cannot find a published example for what you are implementing, say so in the pull
 request and we will work out an acceptable validation path together.

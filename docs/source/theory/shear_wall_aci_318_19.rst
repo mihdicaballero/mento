@@ -205,7 +205,7 @@ high-strength mesh does not translate into unlimited shear strength.
 Validation
 ----------
 
-Tests live in ``tests/test_shear_wall.py``, organised in classes by topic.
+Tests live in ``tests/elements/test_shear_wall.py``, organised in classes by topic.
 
 .. list-table::
    :header-rows: 1

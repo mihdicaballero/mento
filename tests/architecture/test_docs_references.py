@@ -17,14 +17,14 @@ import ast
 import re
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 DOCS = ROOT / "docs" / "source"
 _CITATION = re.compile(r"``(test_\w+)(\*?)``")
 
 
 def _defined_tests() -> set[str]:
     names: set[str] = set()
-    for module in (ROOT / "tests").glob("test_*.py"):
+    for module in (ROOT / "tests").rglob("test_*.py"):
         # utf-8-sig, as in test_published_examples: a file saved with a BOM on
         # Windows must not fail to parse.
         tree = ast.parse(module.read_text(encoding="utf-8-sig"), filename=str(module))

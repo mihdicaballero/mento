@@ -95,6 +95,6 @@ English string a report builder emits to its translation, and registers it in
 never have to know a language exists.
 
 A translation only has to carry the strings it wants to change; anything absent falls back
-to English. ``tests/test_i18n.py`` runs the real reports for every design code and asserts
+to English. ``tests/reports/test_i18n.py`` runs the real reports for every design code and asserts
 the Spanish catalog covers every string they emit, so a label added without a translation
 fails the test suite.

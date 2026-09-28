@@ -207,7 +207,7 @@ Validation
      - Test
      - Verified against
    * - Shear check, ACI, no stirrups
-     - ``test_shear_check_ACI_318_19_1`` (``tests/test_slab.py``)
+     - ``test_shear_check_ACI_318_19_1`` (``tests/elements/test_slab.py``)
      - Calcpad *ACI 318-19 Slab Shear 01 — Imperial*, corrected for the
        :math:`\lambda_s \le 1.0` cap
    * - :math:`\lambda_s` cap, both unit systems

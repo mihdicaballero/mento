@@ -109,7 +109,7 @@ jobs:
       # `published_example` -- the ones that reproduce a case validated outside
       # mento: a Calcpad sheet, a published example or design guide, an ETABS
       # or spreadsheet cross-check, each citing its source in its docstring
-      # (tests/test_published_examples.py). It is only ever that count: with
+      # (tests/architecture/test_published_examples.py). It is only ever that count: with
       # nothing marked it publishes 0 and warns, never the size of the whole
       # suite, which is not what the number means. Collecting imports every
       # test module, which is why mento is installed.

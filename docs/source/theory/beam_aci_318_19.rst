@@ -500,7 +500,7 @@ both faces carry steel.
 Validation
 ----------
 
-Every row is pinned by a test in ``tests/test_beam.py`` and is verified against the
+Every row is pinned by a test in ``tests/elements/test_beam.py`` or ``tests/validation/`` (the rows whose source is external) and is verified against the
 external source named.
 
 .. list-table::
@@ -541,7 +541,7 @@ external source named.
      - Strain compatibility written apart from mento (the Calcpad sheet capped
        :math:`A_s` and is no longer the reference)
    * - Design passes its own check; capacity is the section's
-     - ``test_a_design_passes_its_own_check`` (``tests/test_flexure_design_properties.py``)
+     - ``test_a_design_passes_its_own_check`` (``tests/design/test_flexure_design_properties.py``)
      - Sweep over width, depth, :math:`f'_c` and moment, against the same independent
        strain compatibility
    * - :math:`A_{s,req}` never drops as :math:`M_u` grows
@@ -570,10 +570,10 @@ external source named.
      - Public contract
    * - :math:`\lambda_s \le 1.0` cap
      - ``test_lambda_s_is_capped_at_one_imperial`` / ``_metric``
-       (in ``tests/test_slab.py``)
+       (in ``tests/elements/test_slab.py``)
      - §22.5.5.1.3
    * - Zero capacity reported, not raised
      - ``test_shear_check_with_no_tension_reinforcement_warns_and_does_not_raise``,
        ``test_flexure_check_with_no_bottom_reinforcement_floors_phi_Mn``
-       (in ``tests/test_slab.py``)
+       (in ``tests/elements/test_slab.py``)
      - Public contract: a check reports ``DCR``, it does not blow up

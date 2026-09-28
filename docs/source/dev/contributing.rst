@@ -95,7 +95,11 @@ Writing tests
 
 - For bug fixes, add a regression test that fails before your change and passes after it.
 - For new features, add tests in the test module matching the source module — code in
-  ``mento/beam.py`` is tested in ``tests/test_beam.py``.
+  ``mento/beam.py`` is tested in ``tests/elements/test_beam.py``. The folders of ``tests/``
+  follow the package: ``equations/``, ``materials/``, ``sections/``, ``elements/``,
+  ``design/``, ``reports/``, ``architecture/``.
+- A test whose numbers come from a book, a guide, a Calcpad sheet or another program goes in
+  ``tests/validation/``, and only those go there (see *Calculation validation*).
 - Prefer plain functions to classes for tests.
 - Use ``pytest.mark.parametrize`` for families of similar cases, and fixtures instead of
   constructing the same beam or material repeatedly.
@@ -118,8 +122,9 @@ This is what makes Mento trustworthy.
    source and not from mento: the release counts these tests for the home page of mento-web,
    so the mark is a public claim. A marked test says where the number is, in a docstring
    paragraph that starts with ``Source:`` (the sheet, the row and column or cell, the page or
-   table); ``tests/test_published_examples.py`` checks it. A test that pins mento's own
-   output, or a reading of the code the reference does not share, is not marked.
+   table), and lives in ``tests/validation/``; ``tests/architecture/test_published_examples.py``
+   checks both. A test that pins mento's own output, or a reading of the code the reference
+   does not share, is not marked and goes with the rest.
 
 If no published example exists for what you are implementing, say so in the pull request and
 we will work out an acceptable validation path together.
