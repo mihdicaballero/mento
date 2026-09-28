@@ -46,6 +46,14 @@ mento.design\_results module
    :undoc-members:
    :show-inheritance:
 
+mento.design\_warnings module
+-----------------------------
+
+.. automodule:: mento.design_warnings
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 mento.forces module
 -------------------
 

@@ -81,3 +81,75 @@ jobs:
 
       - name: Publish
         uses: pypa/gh-action-pypi-publish@release/v1
+
+  announce:
+    name: Attach stats and notify mento-web
+    needs: publish
+    # mento-web runs the release from PyPI, so it is only told once that
+    # release is there.
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # upload stats.json to the release
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install mento with its test extras
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[test]"
+
+      # The number on the home page of mento-web. It counts the tests marked
+      # `published_example` -- the ones that reproduce a case validated outside
+      # mento: a Calcpad sheet, a published example or design guide, an ETABS
+      # or spreadsheet cross-check -- and the whole suite while none is marked.
+      # Collecting imports every test module, which is why mento is installed.
+      - name: Count the tests
+        id: count
+        run: |
+          # The full collection runs unguarded, so a module that fails to
+          # import fails the release instead of shrinking the count.
+          python -m pytest --collect-only -q --override-ini="addopts=" > collected.txt
+          # With nothing marked pytest exits 5 and grep finds no test id; both
+          # are the "none marked" case, not an error.
+          tests=$( (python -m pytest --collect-only -q --override-ini="addopts=" -m published_example || true) | grep -c '::' || true)
+          scope="published_example"
+          if [ "$tests" -eq 0 ]; then
+            tests=$(grep -c '::' collected.txt)
+            scope="all"
+          fi
+          echo "Counted $tests tests ($scope)"
+          printf '{"tests": %d}\n' "$tests" > stats.json
+          cat stats.json
+          echo "tests=$tests" >> "$GITHUB_OUTPUT"
+
+      - name: Attach stats.json to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" stats.json --clobber
+
+      # Needs the repository secret MENTO_WEB_DISPATCH_TOKEN: a fine-grained
+      # personal access token scoped to mihdicaballero/mento-web with
+      # "Contents: read and write", which is what the dispatches endpoint asks
+      # for. The workflow's own GITHUB_TOKEN cannot reach another repository.
+      - name: Notify mento-web
+        env:
+          GH_TOKEN: ${{ secrets.MENTO_WEB_DISPATCH_TOKEN }}
+          VERSION: ${{ github.event.release.tag_name }}
+          TESTS: ${{ steps.count.outputs.tests }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::MENTO_WEB_DISPATCH_TOKEN is not set; mento-web was not notified."
+            exit 0
+          fi
+          gh api repos/mihdicaballero/mento-web/dispatches \
+            --method POST \
+            -f event_type=mento-release \
+            -f "client_payload[version]=${VERSION#v}" \
+            -F "client_payload[tests]=$TESTS"

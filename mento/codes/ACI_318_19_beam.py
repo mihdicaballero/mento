@@ -597,15 +597,30 @@ def _minimum_flexural_reinforcement_ratio_ACI_318_19(self: "RectangularBeam", M_
     )
 
 
+def _slab_minimum_applies(self: "RectangularBeam") -> bool:
+    """Whether the element takes the slab minimum 0.0018*Ag rather than the beam one.
+
+    A one-way slab is designed under Chapter 7, whose minimum is §7.6.1.1 of
+    ACI 318-19 / §7.6.1 of CIRSOC 201-25, and a member on the ground reaches the
+    same clause through §13.3.2.1. Only a beam takes §9.6.1.2 -- and with it the
+    4/3 relief of §9.6.1.3, which relieves that clause and no other.
+    """
+    return self.support == "soil" or getattr(self, "mode", "beam") == "slab"
+
+
 def _minimum_flexural_reinforcement_area_ACI_318_19(self: "RectangularBeam", M_u: float, d: float) -> float:
-    """A_s,min on the tension face, for the way this element is supported.
+    """A_s,min on the tension face, for the kind of element this is.
 
     Two different clauses, and which one applies is a property of the element,
     not of the moment:
 
-    * A member spanning between supports gets the flexural minimum of
-      ACI 318-19 §9.6.1.2 / CIRSOC 201-25 §9.6.1.2, ``rho_min * b * d``, sized
-      so the cracked section can still carry the moment that cracked it.
+    * A beam gets the flexural minimum of ACI 318-19 §9.6.1.2 /
+      CIRSOC 201-25 §9.6.1.2, ``rho_min * b * d``, sized so the cracked section
+      can still carry the moment that cracked it.
+    * A one-way slab is designed under Chapter 7, whose minimum is the same
+      ACI 318-19 §7.6.1.1 / CIRSOC 201-25 §7.6.1 described next: 0.0018*Ag on
+      the gross section, with or without a moment, since it is also the
+      shrinkage and temperature steel of §24.4.3.2 the slab carries anyway.
     * A member supported on the ground is designed under Chapter 13:
       ACI 318-19 §13.3.2.1 / CIRSOC 201-25 §13.3.2.1 send a one-way shallow
       foundation to Chapters 7 and 9, and it is Chapter 7's slab minimum that
@@ -630,8 +645,8 @@ def _minimum_flexural_reinforcement_area_ACI_318_19(self: "RectangularBeam", M_u
         A_s,min (mm², or in²).
     """
     sec = section_floats(self)
-    if self.support == "soil":
-        rho_st = flexure_eq.shrinkage_and_temperature_ratio(sec.f_y, is_imperial=sec.is_imperial)
+    if _slab_minimum_applies(self):
+        rho_st = flexure_eq.shrinkage_and_temperature_ratio()
         return rho_st * sec.width * sec.height
     return _minimum_flexural_reinforcement_ratio_ACI_318_19(self, M_u) * d * sec.width
 
@@ -712,16 +727,17 @@ def _calculate_flexural_reinforcement_ACI_318_19(
     # 1.8‰ of the gross section: a geometric floor of this studio's own, not a
     # requirement of either code. ACI 318-19 §9.6.1.1 / CIRSOC 201-25 §9.6.1.1
     # ask for A_s,min only where the analysis calls for tension steel, and the
-    # 4/3 relief of §9.6.1.3 carries no floor in either book. Same for beams
-    # and slabs.
+    # 4/3 relief of §9.6.1.3 carries no floor in either book. Beams only: a
+    # slab goes by Case S below.
     A_s_geo_min = (1.8 / (1000)) * sec.width * sec.height
 
-    if self.support == "soil":
+    if _slab_minimum_applies(self):
         # Case S:
         # A_s_min above is already the 0.0018*Ag of ACI 318-19 §7.6.1.1 /
         # CIRSOC 201-25 §7.6.1, the ratio §24.4.3.2 writes for shrinkage and
-        # temperature, on the gross section -- the minimum Chapter 13 sends a
-        # member on the ground to (§13.3.2.1 in both). The 4/3 relief of
+        # temperature, on the gross section -- the minimum of a one-way slab,
+        # and the one Chapter 13 sends a member on the ground to (§13.3.2.1 in
+        # both). The 4/3 relief of
         # §9.6.1.3 belongs to the clause it relieves, §9.6.1.2, which is a
         # beam clause and not the one governing here, so the minimum stands as
         # written. With M_u = 0, A_s_calc is zero and this is the minimum
@@ -969,6 +985,28 @@ def _determine_nominal_moment_ACI_318_19(self: "RectangularBeam", st: FlexureChe
     return None
 
 
+def _effective_minimum_ACI_318_19(self: "RectangularBeam", A_s_min: float, A_s_calc: float) -> float:
+    """The minimum steel a face has to carry, relief included.
+
+    ACI 318-19 §9.6.1.3 / CIRSOC 201-25 §9.6.1.3 waive §9.6.1.1 and §9.6.1.2
+    when the steel provided is at least one third more than the analysis asks
+    for, so a face meets its minimum with A_s,min or with 4/3 of A_s_calc,
+    whichever is less. What is compared against this is the steel provided,
+    which is why the flag of the requirement -- A_s_bool, "4/3 was adopted as
+    the area to detail" -- cannot stand in for it: a layout checked by hand can
+    fall short of 4/3 A_s_calc while the flag is set.
+
+    A one-way slab, and a member on the ground through §13.3.2.1, take the
+    minimum of §7.6.1.1, which §9.6.1.3 does not relieve, so there the minimum
+    stands as written.
+    The 1.8‰ floor the design adds is this studio's criterion, not a limit of
+    either code, and is not part of it.
+    """
+    if _slab_minimum_applies(self):
+        return A_s_min
+    return min(A_s_min, 4 * A_s_calc / 3)
+
+
 def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> FlexureCheckState:
     """
     Checks the flexural capacity of the section according to ACI 318-19 guidelines,
@@ -1049,6 +1087,9 @@ def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> Flexure
             st.phi_M_n_top = _MOMENT_FLOOR[sec.is_imperial]
         st.DCR_top = -st.M_u_top / st.phi_M_n_top
         st.DCR_bot = 0
+
+    st.A_s_min_eff_bot = _effective_minimum_ACI_318_19(self, st.A_s_min_bot, st.A_s_calc_bot)
+    st.A_s_min_eff_top = _effective_minimum_ACI_318_19(self, st.A_s_min_top, st.A_s_calc_top)
 
     # Determine the maximum detailing cover dimensions for top and bottom.
     length_unit = CANONICAL[sec.is_imperial]["length"]

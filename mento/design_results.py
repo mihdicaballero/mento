@@ -77,6 +77,37 @@ class RebarLayer:
 
 
 @dataclass(frozen=True)
+class RebarOption:
+    """One longitudinal layout a flexure design found for a face.
+
+    ``layers`` holds the bar groups that carry bars, in the order of the
+    search's ``n_1``..``n_4`` / ``d_b1``..``d_b4``: the first two are the layer
+    nearest the face, the other two the layer behind it -- the same
+    :class:`RebarLayer` the applied reinforcement is read as.
+
+    ``functional`` is the score the search ranks layouts by, lower being
+    better: it weighs the area against the fewest bars, the spread of
+    diameters and the use of a second layer. It is ``None`` for a layout the
+    search did not score -- a footing mat, which is chosen afterwards and as a
+    whole.
+    """
+
+    layers: Tuple[RebarLayer, ...]
+    A_s: Quantity
+    functional: Optional[float] = None
+
+    @property
+    def n_bars(self) -> int:
+        """Total number of bars across every layer of this layout."""
+        return sum(layer.n for layer in self.layers)
+
+    def __str__(self) -> str:
+        if not self.layers:
+            return "no reinforcement"
+        return " + ".join(str(layer) for layer in self.layers)
+
+
+@dataclass(frozen=True)
 class FlexureFaceCheck:
     """What a single load combination demanded of one face.
 
@@ -93,6 +124,13 @@ class FlexureFaceCheck:
     ``A_s,nec / A_s,prov`` reads it, because a face governed by its minimum
     carries little of the stress that minimum is sized for.
 
+    ``A_s_min`` is the minimum as the clause writes it. ``A_s_min_eff`` is the
+    one the face has to meet: under ACI 318-19 and CIRSOC 201-25 the relief of
+    §9.6.1.3 lets 4/3 of ``A_s_calc`` stand in for it when that is less, so a
+    face below ``A_s_min`` but not below ``A_s_min_eff`` complies. EN
+    1992-1-1 has no such relief, and there the two are the same. Compare the
+    steel provided against ``A_s_min_eff``.
+
     A field is ``None`` when the design code did not set it for this
     combination; enveloping skips those rather than treating them as zero.
     """
@@ -103,6 +141,7 @@ class FlexureFaceCheck:
     DCR: float
     M_capacity: Optional[Quantity] = None
     A_s_calc: Optional[Quantity] = None
+    A_s_min_eff: Optional[Quantity] = None
 
 
 @dataclass(frozen=True)
@@ -170,6 +209,7 @@ def envelope_flexure_face(checks: Sequence[FlexureCheck], face: str) -> FlexureF
         DCR=max([f.DCR for f in faces], default=0.0),
         M_capacity=_governing([(f.DCR, f.M_capacity) for f in faces]),
         A_s_calc=_worst([f.A_s_calc for f in faces]),
+        A_s_min_eff=_worst([f.A_s_min_eff for f in faces]),
     )
 
 
@@ -194,7 +234,7 @@ def capture_flexure_check(beam: RectangularBeam, label: str, state: Any) -> Flex
     imperial = beam.concrete.is_imperial
 
     def face(suffix: str) -> FlexureFaceCheck:
-        A_s_req, A_s_min, A_s_max, M_capacity, A_s_calc = state.face_quantities(suffix, imperial)
+        A_s_req, A_s_min, A_s_max, M_capacity, A_s_calc, A_s_min_eff = state.face_quantities(suffix, imperial)
         return FlexureFaceCheck(
             A_s_req=A_s_req,
             A_s_min=A_s_min,
@@ -202,6 +242,7 @@ def capture_flexure_check(beam: RectangularBeam, label: str, state: Any) -> Flex
             DCR=float(getattr(state, f"DCR_{suffix}")),
             M_capacity=M_capacity,
             A_s_calc=A_s_calc,
+            A_s_min_eff=A_s_min_eff,
         )
 
     return FlexureCheck(label=label, bottom=face("bot"), top=face("top"))
@@ -329,12 +370,21 @@ class FlexureFaceDesign:
     and ``DCR`` are the envelope over every load combination that was checked,
     so ``DCR`` is the one of the combination that governs this face.
 
-    ``A_s_req`` is the steel to detail, never below the minimum. ``A_s_calc``
+    ``A_s_req`` is the steel to detail, never below ``A_s_min_eff``. ``A_s_calc``
     is what the moment alone asked for, before that minimum -- the envelope of
     the same over the combinations, so the governing one's. Choose bars from
     the first; scale an anchorage by ``A_s,nec / A_s,prov`` from the second,
     since a face governed by its minimum carries little of the stress the
     minimum is sized for.
+
+    ``A_s_min`` is the minimum as the clause writes it, and ``A_s_min_eff``
+    the one the face has to meet, after the relief of ACI 318-19 / CIRSOC
+    201-25 §9.6.1.3 -- see :class:`FlexureFaceCheck`. A designed face can sit
+    below ``A_s_min`` and still comply; it cannot sit below ``A_s_min_eff``.
+
+    ``options`` are the layouts the last design found for this face, best
+    first; ``options[0]`` is the one applied. Empty when the face was not
+    designed, or when its bars were changed by hand after the design.
 
     ``M_capacity`` is the design moment resistance of the face as reinforced
     -- ``ØMn`` under ACI 318-19 and CIRSOC 201-25, ``MRd`` under EN 1992-1-1
@@ -347,9 +397,11 @@ class FlexureFaceDesign:
     A_s_req: Quantity
     A_s_calc: Quantity
     A_s_min: Quantity
+    A_s_min_eff: Quantity
     A_s_max: Quantity
     DCR: float
     M_capacity: Quantity
+    options: Tuple[RebarOption, ...] = ()
 
     @property
     def n_bars(self) -> int:
@@ -379,6 +431,39 @@ class FlexureDesign:
 
 
 @dataclass(frozen=True)
+class StirrupOption:
+    """One transverse layout a shear design found.
+
+    The fields read as those of :class:`ShearDesign`. ``functional`` says how
+    much steel the option adds: the excess of ``A_v`` over what the design
+    asked for, ``A_v / A_v_req - 1``, plus one for every stirrup beyond the
+    fewest any option needs.
+    """
+
+    n_stirrups: int
+    d_b: Quantity
+    s_l: Quantity
+    s_w: Quantity
+    A_v: Quantity
+    functional: float
+    layout: str = STIRRUPS
+
+    @property
+    def n_legs(self) -> int:
+        """Number of stirrup legs crossing the shear plane."""
+        return self.n_stirrups * 2
+
+    def __str__(self) -> str:
+        return format_transverse_rebar(
+            self.layout,
+            self.n_stirrups,
+            f"{self.d_b:.4g~P}",
+            f"{self.s_l:.4g~P}",
+            f"{self.s_w:.4g~P}",
+        )
+
+
+@dataclass(frozen=True)
 class ShearDesign:
     """Transverse reinforcement of the section.
 
@@ -394,6 +479,12 @@ class ShearDesign:
     the resistance ``DCR`` was formed from. Under ACI it can differ between
     combinations: ``V_c`` moves with the axial load and with which face is in
     tension. The per-combination results carry each one's own.
+
+    ``options`` are the stirrup layouts the last design found: ``options[0]``
+    is the one applied, and the rest follow in order of bar diameter -- the
+    same cage in a heavier bar, which is the substitution a drawing makes when
+    that is the bar at hand. Empty when the stirrups were not designed, or were
+    changed by hand afterwards.
     """
 
     n_stirrups: int
@@ -406,6 +497,7 @@ class ShearDesign:
     V_capacity: Quantity
     s_w: Quantity
     layout: str = STIRRUPS
+    options: Tuple[StirrupOption, ...] = ()
 
     @property
     def n_legs(self) -> int:
@@ -465,10 +557,40 @@ def _face(beam: RectangularBeam, face: str) -> FlexureFaceDesign:
         A_s_req=zero if worst.A_s_req is None else worst.A_s_req,
         A_s_calc=zero if worst.A_s_calc is None else worst.A_s_calc,
         A_s_min=zero if worst.A_s_min is None else worst.A_s_min,
+        A_s_min_eff=zero if worst.A_s_min_eff is None else worst.A_s_min_eff,
         A_s_max=zero if worst.A_s_max is None else worst.A_s_max,
         DCR=worst.DCR,
         M_capacity=no_capacity if worst.M_capacity is None else worst.M_capacity,
+        options=_current_flexure_options(beam, face),
     )
+
+
+def _current_flexure_options(beam: RectangularBeam, face: str) -> Tuple[RebarOption, ...]:
+    """The options of the last design of one face, if its layout is still on it.
+
+    A design stores its options with the layout it applied first. Bars set by
+    hand afterwards make them describe a section that is no longer there, so
+    they are only reported while the first one is what the face carries.
+    """
+    options: Tuple[RebarOption, ...] = getattr(beam, f"_flexure_options_{face}", ())
+    if not options or options[0].layers != _layers(beam, face):
+        return ()
+    return options
+
+
+def _current_shear_options(beam: RectangularBeam) -> Tuple[StirrupOption, ...]:
+    """The stirrup options of the last design, if its layout is still applied."""
+    options: Tuple[StirrupOption, ...] = getattr(beam, "_shear_options", ())
+    if not options:
+        return ()
+    first = options[0]
+    if (
+        first.n_stirrups != int(beam._stirrup_n)
+        or not math.isclose(first.d_b.to("mm").magnitude, beam._stirrup_d_b.to("mm").magnitude)
+        or not math.isclose(first.s_l.to("mm").magnitude, beam._stirrup_s_l.to("mm").magnitude)
+    ):
+        return ()
+    return options
 
 
 def build_reinforcement(beam: RectangularBeam) -> SectionReinforcement:
@@ -534,4 +656,5 @@ def build_shear_design(beam: RectangularBeam) -> ShearDesign:
         V_capacity=no_capacity if worst.V_capacity is None else worst.V_capacity,
         s_w=beam._leg_spacing_across_width(),
         layout=transverse_layout(beam),
+        options=_current_shear_options(beam),
     )

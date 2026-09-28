@@ -155,6 +155,66 @@ The per-combination results are available too, one per combination of the last c
 
     beam.shear_design.V_capacity            # the governing combination's
 
+Design alternatives
+-------------------
+
+A design ranks every layout that fits and applies the best one. The runners-up are kept
+too, best first, with the applied layout always in first place:
+
+.. code-block:: python
+
+    node.design()
+
+    for option in beam.flexure_design.bottom.options:
+        str(option), option.A_s, option.functional   # '2Ø16 mm + 1Ø12 mm', ...
+
+    beam.flexure_design.top.options                  # the same for the top face
+    beam.shear_design.options                        # StirrupOption: n_stirrups, d_b, s_l, s_w, A_v
+
+A longitudinal option (``RebarOption``) carries its ``layers`` — the same ``RebarLayer``
+objects the applied reinforcement is read as — its area and the ``functional`` the search
+ranked it by.
+
+The stirrup alternatives are the same cage in each heavier bar, in order of diameter. Where
+the spacing limit governs they share one spacing (``1eØ10/13``, ``1eØ12/13``, ``1eØ16/13``);
+where the demand governs, the heavier bar buys a wider spacing (``1eØ10/7``, ``1eØ12/10``,
+``1eØ16/13``). Either way the list answers "what if I use the bar I have", and each option's
+``functional`` says what it adds in steel: the excess of ``A_v`` over what the design asked
+for, plus one per extra closed stirrup.
+
+How many are kept is a setting, three by default:
+
+.. code-block:: python
+
+    beam = RectangularBeam(..., settings=BeamSettings(design_options=5))
+
+The options belong to the design that produced them. A check alone reports none, and
+changing the bars by hand afterwards clears the options of what was changed.
+
+A design depends only on its inputs. It starts from the same state every time — the
+stirrup diameter the settings assume, the placeholder bars — so running it again, or after
+setting reinforcement by hand, gives the same result.
+
+Warnings
+--------
+
+A detailing limit can be missed while the strength is fine, or met while it is not, so
+the limits are reported beside the ``DCR`` instead of inside it. ``beam.warnings`` (or
+``node.warnings``) lists them after a check or a design, one per limit and face:
+
+.. code-block:: python
+
+    node.check()
+    for warning in node.warnings:
+        warning.code          # 'stirrup_spacing_exceeds_max'
+        warning.message       # 'Stirrup spacing along the member: 35 cm exceeds the maximum 13.9 cm.'
+        warning.values        # {'s': 35 cm, 's_max': 13.9 cm}
+        warning.combinations  # ('1.2D+1.6L', '1.4D')
+
+The ``code`` is stable and is what a program should compare against. The ``message`` is
+written in the language set with ``mento.set_language`` when the warnings are read. The
+codes and what triggers each are listed in :mod:`mento.design_warnings`.
+
 Reading results too early
 -------------------------
 

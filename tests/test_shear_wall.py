@@ -696,3 +696,114 @@ class TestWallCodeGuards:
         )
         with pytest.raises(ValueError):
             wall.design_shear([Forces(V_z=50 * kN)])
+
+
+# ---------------------------------------------------------------------------
+# Public results: the mesh and the shear results as dataclasses
+# ---------------------------------------------------------------------------
+
+
+def test_mesh_reads_the_bars_set_on_the_wall(wall_metric: ShearWall) -> None:
+    wall_metric.set_horizontal_rebar(d_b=12 * mm, s=20 * cm)
+    wall_metric.set_vertical_rebar(d_b=10 * mm, s=25 * cm)
+    mesh = wall_metric.mesh
+    assert mesh.horizontal.d_b == 12 * mm and mesh.horizontal.s == 20 * cm
+    assert mesh.vertical.d_b == 10 * mm and mesh.vertical.s == 25 * cm
+    assert mesh.horizontal.rho == pytest.approx(0.004524, rel=1e-3)
+    assert mesh.horizontal.A_s.to("cm**2/m").magnitude == pytest.approx(2 * 1.131 / 0.20, rel=1e-3)
+    assert str(mesh.horizontal) == "2×Ø12 mm/20 cm"
+
+
+def test_mesh_without_bars(wall_metric: ShearWall) -> None:
+    mesh = wall_metric.mesh
+    assert not mesh.horizontal.has_bars
+    assert mesh.horizontal.A_s.magnitude == 0
+    assert str(mesh.vertical) == "no reinforcement"
+
+
+def test_shear_results_are_the_wall_ones(wall_metric: ShearWall) -> None:
+    # The reference case of this module: Ø12/20 E.F., Vu = 1200 kN, DCR ≈ 0.508.
+    wall_metric.set_horizontal_rebar(d_b=12 * mm, s=20 * cm)
+    wall_metric.set_vertical_rebar(d_b=12 * mm, s=20 * cm)
+    forces = [Forces(label="U1", V_z=1200 * kN), Forces(label="U2", V_z=600 * kN)]
+    table = wall_metric.check_shear(forces)
+
+    checks = wall_metric.shear_checks
+    assert [c.label for c in checks] == ["U1", "U2"]
+    assert checks[0].DCR == pytest.approx(table["DCR"].iloc[1], abs=1e-3)
+    assert checks[0].DCR == pytest.approx(0.508, abs=1e-3)
+    assert checks[0].V_capacity.to("kN").magnitude == pytest.approx(2362.5, rel=1e-3)
+    assert checks[0].V_max.to("kN").magnitude == pytest.approx(2475, rel=1e-3)
+    assert checks[0].s_h_max == 450 * mm
+
+    design = wall_metric.shear_design
+    assert design.DCR == pytest.approx(checks[0].DCR)
+    assert design.V_capacity == checks[0].V_capacity
+    assert design.mesh == wall_metric.mesh
+    assert wall_metric.warnings == ()
+
+
+def test_shear_check_results_matches_check_shear(wall_metric: ShearWall) -> None:
+    wall_metric.set_horizontal_rebar(d_b=12 * mm, s=20 * cm)
+    wall_metric.set_vertical_rebar(d_b=12 * mm, s=20 * cm)
+    forces = [Forces(label="U1", V_z=1200 * kN)]
+    fast = wall_metric.shear_check_results(forces)
+    wall_metric.check_shear(forces)
+    assert fast == wall_metric.shear_checks
+
+
+def test_designed_wall_reports_its_mesh(wall_metric: ShearWall) -> None:
+    wall_metric.design_shear([Forces(label="U1", V_z=1200 * kN)])
+    design = wall_metric.shear_design
+    assert design.mesh.horizontal.has_bars and design.mesh.vertical.has_bars
+    assert design.mesh.horizontal.rho >= design.rho_t_req
+    assert design.mesh.vertical.rho >= design.rho_l_min
+    assert design.DCR <= 1
+    assert wall_metric.warnings == ()
+
+
+def test_shear_design_before_a_check_raises(wall_metric: ShearWall) -> None:
+    from mento.design_results import DesignNotRunError
+
+    with pytest.raises(DesignNotRunError):
+        wall_metric.shear_design
+
+
+def test_the_mesh_prints_both_directions(wall_metric: ShearWall) -> None:
+    wall_metric.set_horizontal_rebar(d_b=12 * mm, s=20 * cm)
+    wall_metric.set_vertical_rebar(d_b=10 * mm, s=25 * cm)
+
+    assert str(wall_metric.mesh) == "horizontal: 2×Ø12 mm/20 cm / vertical: 2×Ø10 mm/25 cm"
+
+
+def test_the_shear_design_prints_its_mesh(wall_metric: ShearWall) -> None:
+    """A wall is identified by the mesh it carries, so the design reads as that mesh."""
+    wall_metric.design_shear([Forces(label="U1", V_z=1200 * kN)])
+    design = wall_metric.shear_design
+
+    assert str(design) == str(design.mesh)
+    assert str(design).startswith("horizontal: ")
+
+
+@pytest.mark.parametrize("name", ["reinforcement", "flexure_design", "flexure_checks"])
+def test_beam_results_are_not_offered_on_a_wall(wall_metric: ShearWall, name: str) -> None:
+    with pytest.raises(NotImplementedError, match="mesh"):
+        getattr(wall_metric, name)
+
+
+def test_flexure_check_results_is_not_offered_on_a_wall(wall_metric: ShearWall) -> None:
+    """The values-only flexure entry point is a method, so the guard needs a call."""
+    with pytest.raises(NotImplementedError, match="mesh"):
+        wall_metric.flexure_check_results([Forces(label="U1", V_z=1200 * kN)])
+
+
+def test_wall_warnings(wall_metric: ShearWall) -> None:
+    wall_metric.set_horizontal_rebar(d_b=6 * mm, s=50 * cm)  # thin and past s_h,max = 450 mm
+    wall_metric.set_vertical_rebar(d_b=12 * mm, s=20 * cm)
+    wall_metric.shear_check_results([Forces(label="U1", V_z=3000 * kN)])
+    found = {(w.code, w.values.get("rho_min") is not None) for w in wall_metric.warnings}
+    assert ("mesh_ratio_below_min", True) in found
+    assert ("mesh_spacing_exceeds_max", False) in found
+    assert ("shear_exceeds_section_limit", False) in found
+    spacing = next(w for w in wall_metric.warnings if w.code == "mesh_spacing_exceeds_max")
+    assert "Horizontal" in spacing.message

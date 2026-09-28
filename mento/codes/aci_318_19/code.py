@@ -349,6 +349,8 @@ def _initialize_attributes(section: "RectangularBeam") -> None:
     section._max_shear_ok = False
     section._A_s_min_bot = 0 * cm**2
     section._A_s_min_top = 0 * cm**2
+    section._A_s_min_eff_bot = 0 * cm**2
+    section._A_s_min_eff_top = 0 * cm**2
     section._A_s_max_bot = 0 * cm**2
     section._A_s_max_top = 0 * cm**2
     section._phi_M_n_bot = 0 * kNm

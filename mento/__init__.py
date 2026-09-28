@@ -83,6 +83,13 @@ __all__ = [
     "TableStyle",
     "set_table_style",
     "get_table_style",
+    "DesignWarning",
+    "RebarOption",
+    "StirrupOption",
+    "WallMesh",
+    "MeshDirection",
+    "WallShearCheck",
+    "WallShearDesign",
 ]
 
 if TYPE_CHECKING:
@@ -106,6 +113,9 @@ if TYPE_CHECKING:
     from mento.shear_wall_summary import ShearWallSummary
     from mento.i18n import available_languages, get_language, set_language
     from mento.reports.table_style import TableStyle, get_table_style, set_table_style
+    from mento.design_warnings import DesignWarning
+    from mento.design_results import RebarOption, StirrupOption
+    from mento.wall_results import MeshDirection, WallMesh, WallShearCheck, WallShearDesign
 
 
 def __getattr__(name: str) -> object:
@@ -140,6 +150,13 @@ def __getattr__(name: str) -> object:
         "TableStyle": "reports.table_style",
         "set_table_style": "reports.table_style",
         "get_table_style": "reports.table_style",
+        "DesignWarning": "design_warnings",
+        "RebarOption": "design_results",
+        "StirrupOption": "design_results",
+        "WallMesh": "wall_results",
+        "MeshDirection": "wall_results",
+        "WallShearCheck": "wall_results",
+        "WallShearDesign": "wall_results",
     }
 
     if name in module_mapping:
