@@ -1399,3 +1399,71 @@ def test_a_one_way_slab_cites_its_own_article() -> None:
     assert slab.flexure_checks[0].bottom.DCR < 1
     assert not slab.flexure_design.complies
     assert [(w.code, w.values["clause"]) for w in node.warnings] == [("not_tension_controlled", "7.3.3.1")]
+
+
+# ---------------------------------------------------------------------------
+# Report rows agree with the warnings
+# ---------------------------------------------------------------------------
+
+
+def test_the_stirrup_diameter_row_holds_only_a_bracing_stirrup_to_a_minimum(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """No clause sizes a stirrup for shear alone; §9.7.6.4.2 sizes one that braces compression bars.
+
+    An ACI 20x50 under 60 kN with 1eØ6/15 set by hand: the row has no minimum
+    and passes (it used to hold the Ø6 to the 10 mm the catalogue starts at).
+    The CIRSOC 20x40 under 200 kNm relies on 2Ø20 + 1Ø20 of compression
+    steel, and Tabla 9.7.6.4.2 asks 8 mm: a Ø6 fails the row, against 8.
+    """
+    from mento import Concrete_CIRSOC_201_25
+
+    beam = _beam(width=20 * cm, height=50 * cm)
+    beam.set_longitudinal_rebar_bot(n1=3, d_b1=16 * mm)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=6 * mm, s_l=15 * cm)
+    node = Node(section=beam, forces=[Forces(label="U", V_z=60 * kN, M_y=50 * kNm)])
+    node.check()
+    node.shear_results_detailed()
+    assert (beam._data_min_max_shear["Min."][3], beam._data_min_max_shear["Ok?"][3]) == ("", "✅")
+
+    braced = RectangularBeam(
+        label="V",
+        concrete=Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=20 * cm,
+        height=40 * cm,
+        c_c=25 * mm,
+    )
+    braced_node = Node(section=braced, forces=[Forces(label="ELU", V_z=60 * kN, M_y=200 * kNm)])
+    braced_node.design()
+    braced.set_transverse_rebar(n_stirrups=1, d_b=6 * mm, s_l=16 * cm)
+    braced_node.check()
+    braced_node.shear_results_detailed()
+    capsys.readouterr()
+    assert (braced._data_min_max_shear["Min."][3], braced._data_min_max_shear["Ok?"][3]) == (8, "❌")
+
+
+def test_a_face_of_one_bar_passes_the_clear_spacing_row(capsys: pytest.CaptureFixture[str]) -> None:
+    """10x30, 1Ø12 top and bottom: no pair of bars, so no clear distance to hold to a minimum."""
+    beam = _beam(width=10 * cm, height=30 * cm)
+    beam.set_longitudinal_rebar_bot(n1=1, d_b1=12 * mm)
+    beam.set_longitudinal_rebar_top(n1=1, d_b1=12 * mm)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=10 * mm, s_l=10 * cm)
+    node = Node(section=beam, forces=[Forces(label="U", V_z=10 * kN, M_y=5 * kNm)])
+    node.check()
+    node.flexure_results_detailed()
+    capsys.readouterr()
+
+    rows = beam._data_min_max_flexure
+    assert (rows["Ok?"][1], rows["Ok?"][3]) == ("✅", "✅")
+
+
+def test_the_catalogue_floor_stays_readable_from_the_registry() -> None:
+    """``min_stirrup_diameter`` is where the shear catalogue starts -- 10 mm under ACI 318-19,
+    6 mm under CIRSOC 201-25 -- a preference no report row holds a stirrup to any more."""
+    from mento import Concrete_CIRSOC_201_25
+
+    aci = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
+    cirsoc = Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa)
+    assert design_code(aci).requires("min_stirrup_diameter")(aci) == 10 * mm
+    assert design_code(cirsoc).requires("min_stirrup_diameter")(cirsoc) == 6 * mm

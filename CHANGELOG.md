@@ -495,6 +495,13 @@ from the release history and are summaries rather than complete lists.
   keep them. The design's verdicts go with them: `As_below_required` and `bars_do_not_fit`
   used to clear face by face, and now clear with any change.
 
+- **Two detailed-report rows no longer fail what no clause asks.** "Minimum rebar
+  diameter" held every stirrup to the 10 mm (6 mm under CIRSOC) the shear catalogue starts
+  at, a preference, and now holds only the stirrups that brace compression bars, to the
+  minimum of ACI 318-19 / CIRSOC 201-25 §9.7.6.4.2; elsewhere it has no minimum. "Minimum
+  spacing" failed a face whose layers hold one bar each, which has no clear distance
+  between bars to measure. Both now read as the warnings do.
+
 - **`As_below_required` is only raised on a face short of its moment** (DCR past 1). It
   used to land on the compression face of a doubly reinforced design, quoting the
   compression steel the other face would need — hundreds of cm² on a 40×25 — and on faces

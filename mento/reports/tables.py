@@ -23,6 +23,7 @@ from mento.units import inch, kN, mm
 
 from mento.codes.registry import design_code
 from mento.design_results import GRID, format_longitudinal_rebar, transverse_layout
+from mento.design_warnings import bars_side_by_side
 
 if TYPE_CHECKING:
     from mento.beam import RectangularBeam
@@ -124,7 +125,9 @@ def _bar_spacing_row(
     spacing = getattr(self, f"_s_b1_{face}", None)
     if spacing is None:
         clear: Quantity = getattr(self, f"_available_s_{'top' if face == 't' else 'bot'}")
-        return f"Minimum spacing {side}", clear, min_clear, None
+        # A layer of one bar has no bar beside it: nothing to hold to a clear
+        # distance, as ``clear_spacing_below_min`` also reads it.
+        return f"Minimum spacing {side}", clear, min_clear if bars_side_by_side(self, face) else None, None
     if getattr(self, f"_n1_{face}") == 0 or spacing.magnitude == 0:
         return f"Bar spacing {side}", spacing, None, None
     max_of = getattr(self, "_max_bar_spacing", None)
@@ -370,11 +373,18 @@ def _initialize_dicts_ACI_318_19_shear(self: "RectangularBeam") -> None:
     # report change the section it describes; it is a local now.
     zero_d_b = 0 * mm if self.concrete.unit_system == "metric" else 0 * inch
     d_b_shown = self._stirrup_d_b
+    # Neither code states a minimum diameter for a stirrup placed for shear
+    # alone (the 10 mm, 6 mm under CIRSOC, where the catalogue starts is a
+    # preference); §9.7.6.4.2 does for the stirrups that laterally support
+    # compression bars, and that is the minimum the row holds them to.
+    support_hook = design_code(self.concrete).stirrup_compression_support
+    support = None if support_hook is None else support_hook(self, self._stirrup_d_b)
+    db_min: Quantity | None
     if self._phi_V_s == 0 * kN:
         db_min = zero_d_b
         d_b_shown = zero_d_b
     else:
-        db_min = design_code(self.concrete).requires("min_stirrup_diameter")(self.concrete)
+        db_min = None if support is None else support.d_b_min.to(self._stirrup_d_b.units)
     min_values = [
         None,
         None,
@@ -417,7 +427,7 @@ def _initialize_dicts_ACI_318_19_shear(self: "RectangularBeam") -> None:
             "",
             "",
             round(self._A_v_min.to("cm**2/m").magnitude, 2),
-            round(db_min.to("mm").magnitude, 0),
+            "" if db_min is None else round(db_min.to("mm").magnitude, 0),
         ],
         "Max.": [
             round(self._stirrup_s_max_l.to("cm").magnitude, 2),

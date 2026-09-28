@@ -459,7 +459,7 @@ def spacing_warnings(beam: "RectangularBeam") -> List[_Raw]:
         # A beam layer with one bar has no pair to measure: what the row
         # carries for it is the room beside the bar, not a distance between
         # bars, and there is no minimum for it to miss.
-        measurable = is_slab or _bars_side_by_side(beam, face)
+        measurable = is_slab or bars_side_by_side(beam, face)
         if (
             measurable
             and s_min is not None
@@ -477,7 +477,7 @@ def spacing_warnings(beam: "RectangularBeam") -> List[_Raw]:
     return [_with_units(raw, beam) for raw in found]
 
 
-def _bars_side_by_side(beam: "RectangularBeam", face: str) -> bool:
+def bars_side_by_side(beam: "RectangularBeam", face: str) -> bool:
     """Whether some layer of the face holds two bars, so a clear spacing exists.
 
     Groups 1 and 2 share the layer nearest the face, groups 3 and 4 the one
