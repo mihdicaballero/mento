@@ -1467,3 +1467,26 @@ def test_the_catalogue_floor_stays_readable_from_the_registry() -> None:
     cirsoc = Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa)
     assert design_code(aci).requires("min_stirrup_diameter")(aci) == 10 * mm
     assert design_code(cirsoc).requires("min_stirrup_diameter")(cirsoc) == 6 * mm
+
+
+def test_en_holds_only_the_bottom_to_a_minimum_when_nothing_bends_the_section() -> None:
+    """EN 20x50 C25/30 B500S under shear alone: the bottom keeps its minimum, the top takes none.
+
+    A beam always carries bottom steel; a top that no combination puts in
+    tension is not held to §9.2.1.1(1). It used to be, and a bare top face
+    under a shear-only combination was warned ``As_below_min``.
+    """
+    beam = RectangularBeam(
+        label="V",
+        concrete=Concrete_EN_1992_2004(name="C25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="B500S", f_y=500 * MPa),
+        width=20 * cm,
+        height=50 * cm,
+        c_c=25 * mm,
+    )
+    node = Node(section=beam, forces=[Forces(label="V", V_z=20 * kN)])
+    node.design()
+
+    assert beam.flexure_design.bottom.A_s_min.magnitude > 0
+    assert beam.flexure_design.top.A_s_min.magnitude == 0
+    assert "As_below_min" not in _by_code(node.warnings)

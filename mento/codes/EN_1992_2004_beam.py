@@ -618,8 +618,12 @@ def _determine_nominal_moment_EN_1992_2004(self: "RectangularBeam", st: ENFlexur
     st.M_Rd_bot = _simple_determine_nominal_moment_EN_1992_2004(
         self, sec.A_s_bot, sec.d_bot, sec.A_s_top, sec.c_mec_top
     )
-    # Determine capacity for negative moment (tension at the top)
-    st.A_s_min_top = 0.0 if tension_at_bottom else _minimum_flexural_reinforcement_area_EN_1992_2004(self, sec.d_top)
+    # Determine capacity for negative moment (tension at the top). Only a
+    # negative moment puts the top in tension, so only then does it take a
+    # minimum: with no moment the bottom keeps its own (the positive branch of
+    # the check), and a top that nothing pulls is not held to one.
+    tension_at_top = force._M_y < 0 * kNm
+    st.A_s_min_top = _minimum_flexural_reinforcement_area_EN_1992_2004(self, sec.d_top) if tension_at_top else 0.0
     st.A_s_max_top = st.A_s_max_bot
     st.M_Rd_top = _simple_determine_nominal_moment_EN_1992_2004(
         self, sec.A_s_top, sec.d_top, sec.A_s_bot, sec.c_mec_bot

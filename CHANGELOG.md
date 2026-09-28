@@ -568,6 +568,11 @@ from the release history and are summaries rather than complete lists.
   42.1 cm² there and 44.9 cm² on top, and warned `As_above_max`; both faces now take
   48.0 cm². The check, the design and the `flexure_admissible` gate read it.
 
+- **Under EN 1992-1-1 a top face that no combination puts in tension takes no minimum.**
+  A combination with no moment held the top to §9.2.1.1(1) as well as the bottom, and a
+  beam or slab designed for shear alone was warned `As_below_min` on its bare top. The
+  bottom keeps its minimum: a member always carries bottom steel.
+
 - **The EN 1992-1-1 flexure DCR is no longer rounded before it is compared with 1.** It
   was rounded to three decimals where it was computed, so a face up to 0.05 % short of its
   moment read 1.000, passed, and the design accepted layouts that short. The reports still
