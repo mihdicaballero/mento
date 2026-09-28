@@ -1,5 +1,5 @@
 Footing
-=======
+========
 
 ``Footing`` subclasses ``OneWaySlab``, which subclasses ``RectangularBeam``.
 **The strength provisions are identical** — a footing strip is solved as a wide,
