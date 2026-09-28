@@ -335,7 +335,12 @@ class BeamSummary:
                 # section that passes as one that fails.
                 dcr_values = [beam._DCRb_top, beam._DCRb_bot, beam._DCRv]
                 all_dcrs_ok = all(v < 1 for v in dcr_values)
-                results_dict[VERDICT_COLUMN] = PASS_MARK if all_dcrs_ok else FAIL_MARK
+                # A face past its maximum steel fails whatever its DCR: under
+                # ACI 318-19 / CIRSOC 201-25 it is not tension-controlled (§9.3.3.1).
+                admissible = all(
+                    check.bottom.admissible and check.top.admissible for check in getattr(beam, "_flexure_checks", ())
+                )
+                results_dict[VERDICT_COLUMN] = PASS_MARK if all_dcrs_ok and admissible else FAIL_MARK
 
             # Add the results to the list
             results_list.append(results_dict)

@@ -1,5 +1,6 @@
 from __future__ import annotations
-from typing import Any, Dict, List, TYPE_CHECKING, Tuple
+from contextlib import contextmanager
+from typing import Any, Callable, Dict, Iterator, List, Optional, TYPE_CHECKING, Tuple
 import math
 import pandas as pd
 import numpy as np
@@ -19,6 +20,12 @@ if TYPE_CHECKING:
 # builds one area Quantity per candidate it keeps, so the unit is built once here
 # instead of on every call.
 _CM2 = cm**2
+
+#: What the section asks of its stirrups, ``(A_v_req, V_s_req)``, read off the
+#: section as it is when called. The transverse search calls it once per bar
+#: diameter, with that diameter on the section, so the demand is the one the
+#: effective depth of that diameter gives.
+_ShearDemand = Callable[[], Tuple["Quantity", "Quantity"]]
 
 
 def max_stirrup_spacing_ACI_318_19(beam: RectangularBeam, V_s_req: float, A_cv: float) -> Tuple[float, float]:
@@ -97,6 +104,18 @@ class Rebar:
         self._clear_limit_mm = self.beam.settings.clear_spacing.to("mm").magnitude
         self._vibrator_mm = self.beam.settings.vibrator_size.to("mm").magnitude
         self._clear_spacing = self.beam.settings.clear_spacing.to("mm")
+        # The most the code lets the bars nearest a tension face sit apart,
+        # centre to centre: the crack-control cap of ACI 318-19 / CIRSOC
+        # 201-25 §24.3.2, which §9.7.2.2 sends a beam to (hook
+        # ``max_bar_spacing_tension``; None for a code without it). A beam's
+        # search holds its layouts to it on a face some load pulls
+        # (:meth:`longitudinal_rebar` lifts it off one nothing does); a slab
+        # strip applies it afterwards, through the spacing it is written back
+        # as (``OneWaySlab._spacing_for_bars``), since the layer this search
+        # lays out between the stirrup legs is not how a strip carries its bars.
+        limit = design_code(self.beam.concrete).max_bar_spacing_tension
+        self._tension_cap_mm: float | None = None if limit is None else limit(self.beam).to("mm").magnitude
+        self._max_centre_mm: float | None = self._tension_cap_mm
         # Unit system default rebar.
         #
         # The metric list is the bar sizes of CIRSOC 201-25 §20.2.1.3,
@@ -284,7 +303,13 @@ class Rebar:
         # Legs come in pairs, one closed stirrup each.
         return n_legs + (n_legs % 2)
 
-    def transverse_rebar(self, A_v_req: Quantity, V_s_req: Quantity, alpha: float) -> DataFrame:
+    def transverse_rebar(
+        self,
+        A_v_req: Quantity,
+        V_s_req: Quantity,
+        alpha: float,
+        demand: Optional[_ShearDemand] = None,
+    ) -> DataFrame:
         """Select the transverse reinforcement that covers ``A_v_req``.
 
         A beam and a slab strip are reinforced differently, so they are searched
@@ -299,27 +324,50 @@ class Rebar:
             V_s_req: Shear the reinforcement must carry, which sets the spacing
                 limits.
             alpha: Inclination of the shear reinforcement, for EN.
+            demand: Reads ``(A_v_req, V_s_req)`` off the section as it is when
+                called. Given, each bar diameter is sized against the demand the
+                section has with that bar on it -- see
+                :meth:`_transverse_rebar_beam` for why. Left out, the two values
+                above stand for every diameter.
 
         Returns:
             Every valid combination, best first; ``transverse_rebar_design``
             reads the first row.
         """
         if self.mode == "slab":
-            return self._transverse_rebar_slab(A_v_req, V_s_req, alpha)
-        return self._transverse_rebar_beam(A_v_req, V_s_req, alpha)
+            return self._transverse_rebar_slab(A_v_req, V_s_req, alpha, demand)
+        return self._transverse_rebar_beam(A_v_req, V_s_req, alpha, demand)
 
-    def _transverse_rebar_beam(self, A_v_req: Quantity, V_s_req: Quantity, alpha: float) -> DataFrame:
+    def _transverse_rebar_beam(
+        self,
+        A_v_req: Quantity,
+        V_s_req: Quantity,
+        alpha: float,
+        demand: Optional[_ShearDemand] = None,
+    ) -> DataFrame:
         """Closed stirrups: (d_b, n_legs, s_l), the legs spread across the width.
 
-        Every diameter is tried against the spacing limits of the section it
-        would make: the limits are written on the effective depth, and a
-        heavier stirrup sits the bars deeper. Reading them off whatever
-        diameter the section held before is what let a first design detail
-        28 cm against a limit the finished beam puts at 27.95 cm.
+        Every diameter is tried against the section it would make. The demand
+        and the spacing limits are both written on the effective depth, and a
+        heavier stirrup sits the bars deeper: at the depth of its own diameter
+        a candidate needs a little more ``A_v`` and, when ``V_s,req`` crosses
+        the threshold of ACI 318-19 Table 9.7.6.2.2 / CIRSOC 201-25
+        Tabla 9.7.6.2.2 there, half the spacing. Reading the limits off
+        whatever diameter the section held before is what let a first design
+        detail 28 cm against a limit the finished beam puts at 27.95 cm; reading
+        the demand off it is what let the design of a 30x40 CIRSOC beam
+        trade Ø8 and Ø10 back and forth and apply 1eØ10/15 against a limit of
+        8.9 cm. Each row is therefore sized at its own depth, and the row the
+        design applies passes its own check by construction. That includes
+        what the section's compression bars ask of the stirrups (ACI 318-19 /
+        CIRSOC 201-25 §9.7.6.4): whether the section relies on them moves
+        with the depth too, so the diameter floor and the spacing cap are
+        read after the demand of each diameter, which the beam's ``demand``
+        reads with its compression steel.
 
         For each diameter the search keeps the widest spacing, with the fewest
-        legs, that covers ``A_v_req``. The rows are then ranked by
-        :meth:`_rank_stirrup_options`.
+        legs, that covers the ``A_v_req`` of that diameter. The rows are then
+        ranked by :meth:`_rank_stirrup_options`.
         """
 
         # Prepare the list for valid combinations
@@ -327,11 +375,13 @@ class Rebar:
 
         # Get code specific limitations
         code = design_code(self.beam.concrete)
-        valid_diameters = code.transverse_rebar(self, V_s_req, alpha)[0]
 
         # Iterate through available diameters
-        for d_b in valid_diameters:
-            s_max_l, s_max_w = self._spacing_limits_for(d_b, V_s_req, alpha)
+        for d_b in code.transverse_rebar(self, V_s_req, alpha)[0]:
+            A_v_req_d, V_s_req_d = self._demand_for(d_b, A_v_req, V_s_req, demand)
+            if not self._supports_compression(d_b):
+                continue
+            s_max_l, s_max_w = self._spacing_limits_for(d_b, V_s_req_d, alpha)
             # Start from the fewest legs that keep the transverse spacing within s_max_w,
             # rather than from a single stirrup: on a wide section two legs never comply.
             n_legs = self.min_legs_along_width(d_b, s_max_w)
@@ -358,7 +408,7 @@ class Rebar:
                 if self.beam.concrete.unit_system == "metric":
                     # Check if the calculated A_v meets or exceeds the required A_v, and
                     # that the legs are close enough together across the width.
-                    if A_v >= A_v_req and s_w <= s_max_w:
+                    if A_v >= A_v_req_d and s_w <= s_max_w:
                         valid_combinations.append(
                             {
                                 "n_stir": int(n_stirrups),
@@ -366,6 +416,7 @@ class Rebar:
                                 "s_l": s_l.to("cm"),  # spacing along length
                                 "s_w": s_w.to("cm"),  # spacing along width
                                 "A_v": A_v.to("cm**2/m"),
+                                "A_v_req": A_v_req_d.to("cm**2/m"),
                                 "s_max_l": s_max_l.to("cm"),
                                 "s_max_w": s_max_w.to("cm"),
                             }
@@ -382,7 +433,7 @@ class Rebar:
                 else:
                     # Check if the calculated A_v meets or exceeds the required A_v, and
                     # that the legs are close enough together across the width.
-                    if A_v >= A_v_req and s_w <= s_max_w:
+                    if A_v >= A_v_req_d and s_w <= s_max_w:
                         valid_combinations.append(
                             {
                                 "n_stir": int(n_stirrups),
@@ -390,6 +441,7 @@ class Rebar:
                                 "s_l": s_l.to("inch"),  # spacing along length
                                 "s_w": s_w.to("inch"),  # spacing along width
                                 "A_v": A_v.to("inch**2/ft"),
+                                "A_v_req": A_v_req_d.to("inch**2/ft"),
                                 "s_max_l": s_max_l.to("inch"),
                                 "s_max_w": s_max_w.to("inch"),
                             }
@@ -409,33 +461,41 @@ class Rebar:
         return df_combinations
 
     @staticmethod
-    def _stirrup_excess(A_v: List[Quantity], A_v_req: Quantity) -> List[float]:
-        """How far each ``A_v`` overshoots the requirement, as a fraction of it.
+    def _stirrup_excess(A_v: List[Quantity], A_v_req: List[Quantity]) -> List[float]:
+        """How far each ``A_v`` overshoots its own requirement, as a fraction of it.
 
-        With nothing required the lightest option is the reference instead, so
-        the numbers still say how much steel each one adds.
+        One requirement per layout, because the demand is read at the depth of
+        each layout's own stirrup. With nothing required the lightest option is
+        the reference instead, so the numbers still say how much steel each one
+        adds.
         """
-        reference = A_v_req if A_v_req.magnitude > 0 else min(A_v)
-        return [float((a / reference).to("dimensionless").magnitude) - 1 for a in A_v]
+        lightest = min(A_v)
+        return [
+            float((a / (req if req.magnitude > 0 else lightest)).to("dimensionless").magnitude) - 1
+            for a, req in zip(A_v, A_v_req)
+        ]
 
     def _rank_stirrup_options(self, combinations: List[Dict[str, Any]], A_v_req: Quantity) -> DataFrame:
         """Rank the stirrup layouts, the one to build first.
 
         One layout per bar diameter -- the widest spacing, with the fewest
-        legs, that covers ``A_v_req`` -- and they are ordered as they always
-        were: fewest stirrups first, least steel among those. The first row is
-        the one the design applies.
+        legs, that covers the ``A_v_req`` read at that diameter's depth -- and
+        they are ordered as they always were: fewest stirrups first, least
+        steel among those. The first row is the one the design applies.
 
-        Each row also carries a ``functional``: the excess of ``A_v`` over
-        ``A_v_req`` as a fraction of it, plus one for every stirrup beyond the
-        fewest any layout needs. It says how much steel a layout adds over the
-        one that is built, which is what makes the alternatives comparable; it
-        does not decide the order.
+        Each row also carries a ``functional``: the excess of ``A_v`` over the
+        row's own ``A_v_req`` as a fraction of it, plus one for every stirrup
+        beyond the fewest any layout needs. It says how much steel a layout adds
+        over what its section asks for, which is what makes the alternatives
+        comparable; it does not decide the order. A row that carries no
+        ``A_v_req`` of its own is measured against the ``A_v_req`` given.
         """
         if not combinations:
             return pd.DataFrame(combinations)
 
-        excess = self._stirrup_excess([row["A_v"] for row in combinations], A_v_req)
+        excess = self._stirrup_excess(
+            [row["A_v"] for row in combinations], [row.get("A_v_req", A_v_req) for row in combinations]
+        )
         n_min = min(row["n_stir"] for row in combinations)
         for row, over in zip(combinations, excess):
             row["functional"] = over + (row["n_stir"] - n_min)
@@ -446,6 +506,44 @@ class Rebar:
         df.sort_values(by=["n_stir", "A_v"], inplace=True)
         df.reset_index(drop=True, inplace=True)
         return df
+
+    @contextmanager
+    def _stirrup_of(self, d_b: Quantity) -> Iterator[None]:
+        """The section with a stirrup of diameter ``d_b`` on it, for the duration.
+
+        Only the diameter moves -- it is what sets the effective depth -- and
+        it is put back afterwards, so a search leaves the section as it found
+        it whatever it tried.
+        """
+        d_b_before = self.beam._stirrup_d_b
+        try:
+            self.beam._stirrup_d_b = d_b
+            self.beam._update_effective_heights()
+            yield
+        finally:
+            self.beam._stirrup_d_b = d_b_before
+            self.beam._update_effective_heights()
+
+    def _demand_for(
+        self,
+        d_b: Quantity,
+        A_v_req: Quantity,
+        V_s_req: Quantity,
+        demand: Optional[_ShearDemand],
+    ) -> Tuple[Quantity, Quantity]:
+        """``(A_v_req, V_s_req)`` of the section carrying stirrups of diameter ``d_b``.
+
+        The demand is written on the effective depth as much as the spacing
+        limits are: ``A_v,req = V_s,req / (f_yt d)`` grows as a heavier stirrup
+        lowers ``d``, and the ``V_s,req`` read there decides which row of the
+        spacing table applies. Read at the diameter being tried, so that the
+        layout kept for it is the one its own section asks for. Without a
+        ``demand`` to read, the values the caller fixed stand.
+        """
+        if demand is None:
+            return A_v_req, V_s_req
+        with self._stirrup_of(d_b):
+            return demand()
 
     def _spacing_limits_for(self, d_b: Quantity, V_s_req: Quantity, alpha: float) -> Tuple[Quantity, Quantity]:
         """The code's spacing limits for a section carrying stirrups of diameter ``d_b``.
@@ -459,17 +557,45 @@ class Rebar:
         being tried is what keeps the chosen spacing inside the limit the
         finished section is later checked against.
         """
-        d_b_before = self.beam._stirrup_d_b
-        try:
-            self.beam._stirrup_d_b = d_b
-            self.beam._update_effective_heights()
+        with self._stirrup_of(d_b):
             _, s_max_l, s_max_w = design_code(self.beam.concrete).transverse_rebar(self, V_s_req, alpha)
-        finally:
-            self.beam._stirrup_d_b = d_b_before
-            self.beam._update_effective_heights()
+        support = self._compression_support(d_b)
+        if support is not None:
+            # The stirrups of a doubly reinforced section also brace its
+            # compression bars: ACI 318-19 / CIRSOC 201-25 §9.7.6.4.3 cap the
+            # spacing at the least of 16 d_b of the bar, 48 d_b of the stirrup
+            # and the least dimension of the beam, beside Table 9.7.6.2.2.
+            s_max_l = min(s_max_l, support.s_max.to(s_max_l.units))
         return s_max_l, s_max_w
 
-    def _transverse_rebar_slab(self, A_v_req: Quantity, V_s_req: Quantity, alpha: float) -> DataFrame:
+    def _compression_support(self, d_b: Quantity) -> Any:
+        """What the section's compression bars ask of a stirrup of diameter ``d_b``, if anything.
+
+        The code's ``stirrup_compression_support`` -- ``None`` for a code
+        with no such clause, and ``None`` from a code that has one when no
+        face of the section acts as compression steel.
+        """
+        hook = design_code(self.beam.concrete).stirrup_compression_support
+        return None if hook is None else hook(self.beam, d_b)
+
+    def _supports_compression(self, d_b: Quantity) -> bool:
+        """Whether a stirrup of diameter ``d_b`` is thick enough for the compression bars it braces.
+
+        ACI 318-19 §9.7.6.4.2 / CIRSOC 201-25 Tabla 9.7.6.4.2, read with the
+        compression steel the section relies on as the demand last left it
+        -- for a beam, at the depth ``d_b`` itself gives the bars, since
+        :meth:`_demand_for` reads the demand with that stirrup on.
+        """
+        support = self._compression_support(d_b)
+        return support is None or d_b >= support.d_b_min
+
+    def _transverse_rebar_slab(
+        self,
+        A_v_req: Quantity,
+        V_s_req: Quantity,
+        alpha: float,
+        demand: Optional[_ShearDemand] = None,
+    ) -> DataFrame:
         """A grid of legs: (d_b, s_l, s_w), with both spacings free.
 
         The limits a slab strip is held to are the beam ones: ACI 318-19
@@ -504,11 +630,17 @@ class Rebar:
         area_unit = "cm**2/m" if metric else "inch**2/ft"
         width = self.beam.width
 
+        # The whole catalogue: the stirrup floor of §9.7.6.4.2 is the beams'
+        # (a slab's transverse reinforcement goes to §9.7.6.2 alone).
         valid_diameters = design_code(self.beam.concrete).transverse_rebar(self, V_s_req, alpha)[0]
 
         valid_combinations = []
         for d_b in valid_diameters:
-            s_max_l, s_max_w = self._spacing_limits_for(d_b, V_s_req, alpha)
+            # As in the beam search: what the strip asks for moves with the
+            # depth the bar being tried gives it, and a slab starts a design
+            # with no stirrup at all.
+            A_v_req_d, V_s_req_d = self._demand_for(d_b, A_v_req, V_s_req, demand)
+            s_max_l, s_max_w = self._spacing_limits_for(d_b, V_s_req_d, alpha)
             # Whole units, so the spacing is one a drawing can carry. The strip
             # caps the transverse spacing as well: a leg spacing wider than the
             # strip would put less than one leg in it.
@@ -524,9 +656,9 @@ class Rebar:
             s_w_lo = max(1, min(s_min, s_w_max))
 
             A_db = self.rebar_areas[d_b]
-            # A_v >= A_v_req  <=>  s_l * s_w <= A_db * width / A_v_req.
-            if A_v_req > 0 * A_v_req.units:
-                product_max = (A_db * width / A_v_req).to(unit**2).magnitude
+            # A_v >= A_v_req_d  <=>  s_l * s_w <= A_db * width / A_v_req_d.
+            if A_v_req_d > 0 * A_v_req_d.units:
+                product_max = (A_db * width / A_v_req_d).to(unit**2).magnitude
             else:
                 product_max = math.inf
 
@@ -555,6 +687,7 @@ class Rebar:
                     "s_l": s_l_q,
                     "s_w": s_w_q,
                     "A_v": (A_db * n_legs / s_l_q).to(area_unit),
+                    "A_v_req": A_v_req_d.to(area_unit),
                     "s_max_l": s_max_l.to(unit),
                     "s_max_w": s_max_w.to(unit),
                 }
@@ -565,7 +698,9 @@ class Rebar:
             # Least steel first. Unlike a beam, a slab gains nothing from a
             # heavier bar: the spacing limits already fix how close the legs go.
             # The functional is the excess alone, which ranks the same way.
-            df_combinations["functional"] = self._stirrup_excess(list(df_combinations["A_v"]), A_v_req)
+            df_combinations["functional"] = self._stirrup_excess(
+                list(df_combinations["A_v"]), list(df_combinations["A_v_req"])
+            )
             df_combinations.sort_values(by=["A_v", "s_l"], ascending=[True, False], inplace=True)
             df_combinations.reset_index(drop=True, inplace=True)
         self._trans_combos_df = df_combinations
@@ -886,6 +1021,15 @@ class Rebar:
         # Ø12 bars 29.999999999999993 mm apart against a 30 mm limit.
         if clear_mm < max_clear_spacing_mm and not math.isclose(clear_mm, max_clear_spacing_mm):
             return None
+        # ... and, on a beam, no further apart than the crack-control cap of
+        # ACI 318-19 / CIRSOC 201-25 §24.3.2 allows the bars nearest the
+        # tension face: adjacent centres sit one clear distance and the larger
+        # bar apart. Without this a wide web was laid out with two bars half
+        # a metre apart, and the check that followed failed it.
+        if self.mode != "slab" and self._max_centre_mm is not None:
+            centre_mm = clear_mm + max(d1_mm, d2_mm)
+            if centre_mm > self._max_centre_mm and not math.isclose(centre_mm, self._max_centre_mm):
+                return None
         return clear_mm
 
     def _long_combo(
@@ -1048,6 +1192,7 @@ class Rebar:
         A_s_max: Quantity | None = None,
         mech_cover: Quantity | None = None,
         face: str | None = None,
+        tension: bool = True,
     ) -> Dict[str, Any]:
         """
         Selects the appropriate longitudinal rebar method based on the design
@@ -1063,7 +1208,17 @@ class Rebar:
                 of the top bars -- the rule the check and the warnings apply.
                 ``None`` keeps it on whatever face this is, the safe side for a
                 caller that does not say.
+            tension: whether some load puts this face in tension. The
+                crack-control cap of §24.3.2 is on the bars nearest a tension
+                face (§9.7.2.2), and the check and ``bar_spacing_exceeds_max``
+                read it there only; a face that is only ever compressed --
+                the compression steel of a doubly reinforced beam -- is laid
+                out without it. Held to it, two bars across a 40 cm web were
+                too far apart, and a compression face with no room for a
+                third was left bare. ``True`` keeps the cap, as before, for a
+                caller that does not say.
         """
         vibrator = self.beam.settings.vibrator_size.to("mm").magnitude
         self._vibrator_mm = 0.0 if face == "bot" else vibrator
+        self._max_centre_mm = self._tension_cap_mm if tension else None
         return design_code(self.beam.concrete).longitudinal_rebar(self, A_s_req, A_s_max, mech_cover)

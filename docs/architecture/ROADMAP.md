@@ -354,7 +354,7 @@ checkers, no pint in `equations/`) lands with the first extracted module.
 | --- | --- |
 | `aci_318_19/equations/shear.py` | Eq. 22.5.5.1.3, Table 22.5.5.1, §22.5.5.1.1, §22.5.1.2, §9.6.3.1, §20.2.2.4, Table 9.6.3.4, §22.5.8.5.3 |
 | `aci_318_19/equations/flexure.py` | §21.2.2, §9.6.1.2, §22.2, §22.2.2.4.1, §22.3 |
-| `aci_318_19/equations/wall.py` | §11.5.4.3, §11.5.4.6, §11.6.1, Eq. 11.6.2, §11.7.3 |
+| `aci_318_19/equations/wall.py` | §11.5.4.2, §11.5.4.3, §11.6.2, Eq. 11.6.2, §11.7.2.1, §11.7.3.1 |
 
 `ACI_318_19_beam.py` no longer imports `math` **or** `numpy`: every inline
 formula in the module is gone. `tests/test_architecture_boundaries.py` enforces

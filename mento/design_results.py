@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any, Optional, Sequence, Tuple
 from mento.units import Quantity
 
 from mento.codes.check_state import to_display
+from mento.design_warnings import steel_above_maximum
 
 if TYPE_CHECKING:
     from mento.beam import RectangularBeam
@@ -33,21 +34,33 @@ class DesignNotRunError(RuntimeError):
     """Raised when results are read before a check or design has been run."""
 
 
-def format_longitudinal_rebar(n: int, d_b: str, s: Optional[str] = None) -> str:
+def format_longitudinal_rebar(n: float, d_b: str, s: Optional[str] = None) -> str:
     """Label one layer of longitudinal bars in the notation of its element.
 
     A beam is detailed as a number of bars of a diameter, so the count leads:
     ``4Ø16``. A slab is one bar repeated at a spacing across the strip, and the
-    count that falls out of it says nothing about how it is drawn, so the
-    spacing takes its place: ``Ø12/17cm`` -- the same notation its grid of
-    stirrups is written in.
+    count that falls out of it -- ``width / s``, not a whole number -- says
+    nothing about how it is drawn, so the spacing takes its place:
+    ``Ø12/17cm`` -- the same notation its grid of stirrups is written in.
 
     Takes the numbers already formatted, so each caller keeps its own precision
-    and units while the shape of the label is decided in one place.
+    and units while the shape of the label is decided in one place. The count
+    is the exception, a bare number: a whole one reads whole whatever its
+    type, since a count entered as ``2.0`` is still two bars, not "2.0Ø16".
     """
     if s is None:
-        return f"{n}Ø{d_b}"
+        count = int(n) if float(n).is_integer() else n
+        return f"{count}Ø{d_b}"
     return f"Ø{d_b}/{s}"
+
+
+def placed_bars(n: float) -> int:
+    """The whole bars a count of ``n`` bars per strip is laid out with: ``ceil(n)``.
+
+    A count that is whole but arrives a hair above it, through the division
+    ``width / s``, stays whole: 100/20 is five bars, not six.
+    """
+    return math.ceil(n - 1e-9)
 
 
 @dataclass(frozen=True)
@@ -56,10 +69,18 @@ class RebarLayer:
 
     ``s`` is the centre-to-centre spacing the layer was detailed with, and is
     ``None`` on a section that is detailed by a bar count instead -- a beam.
-    The area is the same either way; what changes is how the layer reads.
+    On a beam ``n`` is a whole number of bars. On a slab strip it is
+    ``width / s``, the bars per strip the spacing gives, and need not be
+    whole: a metre of Ø10/15 carries 6.67 of them, 5.24 cm², which is what
+    every metre of that slab carries, and what its strength is computed with.
+    The area is ``n`` bar areas either way.
+
+    ``n_placed`` is the whole number of bars that lay the layer out across
+    the strip: 7 for that Ø10/15 in a metre, placed at 15 cm, the last bar a
+    little past the metre. On a beam it is ``n``.
     """
 
-    n: int
+    n: float
     d_b: Quantity
     s: Optional[Quantity] = None
 
@@ -67,6 +88,11 @@ class RebarLayer:
     def A_s(self) -> Quantity:
         """Steel area of this layer."""
         return self.n * (self.d_b**2) * math.pi / 4
+
+    @property
+    def n_placed(self) -> int:
+        """The whole bars that lay this layer out: ``ceil(n)``, ``n`` on a beam."""
+        return placed_bars(self.n)
 
     def __str__(self) -> str:
         return format_longitudinal_rebar(
@@ -90,16 +116,41 @@ class RebarOption:
     diameters and the use of a second layer. It is ``None`` for a layout the
     search did not score -- a footing mat, which is chosen afterwards and as a
     whole.
+
+    ``section_DCR`` is the worst demand-capacity ratio of the finished
+    section with this layout on its face and the other face as applied --
+    flexure and shear, both faces, every combination the design was run
+    for. It is the section's, not the face's: ``flexure_design.top.DCR`` is
+    the top face's ratio, while ``flexure_design.top.options[0].section_DCR``
+    may be the bottom's, or the shear's. The bars set the depth the shear
+    is read at too, so a layout that sits deeper lowers the section's shear
+    limit and can tighten its stirrup spacing limit. An alternative is only
+    offered when that ratio is at most 1, the
+    bars fit beside the stirrups the design finished with, the section keeps
+    within the code's limits on its reinforcement, and its stirrups within
+    theirs -- the compression bars the layout relies on included; the applied
+    layout carries its own, whatever it is. ``None`` on an option that has
+    not been verified.
     """
 
     layers: Tuple[RebarLayer, ...]
     A_s: Quantity
     functional: Optional[float] = None
+    section_DCR: Optional[float] = None
 
     @property
-    def n_bars(self) -> int:
-        """Total number of bars across every layer of this layout."""
+    def n_bars(self) -> float:
+        """Total number of bars across every layer of this layout.
+
+        Whole on a beam; on a slab strip the bars per strip its spacings give,
+        which need not be (see :class:`RebarLayer`).
+        """
         return sum(layer.n for layer in self.layers)
+
+    @property
+    def n_bars_placed(self) -> int:
+        """The whole bars that lay out every layer: see :attr:`RebarLayer.n_placed`."""
+        return sum(layer.n_placed for layer in self.layers)
 
     def __str__(self) -> str:
         if not self.layers:
@@ -141,6 +192,15 @@ class FlexureFaceCheck:
     the 4 % of §9.2.1.1(3), which compression steel does not extend, and the
     two are the same.
 
+    ``admissible`` is False when the face carries more steel than that
+    maximum allows: under ACI 318-19 and CIRSOC 201-25 the section is then
+    not tension-controlled, which §9.3.3.1 (§7.3.3.1 for a one-way slab)
+    does not allow, and under EN 1992-1-1 it is past the 4 %. A face that is
+    not admissible does not comply even where its ``DCR`` is below 1:
+    ``complies`` reads both. The warning that goes with it is
+    ``not_tension_controlled`` (ACI 318-19 / CIRSOC 201-25) or
+    ``As_above_max`` (EN 1992-1-1).
+
     A field is ``None`` when the design code did not set it for this
     combination; enveloping skips those rather than treating them as zero.
     """
@@ -153,6 +213,12 @@ class FlexureFaceCheck:
     A_s_calc: Optional[Quantity] = None
     A_s_min_eff: Optional[Quantity] = None
     A_s_max_eff: Optional[Quantity] = None
+    admissible: bool = True
+
+    @property
+    def complies(self) -> bool:
+        """The face carries its moment (``DCR <= 1``) and is within its maximum steel."""
+        return self.DCR <= 1.0 and self.admissible
 
 
 @dataclass(frozen=True)
@@ -162,6 +228,11 @@ class FlexureCheck:
     label: str
     bottom: FlexureFaceCheck
     top: FlexureFaceCheck
+
+    @property
+    def complies(self) -> bool:
+        """Both faces comply under this combination."""
+        return self.bottom.complies and self.top.complies
 
 
 @dataclass(frozen=True)
@@ -231,6 +302,7 @@ def envelope_flexure_face(checks: Sequence[FlexureCheck], face: str) -> FlexureF
         A_s_calc=_worst([f.A_s_calc for f in faces]),
         A_s_min_eff=_worst([f.A_s_min_eff for f in faces]),
         A_s_max_eff=_least([f.A_s_max_eff for f in faces]),
+        admissible=all(f.admissible for f in faces),
     )
 
 
@@ -253,6 +325,7 @@ def capture_flexure_check(beam: RectangularBeam, label: str, state: Any) -> Flex
     the section afterwards.
     """
     imperial = beam.concrete.is_imperial
+    over = steel_above_maximum(beam, state)
 
     def face(suffix: str) -> FlexureFaceCheck:
         A_s_req, A_s_min, A_s_max, M_capacity, A_s_calc, A_s_min_eff, A_s_max_eff = state.face_quantities(
@@ -267,6 +340,7 @@ def capture_flexure_check(beam: RectangularBeam, label: str, state: Any) -> Flex
             A_s_calc=A_s_calc,
             A_s_min_eff=A_s_min_eff,
             A_s_max_eff=A_s_max_eff,
+            admissible=suffix not in over,
         )
 
     return FlexureCheck(label=label, bottom=face("bot"), top=face("top"))
@@ -304,9 +378,18 @@ class FaceReinforcement:
     A_s: Quantity
 
     @property
-    def n_bars(self) -> int:
-        """Total number of bars across every layer of this face."""
+    def n_bars(self) -> float:
+        """Total number of bars across every layer of this face.
+
+        Whole on a beam; on a slab strip the bars per strip its spacings give,
+        which need not be (see :class:`RebarLayer`).
+        """
         return sum(layer.n for layer in self.layers)
+
+    @property
+    def n_bars_placed(self) -> int:
+        """The whole bars that lay out every layer: see :attr:`RebarLayer.n_placed`."""
+        return sum(layer.n_placed for layer in self.layers)
 
     def __str__(self) -> str:
         if not self.layers:
@@ -411,13 +494,25 @@ class FlexureFaceDesign:
     and complies.
 
     ``options`` are the layouts the last design found for this face, best
-    first; ``options[0]`` is the one applied. Empty when the face was not
+    first; ``options[0]`` is the one applied. The rest were each built on
+    the finished section -- the stirrups the design ended with, the other
+    face as applied -- and kept only if the section carries both moments
+    and the shear with it, within the code's limits on its reinforcement and
+    its stirrups; each carries the ``section_DCR`` it was kept at -- the
+    section's worst ratio, not this face's ``DCR``. A footing offers none:
+    its mat is chosen as a whole, module and both bars together, and no row
+    of the per-face search is that mat with one thing changed. Empty when the face was not
     designed, or when its bars were changed by hand after the design.
 
     ``M_capacity`` is the design moment resistance of the face as reinforced
     -- ``ØMn`` under ACI 318-19 and CIRSOC 201-25, ``MRd`` under EN 1992-1-1
     -- as the governing combination saw it, so it is the resistance ``DCR``
     was formed from.
+
+    ``admissible`` is False when some combination found the face past its
+    maximum steel, and ``complies`` reads it with ``DCR`` -- see
+    :class:`FlexureFaceCheck`. A design never accepts a face that does not
+    comply; it ends on one only when no layout does, and warns.
     """
 
     layers: Tuple[RebarLayer, ...]
@@ -431,11 +526,26 @@ class FlexureFaceDesign:
     DCR: float
     M_capacity: Quantity
     options: Tuple[RebarOption, ...] = ()
+    admissible: bool = True
 
     @property
-    def n_bars(self) -> int:
-        """Total number of bars across every layer of this face."""
+    def complies(self) -> bool:
+        """The face carries its moment (``DCR <= 1``) and is within its maximum steel."""
+        return self.DCR <= 1.0 and self.admissible
+
+    @property
+    def n_bars(self) -> float:
+        """Total number of bars across every layer of this face.
+
+        Whole on a beam; on a slab strip the bars per strip its spacings give,
+        which need not be (see :class:`RebarLayer`).
+        """
         return sum(layer.n for layer in self.layers)
+
+    @property
+    def n_bars_placed(self) -> int:
+        """The whole bars that lay out every layer: see :attr:`RebarLayer.n_placed`."""
+        return sum(layer.n_placed for layer in self.layers)
 
     def __str__(self) -> str:
         if not self.layers:
@@ -455,6 +565,11 @@ class FlexureDesign:
         """Governing demand-to-capacity ratio of the two faces."""
         return max(self.bottom.DCR, self.top.DCR)
 
+    @property
+    def complies(self) -> bool:
+        """Both faces comply: see :attr:`FlexureFaceDesign.complies`."""
+        return self.bottom.complies and self.top.complies
+
     def __str__(self) -> str:
         return f"bottom: {self.bottom} / top: {self.top}"
 
@@ -464,9 +579,18 @@ class StirrupOption:
     """One transverse layout a shear design found.
 
     The fields read as those of :class:`ShearDesign`. ``functional`` says how
-    much steel the option adds: the excess of ``A_v`` over what the design
-    asked for, ``A_v / A_v_req - 1``, plus one for every stirrup beyond the
-    fewest any option needs.
+    much steel the option adds: the excess of ``A_v`` over what the section
+    asks for with this stirrup on it, ``A_v / A_v_req - 1``, plus one for
+    every stirrup beyond the fewest any option needs.
+
+    ``section_DCR`` is the worst demand-capacity ratio of the finished
+    section built with this option -- shear and flexure, both faces, every
+    combination the design was run for -- so it need not be the shear's:
+    ``shear_design.DCR`` is. A stirrup is not only shear: a heavier one sits the
+    bars deeper, which lowers the effective depth and with it the section's
+    shear limit and its moment capacity. An alternative is only offered when
+    that ratio is at most 1 and the section misses no limit with it; the
+    applied layout carries its own, whatever it is.
     """
 
     n_stirrups: int
@@ -476,6 +600,7 @@ class StirrupOption:
     A_v: Quantity
     functional: float
     layout: str = STIRRUPS
+    section_DCR: Optional[float] = None
 
     @property
     def n_legs(self) -> int:
@@ -510,10 +635,15 @@ class ShearDesign:
     tension. The per-combination results carry each one's own.
 
     ``options`` are the stirrup layouts the last design found: ``options[0]``
-    is the one applied, and the rest follow in order of bar diameter -- the
-    same cage in a heavier bar, which is the substitution a drawing makes when
-    that is the bar at hand. Empty when the stirrups were not designed, or were
-    changed by hand afterwards.
+    is the one applied, and the rest are one layout per other bar diameter
+    the code offers, lighter and heavier alike, in order of diameter -- each
+    the widest spacing with the fewest legs that covers the demand read at
+    the depth that bar gives the section. Only the ones the finished section
+    passes with are kept, shear and flexure, so a drawing can take any of
+    them for the bar at hand; each carries its ``section_DCR``, the worst of
+    the section built with it, flexure included -- not always this result's
+    ``DCR``, which is the shear's. Empty when the stirrups were not
+    designed, or were changed by hand afterwards.
     """
 
     n_stirrups: int
@@ -560,7 +690,10 @@ def _layers(beam: RectangularBeam, face: str) -> Tuple[RebarLayer, ...]:
         if s is not None and s.magnitude == 0:
             s = None
         if n and d_b is not None and d_b.magnitude > 0:
-            layers.append(RebarLayer(n=int(n), d_b=d_b, s=s))
+            # As the section counts them: whole on a beam, width / s on a slab.
+            # A beam's setters store the count as given, so a 2.0 from a
+            # spreadsheet is made the 2 bars it is.
+            layers.append(RebarLayer(n=n if s is not None else int(n), d_b=d_b, s=s))
     return tuple(layers)
 
 
@@ -592,6 +725,7 @@ def _face(beam: RectangularBeam, face: str) -> FlexureFaceDesign:
         DCR=worst.DCR,
         M_capacity=no_capacity if worst.M_capacity is None else worst.M_capacity,
         options=_current_flexure_options(beam, face),
+        admissible=worst.admissible,
     )
 
 

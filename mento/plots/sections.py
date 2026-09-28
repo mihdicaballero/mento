@@ -19,7 +19,7 @@ from matplotlib.figure import Figure
 from matplotlib.patches import Circle, FancyBboxPatch, Rectangle
 from mento.units import Quantity
 
-from mento.design_results import format_transverse_rebar
+from mento.design_results import format_transverse_rebar, placed_bars
 from mento.results import CUSTOM_COLORS
 
 if TYPE_CHECKING:
@@ -51,9 +51,9 @@ def _plot_rebar_layer(
     c_c_cm: float,
     stirrup_d_b_cm: float,
     layers_spacing_cm: float,
-    n1: int,
+    n1: float,
     d_b1: Quantity,
-    n2: int,
+    n2: float,
     d_b2: Quantity,
     max_db: Quantity,
     is_bottom: bool = True,
@@ -62,6 +62,11 @@ def _plot_rebar_layer(
     """
     Helper method to plot a single layer of rebars.
     """
+    # A slab strip carries width / s bars, which need not be a whole number
+    # (mento.slab._bars_at_spacing); what is drawn is the whole bars that
+    # cover the strip. A beam's count is whole already.
+    n1, n2 = placed_bars(n1), placed_bars(n2)
+
     # Calculate y-position based on layer and bottom/top
     y_base = c_c_cm + stirrup_d_b_cm if is_bottom else height_cm - c_c_cm - stirrup_d_b_cm
 
@@ -217,9 +222,9 @@ def _annotate_rebar_layer_text(
     c_c_cm: float,
     stirrup_d_b_cm: float,
     layers_spacing_cm: float,
-    n1: int,
+    n1: float,
     d_b1: Quantity,
-    n2: int,
+    n2: float,
     d_b2: Quantity,
     max_db: Quantity,
     is_bottom: bool = True,
@@ -230,7 +235,8 @@ def _annotate_rebar_layer_text(
     Ejemplo: '2Ø16+3Ø10'.
     """
 
-    text = _format_rebar_layer_text(self, n1, d_b1, n2, d_b2)
+    # The whole bars the drawing shows; see _plot_rebar_layer.
+    text = _format_rebar_layer_text(self, placed_bars(n1), d_b1, placed_bars(n2), d_b2)
     if not text:
         return  # nada que mostrar
 

@@ -1317,12 +1317,13 @@ def test_a_failed_limit_check_is_shaded_red(
 ) -> None:
     """The colouring has to distinguish, not just decorate.
 
-    A 6 mm stirrup is below the 10 mm ACI 318-19 detailing minimum, so the
-    "Minimum rebar diameter" limit fails while the rest of the table passes.
+    Ø10 stirrups at 40 cm are past the d/2 of ACI 318-19 Table 9.7.6.2.2
+    (about 22 cm on this 25x50), so "Stirrup spacing along length" fails,
+    while the minimum shear reinforcement in the same table passes.
     """
     beam_list = pd.DataFrame(
         {
-            "Label": ["", "thin-stirrup"],
+            "Label": ["", "sparse-stirrups"],
             "Comb.": ["", "ELU 1"],
             "b": ["cm", 25],
             "h": ["cm", 50],
@@ -1331,8 +1332,8 @@ def test_a_failed_limit_check_is_shaded_red(
             "Vz": ["kN", 72],
             "My": ["kNm", 90],
             "ns": ["", 1],
-            "dbs": ["mm", 6],
-            "sl": ["cm", 20],
+            "dbs": ["mm", 10],
+            "sl": ["cm", 40],
             "n1": ["", 3],
             "db1": ["mm", 16],
             "n2": ["", 0],
@@ -1352,11 +1353,11 @@ def test_a_failed_limit_check_is_shaded_red(
         row.cells[0].text: row.cells[len(table.columns) - 1] for table in limit_tables for row in table.rows[1:]
     }
 
-    failed = by_check["Minimum rebar diameter"]
+    failed = by_check["Stirrup spacing along length"]
     assert failed.text == FAIL_MARK
     assert _cell_fill(failed) == "FFC7CE"
     # And a passing check in the same table is still green.
-    passed = by_check["Stirrup spacing along length"]
+    passed = by_check["Minimum shear reinforcement"]
     assert passed.text == PASS_MARK
     assert _cell_fill(passed) == "C6EFCE"
 
@@ -1576,3 +1577,42 @@ def test_the_report_prints_check_rather_than_a_subset_of_it(
     # Ending on the three DCRs and the verdict, as the wall summary does.
     assert printed[-4:] == ["DCRb,top", "DCRb,bot", "DCRv", VERDICT_COLUMN]
     assert len(printed) == len(CHECK_SUMMARY_WIDTHS)
+
+
+def test_a_beam_that_is_not_tension_controlled_fails_the_summary(
+    sample_concrete: Concrete_ACI_318_19, sample_steel: SteelBar
+) -> None:
+    """25x40 with 3Ø25 + 3Ø25 below under 100 kN·m: every DCR below 1, and still ❌.
+
+    A_s = 29.45 cm² against the tension-controlled A_s,max = 14.07 cm²:
+    ACI 318-19 §9.3.3.1 does not allow the section, whatever its capacity.
+    """
+    beam_list = pd.DataFrame(
+        {
+            "Label": ["", "over"],
+            "Comb.": ["", "ELU 1"],
+            "b": ["cm", 25],
+            "h": ["cm", 40],
+            "cc": ["mm", 25],
+            "Nx": ["kN", 0],
+            "Vz": ["kN", 20],
+            "My": ["kNm", 100],
+            "ns": ["", 1],
+            "dbs": ["mm", 10],
+            "sl": ["cm", 15],
+            "n1": ["", 3],
+            "db1": ["mm", 25],
+            "n2": ["", 0],
+            "db2": ["mm", 0],
+            "n3": ["", 3],
+            "db3": ["mm", 25],
+            "n4": ["", 0],
+            "db4": ["mm", 0],
+        }
+    )
+    summary = BeamSummary(concrete=sample_concrete, steel_bar=sample_steel, beam_list=beam_list)
+    results = summary.check()
+
+    beam = summary.nodes[0].section
+    assert max(beam._DCRb_bot, beam._DCRb_top, beam._DCRv) < 1.0
+    assert results[VERDICT_COLUMN][1] == FAIL_MARK

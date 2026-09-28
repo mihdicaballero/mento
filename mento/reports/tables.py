@@ -23,6 +23,7 @@ from mento.units import inch, kN, mm
 
 from mento.codes.registry import design_code
 from mento.design_results import GRID, format_longitudinal_rebar, transverse_layout
+from mento.design_warnings import bars_side_by_side
 
 if TYPE_CHECKING:
     from mento.beam import RectangularBeam
@@ -124,7 +125,9 @@ def _bar_spacing_row(
     spacing = getattr(self, f"_s_b1_{face}", None)
     if spacing is None:
         clear: Quantity = getattr(self, f"_available_s_{'top' if face == 't' else 'bot'}")
-        return f"Minimum spacing {side}", clear, min_clear, None
+        # A layer of one bar has no bar beside it: nothing to hold to a clear
+        # distance, as ``clear_spacing_below_min`` also reads it.
+        return f"Minimum spacing {side}", clear, min_clear if bars_side_by_side(self, face) else None, None
     if getattr(self, f"_n1_{face}") == 0 or spacing.magnitude == 0:
         return f"Bar spacing {side}", spacing, None, None
     max_of = getattr(self, "_max_bar_spacing", None)
@@ -142,6 +145,39 @@ def _bar_spacing_row(
         minimum,
         None if max_of is None else max_of(),
     )
+
+
+def _append_max_bar_spacing_rows(self: "RectangularBeam", M: Quantity) -> None:
+    """Add a beam's §24.3.2 rows to the flexure limits table, the tension face held to the cap.
+
+    "Maximum spacing top" and "Maximum spacing bottom", each carrying the
+    centre-to-centre spacing of the layer nearest the face against the
+    crack-control cap of ACI 318-19 / CIRSOC 201-25 §24.3.2 (see
+    :meth:`~mento.beam.RectangularBeam._tension_bar_spacing`). The cap is printed on both faces and
+    checked on the one the combination puts in tension, the way
+    :func:`_drop_max_off_tension_face` treats A_s,max: the clause is written
+    on the bars closest to the face in tension, and a combination pulls one
+    face or the other. A slab, whose spacing row already carries the cap,
+    and a code without it add nothing, so their tables keep their four rows.
+    :func:`mento.design_warnings.flexure_warnings` reads the same row.
+    """
+    table = self._data_min_max_flexure
+    for face, label in (("t", "Maximum spacing top"), ("b", "Maximum spacing bottom")):
+        row = self._tension_bar_spacing(face)
+        if row is None:
+            continue
+        value, limit = row
+        in_tension = M.magnitude > 0 if face == "b" else M.magnitude < 0
+        within = value <= limit or math.isclose(value.to("mm").magnitude, limit.to("mm").magnitude)
+        ok = within or not in_tension
+        table["Check"].append(label)
+        table["Unit"].append("mm")
+        table["Value"].append(_shown_mm(value))
+        table["Min."].append("")
+        table["Max."].append(_shown_mm(limit))
+        table["Ok?"].append("✅" if ok else "❌")
+        if not ok:
+            self._all_flexure_checks_passed = False
 
 
 def _shown_mm(value: Quantity | None) -> Any:
@@ -337,11 +373,18 @@ def _initialize_dicts_ACI_318_19_shear(self: "RectangularBeam") -> None:
     # report change the section it describes; it is a local now.
     zero_d_b = 0 * mm if self.concrete.unit_system == "metric" else 0 * inch
     d_b_shown = self._stirrup_d_b
+    # Neither code states a minimum diameter for a stirrup placed for shear
+    # alone (the 10 mm, 6 mm under CIRSOC, where the catalogue starts is a
+    # preference); §9.7.6.4.2 does for the stirrups that laterally support
+    # compression bars, and that is the minimum the row holds them to.
+    support_hook = design_code(self.concrete).stirrup_compression_support
+    support = None if support_hook is None else support_hook(self, self._stirrup_d_b)
+    db_min: Quantity | None
     if self._phi_V_s == 0 * kN:
         db_min = zero_d_b
         d_b_shown = zero_d_b
     else:
-        db_min = design_code(self.concrete).requires("min_stirrup_diameter")(self.concrete)
+        db_min = None if support is None else support.d_b_min.to(self._stirrup_d_b.units)
     min_values = [
         None,
         None,
@@ -384,7 +427,7 @@ def _initialize_dicts_ACI_318_19_shear(self: "RectangularBeam") -> None:
             "",
             "",
             round(self._A_v_min.to("cm**2/m").magnitude, 2),
-            round(db_min.to("mm").magnitude, 0),
+            "" if db_min is None else round(db_min.to("mm").magnitude, 0),
         ],
         "Max.": [
             round(self._stirrup_s_max_l.to("cm").magnitude, 2),
@@ -557,9 +600,21 @@ def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
     singly_max = {0: self._A_s_max_top, 2: self._A_s_max_bot}
 
     ARTICLE_STR = "9.6.1.3"
+    # Past the maximum the section is not tension-controlled, which §9.3.3.1
+    # (§7.3.3.1 for a one-way slab) does not allow: the row and the DCR of
+    # that face say which article it misses.
+    tension_controlled_str = self._tension_controlled_clause
+    over_max = {
+        i: max_val is not None and curr > max_val
+        for i, (curr, max_val) in enumerate(zip(current_values, max_values))
+        if i in singly_max
+    }
 
     checks = []
     for i, (curr, min_val, max_val) in enumerate(zip(current_values, min_values, max_values)):
+        if over_max.get(i):
+            checks.append(f"❌ {tension_controlled_str}")
+            continue
         passed = (min_val is None or curr >= min_val) and (max_val is None or curr <= max_val)
         if passed:
             doubly = max_val is not None and i in singly_max and curr > singly_max[i]
@@ -577,7 +632,7 @@ def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
             # Any other failure: the maximum, or short of the relieved minimum
             checks.append("❌")
 
-    self._all_flexure_checks_passed = not any(check in ("❌") for check in checks)
+    self._all_flexure_checks_passed = not any(check.startswith("❌") for check in checks)
     self._data_min_max_flexure = {
         "Check": [
             "Min/Max As rebar top",
@@ -606,8 +661,11 @@ def _initialize_dicts_ACI_318_19_flexure(self: "RectangularBeam") -> None:
         ],
         "Ok?": checks,
     }
-    check_DCR_top = "✅" if self._DCRb_top < 1 else "❌"
-    check_DCR_bot = "✅" if self._DCRb_bot < 1 else "❌"
+    _append_max_bar_spacing_rows(self, self._M_u)
+    # A face past its tension-controlled limit does not comply whatever its
+    # DCR: it reads ❌ with the article, as its limit row does.
+    check_DCR_top = f"❌ {tension_controlled_str}" if over_max[0] else "✅" if self._DCRb_top < 1 else "❌"
+    check_DCR_bot = f"❌ {tension_controlled_str}" if over_max[2] else "✅" if self._DCRb_bot < 1 else "❌"
     long_rebar_top = _longitudinal_rebar_rows(self, "t")
     self._flexure_capacity_top = {
         "Top reinforcement check": [
@@ -1026,6 +1084,9 @@ def _initialize_dicts_EN_1992_2004_flexure(self: "RectangularBeam") -> None:
         ],
         "Ok?": checks,
     }
+    # EN 1992-1-1 registers no such cap (it controls cracking through §7.3.3),
+    # so this adds nothing; it is here so a code that does gets the rows.
+    _append_max_bar_spacing_rows(self, self._M_Ed)
     check_DCR_top = "✅" if self._DCRb_top < 1 else "❌"
     check_DCR_bot = "✅" if self._DCRb_bot < 1 else "❌"
     long_rebar_top = _longitudinal_rebar_rows(self, "t")

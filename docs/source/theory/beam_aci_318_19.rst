@@ -238,10 +238,13 @@ other face the limit on the tension steel grows to
 (:math:`f'_{s,net}` at :math:`c_t`, below; a compression bar with
 :math:`f'_{s,net} \le 0` extends nothing). It is the same boundary as
 :math:`\varepsilon_t = \varepsilon_y + 0.003`, read as an area. The check reports it
-as ``A_s_max_eff`` and holds the face in tension to it: past it the section does not
-comply with §9.3.3.1, the warning ``As_above_max`` says so, and the capacity already
-carries the lower :math:`\phi` of the strain reached. The face a combination
-compresses is not held to it.
+as ``A_s_max_eff`` and holds the face in tension to it. Past it the section is not
+tension-controlled, which §9.3.3.1 (§7.3.3.1 for a one-way slab) does not allow, so it
+does **not comply whatever its DCR**: the capacity already carries the lower
+:math:`\phi` of the strain reached, and the DCR keeps that value, but
+``admissible`` and ``complies`` of the flexure results are False, the detailed
+report marks the face ❌ 9.3.3.1, and the warning ``not_tension_controlled`` cites the
+article. The face a combination compresses is not held to it.
 
 Compression steel at the ductility limit
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -270,6 +273,35 @@ candidate layout — see :ref:`aci-decisions`. Where :math:`f'_{s,net} \le 0` th
 compression bars sit too close to the neutral axis to help: no compression steel is
 asked for, the face is asked for :math:`A_{s,max}`, and the moment it cannot reach is
 the check's to report.
+
+Maximum bar spacing (crack control)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+§9.7.2.2 sends the bars closest to the tension face to Table 24.3.2:
+
+.. math::
+
+   s \le \min\left(380\,\frac{280}{f_s} - 2.5\,c_c,\ 300\,\frac{280}{f_s}\right)
+   \quad\text{(mm, MPa)}
+   \qquad
+   \min\left(15\,\frac{40000}{f_s} - 2.5\,c_c,\ 12\,\frac{40000}{f_s}\right)
+   \quad\text{(in, psi)}
+
+with :math:`f_s = \tfrac{2}{3} f_y`, which §24.3.2.1 permits in place of a service-load
+calculation, and :math:`c_c` the distance from the surface of those bars to the tension
+face — the clear cover plus the stirrup. With Grade 420 and 25 mm of cover to the
+stirrup that is 292.5 mm (Ø10 stirrup) to 297.5 mm (Ø8). The check reads the spacing
+off the layer nearest each face, centre to centre, as the section spreads it between
+the stirrup legs, and holds the face the combination puts in tension to it; a wide
+beam detailed with two bars — 60 cm with 2Ø25, 505 mm apart — fails it. With a single
+bar nearest the face, §24.3.3 compares the width of the face instead. The detailed
+report adds a *Maximum spacing* row per face, and the warning is
+``bar_spacing_exceeds_max``. The bar search holds every layer it lays out to the cap
+as well, so a wide web is designed with three bars where two would sit too far apart:
+that 60x50 beam comes out as 3Ø20, 255 mm apart. The search reads the cap with the
+stirrup the section carries when it runs — the starter stirrup, before the shear design
+picks the real one — so a layout that lands within a few millimetres of the cap can be
+reported by the check that follows with the heavier stirrup.
 
 Shear
 -----
@@ -406,6 +438,10 @@ provision; it is common detailing practice and it prevents two degenerate outcom
    flexural steel at all, so the design would return :math:`A_s = 0`. That is not a
    buildable layout, and it makes :math:`\rho_w = 0`, which collapses :math:`V_c` to
    zero in Table 22.5.5.1. mento adopts the geometric minimum instead.
+   It goes on the **bottom** face, which a member always carries steel on, and the
+   check holds a bottom with no moment to the same floor (no 4/3 relief, since there
+   is no :math:`A_{s,calc}` to relieve it against), warning ``As_below_min`` if it is
+   bare. A top face that no combination puts in tension is held to no minimum.
 
 Order of the minimum-reinforcement rules
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -468,7 +504,7 @@ both faces carry steel.
 Validation
 ----------
 
-Every row is pinned by a test in ``tests/test_beam.py`` and is verified against the
+Every row is pinned by a test in ``tests/elements/test_beam.py`` or ``tests/validation/`` (the rows whose source is external) and is verified against the
 external source named.
 
 .. list-table::
@@ -509,7 +545,7 @@ external source named.
      - Strain compatibility written apart from mento (the Calcpad sheet capped
        :math:`A_s` and is no longer the reference)
    * - Design passes its own check; capacity is the section's
-     - ``test_a_design_passes_its_own_check`` (``tests/test_flexure_design_properties.py``)
+     - ``test_a_design_passes_its_own_check`` (``tests/design/test_flexure_design_properties.py``)
      - Sweep over width, depth, :math:`f'_c` and moment, against the same independent
        strain compatibility
    * - :math:`A_{s,req}` never drops as :math:`M_u` grows
@@ -538,10 +574,10 @@ external source named.
      - Public contract
    * - :math:`\lambda_s \le 1.0` cap
      - ``test_lambda_s_is_capped_at_one_imperial`` / ``_metric``
-       (in ``tests/test_slab.py``)
+       (in ``tests/elements/test_slab.py``)
      - §22.5.5.1.3
    * - Zero capacity reported, not raised
      - ``test_shear_check_with_no_tension_reinforcement_warns_and_does_not_raise``,
        ``test_flexure_check_with_no_bottom_reinforcement_floors_phi_Mn``
-       (in ``tests/test_slab.py``)
+       (in ``tests/elements/test_slab.py``)
      - Public contract: a check reports ``DCR``, it does not blow up

@@ -44,13 +44,13 @@ the `rame-env` path on Windows, `.venv/bin/python` on Linux.
 $PY -m pytest tests/
 
 # Single file, fast iteration (strip addopts to avoid --cov conflicts)
-$PY -m pytest tests/test_beam.py --override-ini="addopts=" -v
+$PY -m pytest tests/elements/test_beam.py --override-ini="addopts=" -v
 
 # Single file with coverage
-$PY -m pytest tests/test_beam.py --override-ini="addopts=" --cov=mento --cov-report=term-missing -q
+$PY -m pytest tests/elements/test_beam.py --override-ini="addopts=" --cov=mento --cov-report=term-missing -q
 
 # Single test by name
-$PY -m pytest tests/test_beam.py::test_my_function --override-ini="addopts=" -v
+$PY -m pytest tests/elements/test_beam.py::test_my_function --override-ini="addopts=" -v
 
 # Coverage for one module only (Linux)
 $PY -m pytest tests/ --override-ini="addopts=" --cov=mento --cov-report=term-missing -q | grep -E "beam|slab|rebar"
@@ -127,50 +127,38 @@ mento/
 
 ```
 tests/
-├── conftest.py           Shared fixtures + Agg matplotlib backend for the whole suite
-├── test_architecture_boundaries.py   Enforces the layer rules (no units in equations, no report tables in codes/, ...)
-├── test_aci_318_19_flexure_equations.py
-├── test_aci_318_19_shear_equations.py
-├── test_aci_318_19_wall_equations.py
-├── test_en_1992_2004_equations.py
-├── test_beam.py
-├── test_beam_summary.py
-├── test_design_results.py
-├── test_design_options.py        options[0] is the applied layout; design() is repeatable
-├── test_design_warnings.py
-├── test_slab.py
-├── test_footing.py
-├── test_material.py
-├── test_rebar.py
-├── test_section.py
-├── test_rectangular.py
-├── test_punching.py
-├── test_shear_wall.py
-├── test_shear_wall_summary.py
-├── test_forces.py
-├── test_node.py
-├── test_units.py
-├── test_settings.py
-├── test_results.py
-├── test_headings.py
-├── test_table_style.py
-├── test_i18n.py
-└── test_init.py
+├── conftest.py      Shared fixtures (materials, the beam examples of test_beam and validation/) + Agg backend
+├── helpers.py       Pint adapters for the float-only ACI flexure functions (test_beam and validation/)
+├── architecture/    Layer rules, published_example sources and placement, doc-cited tests, public API
+├── equations/       Float-only clause functions (ACI flexure / shear / wall, EN)
+├── materials/       material, rebar, units, settings, forces
+├── sections/        section, rectangular, node
+├── elements/        beam, slab, footing, shear_wall, punching
+├── design/          design_results, design_options, design_warnings, flexure_design_properties, ...
+├── reports/         results, headings, table_style, i18n, beam_summary, shear_wall_summary
+└── validation/      ONLY the tests marked published_example: Calcpad, ETABS, Concrete Centre, eurocodeapplied
 
 scripts/
 └── modules_testing.py    Manual/exploratory script; not part of the test suite
 ```
 
+`tests/validation/` holds exactly the tests that reproduce a case validated outside
+mento, each marked `published_example` with a `Source:` paragraph in its docstring;
+`tests/architecture/test_published_examples.py` fails if a marked test lives elsewhere
+or an unmarked one lives there. Tests written against mento itself go in the other
+folders. The release publishes the count of that folder.
+
 `pyproject.toml` is the only pytest config. A `tests/pytest.ini` would change the
 rootdir and silently disable the coverage `addopts`, so there is none.
 
-**Fixtures:** `conftest.py` holds the fixtures that several modules define
-identically (`concrete_c25`, `steel_b500s`, `steel`) and sets the `Agg` backend
-once, so no test module needs the `matplotlib.use("Agg")` incantation. Fixtures
-tied to a specific validated example stay in the module that asserts against
-them. Note that `beam_example_imperial` exists in both `test_beam.py` and
-`test_rebar.py` with **different** geometry and settings — they are per-module on
-purpose; do not hoist them.
+**Fixtures:** `conftest.py` holds the fixtures that several modules share
+(`concrete_c25`, `steel_b500s`, `steel`, and the beam examples
+`beam_example_imperial`, `beam_example_EN_1992_2004_01`, `beam_example_flexure_ACI`
+that `elements/test_beam.py` and `validation/` both use) and sets the `Agg` backend
+once, so no test module needs the `matplotlib.use("Agg")` incantation. Note that
+`materials/test_rebar.py` defines its **own** `beam_example_imperial`, with different
+geometry and settings: its module-level fixture overrides the conftest one there, on
+purpose.
 
 ---
 
@@ -185,7 +173,7 @@ PunchingSlab (standalone dataclass); PunchingNode(slab, column, forces) pairs it
 
 **Unit-system detection:** `Concrete` auto-detects metric vs. imperial from `f_c` units (MPa → metric, psi → imperial). This propagates through `BeamSettings` and all `Forces` objects — never hard-code unit assumptions.
 
-**Design code delegation:** elements never compare `concrete.design_code` against a string; they look the code up in `codes/registry.py` (`DesignCode`) and call its hooks (`check_shear`, `design_flexure`, `check_punching`, ...). Each code's entry lives in `codes/aci_318_19/code.py` / `codes/en_1992_2004/code.py`; the hooks are module-level functions typed as `self: RectangularBeam` in `codes/ACI_318_19_beam.py` and friends, which convert on entry and call the float-only clause functions in `equations/` (ADR-0002, ADR-0005). `tests/test_architecture_boundaries.py` fails the build if these rules are broken. `Concrete_CIRSOC_201_25` subclasses `Concrete_ACI_318_19` (same formulas, metric only, `design_code = "CIRSOC 201-25"`).
+**Design code delegation:** elements never compare `concrete.design_code` against a string; they look the code up in `codes/registry.py` (`DesignCode`) and call its hooks (`check_shear`, `design_flexure`, `check_punching`, ...). Each code's entry lives in `codes/aci_318_19/code.py` / `codes/en_1992_2004/code.py`; the hooks are module-level functions typed as `self: RectangularBeam` in `codes/ACI_318_19_beam.py` and friends, which convert on entry and call the float-only clause functions in `equations/` (ADR-0002, ADR-0005). `tests/architecture/test_architecture_boundaries.py` fails the build if these rules are broken. `Concrete_CIRSOC_201_25` subclasses `Concrete_ACI_318_19` (same formulas, metric only, `design_code = "CIRSOC 201-25"`).
 
 **`BeamSettings` sentinel pattern:** Unset fields use `_NOT_SET` so `__post_init__` can apply metric or imperial defaults conditionally based on the detected unit system.
 

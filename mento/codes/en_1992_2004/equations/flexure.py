@@ -47,14 +47,19 @@ def min_reinforcement_ratio(f_ctm: float, f_yk: float) -> float:
 
 
 def foundation_min_reinforcement_ratio(f_yk: float) -> float:
-    """Geometric minimum for a foundation, per direction — EN 1992-1-1 §9.2.1.1, §9.8.1.
+    """Geometric minimum for a foundation, per direction — EHE-08 Tabla 42.3.5, note (1).
 
     A footing or raft bears on the ground, so the brittle-failure mechanism the
-    non-fragility minimum of §9.2.1.1 guards against cannot develop: the soil
-    keeps carrying the element after the section cracks. §9.8.1 detailing
-    practice therefore takes the minimum at half of it in each of the two
-    directions, and writes it on the GROSS section ``b*h`` rather than on the
-    effective depth.
+    non-fragility minimum of EN 1992-1-1 §9.2.1.1 guards against cannot
+    develop: the soil keeps carrying the element after the section cracks.
+    EN 1992-1-1 itself prints no foundation minimum: §9.8.1 (pile caps) and
+    §9.8.2.1 (column and wall footings) ask only for a minimum bar diameter,
+    phi_min, 8 mm recommended. The numbers are the Spanish code's, EHE-08
+    Tabla 42.3.5: a slab carries 2.0 per mille (f_y = 400 MPa) or 1.8 per
+    mille (500 MPa) of the GROSS section, and note (1) gives footings and
+    foundation slabs half of it in each direction, on the bottom face. mento
+    applies that under EN as detailing practice, on ``b*h`` rather than on
+    the effective depth.
 
     Args:
         f_yk: Characteristic yield strength of the reinforcement (MPa).

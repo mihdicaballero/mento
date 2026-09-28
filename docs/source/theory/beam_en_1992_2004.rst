@@ -220,6 +220,10 @@ with :math:`f_{ctm} = 0.30\, f_{ck}^{2/3}` (Table 3.1). Unlike ACI, :math:`\rho_
 is not conditioned on the moment being non-zero, so a shear-only combination already
 receives minimum flexural steel.
 
+The minimum is written on :math:`b_t d`, as §9.2.1.1(1) writes it. The maximum of
+§9.2.1.1(3) is :math:`0.04\, A_c`, and :math:`A_c` is the cross-sectional area of the
+concrete (§1.6): :math:`A_{s,max} = 0.04\, b h`, the same on both faces.
+
 The maximum applies to "tension or compression reinforcement", so unlike ACI's it
 caps both faces, whatever a combination does to them, and compression steel does not
 extend it. The check warns ``As_above_max`` on either face past it, and the design

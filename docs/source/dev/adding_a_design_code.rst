@@ -122,10 +122,12 @@ the description and it can be finished separately.
 Step 5 — tests and validation
 -----------------------------
 
-Add ``tests/test_<code>_beam.py`` with, at minimum:
+Add ``tests/elements/test_<code>_beam.py`` for the behaviour, and put the worked examples in
+``tests/validation/test_<code>_beam_validated.py``. At minimum:
 
-* one test per worked example you validated against, asserting the values the source
-  publishes, with the source named in the test docstring;
+* one test per worked example you validated against, in ``tests/validation/``, asserting
+  the values the source publishes, marked ``published_example`` and with a ``Source:``
+  paragraph in its docstring;
 * the unit system your standard uses, and the other one too if you support both;
 * a case with no shear reinforcement, and one where the demand exceeds capacity, so the
   ``DCR > 1`` path is exercised.
@@ -135,7 +137,7 @@ the section and materials rather than rebuilding them in each test.
 
 .. code-block:: bash
 
-    pytest tests/test_<code>_beam.py --override-ini="addopts=" -v
+    pytest tests/elements/test_<code>_beam.py tests/validation/ --override-ini="addopts=" -v
     mypy mento/
     pre-commit run --all-files
 

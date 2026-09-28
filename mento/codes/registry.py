@@ -90,8 +90,24 @@ class DesignCode:
     #: one -- ACI 318-19 §9.7.6.4.2 / CIRSOC 201-25 §9.7.6.4.2, Tabla 9.7.6.4.2,
     #: which differ: a No. 10 bar against 6 to 12 mm graded by longitudinal bar
     #: size -- it applies to the stirrups supporting compression reinforcement,
-    #: not to every stirrup.
+    #: not to every stirrup. That graded clause is ``min_stirrup_for_compression_bar``.
     min_stirrup_diameter: Callable[..., Any] | None = None
+    #: The smallest stirrup this code lets laterally support a compression bar
+    #: of a given diameter, ``(concrete, d_b_long) -> Quantity``: ACI 318-19
+    #: §9.7.6.4.2, a No. 10 up to a No. 32 bar and a No. 13 above (No. 3 and
+    #: No. 4 in the in-lb edition), against CIRSOC 201-25 Tabla 9.7.6.4.2,
+    #: 6, 8, 10 and 12 mm as the bar passes 16, 25 and 32 mm. They differ, so
+    #: each registers its own. ``None`` where the code states none.
+    min_stirrup_for_compression_bar: Callable[..., Any] | None = None
+    #: What the stirrups of a doubly reinforced section owe its compression
+    #: bars -- ACI 318-19 / CIRSOC 201-25 §9.7.6.4: the spacing cap of
+    #: §9.7.6.4.3 and the stirrup size of §9.7.6.4.2 -- or ``None`` when
+    #: nothing on the section acts as compression steel.
+    #: ``(beam, d_b_stirrup) -> CompressionSupport | None``. Read by the shear
+    #: design, which caps the bars and the spacing it may choose, and by the
+    #: shear warnings. ``None`` for a code with no such clause here: EN 1992-1-1
+    #: has its own, §9.2.1.2(3), which is not implemented.
+    stirrup_compression_support: Callable[..., Any] | None = None
     #: Absolute caps of Table 9.7.6.2.2 on the spacing of stirrup legs, as
     #: ``(under the Vs threshold, over it)``; they bound the spacing both along
     #: the member and across its width. Codes sharing the table differ only in
@@ -118,6 +134,16 @@ class DesignCode:
     #: ACI 318-19 §25.2.1 / CIRSOC 201-25 §25.2.1 the settings already impose.
     #: ``None`` where the code states none.
     min_bar_spacing_slab: Callable[..., Any] | None = None
+    #: Largest centre-to-centre spacing this code allows between the bars
+    #: nearest the tension face of a beam or a one-way slab, for crack
+    #: control: ACI 318-19 §24.3.2 / CIRSOC 201-25 art. 24.3.2, reached
+    #: through §9.7.2.2 and §7.7.2.2 of both. Takes the section, since the
+    #: limit depends on its steel grade and on the cover to those bars. A slab
+    #: folds it into its own spacing limit beside §7.7.2.3; a beam is held to
+    #: it on the face a combination puts in tension. ``None`` for a code that
+    #: controls cracking some other way (EN 1992-1-1 §7.3.3), which is read as
+    #: no limit of this kind rather than as an error.
+    max_bar_spacing_tension: Callable[..., Any] | None = None
     #: Thinnest *overall* section this code allows for a member bearing on the
     #: ground. ``None`` for a code that instead writes its limit on the
     #: effective depth, which is a different quantity and has its own hook
@@ -140,6 +166,16 @@ class DesignCode:
     #: they do -- EN 1992-1-1 §9.2.1.1(3), "tension or compression
     #: reinforcement". Read by the warnings and the report tables.
     max_steel_is_ductility_limit: bool = False
+    #: Does ``face`` of a beam, in tension, keep within the limits this code
+    #: puts on its reinforcement with the layout the section carries?
+    #: ``(beam, face) -> bool``. Strength alone does not say it: ACI 318-19 /
+    #: CIRSOC 201-25 §9.3.3.1 hold a beam tension-controlled, past which the
+    #: capacity only drops through phi and may still reach the moment; EN
+    #: 1992-1-1 §9.2.1.1(3) caps either face at A_s,max, and bars past it add
+    #: resistance a design must not rely on. What a design's own verification
+    #: and the alternatives it offers are held to. ``None`` where the code
+    #: states no such limit, read as every layout admissible.
+    flexure_admissible: Callable[..., bool] | None = None
 
     def requires(self, hook: str) -> Callable[..., Any]:
         """The hook, or a clear error naming the code that lacks it."""

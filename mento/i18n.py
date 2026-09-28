@@ -193,11 +193,19 @@ ES.update(
     {
         "bottom face": "cara inferior",
         "top face": "cara superior",
-        "Steel on the {face}: A_s = {A_s} is below the minimum A_s,min = {A_s_min}.": (
-            "Armadura en la {face}: A_s = {A_s} es menor que la mínima A_s,mín = {A_s_min}."
+        "Steel on the {face}: A_s = {A_s} is below the minimum it has to meet, A_s,min,eff = {A_s_min_eff}.": (
+            "Armadura en la {face}: A_s = {A_s} es menor que la mínima que tiene que cumplir, "
+            "A_s,mín,ef = {A_s_min_eff}."
         ),
         "Steel on the {face}: A_s = {A_s} exceeds the maximum A_s,max = {A_s_max}.": (
             "Armadura en la {face}: A_s = {A_s} supera la máxima A_s,máx = {A_s_max}."
+        ),
+        (
+            "The section is not tension-controlled (§{clause}): A_s = {A_s} on the {face} exceeds "
+            "A_s,max = {A_s_max}. It does not comply, even where its capacity covers the moment."
+        ): (
+            "La sección no es controlada por tracción (§{clause}): A_s = {A_s} en la {face} supera "
+            "A_s,máx = {A_s_max}. No cumple, aunque su capacidad alcance el momento."
         ),
         "Clear spacing between the bars on the {face}: {s} is below the minimum {s_min}.": (
             "Separación libre entre las barras de la {face}: {s} es menor que la mínima {s_min}."
@@ -230,9 +238,6 @@ ES.update(
         "Stirrup leg spacing across the width: {s} exceeds the maximum {s_max}.": (
             "Separación de las ramas de estribo en el ancho: {s} supera la máxima {s_max}."
         ),
-        "Stirrup diameter {d_b} is below the minimum {d_b_min}.": (
-            "Diámetro de estribo {d_b} menor que el mínimo {d_b_min}."
-        ),
         "Shear V = {V} exceeds the most the section can carry, {V_max}: enlarge the section.": (
             "El corte V = {V} supera el máximo que admite la sección, {V_max}: hay que agrandarla."
         ),
@@ -242,12 +247,42 @@ ES.update(
         "Vertical wall mesh: ρl = {rho} is below the minimum ρl,min = {rho_min}.": (
             "Malla vertical del muro: ρl = {rho} es menor que la mínima ρl,mín = {rho_min}."
         ),
-        "Horizontal wall mesh spacing: {s} exceeds the maximum {s_max}.": (
-            "Separación de la malla horizontal del muro: {s} supera la máxima {s_max}."
+        ("Horizontal wall mesh spacing: {s} exceeds the maximum {s_max} (§11.7.3.1; lw/5 where Vu > φVc)."): (
+            "Separación de la malla horizontal del muro: {s} supera la máxima {s_max} (§11.7.3.1; lw/5 donde Vu > φVc)."
         ),
-        "Vertical wall mesh spacing: {s} exceeds the maximum {s_max}.": (
-            "Separación de la malla vertical del muro: {s} supera la máxima {s_max}."
+        ("Vertical wall mesh spacing: {s} exceeds the maximum {s_max} (§11.7.2.1; lw/3 where Vu > φVc)."): (
+            "Separación de la malla vertical del muro: {s} supera la máxima {s_max} (§11.7.2.1; lw/3 donde Vu > φVc)."
         ),
+        (
+            "Stirrup spacing along the member: {s} exceeds the {s_max} that lateral support of the "
+            "Ø{d_b_comp} compression bars allows (16 d_b, 48 d_b of the stirrup, least dimension of the beam)."
+        ): (
+            "Separación de estribos a lo largo del elemento: {s} supera los {s_max} que admite el "
+            "arriostramiento de las barras comprimidas Ø{d_b_comp} (16 d_b, 48 d_b del estribo, menor "
+            "dimensión de la viga)."
+        ),
+        (
+            "Stirrup diameter {d_b} is below the minimum {d_b_min} that lateral support of "
+            "Ø{d_b_comp} compression bars requires."
+        ): (
+            "Diámetro de estribo {d_b} menor que el mínimo {d_b_min} que exige el arriostramiento de "
+            "barras comprimidas Ø{d_b_comp}."
+        ),
+        (
+            "The section relies on Ø{d_b_comp} compression bars and has no stirrups to brace them: "
+            "closed stirrups of at least {d_b_min} at no more than {s_max} are required."
+        ): (
+            "La sección depende de barras comprimidas Ø{d_b_comp} y no tiene estribos que las arriostren: "
+            "hacen falta estribos cerrados de al menos {d_b_min} separados a lo sumo {s_max}."
+        ),
+    }
+)
+
+# The §24.3.2 rows of a beam's flexure limits table (mento.reports.tables).
+ES.update(
+    {
+        "Maximum spacing top": "Separación máxima superior",
+        "Maximum spacing bottom": "Separación máxima inferior",
     }
 )
 

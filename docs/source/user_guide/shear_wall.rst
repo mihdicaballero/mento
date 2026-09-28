@@ -4,26 +4,36 @@ Shear Wall
 The `ShearWall` class models a reinforced-concrete structural wall for **in-plane
 shear analysis and design** per ACI 318-19 Chapter 11.
 
-- Concrete shear capacity follows ACI 318-19 §11.5.4.6 with the aspect-ratio
-  factor ``α_c``, instead of a longitudinal-reinforcement term.
+- Concrete shear capacity follows ACI 318-19 Eq. (11.5.4.3) with the aspect-ratio
+  factor ``α_c`` defined under it, instead of a longitudinal-reinforcement term,
+  capped by §11.5.4.2.
 - Reinforcement is **distributed mesh** in two orthogonal directions
   (``ρt`` horizontal, ``ρl`` vertical), placed on **both faces** of the wall
   (E.F. — each face), not stirrups.
-- The minimum horizontal ratio is ``ρt,min = 0.0025`` (§11.6.1). The minimum
-  vertical ratio follows the §11.6.2 interpolation
-  ``ρl,min = max(0.0025, 0.0025 + 0.5·(2.5 − hw/lw)·(ρt,req − 0.0025))``,
-  with ``hw/lw`` clamped to ``[0.5, 2.5]``.
+- The minimum horizontal ratio is ``ρt,min = 0.0025`` (§11.6.2(b)). The minimum
+  vertical ratio follows §11.6.2(a): Eq. (11.6.2) with the horizontal ratio the
+  wall **provides**, never below 0.0025 and never above the ``ρt`` the shear
+  requires —
+  ``ρl,min = max(0.0025, min(0.0025 + 0.5·(2.5 − hw/lw)·(ρt − 0.0025), ρt,req))``,
+  with ``hw/lw`` clamped to ``[0.5, 2.5]``. A horizontal mesh heavier than the
+  shear needs therefore asks for a heavier vertical mesh, up to ``ρt,req``.
 
 The same shear provisions serve both **ACI 318-19** and **CIRSOC 201-25**;
-CIRSOC differs only in the reinforcing-bar catalogue used for design (it
-allows Ø6 mm for the transverse mesh and Ø10 mm minimum for the vertical mesh).
+CIRSOC differs in the reinforcing-bar catalogue used for design (it allows
+Ø6 mm for the transverse mesh and Ø10 mm minimum for the vertical mesh) and in
+the divisor of Eq. (11.5.4.4) for a wall in net axial tension (3.5·Ag against
+ACI's 3.45·Ag).
 
 .. note::
 
     The module covers **shear check and design only**. Flexure design
     for shear walls is not implemented yet. Inherited flexure methods from
     ``RectangularBeam`` are not validated for wall geometry and should not be
-    used.
+    used. The beam's results are not offered at all: ``wall.reinforcement``,
+    ``wall.flexure_design`` and ``wall.flexure_checks`` raise ``NotABeamError``,
+    an ``AttributeError`` (so ``hasattr`` is ``False`` and ``getattr`` takes its
+    default) that points to ``wall.mesh``, ``wall.shear_design`` and
+    ``wall.shear_checks``.
 
 Key Concepts
 ------------
@@ -32,7 +42,11 @@ Key Concepts
 
   - ``thickness`` (*t*) — out-of-plane dimension
   - ``length`` (*lw*) — in-plane length, resists in-plane shear
-  - ``height`` (*hw*) — story / overall wall height, used for the ``hw / lw`` aspect ratio
+  - ``height`` (*hw*) — the height of the **entire wall** from base to top, or the
+    clear height of the wall segment or pier considered (ACI 318-19 / CIRSOC 201-25
+    Chapter 2). It is **not** the storey height of a multi-storey wall: ``hw / lw``
+    sets ``α_c`` and ``ρl,min``, and a storey height in its place makes a slender
+    wall look squat and overstates ``ØVn``.
 
 - **Material Properties**: requires a ``Concrete`` object (currently
   ``Concrete_ACI_318_19`` or ``Concrete_CIRSOC_201_25``) and a ``SteelBar``
@@ -70,7 +84,7 @@ constructor parameters ``thickness``, ``length``, and ``height``.
         steel_bar=steel,
         thickness=25 * cm,   # t
         length=4.0 * m,      # lw (in-plane length)
-        height=3.5 * m,      # hw (story height; hw/lw = 0.875)
+        height=3.5 * m,      # hw (height of the whole wall; hw/lw = 0.875)
         c_c=20 * mm,
     )
 
@@ -159,11 +173,12 @@ re-evaluated check DataFrame.
 What it does:
 
 1. Runs the check for every force and tracks the worst-case ``ρt,req``.
-2. Derives the worst-case ``ρl,min`` from §11.6.2.
-3. Selects a bar diameter and spacing for the **horizontal mesh** (against
-   ``ρt,req``) and the **vertical mesh** (against ``ρl,min``).
-4. Applies both via ``set_horizontal_rebar`` / ``set_vertical_rebar`` and
-   re-runs the check.
+2. Selects a bar diameter and spacing for the **horizontal mesh** (against
+   ``ρt,req``) and applies it via ``set_horizontal_rebar``.
+3. Derives the worst-case ``ρl,min`` from §11.6.2(a) with the ``ρt`` that mesh
+   provides, capped by ``ρt,req``.
+4. Selects the **vertical mesh** (against ``ρl,min``), applies it via
+   ``set_vertical_rebar`` and re-runs the check.
 
 
 **Vertical mesh.** Because for now *mento* does not check flexure, the vertical mesh
@@ -206,9 +221,9 @@ attributes on the wall:
 +----------------------+----------------------------------------------+
 | ``_rho_l_min``       | Minimum vertical reinforcement ratio         |
 +----------------------+----------------------------------------------+
-| ``_s_h_max``         | §11.7.3 horizontal spacing limit             |
+| ``_s_h_max``         | §11.7.3.1 horizontal spacing limit           |
 +----------------------+----------------------------------------------+
-| ``_s_v_max``         | §11.7.3 vertical spacing limit               |
+| ``_s_v_max``         | §11.7.2.1 vertical spacing limit             |
 +----------------------+----------------------------------------------+
 | ``_d_b_h`` / ``_s_h``| Designed horizontal bar diameter / spacing   |
 +----------------------+----------------------------------------------+

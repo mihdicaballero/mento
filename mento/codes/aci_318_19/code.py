@@ -13,7 +13,10 @@ different number. What actually differs, with the clause on each side, is:
   bar size. Hook ``min_stirrup_diameter``.
 * ACI 318-19 §7.7.2.3 / CIRSOC 201-25 art. 7.7.2.3 -- largest spacing of the
   flexural bars of a one-way slab: the lesser of 3h and 450 mm (18 in.)
-  against the lesser of 3h and 300 mm. Hook ``max_bar_spacing_slab``.
+  against the lesser of 3h and 300 mm. Hook ``max_bar_spacing_slab``. Beside
+  it, and the same in both codes, the crack-control cap of Table 24.3.2 on
+  the bars nearest the tension face of a slab (§7.7.2.2) or a beam
+  (§9.7.2.2): hook ``max_bar_spacing_tension``, shared through ``_COMMON``.
 * The bar sizes the transverse selection draws from, which are those of
   CIRSOC 201-25 §20.2.1.3, Tabla 20.2.1. Hook ``transverse_rebar``.
 * §9.6.1.2 -- the f_y cap for minimum flexural reinforcement: 550 MPa
@@ -45,9 +48,13 @@ from mento.codes.ACI_318_19_beam import (
     _check_shear_ACI_318_19,
     _design_flexure_ACI_318_19,
     _design_shear_ACI_318_19,
+    _flexure_ductile_ACI_318_19,
+    _stirrup_compression_support_ACI_318_19,
 )
 from mento.codes.ACI_318_19_punching import check_punching_ACI_318_19
+from mento.codes.aci_318_19.equations import shear as shear_eq
 from mento.codes.ACI_318_19_wall import _check_shear_ACI_318_19_wall, _design_shear_ACI_318_19_wall
+from mento.codes.aci_318_19.equations import flexure as flexure_eq
 from mento.codes.check_state import (
     apply_flexure_state,
     apply_shear_state,
@@ -194,6 +201,39 @@ def _max_bar_spacing_slab(section: "RectangularBeam") -> Any:
     return _max_bar_spacing_slab_under(section, limit)
 
 
+def _max_bar_spacing_tension(section: "RectangularBeam") -> Any:
+    """ACI 318-19 §24.3.2 / CIRSOC 201-25 art. 24.3.2: the crack-control cap on the bars nearest the tension face.
+
+    Both codes send the bars closest to the tension face of a one-way slab
+    (§7.7.2.2) and of a beam (§9.7.2.2) to Table 24.3.2, the same table in
+    both: the lesser of 380*(280/f_s) - 2.5*c_c and 300*(280/f_s) in mm, of
+    15*(40,000/f_s) - 2.5*c_c and 12*(40,000/f_s) in inches. The equation is
+    :func:`mento.codes.aci_318_19.equations.flexure.max_bar_spacing_crack_control`;
+    what this hook supplies is the two inputs the section fixes:
+
+    * f_s, the stress in those bars at service loads. §24.3.2.1 permits
+      (2/3)*f_y in place of a calculation from the unfactored moment, and a
+      section that only knows its factored loads takes that: 280 MPa for
+      ADN 420 or Grade 60, which is the stress the table is written around.
+    * c_c, the least distance from the surface of those bars to the tension
+      face: the clear cover the section carries, which is to the stirrup,
+      plus the stirrup itself -- nothing on a slab strip with none.
+
+    With Grade 420 and 25 mm of cover to the bars that is min(317.5, 300)
+    = 300 mm, so under ACI 318-19 the 450 mm of §7.7.2.3 never governs a slab
+    of that grade; a metre-wide face detailed as two bars, or a beam 40 cm and
+    wider with two bars in the layer, is past it. On the tension face only:
+    the clause is written on the bars closest to the face in tension, and a
+    combination pulls one face or the other.
+    """
+    imperial = section.concrete.is_imperial
+    stress = psi if imperial else MPa
+    length = inch if imperial else mm
+    f_s = (2 / 3) * section.steel_bar.f_y.to(stress).magnitude
+    c_c = (section.c_c + section._stirrup_d_b).to(length).magnitude
+    return flexure_eq.max_bar_spacing_crack_control(f_s, c_c, is_imperial=imperial) * length
+
+
 def _min_bar_spacing_slab(section: "RectangularBeam") -> Any:
     """The closest together the bars of a footing are detailed.
 
@@ -225,6 +265,30 @@ def _min_effective_depth_on_soil(concrete: Any) -> Any:
     CIRSOC, both short of the 150 mm the clause asks for.
     """
     return 150 * mm if concrete.unit_system == "metric" else 6 * inch
+
+
+def _min_stirrup_for_compression_bar(concrete: Any, d_b_long: Any) -> Any:
+    """ACI 318-19 §9.7.6.4.2: a No. 10 stirrup up to a No. 32 compression bar, a No. 13 above.
+
+    The clause the stirrups supporting compression reinforcement are sized
+    by (§9.7.6.4.1), in the bars of each edition: No. 10 and No. 13 in SI
+    (9.5 and 12.7 mm), No. 3 and No. 4 in in-lb. In metric units it is the
+    Ø10 of the local catalogue that meets the 9.5 mm; a Ø8 does not. CIRSOC
+    201-25 Tabla 9.7.6.4.2 grades it in four steps instead; see
+    :func:`_min_stirrup_for_compression_bar_cirsoc`.
+    """
+    unit = inch if concrete.is_imperial else mm
+    return (
+        shear_eq.min_stirrup_diameter_for_compression_support(
+            d_b_long.to(unit).magnitude, is_imperial=concrete.is_imperial
+        )
+        * unit
+    )
+
+
+def _min_stirrup_for_compression_bar_cirsoc(concrete: Any, d_b_long: Any) -> Any:
+    """CIRSOC 201-25 Tabla 9.7.6.4.2: 6, 8, 10 or 12 mm as the compression bar passes 16, 25 and 32 mm."""
+    return shear_eq.min_stirrup_diameter_for_compression_support_cirsoc(d_b_long.to(mm).magnitude) * mm
 
 
 def _min_stirrup_diameter_cirsoc(concrete: Any) -> Any:
@@ -403,11 +467,18 @@ _COMMON = dict(
     # ``max_bar_spacing_slab`` is deliberately absent: the two codes print a
     # different absolute term in their 7.7.2.3, so each registers its own.
     min_bar_spacing_slab=_min_bar_spacing_slab,
+    # Table 24.3.2 is the same in both, reached through §7.7.2.2 and §9.7.2.2.
+    max_bar_spacing_tension=_max_bar_spacing_tension,
     # §13.3.1.2 is written on d, not on h, so there is no overall-thickness
     # hook for these two codes; ``min_thickness_on_soil`` stays unset.
     min_effective_depth_on_soil=_min_effective_depth_on_soil,
-    # A_s,max is the tension-controlled limit of §9.3.3.1 (Table 21.2.2).
+    # A_s,max is the tension-controlled limit of §9.3.3.1 (Table 21.2.2), and
+    # that is the limit a layout is held to, compression steel included.
     max_steel_is_ductility_limit=True,
+    flexure_admissible=_flexure_ductile_ACI_318_19,
+    # §9.7.6.4: the same clause in both; the stirrup size it reads comes from
+    # each code's own ``min_stirrup_for_compression_bar``.
+    stirrup_compression_support=_stirrup_compression_support_ACI_318_19,
 )
 
 ACI_318_19 = register(
@@ -417,6 +488,7 @@ ACI_318_19 = register(
         materials=(Concrete_ACI_318_19,),
         transverse_rebar=_transverse_rebar_aci,
         min_stirrup_diameter=_min_stirrup_diameter,
+        min_stirrup_for_compression_bar=_min_stirrup_for_compression_bar,
         stirrup_spacing_caps=_stirrup_spacing_caps,
         flexural_min_fy_cap=_flexural_min_fy_cap,
         min_shear_reinforcement_coefficient=_min_shear_reinforcement_coefficient,
@@ -438,6 +510,7 @@ CIRSOC_201_25 = register(
         # same numbering; see the module docstring for what is not hooked.
         transverse_rebar=_transverse_rebar_cirsoc,
         min_stirrup_diameter=_min_stirrup_diameter_cirsoc,
+        min_stirrup_for_compression_bar=_min_stirrup_for_compression_bar_cirsoc,
         stirrup_spacing_caps=_stirrup_spacing_caps_cirsoc,
         flexural_min_fy_cap=_flexural_min_fy_cap_cirsoc,
         min_shear_reinforcement_coefficient=_min_shear_reinforcement_coefficient_cirsoc,

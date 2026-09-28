@@ -258,6 +258,8 @@ def test_all_exports_in_all() -> None:
         "MeshDirection",
         "WallShearCheck",
         "WallShearDesign",
+        "DesignNotRunError",
+        "NotABeamError",
     ]
 
     assert set(mento.__all__) == set(expected_exports)
@@ -367,3 +369,15 @@ def test_all_result_classes_loadable() -> None:
         assert builder is not None
     except (AttributeError, TypeError):
         pytest.skip("Some result classes not available in current implementation")
+
+
+def test_the_result_errors_are_importable_from_the_package() -> None:
+    """A program catches them without knowing which module raises them."""
+    import mento
+
+    from mento.design_results import DesignNotRunError
+    from mento.shear_wall import NotABeamError
+
+    assert mento.DesignNotRunError is DesignNotRunError
+    assert mento.NotABeamError is NotABeamError
+    assert issubclass(mento.NotABeamError, AttributeError)

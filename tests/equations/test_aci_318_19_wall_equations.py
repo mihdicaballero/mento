@@ -76,28 +76,61 @@ def test_reinforcement_shear_stress():
 
 
 def test_min_vertical_ratio_equals_horizontal_for_a_squat_wall():
-    # hw/lw <= 0.5: 0.0025 + 0.5*2.0*(rho_t - 0.0025) = rho_t
-    assert eq.min_vertical_reinforcement_ratio(0.5, 0.005) == pytest.approx(0.005, rel=1e-12)
+    # hw/lw <= 0.5: 0.0025 + 0.5*2.0*(rho_t - 0.0025) = rho_t, with rho_t provided = required
+    assert eq.min_vertical_reinforcement_ratio(0.5, 0.005, 0.005) == pytest.approx(0.005, rel=1e-12)
 
 
 def test_min_vertical_ratio_clamps_below_half():
-    assert eq.min_vertical_reinforcement_ratio(0.1, 0.005) == eq.min_vertical_reinforcement_ratio(0.5, 0.005)
+    assert eq.min_vertical_reinforcement_ratio(0.1, 0.005, 0.005) == eq.min_vertical_reinforcement_ratio(
+        0.5, 0.005, 0.005
+    )
 
 
 def test_min_vertical_ratio_drops_to_the_floor_for_a_slender_wall():
     # hw/lw >= 2.5 leaves only the 0.0025 minimum.
-    assert eq.min_vertical_reinforcement_ratio(2.5, 0.005) == pytest.approx(0.0025, rel=1e-12)
-    assert eq.min_vertical_reinforcement_ratio(6.0, 0.005) == pytest.approx(0.0025, rel=1e-12)
+    assert eq.min_vertical_reinforcement_ratio(2.5, 0.005, 0.005) == pytest.approx(0.0025, rel=1e-12)
+    assert eq.min_vertical_reinforcement_ratio(6.0, 0.005, 0.005) == pytest.approx(0.0025, rel=1e-12)
 
 
 def test_min_vertical_ratio_interpolates_in_between():
     # hw/lw = 1.5: 0.0025 + 0.5*1.0*(0.005-0.0025) = 0.00375
-    assert eq.min_vertical_reinforcement_ratio(1.5, 0.005) == pytest.approx(0.00375, rel=1e-12)
+    assert eq.min_vertical_reinforcement_ratio(1.5, 0.005, 0.005) == pytest.approx(0.00375, rel=1e-12)
 
 
 def test_min_vertical_ratio_never_falls_below_the_floor():
     # A rho_t below the minimum would drive the equation under 0.0025.
-    assert eq.min_vertical_reinforcement_ratio(0.5, 0.001) == pytest.approx(eq.MIN_REINFORCEMENT_RATIO, rel=1e-12)
+    assert eq.min_vertical_reinforcement_ratio(0.5, 0.001, 0.001) == pytest.approx(
+        eq.MIN_REINFORCEMENT_RATIO, rel=1e-12
+    )
+
+
+def test_min_vertical_ratio_reads_the_ratio_provided():
+    """Eq. (11.6.2) takes the rho_t the wall provides, not the one it needs.
+
+    ACI 318-19 / CIRSOC 201-25 §11.6.2(a). hw/lw = 1.5 (factor 0.5), a wall
+    that carries rho_t = 0.004 where 0.006 would be needed for strength:
+    0.0025 + 0.5*(0.004 - 0.0025) = 0.00325, under the 0.006 ceiling. Fed
+    the required ratio instead, the equation gives 0.00425.
+    """
+    assert eq.min_vertical_reinforcement_ratio(1.5, 0.004, 0.006) == pytest.approx(0.00325, rel=1e-12)
+
+
+def test_min_vertical_ratio_need_not_exceed_the_ratio_required_for_strength():
+    """The ceiling of §11.6.2(a) binds once the mesh is heavier than the shear needs.
+
+    The ACI test wall of tests/test_shear_wall.py: hw/lw = 0.875 (factor
+    0.8125), Ø12/15 E.F. gives rho_t = 0.006032, Vu = 2000 kN needs
+    rho_t,req = 0.003373. Eq. (11.6.2) = 0.0025 + 0.8125*(0.006032 - 0.0025)
+    = 0.005370 > 0.003373, so rho_l,min is the required ratio.
+    """
+    assert eq.min_vertical_reinforcement_ratio(0.875, 0.006032, 0.003373) == pytest.approx(0.003373, rel=1e-12)
+
+
+def test_min_vertical_ratio_ceiling_never_lifts_the_floor():
+    # A required ratio under the 0.0025 of §11.6.2(b) leaves the floor of §11.6.2(a).
+    assert eq.min_vertical_reinforcement_ratio(0.5, 0.004, 0.001) == pytest.approx(
+        eq.MIN_REINFORCEMENT_RATIO, rel=1e-12
+    )
 
 
 # ---------------------------------------------------------------------------

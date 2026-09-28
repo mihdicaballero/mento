@@ -19,6 +19,7 @@ from mento.design_results import (
     ShearDesign,
     envelope_flexure_face,
     envelope_shear,
+    format_longitudinal_rebar,
 )
 
 pytestmark = pytest.mark.filterwarnings("ignore::UserWarning")
@@ -142,6 +143,30 @@ def test_reinforcement_str_says_so_when_there_are_no_stirrups(beam: RectangularB
 
 def test_rebar_layer_str_is_the_engineering_shorthand() -> None:
     assert str(RebarLayer(n=2, d_b=12 * mm)) == "2Ø12 mm"
+
+
+def test_a_whole_bar_count_given_as_a_float_reads_as_a_whole_number(beam: RectangularBeam) -> None:
+    """A count entered as ``2.0`` -- a spreadsheet cell, a numpy float -- is still 2 bars.
+
+    ``set_longitudinal_rebar_bot(2.0, 16 mm, 1.0, 12 mm)`` stores the counts
+    as given. The layers pass the count through as it comes, for the bars
+    per metre of a slab strip, and read that way the same beam would print
+    "2.0Ø16 mm + 1.0Ø12 mm". A beam is detailed by a whole number of bars
+    (see :class:`RebarLayer`), so its layers carry a whole count. The label
+    itself printed a float count with its decimals in PR #164
+    (``format_longitudinal_rebar(2.0, "16")`` -> "2.0Ø16"): a whole count
+    now reads whole whatever its type. A slab layer keeps its fractional
+    count and its spacing label.
+    """
+    beam.set_longitudinal_rebar_bot(2.0, 16 * mm, 1.0, 12 * mm)
+
+    bottom = beam.reinforcement.bottom
+    assert str(bottom) == "2Ø16 mm + 1Ø12 mm"
+    assert [type(layer.n) for layer in bottom.layers] == [int, int]
+    assert bottom.n_bars == 3
+    assert str(RebarLayer(n=2.0, d_b=16 * mm)) == "2Ø16 mm"
+    assert format_longitudinal_rebar(2.0, "16") == "2Ø16"
+    assert str(RebarLayer(n=100 / 12, d_b=10 * mm, s=12 * cm)) == "Ø10 mm/12 cm"
 
 
 def test_a_layer_detailed_by_a_spacing_reads_as_one_bar_at_that_spacing() -> None:
@@ -717,3 +742,115 @@ def test_a_s_calc_is_enveloped_like_a_s_req() -> None:
     assert envelope_flexure_face(checks, "bottom").A_s_calc == 5 * cm**2
     assert envelope_flexure_face(checks, "top").A_s_calc is None
     assert envelope_flexure_face([], "bottom").A_s_calc is None
+
+
+def test_a_slab_layer_is_computed_per_metre_and_placed_in_whole_bars() -> None:
+    """Ø10/15 on a 1 m strip: 6.67 bars, 5.24 cm², for the strength; 7 bars to place.
+
+    A beam's layers place the bars they count.
+    """
+    from mento import OneWaySlab
+    from mento.design_results import placed_bars
+
+    slab = OneWaySlab(
+        label="L",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=20 * cm,
+        c_c=25 * mm,
+    )
+    slab.set_slab_longitudinal_rebar_bot(d_b1=10 * mm, s_b1=15 * cm)
+    bottom = slab.reinforcement.bottom
+    layer = bottom.layers[0]
+
+    assert layer.n == pytest.approx(100 / 15)
+    assert bottom.A_s.to("cm**2").magnitude == pytest.approx(5.236, abs=5e-4)
+    assert layer.n_placed == 7
+    assert bottom.n_bars_placed == 7
+    # A whole count reached through the division stays whole.
+    assert placed_bars(100 / 20) == 5
+    assert placed_bars(5.000000001) == 5
+
+    beam = RectangularBeam(
+        label="V",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=20 * cm,
+        height=50 * cm,
+        c_c=25 * mm,
+    )
+    beam.set_longitudinal_rebar_bot(n1=3, d_b1=16 * mm)
+    assert beam.reinforcement.bottom.n_bars_placed == beam.reinforcement.bottom.n_bars == 3
+
+
+def test_a_designed_slab_reports_the_whole_bars_it_places() -> None:
+    """The design result and its options place ceil(width / s) bars of each layer."""
+    from mento import OneWaySlab
+    from mento.design_results import placed_bars
+
+    slab = OneWaySlab(
+        label="L",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=20 * cm,
+        c_c=25 * mm,
+    )
+    Node(section=slab, forces=[Forces(label="U", M_y=30 * kNm)]).design()
+    bottom = slab.flexure_design.bottom
+
+    assert bottom.n_bars_placed == sum(placed_bars(layer.n) for layer in bottom.layers)
+    assert bottom.n_bars_placed >= bottom.n_bars
+    assert bottom.options[0].n_bars_placed == bottom.n_bars_placed
+
+
+def test_changing_the_bars_by_hand_drops_the_results_until_the_next_check() -> None:
+    """The results of the last design described the old section: they go, and a check brings them back.
+
+    A design's own placements keep them, and the reinforcement, which reads
+    the section as it is, is always there.
+    """
+    from mento import OneWaySlab
+
+    beam = RectangularBeam(
+        label="V",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=20 * cm,
+        height=50 * cm,
+        c_c=25 * mm,
+    )
+    forces = [Forces(label="U", M_y=100 * kNm, V_z=100 * kN)]
+    node = Node(section=beam, forces=forces)
+    node.design()
+    assert beam.flexure_checks and beam.shear_checks
+
+    beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=30 * cm)
+    with pytest.raises(DesignNotRunError):
+        beam.flexure_design
+    with pytest.raises(DesignNotRunError):
+        beam.shear_design
+    assert beam.flexure_checks == () and beam.shear_checks == ()
+    assert str(beam.reinforcement.transverse) == "1eØ8 mm/30 cm"
+
+    node.check()
+    assert beam.flexure_design.DCR > 0 and beam.shear_design.DCR > 0
+
+    slab = OneWaySlab(
+        label="L",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=100 * cm,
+        height=20 * cm,
+        c_c=25 * mm,
+    )
+    slab_node = Node(section=slab, forces=[Forces(label="U", M_y=20 * kNm)])
+    slab_node.design()
+    slab.set_slab_longitudinal_rebar_bot(d_b1=12 * mm, s_b1=20 * cm)
+    with pytest.raises(DesignNotRunError):
+        slab.flexure_design
+    slab_node.design()
+    slab.set_slab_transverse_rebar(d_b=8 * mm, s_long=20 * cm, s_trans=20 * cm)
+    with pytest.raises(DesignNotRunError):
+        slab.shear_design

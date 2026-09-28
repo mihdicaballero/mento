@@ -29,6 +29,9 @@ __all__ = [
     "min_shear_reinforcement_ratio",
     "shear_strength_of_reinforcement",
     "max_stirrup_spacing",
+    "max_stirrup_spacing_for_compression_support",
+    "min_stirrup_diameter_for_compression_support",
+    "min_stirrup_diameter_for_compression_support_cirsoc",
 ]
 
 
@@ -369,3 +372,79 @@ def shear_strength_of_reinforcement(A_v: float, f_yt: float, d: float) -> float:
         V_s (N, or lb). Same expression in both unit systems.
     """
     return A_v * f_yt * d
+
+
+def max_stirrup_spacing_for_compression_support(d_b_long: float, d_b_stirrup: float, least_dimension: float) -> float:
+    """Spacing cap of the stirrups that support compression bars — ACI 318-19 §9.7.6.4.3 / CIRSOC 201-25 §9.7.6.4.3.
+
+    The least of (a) 16 d_b of the longitudinal reinforcement, (b) 48 d_b of
+    the transverse reinforcement and (c) the least dimension of the beam: the
+    same three items in both codes ("16db de barra longitudinal, 48dbe de
+    barra o alambre transversal, la menor dimensión de la viga", CIRSOC
+    201-25 Cap. 9 p. 179). §9.7.6.4.1 of both asks for it throughout the
+    distance where longitudinal compression reinforcement is required, so it
+    binds only a section whose flexure relies on compression steel; the
+    Table 9.7.6.2.2 limits of :func:`max_stirrup_spacing` apply beside it.
+
+    Args:
+        d_b_long: Diameter of the compression bar the stirrup supports (mm, or in).
+        d_b_stirrup: Diameter of the stirrup (mm, or in).
+        least_dimension: Least dimension of the beam, min(b, h) (mm, or in).
+
+    Returns:
+        The spacing cap (mm, or in). Same expression in both unit systems.
+    """
+    return min(16 * d_b_long, 48 * d_b_stirrup, least_dimension)
+
+
+#: ACI 318-19 §9.7.6.4.2 in the bars of each edition, as (largest longitudinal
+#: bar the smaller stirrup serves, that stirrup, the stirrup above it). SI:
+#: No. 32 (32.3 mm) -> No. 10 (9.5 mm), else No. 13 (12.7 mm). in-lb: No. 10
+#: (1.27 in) -> No. 3 (0.375 in), else No. 4 (0.5 in).
+_ACI_COMPRESSION_SUPPORT_STIRRUP = {False: (32.3, 9.5, 12.7), True: (1.27, 0.375, 0.5)}
+
+#: CIRSOC 201-25 Tabla 9.7.6.4.2, as (largest longitudinal bar of the row,
+#: stirrup), in mm; the row past the last is 12 mm.
+_CIRSOC_COMPRESSION_SUPPORT_STIRRUP = ((16.0, 6.0), (25.0, 8.0), (32.0, 10.0))
+
+
+def min_stirrup_diameter_for_compression_support(d_b_long: float, *, is_imperial: bool = False) -> float:
+    """Smallest stirrup that may laterally support a compression bar — ACI 318-19 §9.7.6.4.2.
+
+    (a) No. 10 for longitudinal bars No. 32 and smaller, (b) No. 13 for
+    No. 36 and larger and for bundled bars; the in-lb edition prints No. 3
+    for No. 10 and smaller and No. 4 for No. 11 and larger. Read on the
+    nominal diameters: 9.5 mm (0.375 in) up to a 32.3 mm (1.27 in) bar,
+    12.7 mm (0.5 in) past it. Bundled bars are not modelled. CIRSOC 201-25
+    §9.7.6.4.2 grades the minimum with its Tabla 9.7.6.4.2 instead, so it
+    has its own function.
+
+    Args:
+        d_b_long: Diameter of the compression bar (mm, or in).
+
+    Returns:
+        The smallest stirrup diameter (mm, or in).
+    """
+    largest_small, stirrup_small, stirrup_large = _ACI_COMPRESSION_SUPPORT_STIRRUP[is_imperial]
+    return stirrup_small if d_b_long <= largest_small else stirrup_large
+
+
+def min_stirrup_diameter_for_compression_support_cirsoc(d_b_long: float) -> float:
+    """Smallest stirrup that may support a compression bar — CIRSOC 201-25 §9.7.6.4.2, Tabla 9.7.6.4.2.
+
+    Read off the printed table (Cap. 9 p. 178): 6 mm for db <= 16 mm, 8 mm
+    for 16 < db <= 25 mm, 10 mm for 25 < db <= 32 mm, 12 mm for db > 32 mm
+    and for bundled bars. Metric only, as the code is; bundled bars are not
+    modelled. ACI 318-19 §9.7.6.4.2 has two steps in place of four:
+    :func:`min_stirrup_diameter_for_compression_support`.
+
+    Args:
+        d_b_long: Diameter of the compression bar (mm).
+
+    Returns:
+        The smallest stirrup diameter (mm).
+    """
+    for largest, stirrup in _CIRSOC_COMPRESSION_SUPPORT_STIRRUP:
+        if d_b_long <= largest:
+            return stirrup
+    return 12.0
