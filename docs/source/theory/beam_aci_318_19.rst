@@ -438,6 +438,10 @@ provision; it is common detailing practice and it prevents two degenerate outcom
    flexural steel at all, so the design would return :math:`A_s = 0`. That is not a
    buildable layout, and it makes :math:`\rho_w = 0`, which collapses :math:`V_c` to
    zero in Table 22.5.5.1. mento adopts the geometric minimum instead.
+   It goes on the **bottom** face, which a member always carries steel on, and the
+   check holds a bottom with no moment to the same floor (no 4/3 relief, since there
+   is no :math:`A_{s,calc}` to relieve it against), warning ``As_below_min`` if it is
+   bare. A top face that no combination puts in tension is held to no minimum.
 
 Order of the minimum-reinforcement rules
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

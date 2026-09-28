@@ -824,6 +824,17 @@ def _minimum_flexural_reinforcement_area_ACI_318_19(self: "RectangularBeam", M_u
     return _minimum_flexural_reinforcement_ratio_ACI_318_19(self, M_u) * d * sec.width
 
 
+def _geometric_minimum_ACI_318_19(self: "RectangularBeam") -> float:
+    """1.8‰ of the gross section, b*h (mm², or in²): this studio's floor, not a clause.
+
+    The design adopts it where the codes ask for no minimum and a member still
+    needs its bottom steel -- no moment, or a 4/3 relief that would leave less
+    -- and the check holds a bottom face with no moment to it.
+    """
+    sec = section_floats(self)
+    return (1.8 / 1000) * sec.width * sec.height
+
+
 def _calculate_flexural_reinforcement_ACI_318_19(
     self: "RectangularBeam", M_u: float, d: float, d_prima: float
 ) -> tuple[float, float, float, float, float, bool, bool, float]:
@@ -908,7 +919,7 @@ def _calculate_flexural_reinforcement_ACI_318_19(
     # only ever enters through the 4/3 rule or with no moment (Case 0); on a
     # slab it is the same number as the minimum of §7.6.1.1, and only enters
     # with no moment.
-    A_s_geo_min = (1.8 / (1000)) * sec.width * sec.height
+    A_s_geo_min = _geometric_minimum_ACI_318_19(self)
 
     if M_u == 0:
         # Case 0:
@@ -1262,6 +1273,14 @@ def _check_flexure_ACI_318_19(self: "RectangularBeam", force: Forces) -> Flexure
 
     st.A_s_min_eff_bot = _effective_minimum_ACI_318_19(self, st.A_s_min_bot, st.A_s_calc_bot)
     st.A_s_min_eff_top = _effective_minimum_ACI_318_19(self, st.A_s_min_top, st.A_s_calc_top)
+    if st.M_u == 0:
+        # No moment: neither code asks for a flexural minimum, but a member
+        # always carries its bottom steel, and the design gives it the 1.8‰
+        # of the gross section (Case 0 of _calculate_flexural_reinforcement).
+        # The check holds the bottom to the same floor, with no 4/3 relief --
+        # there is no A_s_calc to relieve it against -- so a bare bottom is
+        # warned; the top, which nothing pulls, keeps no minimum.
+        st.A_s_min_bot = st.A_s_min_eff_bot = _geometric_minimum_ACI_318_19(self)
 
     # Determine the maximum detailing cover dimensions for top and bottom.
     length_unit = CANONICAL[sec.is_imperial]["length"]

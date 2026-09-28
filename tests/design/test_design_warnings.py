@@ -1490,3 +1490,19 @@ def test_en_holds_only_the_bottom_to_a_minimum_when_nothing_bends_the_section() 
     assert beam.flexure_design.bottom.A_s_min.magnitude > 0
     assert beam.flexure_design.top.A_s_min.magnitude == 0
     assert "As_below_min" not in _by_code(node.warnings)
+
+
+def test_aci_holds_a_bare_bottom_to_the_geometric_floor_when_nothing_bends_the_section() -> None:
+    """ACI 20x50 under shear alone, with no bottom bars: 1.8‰ of b*h = 1.80 cm² owed below, none above."""
+    beam = _beam(width=20 * cm, height=50 * cm)
+    beam.set_longitudinal_rebar_bot(0, 0 * mm)
+    beam.set_longitudinal_rebar_top(n1=2, d_b1=12 * mm)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=10 * mm, s_l=20 * cm)
+    node = Node(section=beam, forces=[Forces(label="V", V_z=20 * kN)])
+    node.check()
+
+    check = beam.flexure_checks[0]
+    assert check.bottom.A_s_min.to("cm**2").magnitude == pytest.approx(1.80)
+    assert check.bottom.A_s_min_eff == check.bottom.A_s_min
+    assert check.top.A_s_min.magnitude == 0
+    assert [w.face for w in node.warnings if w.code == "As_below_min"] == ["bottom"]

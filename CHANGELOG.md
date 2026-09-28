@@ -584,6 +584,13 @@ from the release history and are summaries rather than complete lists.
   42.1 cm² there and 44.9 cm² on top, and warned `As_above_max`; both faces now take
   48.0 cm². The check, the design and the `flexure_admissible` gate read it.
 
+- **Under ACI 318-19 / CIRSOC 201-25 a bottom face with no moment is held to 1.8‰ of
+  b·h.** The design already gave it that floor (a member always carries bottom steel), but
+  the check reported a zero minimum, so a bottom left bare under a shear-only combination
+  passed. The check now holds it to the same floor, with no 4/3 relief, and warns
+  `As_below_min`; the top face keeps no minimum. A cantilever strip detailed with top bars
+  only is warned on its bottom under a shear-only combination.
+
 - **Under EN 1992-1-1 a top face that no combination puts in tension takes no minimum.**
   A combination with no moment held the top to §9.2.1.1(1) as well as the bottom, and a
   beam or slab designed for shear alone was warned `As_below_min` on its bare top. The

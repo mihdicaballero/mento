@@ -756,8 +756,10 @@ def test_a_face_nothing_puts_in_tension_has_no_minimum() -> None:
     A cantilever strip, 100x20 with c_c 25 mm, carries top bars only. Under
     the hogging combination the top face owes 0.0018*100*20 = 3.60 cm² and
     the bottom face, in compression, nothing. Under a combination of shear
-    alone no face is in tension, so neither owes anything -- the bottom used
-    to be asked for the 3.60 cm² all the same, and warned for carrying none.
+    alone no face is in tension and the code asks nothing, but a member
+    always carries its bottom steel: the bottom is held to the 1.8‰ floor
+    the design gives it, 3.60 cm², and warned for carrying none. The top,
+    which nothing pulls, owes nothing.
     """
     slab = OneWaySlab(
         label="Cantilever",
@@ -775,8 +777,9 @@ def test_a_face_nothing_puts_in_tension_has_no_minimum() -> None:
     assert hogging.top.A_s_min.to("cm**2").magnitude == pytest.approx(3.60, rel=1e-3)
     assert hogging.bottom.A_s_min.magnitude == 0
     assert shear_only.top.A_s_min.magnitude == 0
-    assert shear_only.bottom.A_s_min.magnitude == 0
-    assert "As_below_min" not in {w.code for w in node.warnings}
+    assert shear_only.bottom.A_s_min.to("cm**2").magnitude == pytest.approx(3.60, rel=1e-3)
+    below = [w for w in node.warnings if w.code == "As_below_min"]
+    assert [(w.face, w.combinations) for w in below] == [("bottom", ("V",))]
     # The minimum is kept where a moment does put a face in tension.
     assert Node(section=slab, forces=[Forces(label="M-", M_y=-20 * kNm)]).check_flexure().iloc[1][
         "As,min"
@@ -804,12 +807,14 @@ def test_a_slab_designed_for_span_and_shear_alone_is_not_warned_on_its_bare_top(
 
 
 def test_a_slab_designed_for_shear_alone_still_gets_its_detailing_steel() -> None:
-    """With no moment the code asks nothing, and the check says so: A_s,min = 0.
+    """With no moment the code asks nothing; the bottom is still held to 1.8‰ of b*h.
 
-    The design still places the 1.8 permille of the gross section it gives a
-    beam in the same case -- the studio's floor, not a clause, and on a slab
-    the same 3.60 cm² as §7.6.1.1 -- because a strip with no bars has no
-    shear strength either: V_c goes with rho_w**(1/3) in Table 22.5.5.1.
+    The design places the 1.8 permille of the gross section it gives a beam
+    in the same case -- the studio's floor, not a clause, and on a slab the
+    same 3.60 cm² as §7.6.1.1 -- because a member always carries bottom
+    steel, and a strip with no bars has no shear strength either: V_c goes
+    with rho_w**(1/3) in Table 22.5.5.1. The check holds the bottom to the
+    same floor, so it reports it as the minimum.
     """
     slab = OneWaySlab(
         label="Shear only",
@@ -823,7 +828,8 @@ def test_a_slab_designed_for_shear_alone_still_gets_its_detailing_steel() -> Non
     node.design()
 
     bottom = slab.flexure_design.bottom
-    assert bottom.A_s_min.magnitude == 0
+    assert bottom.A_s_min.to("cm**2").magnitude == pytest.approx(3.60, rel=1e-3)
+    assert slab.flexure_design.top.A_s_min.magnitude == 0
     assert bottom.A_s_req.to("cm**2").magnitude == pytest.approx(3.60, rel=1e-3)
     assert slab.reinforcement.bottom.A_s >= bottom.A_s_req
     assert node.warnings == ()
