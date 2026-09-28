@@ -90,6 +90,8 @@ __all__ = [
     "MeshDirection",
     "WallShearCheck",
     "WallShearDesign",
+    "DesignNotRunError",
+    "NotABeamError",
 ]
 
 if TYPE_CHECKING:
@@ -116,6 +118,8 @@ if TYPE_CHECKING:
     from mento.design_warnings import DesignWarning
     from mento.design_results import RebarOption, StirrupOption
     from mento.wall_results import MeshDirection, WallMesh, WallShearCheck, WallShearDesign
+    from mento.design_results import DesignNotRunError
+    from mento.shear_wall import NotABeamError
 
 
 def __getattr__(name: str) -> object:
@@ -134,8 +138,8 @@ def __getattr__(name: str) -> object:
         "Formatter": "results",
         "TablePrinter": "results",
         "DocumentBuilder": "results",
-        "EN_1992_2004_beam": "codes",
-        "ACI_318_19_beam": "codes",
+        "EN_1992_2004_beam": "codes.EN_1992_2004_beam",
+        "ACI_318_19_beam": "codes.ACI_318_19_beam",
         "BeamSummary": "beam_summary",
         "Column": "column",
         "PunchingSlab": "punching",
@@ -157,11 +161,17 @@ def __getattr__(name: str) -> object:
         "MeshDirection": "wall_results",
         "WallShearCheck": "wall_results",
         "WallShearDesign": "wall_results",
+        "DesignNotRunError": "design_results",
+        "NotABeamError": "shear_wall",
     }
 
     if name in module_mapping:
         import importlib
 
         module = importlib.import_module(f".{module_mapping[name]}", __name__)
+        # A name that is a module itself (the code modules) is the module: reading it
+        # off its package only worked once something else had imported it.
+        if module.__name__.rsplit(".", 1)[-1] == name:
+            return module
         return getattr(module, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

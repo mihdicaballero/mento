@@ -486,6 +486,13 @@ from the release history and are summaries rather than complete lists.
 - **`clear_spacing_below_min` is not reported for a face whose layers hold one bar
   each:** there is no pair to measure.
 
+- **`DesignNotRunError` and `NotABeamError` are exported from `mento`**, so a program
+  catches them without knowing which module raises them.
+
+- **`mento.EN_1992_2004_beam`, `mento.ACI_318_19_beam` and `from mento import *` work in
+  a fresh interpreter.** The lazy loader read the code modules off `mento.codes`, which
+  only held them once something else had imported them.
+
 - **Changing a beam's or slab's reinforcement by hand drops its results.** The setters
   (`set_longitudinal_rebar_bot/top`, `set_transverse_rebar` and the slab's) left
   `flexure_design`, `shear_design`, the per-combination checks and the warnings describing
