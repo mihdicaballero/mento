@@ -12,6 +12,26 @@ from the release history and are summaries rather than complete lists.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-09-27
+
+### Migration notes
+
+Nothing is removed, but four behaviours of 1.2.0 change in ways a program may notice:
+
+- **Bars or stirrups set by hand drop the results.** `flexure_design`, `shear_design`, the
+  per-combination checks and the warnings raise `DesignNotRunError` (or are empty) until the
+  next `check()` or `design()`. Run a check after changing the reinforcement.
+- **A slab layer counts its bars per width.** `RebarLayer.n` and `n_bars` are floats on a
+  slab (`width / s`, 6.67 for Ø10/15 in a metre) and the steel follows from them; use
+  `n_placed` / `n_bars_placed` for the whole bars to lay out. On a beam nothing changes.
+- **A `ShearWall` no longer answers as a beam.** `reinforcement`, `flexure_design`,
+  `flexure_checks` and `flexure_check_results` raise `NotABeamError` (an `AttributeError`);
+  read `wall.mesh`, `wall.shear_design` and `wall.shear_checks`.
+- **Some results move.** The one-way slab minimum is 0.0018·Ag; an over-reinforced section
+  reports its strain-compatible capacity and does not comply past its tension-controlled
+  limit (`complies`, `not_tension_controlled`); EN A_s,max is 0.04·b·h. The entries below
+  give the numbers.
+
 ### Added
 
 - **A design keeps its alternatives.** `beam.flexure_design.bottom.options` and
@@ -1066,7 +1086,8 @@ First public release on PyPI: rectangular concrete beam check and design for fle
 shear under ACI 318-19 and CIRSOC 201-25, unit aware calculations, results as pandas
 DataFrames, and Word calculation reports.
 
-[Unreleased]: https://github.com/mihdicaballero/mento/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/mihdicaballero/mento/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/mihdicaballero/mento/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/mihdicaballero/mento/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/mihdicaballero/mento/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/mihdicaballero/mento/compare/v1.0.0...v1.0.1
