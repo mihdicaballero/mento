@@ -27,6 +27,9 @@ __all__ = [
     "neutral_axis_depth",
     "nominal_moment_singly_reinforced",
     "nominal_moment_doubly_reinforced",
+    "nominal_moment_strain_compatibility",
+    "net_tensile_strain",
+    "flexure_strength_reduction_factor",
 ]
 
 
@@ -345,3 +348,113 @@ def nominal_moment_doubly_reinforced(
     A_s_1 = A_s - A_s_2
 
     return A_s_1 * f_y * (d - a / 2) + A_s_prime * f_s_prime_net * (d - d_prime)
+
+
+def nominal_moment_strain_compatibility(
+    A_s: float,
+    A_s_prime: float,
+    f_y: float,
+    f_c: float,
+    b: float,
+    d: float,
+    d_prime: float,
+    beta_1: float,
+    epsilon_c: float,
+    E_s: float,
+) -> tuple[float, float]:
+    """Nominal moment and neutral axis by strain compatibility — ACI 318-19 §22.2 / CIRSOC 201-25 §22.2.
+
+    The general solution the two closed forms above are special cases of,
+    written for a section that may be past the tension-controlled limit: every
+    bar is taken at the stress its strain gives it -- linear strains with
+    eps_cu at the extreme fibre (§22.2.1.2, §22.2.2.1), f_s = E_s*eps_s capped
+    at f_y (§20.2.2.1) -- so the tension steel need not yield, and nothing is
+    capped. The same clauses in both codes.
+
+    The neutral axis is the root of the force balance
+
+        0.85*f_c*b*beta_1*c + A_s'*(f_s' - 0.85*f_c) = A_s*f_s
+
+    with the displaced-concrete correction on the compression bar that
+    :func:`nominal_moment_doubly_reinforced` applies. Every term moves one way
+    with c -- the concrete and the compression bar carry more, the tension bar
+    less -- so the root is unique, and it lies between 0 and d, where the
+    tension bar carries nothing. It is found by bisection, to a tolerance far
+    below anything a detail can hold.
+
+    Args:
+        A_s: Tension reinforcement area (mm², or in²).
+        A_s_prime: Compression reinforcement area (mm², or in²); 0 for none.
+        f_y: Steel yield strength (MPa, or psi).
+        f_c: Concrete compressive strength (MPa, or psi).
+        b: Section width (mm, or in).
+        d: Effective depth of the tension steel (mm, or in).
+        d_prime: Depth to the compression steel (mm, or in).
+        beta_1: Stress block factor.
+        epsilon_c: Concrete crushing strain.
+        E_s: Steel modulus of elasticity (MPa, or psi).
+
+    Returns:
+        ``(M_n, c)``: the nominal moment about the tension steel (N·mm, or
+        lb·in) and the neutral axis depth (mm, or in).
+    """
+
+    def _forces(c: float) -> tuple[float, float, float]:
+        a = beta_1 * c
+        C_c = 0.85 * f_c * a * b
+        f_s_prime = max(-f_y, min(f_y, E_s * epsilon_c * (c - d_prime) / c))
+        C_s = A_s_prime * (f_s_prime - 0.85 * f_c)
+        f_s = max(-f_y, min(f_y, E_s * epsilon_c * (d - c) / c))
+        return C_c, C_s, A_s * f_s
+
+    lo, hi = d * 1e-9, d
+    for _ in range(100):
+        c = 0.5 * (lo + hi)
+        C_c, C_s, T = _forces(c)
+        if C_c + C_s > T:
+            hi = c
+        else:
+            lo = c
+    c = 0.5 * (lo + hi)
+    C_c, C_s, _ = _forces(c)
+    a = beta_1 * c
+    return C_c * (d - a / 2) + C_s * (d - d_prime), c
+
+
+def net_tensile_strain(c: float, d: float, epsilon_c: float) -> float:
+    """Net tensile strain in the tension steel — ACI 318-19 §21.2.2 / CIRSOC 201-25 §21.2.2.
+
+    From linear strains (§22.2.1.2 in both): eps_t = eps_cu*(d - c)/c. The
+    clause reads it at the extreme layer of tension steel, d_t; read at the
+    centroid d, as here, it is never larger, so the classification it gives
+    is on the safe side for a face in more than one layer.
+
+    Args:
+        c: Neutral axis depth (mm, or in).
+        d: Depth at which the strain is read (mm, or in).
+        epsilon_c: Concrete crushing strain.
+
+    Returns:
+        eps_t, dimensionless; positive in tension.
+    """
+    return epsilon_c * (d - c) / c
+
+
+def flexure_strength_reduction_factor(epsilon_t: float, epsilon_ty: float) -> float:
+    """phi for moment — ACI 318-19 Table 21.2.2 / CIRSOC 201-25 Tabla 21.2.2.
+
+    0.90 for a tension-controlled section (eps_t >= eps_ty + 0.003), 0.65 for a
+    compression-controlled one (eps_t <= eps_ty), and linear in between. The
+    0.65 is the "other" transverse reinforcement row, the one a beam with
+    stirrups falls in; the spiral row (0.75) does not apply to a beam. Both
+    codes print the same table.
+
+    Args:
+        epsilon_t: Net tensile strain, from :func:`net_tensile_strain`.
+        epsilon_ty: Yield strain of the tension steel, f_y/E_s.
+
+    Returns:
+        phi, dimensionless.
+    """
+    phi = 0.65 + 0.25 * (epsilon_t - epsilon_ty) / 0.003
+    return max(0.65, min(0.90, phi))

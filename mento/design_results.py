@@ -131,6 +131,16 @@ class FlexureFaceCheck:
     1992-1-1 has no such relief, and there the two are the same. Compare the
     steel provided against ``A_s_min_eff``.
 
+    ``A_s_max`` and ``A_s_max_eff`` are the same pair at the other end. Under
+    ACI 318-19 and CIRSOC 201-25 ``A_s_max`` is the tension steel that keeps a
+    singly reinforced face tension-controlled, and ``A_s_max_eff`` the same
+    limit with the compression steel the opposite face carries,
+    ``A_s_max + A_s'*f_s'/f_y``: past it the face is no longer
+    tension-controlled, which §9.3.3.1 does not allow a beam, and its capacity
+    takes the phi of the strain it reaches. Under EN 1992-1-1 the maximum is
+    the 4 % of §9.2.1.1(3), which compression steel does not extend, and the
+    two are the same.
+
     A field is ``None`` when the design code did not set it for this
     combination; enveloping skips those rather than treating them as zero.
     """
@@ -142,6 +152,7 @@ class FlexureFaceCheck:
     M_capacity: Optional[Quantity] = None
     A_s_calc: Optional[Quantity] = None
     A_s_min_eff: Optional[Quantity] = None
+    A_s_max_eff: Optional[Quantity] = None
 
 
 @dataclass(frozen=True)
@@ -173,6 +184,15 @@ def _worst(values: Sequence[Optional[Quantity]]) -> Optional[Quantity]:
     """Largest of the values that are present, or None if none of them are."""
     present = [value for value in values if value is not None]
     return max(present) if present else None
+
+
+def _least(values: Sequence[Optional[Quantity]]) -> Optional[Quantity]:
+    """Smallest of the values that are present, or None if none of them are.
+
+    The envelope of a limit the steel must stay under is its tightest value.
+    """
+    present = [value for value in values if value is not None]
+    return min(present) if present else None
 
 
 def _governing(pairs: Sequence[Tuple[float, Optional[Quantity]]]) -> Optional[Quantity]:
@@ -210,6 +230,7 @@ def envelope_flexure_face(checks: Sequence[FlexureCheck], face: str) -> FlexureF
         M_capacity=_governing([(f.DCR, f.M_capacity) for f in faces]),
         A_s_calc=_worst([f.A_s_calc for f in faces]),
         A_s_min_eff=_worst([f.A_s_min_eff for f in faces]),
+        A_s_max_eff=_least([f.A_s_max_eff for f in faces]),
     )
 
 
@@ -234,7 +255,9 @@ def capture_flexure_check(beam: RectangularBeam, label: str, state: Any) -> Flex
     imperial = beam.concrete.is_imperial
 
     def face(suffix: str) -> FlexureFaceCheck:
-        A_s_req, A_s_min, A_s_max, M_capacity, A_s_calc, A_s_min_eff = state.face_quantities(suffix, imperial)
+        A_s_req, A_s_min, A_s_max, M_capacity, A_s_calc, A_s_min_eff, A_s_max_eff = state.face_quantities(
+            suffix, imperial
+        )
         return FlexureFaceCheck(
             A_s_req=A_s_req,
             A_s_min=A_s_min,
@@ -243,6 +266,7 @@ def capture_flexure_check(beam: RectangularBeam, label: str, state: Any) -> Flex
             M_capacity=M_capacity,
             A_s_calc=A_s_calc,
             A_s_min_eff=A_s_min_eff,
+            A_s_max_eff=A_s_max_eff,
         )
 
     return FlexureCheck(label=label, bottom=face("bot"), top=face("top"))
@@ -381,6 +405,10 @@ class FlexureFaceDesign:
     the one the face has to meet, after the relief of ACI 318-19 / CIRSOC
     201-25 §9.6.1.3 -- see :class:`FlexureFaceCheck`. A designed face can sit
     below ``A_s_min`` and still comply; it cannot sit below ``A_s_min_eff``.
+    ``A_s_max_eff`` is the same at the top end: the tension steel the face can
+    carry and stay tension-controlled with the compression steel opposite it.
+    A face above ``A_s_max`` and below ``A_s_max_eff`` is doubly reinforced
+    and complies.
 
     ``options`` are the layouts the last design found for this face, best
     first; ``options[0]`` is the one applied. Empty when the face was not
@@ -399,6 +427,7 @@ class FlexureFaceDesign:
     A_s_min: Quantity
     A_s_min_eff: Quantity
     A_s_max: Quantity
+    A_s_max_eff: Quantity
     DCR: float
     M_capacity: Quantity
     options: Tuple[RebarOption, ...] = ()
@@ -559,6 +588,7 @@ def _face(beam: RectangularBeam, face: str) -> FlexureFaceDesign:
         A_s_min=zero if worst.A_s_min is None else worst.A_s_min,
         A_s_min_eff=zero if worst.A_s_min_eff is None else worst.A_s_min_eff,
         A_s_max=zero if worst.A_s_max is None else worst.A_s_max,
+        A_s_max_eff=zero if worst.A_s_max_eff is None else worst.A_s_max_eff,
         DCR=worst.DCR,
         M_capacity=no_capacity if worst.M_capacity is None else worst.M_capacity,
         options=_current_flexure_options(beam, face),

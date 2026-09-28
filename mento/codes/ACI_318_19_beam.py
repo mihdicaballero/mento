@@ -14,15 +14,11 @@ the two still agree.
 """
 
 from mento.units import Quantity
-from typing import TYPE_CHECKING, Dict, Any, cast
+from typing import TYPE_CHECKING, cast
 import warnings
 # from devtools import debug
 
-from mento.codes.flexure_design import (
-    _FaceDemand,
-    _run_flexure_design,
-    _select_safe_design as _select_safe_design_generic,
-)
+from mento.codes.flexure_design import _FaceDemand, _run_flexure_design
 from mento.codes.aci_318_19.equations import flexure as flexure_eq
 from mento.codes.check_state import (
     FlexureCheckState,
@@ -530,6 +526,67 @@ def _f_s_prime_net_at_ductility_limit_ACI_318_19(self: "RectangularBeam", d: flo
     return flexure_eq.compression_steel_net_stress(d_prime, c_t, sec.E_s, sec.f_y, sec.f_c)
 
 
+def _extended_tension_cap_ACI_318_19(
+    self: "RectangularBeam", A_s_max: float, A_s_comp: float, d: float, d_prime: float
+) -> float:
+    """Tension steel a face can carry and stay tension-controlled, given the
+    compression steel on the opposite face.
+
+    ACI 318-19 §9.3.3.1 with Table 21.2.2 / CIRSOC 201-25 §9.3.3.1 with
+    Tabla 21.2.2: past A_s_max the excess tension is balanced by the
+    compression steel, at the stress it reaches at the ductility limit,
+        A_s_max_total = A_s_max + A_s' * f_s'_net / f_y
+
+    It is the same boundary :func:`_nominal_moment_face_ACI_318_19` reads off
+    the strain: a face carries no more than this exactly when eps_t reaches
+    eps_ty + 0.003. A compression bar too close to the neutral axis to carry
+    more than the concrete it displaces (f_s'_net <= 0) extends nothing.
+    """
+    f_s_prima_net = _f_s_prime_net_at_ductility_limit_ACI_318_19(self, d, d_prime)
+    return A_s_max + A_s_comp * max(f_s_prima_net, 0.0) / section_floats(self).f_y
+
+
+def _nominal_moment_face_ACI_318_19(
+    self: "RectangularBeam", A_s: float, A_s_max: float, d: float, A_s_prime: float, d_prime: float
+) -> tuple[float, float]:
+    """``(M_n, phi)`` of one face, with ``A_s`` in tension and ``A_s_prime`` opposite.
+
+    Up to A_s_max the section is tension-controlled on its tension steel alone
+    and the closed form stands, with phi = 0.90 -- ACI 318-19 Table 21.2.2 /
+    CIRSOC 201-25 Tabla 21.2.2. Past it the moment comes from strain
+    compatibility with every bar at the stress its strain gives it, and phi
+    from the strain the tension steel actually reaches, through the same
+    table. While the compression steel keeps eps_t at eps_ty + 0.003 or more
+    that is the doubly reinforced value at phi = 0.90; beyond, the section is
+    no longer tension-controlled -- which §9.3.3.1 of both codes does not allow
+    a beam, and the check reports -- and its strength is the one it has.
+
+    Nothing is capped. The tension steel used to be cut back to
+    A_s_max + A_s'*f_s'/f_y and kept at phi = 0.90, which credited an
+    over-reinforced section with more than it carries: 213.4 kN·m for a
+    25x40 section whose strain compatibility gives 196.2.
+    """
+    sec = section_floats(self)
+    concrete_aci = cast("Concrete_ACI_318_19", self.concrete)
+    if A_s <= A_s_max:
+        return _determine_nominal_moment_simple_reinf_ACI_318_19(self, A_s, d), concrete_aci._phi_t
+    M_n, c = flexure_eq.nominal_moment_strain_compatibility(
+        A_s,
+        A_s_prime,
+        sec.f_y,
+        sec.f_c,
+        sec.width,
+        d,
+        d_prime,
+        concrete_aci._beta_1,
+        concrete_aci._epsilon_c,
+        sec.E_s,
+    )
+    epsilon_t = flexure_eq.net_tensile_strain(c, d, concrete_aci._epsilon_c)
+    phi = flexure_eq.flexure_strength_reduction_factor(epsilon_t, self.steel_bar.epsilon_y)
+    return M_n, min(phi, concrete_aci._phi_t)
+
+
 def _minimum_flexural_reinforcement_ratio_ACI_318_19(self: "RectangularBeam", M_u: float) -> float:
     """
     Calculates the minimum flexural reinforcement ratio of ACI 318-19 §9.6.1.2
@@ -703,9 +760,13 @@ def _calculate_flexural_reinforcement_ACI_318_19(
     # Calculate required reinforcement based on the nominal moment capacity
     R_n = flexure_eq.flexural_resistance_factor(M_u, concrete_aci._phi_t, b, d)
     # Verify if the value under the square root is negative
-    if flexure_eq.singly_reinforced_discriminant(R_n, f_c_mag) < 0:
-        # Here we assign A_s_max so that the calculation does not break,
-        # resulting in a DCR greater than 1.
+    # A negative discriminant means no tension steel alone reaches the moment,
+    # however much of it: the section needs compression steel. A_s_max stands
+    # in for A_s_calc until the couple below replaces it -- it used to stay,
+    # and since it is not greater than A_s_max the couple never ran, so the
+    # face reported A_s_max as its requirement and no compression steel.
+    beyond_singly = flexure_eq.singly_reinforced_discriminant(R_n, f_c_mag) < 0
+    if beyond_singly:
         A_s_calc = A_s_max
     else:
         A_s_calc = flexure_eq.tension_steel_for_moment(R_n, f_c_mag, f_y_mag, b, d)
@@ -786,7 +847,7 @@ def _calculate_flexural_reinforcement_ACI_318_19(
     A_s_final = clean_zero(A_s_final)
 
     # Determine if compression reinforcement is required
-    if A_s_final <= A_s_max:
+    if A_s_final <= A_s_max and not beyond_singly:
         A_s_comp = 0.0
     else:
         doubly = True
@@ -809,8 +870,18 @@ def _calculate_flexural_reinforcement_ACI_318_19(
         M_n_t = rho * f_y_mag * (d - a_max / 2) * b * d
         M_n_prima = M_u / concrete_aci._phi_t - M_n_t
         f_s_prima_net = _f_s_prime_net_at_ductility_limit_ACI_318_19(self, d, d_prima)
-        A_s_comp = M_n_prima / (f_s_prima_net * (d - d_prima))
-        A_s_final = rho * b * d + A_s_comp * f_s_prima_net / f_y_mag
+        if f_s_prima_net > 0:
+            A_s_comp = M_n_prima / (f_s_prima_net * (d - d_prima))
+            A_s_final = rho * b * d + A_s_comp * f_s_prima_net / f_y_mag
+        else:
+            # The compression bar sits too close to the neutral axis to carry
+            # more than the concrete it displaces: no amount of it extends the
+            # section, and the division above turned negative (-39 cm² on a
+            # shallow section). The most the face can take and stay
+            # tension-controlled is A_s_max, and that is what it is asked for;
+            # the moment it cannot reach is the check's to report.
+            A_s_comp = 0.0
+            A_s_final = rho * b * d
         # Beyond the ductility limit the moment is carried as a couple, and the
         # tension steel of that couple is what the moment asks for.
         A_s_calc = A_s_final
@@ -909,10 +980,11 @@ def _determine_nominal_moment_ACI_318_19(self: "RectangularBeam", st: FlexureChe
     For negative moments, the tension is in the top reinforcement.
 
     Flexural strength of ACI 318-19 Ch. 22.2 / CIRSOC 201-25 Cap. 22.2, reduced by the
-    phi = 0.90 that ACI 318-19 Table 21.2.2 / CIRSOC 201-25 Tabla 21.2.2 give a
-    tension-controlled section, which §9.3.3.1 of both codes requires a beam to be. The
-    A_s_max_total cap below follows from that limit but is a construction of Mento's: neither
-    code writes a capacity formula for a section past it.
+    phi of ACI 318-19 Table 21.2.2 / CIRSOC 201-25 Tabla 21.2.2 for the strain the
+    tension steel reaches: 0.90 while the section is tension-controlled, less past
+    it (see :func:`_nominal_moment_face_ACI_318_19`). Past it the section also
+    misses §9.3.3.1 of both codes, which the check reports against
+    ``A_s_max_eff``, set here per face.
 
     Parameters:
         force (Forces): An object containing the forces acting on the section, including the moment M_y.
@@ -936,51 +1008,32 @@ def _determine_nominal_moment_ACI_318_19(self: "RectangularBeam", st: FlexureChe
     st.A_s_min_bot = _minimum_flexural_reinforcement_area_ACI_318_19(self, M_u, sec.d_bot) if tension_at_bottom else 0.0
     st.A_s_max_bot = rho_max * sec.d_bot * sec.width
 
-    # Determine the nominal moment for positive moments.
-    # Three-branch dispatcher based on ductility:
-    #   1. Ductile section (A_s_bot <= A_s_max_bot): simple flexure with A_s real.
-    #   2. Over-reinforced but redeemed by compression steel: doubly reinforced
-    #      formula with A_s real. When A_s_top = 0, A_s_max_total collapses to
-    #      A_s_max_bot and this branch cannot be reached (goes to branch 3).
-    #   3. Over-reinforced beyond redemption: cap A_s to A_s_max_total and use
-    #      doubly reinforced formula. If A_s_top = 0, the doubly reinforced
-    #      formula degenerates to simple with A_s_max_bot.
-    if sec.A_s_bot <= st.A_s_max_bot:
-        M_n_positive = _determine_nominal_moment_simple_reinf_ACI_318_19(self, sec.A_s_bot, sec.d_bot)
-    else:
-        # Compression steel contribution at the ductility limit determines how
-        # much the tension-steel cap can be extended:
-        #     A_s_max_total = A_s_max_bot + A_s_top * f_s'_net / f_y
-        f_s_prima_net = _f_s_prime_net_at_ductility_limit_ACI_318_19(self, sec.d_bot, sec.c_mec_top)
-        A_s_max_total = st.A_s_max_bot + sec.A_s_top * f_s_prima_net / sec.f_y
-        A_s_eff = min(sec.A_s_bot, A_s_max_total)
-        M_n_positive = _determine_nominal_moment_double_reinf_ACI_318_19(
-            self, A_s_eff, sec.d_bot, sec.c_mec_top, sec.A_s_top
-        )
+    # Positive moment: the bottom steel in tension, the top steel opposite.
+    M_n_positive, phi_positive = _nominal_moment_face_ACI_318_19(
+        self, sec.A_s_bot, st.A_s_max_bot, sec.d_bot, sec.A_s_top, sec.c_mec_top
+    )
 
     # Determine capacity for negative moment (tension at the top)
     st.A_s_min_top = 0.0 if tension_at_bottom else _minimum_flexural_reinforcement_area_ACI_318_19(self, M_u, sec.d_top)
     st.A_s_max_top = rho_max * sec.d_top * sec.width
 
-    # Determine the nominal moment for negative moments (tension on top face).
-    # Mirror of the positive-moment dispatcher, plus the leading edge case of
-    # zero tension steel (no top → no negative capacity).
+    # Negative moment: the mirror, with no top steel carrying nothing.
     if sec.A_s_top == 0:
-        M_n_negative = 0.0
-    elif sec.A_s_top <= st.A_s_max_top:
-        M_n_negative = _determine_nominal_moment_simple_reinf_ACI_318_19(self, sec.A_s_top, sec.d_top)
+        M_n_negative, phi_negative = 0.0, 0.0
     else:
-        f_s_prima_net = _f_s_prime_net_at_ductility_limit_ACI_318_19(self, sec.d_top, sec.c_mec_bot)
-        A_s_max_total = st.A_s_max_top + sec.A_s_bot * f_s_prima_net / sec.f_y
-        A_s_eff = min(sec.A_s_top, A_s_max_total)
-        M_n_negative = _determine_nominal_moment_double_reinf_ACI_318_19(
-            self, A_s_eff, sec.d_top, sec.c_mec_bot, sec.A_s_bot
+        M_n_negative, phi_negative = _nominal_moment_face_ACI_318_19(
+            self, sec.A_s_top, st.A_s_max_top, sec.d_top, sec.A_s_bot, sec.c_mec_bot
         )
 
-    # Calculate the design moment capacities for both bottom and top reinforcement
-    concrete_aci = cast("Concrete_ACI_318_19", self.concrete)
-    st.phi_M_n_bot = concrete_aci._phi_t * M_n_positive
-    st.phi_M_n_top = concrete_aci._phi_t * M_n_negative
+    # The tension steel each face can carry and stay tension-controlled, with
+    # the steel of the opposite face as it is: the limit §9.3.3.1 holds a beam
+    # to once it has compression steel. A section property, read the same
+    # under every combination.
+    st.A_s_max_eff_bot = _extended_tension_cap_ACI_318_19(self, st.A_s_max_bot, sec.A_s_top, sec.d_bot, sec.c_mec_top)
+    st.A_s_max_eff_top = _extended_tension_cap_ACI_318_19(self, st.A_s_max_top, sec.A_s_bot, sec.d_top, sec.c_mec_bot)
+
+    st.phi_M_n_bot = phi_positive * M_n_positive
+    st.phi_M_n_top = phi_negative * M_n_negative
 
     return None
 
@@ -1133,6 +1186,26 @@ def _flexure_capacity_ACI_318_19(self: "RectangularBeam", face: str, M_demand: Q
     return self._phi_M_n_bot if face == "bot" else self._phi_M_n_top
 
 
+def _flexure_ductile_ACI_318_19(self: "RectangularBeam", face: str) -> bool:
+    """Is ``face``, in tension, tension-controlled with the layout on the section?
+
+    ACI 318-19 §9.3.3.1 / CIRSOC 201-25 §9.3.3.1: a beam has to be
+    tension-controlled, eps_t >= eps_ty + 0.003 (Table 21.2.2 in both). With the
+    compression steel the other face carries, that is the face's tension steel
+    against ``A_s_max + A_s'*f_s'/f_y`` -- the limit the check reports as
+    ``A_s_max_eff``. A design that reached the moment past it would hand back
+    a section the check marks as not complying.
+    """
+    sec = section_floats(self)
+    rho_max = _maximum_flexural_reinforcement_ratio_ACI_318_19(self)
+    if face == "bot":
+        A_s, d, A_s_prime, d_prime = sec.A_s_bot, sec.d_bot, sec.A_s_top, sec.c_mec_top
+    else:
+        A_s, d, A_s_prime, d_prime = sec.A_s_top, sec.d_top, sec.A_s_bot, sec.c_mec_bot
+    limit = _extended_tension_cap_ACI_318_19(self, rho_max * d * sec.width, A_s_prime, d, d_prime)
+    return A_s <= limit * (1 + 1e-9)
+
+
 def _required_areas_ACI_318_19(
     self: "RectangularBeam", face: str, M: Quantity, d: Quantity, d_prime: Quantity
 ) -> _FaceDemand:
@@ -1175,22 +1248,14 @@ def _required_areas_ACI_318_19(
     else:
         self._A_s_min_top, self._A_s_max_top = A_s_min, A_s_max
         self._c_d_top, self._A_s_bool_top = c_d, A_s_bool
-    return _FaceDemand(A_s_min, A_s_max, A_s_tension, A_s_compression)
-
-
-def _select_safe_design(
-    self: "RectangularBeam",
-    candidate_designs: list,
-    M_demand: Quantity,
-    face: str,
-) -> Dict[str, Any]:
-    """ACI-flavoured safe-layout selection — same selection rules, with
-    phi*Mn as the capacity measure."""
-
-    def _capacity(f: str, M: Quantity) -> Quantity:
-        return _flexure_capacity_ACI_318_19(self, f, M)
-
-    return _select_safe_design_generic(self, candidate_designs, M_demand, face, _capacity)
+    # Past A_s_max each unit of tension steel needs f_y / f_s' of compression
+    # steel to keep the section tension-controlled. A compression bar too close
+    # to the neutral axis to carry stress extends nothing.
+    f_s_prime_net = _f_s_prime_net_at_ductility_limit_ACI_318_19(
+        self, d.to(canonical["length"]).magnitude, d_prime.to(canonical["length"]).magnitude
+    )
+    ratio = sec.f_y / f_s_prime_net if f_s_prime_net > 0 else None
+    return _FaceDemand(A_s_min, A_s_max, A_s_tension, A_s_compression, ratio)
 
 
 def _design_flexure_ACI_318_19(self: "RectangularBeam", max_M_y_bot: Quantity, max_M_y_top: Quantity) -> None:
@@ -1207,7 +1272,10 @@ def _design_flexure_ACI_318_19(self: "RectangularBeam", max_M_y_bot: Quantity, m
     def _capacity(face: str, M: Quantity) -> Quantity:
         return _flexure_capacity_ACI_318_19(self, face, M)
 
-    _run_flexure_design(self, max_M_y_bot, max_M_y_top, _required, _capacity)
+    def _admissible(face: str) -> bool:
+        return _flexure_ductile_ACI_318_19(self, face)
+
+    _run_flexure_design(self, max_M_y_bot, max_M_y_top, _required, _capacity, _admissible)
 
 
 ##########################################################
