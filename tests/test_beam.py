@@ -565,8 +565,12 @@ def test_shear_design_EN_1992_2004_1(
     assert results.iloc[1]["VEd,2≤VRd"] is True
 
 
-# Not published_example: no source is cited for these numbers (the sibling tests cite a Calcpad sheet).
+@pytest.mark.published_example
 def test_shear_check_ACI_318_19_1(beam_example_imperial: RectangularBeam) -> None:
+    """Stirrups 1e#4/6 in under V_u = 37.727 kip, no axial load.
+
+    Source: Calcpad "ACI 318-19 Beam Shear 01 - Imperial.cpd".
+    """
     f = Forces(V_z=37.727 * kip, N_x=0 * kip)
     beam_example_imperial.set_transverse_rebar(n_stirrups=1, d_b=0.5 * inch, s_l=6 * inch)
     node = Node(section=beam_example_imperial, forces=f)
@@ -587,8 +591,12 @@ def test_shear_check_ACI_318_19_1(beam_example_imperial: RectangularBeam) -> Non
     assert results.iloc[1]["Vu≤ØVn"] is True
 
 
-# Not published_example: no source is cited for these numbers (the sibling tests cite a Calcpad sheet).
+@pytest.mark.published_example
 def test_shear_check_ACI_318_19_2(beam_example_imperial: RectangularBeam) -> None:
+    """Stirrups 1e#4/6 in under V_u = 37.727 kip with N_u = 20 kip.
+
+    Source: Calcpad "ACI 318-19 Beam Shear 01 - Imperial.cpd".
+    """
     f = Forces(V_z=37.727 * kip, N_x=20 * kip)
     beam_example_imperial.set_transverse_rebar(n_stirrups=1, d_b=0.5 * inch, s_l=6 * inch)
     node = Node(section=beam_example_imperial, forces=f)
