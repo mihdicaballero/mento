@@ -126,7 +126,7 @@ Factor de Utilización                      DCR         1.53  ❌
 
 ### flexure_results_detailed_doc: Beam V102 flexure check CIRSOC 201-25.docx
 Verificación a flexión de viga V102
-Generado con mento 1.2.0. Código de diseño: CIRSOC 201-25
+Generado con mento <version>. Código de diseño: CIRSOC 201-25
 Datos de la sección
 Materiales | Variable | Valor | Unidad
 Identificación de la sección |  | V102 | 
@@ -176,7 +176,7 @@ Factor de Utilización | DCR | 0.26 | ❌ 9.3.3.1
 
 ### shear_results_detailed_doc: Beam V102 shear check CIRSOC 201-25.docx
 Verificación a corte de viga V102
-Generado con mento 1.2.0. Código de diseño: CIRSOC 201-25
+Generado con mento <version>. Código de diseño: CIRSOC 201-25
 Datos de la sección
 Materiales | Variable | Valor | Unidad
 Identificación de la sección |  | V102 | 

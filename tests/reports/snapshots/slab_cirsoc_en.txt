@@ -126,7 +126,7 @@ Demand Capacity Ratio                DCR         0.89  ✅
 
 ### flexure_results_detailed_doc: Slab L1 flexure check CIRSOC 201-25.docx
 Slab L1 flexure check
-Made with mento 1.2.0. Design code: CIRSOC 201-25
+Made with mento <version>. Design code: CIRSOC 201-25
 Section Data
 Materials | Variable | Value | Unit
 Section Label |  | L1 | 
@@ -176,7 +176,7 @@ Demand Capacity Ratio | DCR | 0.92 | ✅
 
 ### shear_results_detailed_doc: Slab L1 shear check CIRSOC 201-25.docx
 Slab L1 shear check
-Made with mento 1.2.0. Design code: CIRSOC 201-25
+Made with mento <version>. Design code: CIRSOC 201-25
 Section Data
 Materials | Variable | Value | Unit
 Section Label |  | L1 | 

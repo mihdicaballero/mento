@@ -19,7 +19,9 @@ from matplotlib.figure import Figure
 from matplotlib.patches import Circle, FancyBboxPatch, Rectangle
 from mento.units import Quantity
 
+from mento.bar_sizes import bar_designation
 from mento.design_results import format_transverse_rebar, placed_bars
+from mento.precompute import DISPLAY
 from mento.results import CUSTOM_COLORS
 
 if TYPE_CHECKING:
@@ -169,6 +171,11 @@ def _format_rebar_layer_text(
     """
 
     mode = getattr(self, "mode", "beam")
+    imperial = self.concrete.is_imperial
+
+    def mark(d_b: Quantity) -> str:
+        # A bar is its diameter in mm in SI and its ASTM size in US customary.
+        return bar_designation(d_b) if imperial else f"Ø{d_b.to('mm').magnitude:.0f}"
 
     # -------------------------------
     # MODO SLAB: siempre combinar
@@ -180,37 +187,32 @@ def _format_rebar_layer_text(
 
         # Tomar el diámetro "no nulo"
         if n1 > 0 and d_b1 is not None:
-            phi = d_b1.to("mm").magnitude
+            d_b = d_b1
         elif n2 > 0 and d_b2 is not None:
-            phi = d_b2.to("mm").magnitude
+            d_b = d_b2
         else:
             return ""  # por seguridad
 
-        return f"{total_bars}Ø{phi:.0f}"
+        return f"{total_bars}{mark(d_b)}"
 
     # -------------------------------
     # MODO BEAM
     # -------------------------------
     # Si n1 y n2 tienen el mismo diámetro y ambos > 0 → combinar
     if n1 > 0 and n2 > 0 and d_b1 is not None and d_b2 is not None:
-        phi1 = d_b1.to("mm").magnitude
-        phi2 = d_b2.to("mm").magnitude
-
         # Igualdad con una pequeña tolerancia
-        if abs(phi1 - phi2) < 1e-6:
+        if abs(d_b1.to("mm").magnitude - d_b2.to("mm").magnitude) < 1e-6:
             total_bars = n1 + n2
-            return f"{total_bars}Ø{phi1:.0f}"
+            return f"{total_bars}{mark(d_b1)}"
 
     # Caso general: como lo tenías antes
     parts: list[str] = []
 
     if n1 > 0 and d_b1 is not None:
-        phi1 = d_b1.to("mm").magnitude
-        parts.append(f"{n1}Ø{phi1:.0f}")
+        parts.append(f"{n1}{mark(d_b1)}")
 
     if n2 > 0 and d_b2 is not None:
-        phi2 = d_b2.to("mm").magnitude
-        parts.append(f"{n2}Ø{phi2:.0f}")
+        parts.append(f"{n2}{mark(d_b2)}")
 
     return "+".join(parts) if parts else ""
 
@@ -281,12 +283,16 @@ def _annotate_stirrups_text(
     # Bare magnitudes, as the drawing has always shown them: mm for the bar,
     # cm for the spacings, no unit suffix. The shape of the label is the
     # element's, which is what format_transverse_rebar decides.
+    imperial = self.concrete.is_imperial
+    length = DISPLAY[imperial]["length"]
+    bar = bar_designation(self._stirrup_d_b) if imperial else f"Ø{self._stirrup_d_b.to('mm').magnitude:.0f}"
     text = format_transverse_rebar(
         transverse.layout,
         transverse.n_stirrups,
-        f"{self._stirrup_d_b.to('mm').magnitude:.0f}",
-        f"{self._stirrup_s_l.to('cm').magnitude:.0f}",
-        f"{transverse.s_w.to('cm').magnitude:.0f}",
+        bar,
+        f"{self._stirrup_s_l.to(length).magnitude:.0f}",
+        f"{transverse.s_w.to(length).magnitude:.0f}",
+        imperial=imperial,
     )
 
     x_text = width_cm + 0.1 * width_cm

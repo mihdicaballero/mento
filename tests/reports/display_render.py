@@ -14,6 +14,7 @@ from __future__ import annotations
 import contextlib
 import io
 import os
+import re
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List
 
@@ -30,6 +31,9 @@ from mento.shear_wall_summary import ShearWallSummary
 
 SNAPSHOT_DIR = Path(__file__).parent / "snapshots"
 LANGUAGES = ("en", "es")
+# The Word footer names the installed version, which changes with every release
+# and depends on which distribution Python finds first: not what a snapshot pins.
+_VERSION = re.compile(r"mento [0-9]\S*?(?=\.?(\s|$))")
 
 
 @contextlib.contextmanager
@@ -95,6 +99,7 @@ class Transcript:
         self._docs_seen: set[str] = set()
 
     def add(self, title: str, text: Any) -> None:
+        text = _VERSION.sub("mento <version>", str(text))
         self.parts.append(f"### {title}\n{text}\n")
 
     def printed(self, title: str, call: Callable[[], Any]) -> Any:

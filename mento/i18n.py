@@ -255,24 +255,24 @@ ES.update(
         ),
         (
             "Stirrup spacing along the member: {s} exceeds the {s_max} that lateral support of the "
-            "Ø{d_b_comp} compression bars allows (16 d_b, 48 d_b of the stirrup, least dimension of the beam)."
+            "{d_b_comp} compression bars allows (16 d_b, 48 d_b of the stirrup, least dimension of the beam)."
         ): (
             "Separación de estribos a lo largo del elemento: {s} supera los {s_max} que admite el "
-            "arriostramiento de las barras comprimidas Ø{d_b_comp} (16 d_b, 48 d_b del estribo, menor "
+            "arriostramiento de las barras comprimidas {d_b_comp} (16 d_b, 48 d_b del estribo, menor "
             "dimensión de la viga)."
         ),
         (
             "Stirrup diameter {d_b} is below the minimum {d_b_min} that lateral support of "
-            "Ø{d_b_comp} compression bars requires."
+            "{d_b_comp} compression bars requires."
         ): (
             "Diámetro de estribo {d_b} menor que el mínimo {d_b_min} que exige el arriostramiento de "
-            "barras comprimidas Ø{d_b_comp}."
+            "barras comprimidas {d_b_comp}."
         ),
         (
-            "The section relies on Ø{d_b_comp} compression bars and has no stirrups to brace them: "
+            "The section relies on {d_b_comp} compression bars and has no stirrups to brace them: "
             "closed stirrups of at least {d_b_min} at no more than {s_max} are required."
         ): (
-            "La sección depende de barras comprimidas Ø{d_b_comp} y no tiene estribos que las arriostren: "
+            "La sección depende de barras comprimidas {d_b_comp} y no tiene estribos que las arriostren: "
             "hacen falta estribos cerrados de al menos {d_b_min} separados a lo sumo {s_max}."
         ),
     }
@@ -323,6 +323,17 @@ def set_language(language: str) -> None:
 def get_language() -> str:
     """The language detailed reports are currently rendered in."""
     return _language
+
+
+#: The letter a stirrup count is written with: ``2eØ10`` for *estribo*,
+#: ``2sØ10`` for *stirrup*. It is part of the notation, not of a sentence, so
+#: it lives here rather than in a catalogue that falls back to English words.
+_STIRRUP_MARK: Dict[str, str] = {"en": "s", "es": "e"}
+
+
+def stirrup_mark() -> str:
+    """The stirrup letter of the current language: ``"s"`` in English, ``"e"`` in Spanish."""
+    return _STIRRUP_MARK[_language]
 
 
 def translate(text: str, language: Optional[str] = None, **fields: Any) -> str:

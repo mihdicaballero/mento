@@ -133,7 +133,7 @@ def test_reinforcement_str_describes_both_faces_and_stirrups(beam: RectangularBe
     beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=20 * cm)
     text = str(beam.reinforcement)
     assert "bottom: 3Ø20" in text
-    assert "stirrups: 1eØ8" in text
+    assert "stirrups: 1sØ8" in text
 
 
 def test_reinforcement_str_says_so_when_there_are_no_stirrups(beam: RectangularBeam) -> None:
@@ -154,7 +154,7 @@ def test_a_whole_bar_count_given_as_a_float_reads_as_a_whole_number(beam: Rectan
     "2.0Ø16 mm + 1.0Ø12 mm". A beam is detailed by a whole number of bars
     (see :class:`RebarLayer`), so its layers carry a whole count. The label
     itself printed a float count with its decimals in PR #164
-    (``format_longitudinal_rebar(2.0, "16")`` -> "2.0Ø16"): a whole count
+    (``format_longitudinal_rebar(2.0, "Ø16")`` -> "2.0Ø16"): a whole count
     now reads whole whatever its type. A slab layer keeps its fractional
     count and its spacing label.
     """
@@ -165,7 +165,7 @@ def test_a_whole_bar_count_given_as_a_float_reads_as_a_whole_number(beam: Rectan
     assert [type(layer.n) for layer in bottom.layers] == [int, int]
     assert bottom.n_bars == 3
     assert str(RebarLayer(n=2.0, d_b=16 * mm)) == "2Ø16 mm"
-    assert format_longitudinal_rebar(2.0, "16") == "2Ø16"
+    assert format_longitudinal_rebar(2.0, "Ø16") == "2Ø16"
     assert str(RebarLayer(n=100 / 12, d_b=10 * mm, s=12 * cm)) == "Ø10 mm/12 cm"
 
 
@@ -270,7 +270,7 @@ def test_shear_provided_area_covers_the_requirement(designed_beam: RectangularBe
 
 def test_shear_str_is_the_engineering_shorthand(designed_beam: RectangularBeam) -> None:
     shear = designed_beam.shear_design
-    assert str(shear).startswith(f"{shear.n_stirrups}eØ")
+    assert str(shear).startswith(f"{shear.n_stirrups}sØ")
 
 
 def test_shear_str_without_stirrups(beam: RectangularBeam) -> None:
@@ -832,7 +832,7 @@ def test_changing_the_bars_by_hand_drops_the_results_until_the_next_check() -> N
     with pytest.raises(DesignNotRunError):
         beam.shear_design
     assert beam.flexure_checks == () and beam.shear_checks == ()
-    assert str(beam.reinforcement.transverse) == "1eØ8 mm/30 cm"
+    assert str(beam.reinforcement.transverse) == "1sØ8 mm/30 cm"
 
     node.check()
     assert beam.flexure_design.DCR > 0 and beam.shear_design.DCR > 0

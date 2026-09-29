@@ -48,7 +48,7 @@
 
 ### results_detailed_doc: Beam_Summary_EN 1992-2004.docx
 Análisis del resumen de vigas
-Generado con mento 1.2.0. Código de diseño: EN 1992-2004
+Generado con mento <version>. Código de diseño: EN 1992-2004
 Este informe presenta los resultados detallados de la primera viga del resumen, seguidos de las tablas resumen de todas las vigas.
 Verificación a flexión de viga V101
 Datos de la sección

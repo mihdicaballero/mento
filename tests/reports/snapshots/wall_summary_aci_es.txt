@@ -19,7 +19,7 @@
 
 ### results_detailed_doc: Shear_Wall_Summary_ACI 318-19.docx
 Análisis del resumen de tabiques
-Generado con mento 1.2.0. Código de diseño: ACI 318-19
+Generado con mento <version>. Código de diseño: ACI 318-19
 Verificación a corte del tabique Level 1 - M1
 Datos de la sección
 Materiales | Variable | Valor | Unidad

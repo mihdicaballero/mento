@@ -124,7 +124,7 @@ Factor de Utilización                DCR        0.967  ✅
 
 ### flexure_results_detailed_doc: Beam V101 flexure check EN 1992-2004.docx
 Verificación a flexión de viga V101
-Generado con mento 1.2.0. Código de diseño: EN 1992-2004
+Generado con mento <version>. Código de diseño: EN 1992-2004
 Datos de la sección
 Materiales | Variable | Valor | Unidad
 Identificación de la sección |  | V101 | 
@@ -174,7 +174,7 @@ Factor de Utilización | DCR | 0.83 | ✅
 
 ### shear_results_detailed_doc: Beam V101 shear check EN 1992-2004.docx
 Verificación a corte de viga V101
-Generado con mento 1.2.0. Código de diseño: EN 1992-2004
+Generado con mento <version>. Código de diseño: EN 1992-2004
 Datos de la sección
 Materiales | Variable | Valor | Unidad
 Identificación de la sección |  | V101 | 

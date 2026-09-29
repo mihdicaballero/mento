@@ -46,7 +46,7 @@ Factor de Utilización                 DCR        0.386
 
 ### shear_results_detailed_doc: Shear Wall M1 shear check CIRSOC 201-25.docx
 Verificación a corte de tabique M1
-Generado con mento 1.2.0. Código de diseño: CIRSOC 201-25
+Generado con mento <version>. Código de diseño: CIRSOC 201-25
 Datos de la sección
 Materiales | Variable | Valor | Unidad
 Identificación de la sección |  | M1 | 

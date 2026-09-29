@@ -289,7 +289,7 @@ def test_a_design_that_does_not_close_goes_back_to_the_round_that_came_closest()
 
     assert str(beam.reinforcement.bottom) == "2Ø16 mm + 1Ø16 mm"
     assert str(beam.reinforcement.top) == "2Ø32 mm"
-    assert str(beam.reinforcement.transverse) == "1eØ10 mm/9 cm"
+    assert str(beam.reinforcement.transverse) == "1sØ10 mm/9 cm"
     assert beam.flexure_design.bottom.DCR == pytest.approx(1.171, abs=0.0005)
     assert "bottom" in [w.face for w in node.warnings if w.code == "As_below_required"]
 

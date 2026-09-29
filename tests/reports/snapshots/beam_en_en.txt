@@ -124,7 +124,7 @@ Demand Capacity Ratio                DCR        0.967  ✅
 
 ### flexure_results_detailed_doc: Beam V101 flexure check EN 1992-2004.docx
 Beam V101 flexure check
-Made with mento 1.2.0. Design code: EN 1992-2004
+Made with mento <version>. Design code: EN 1992-2004
 Section Data
 Materials | Variable | Value | Unit
 Section Label |  | V101 | 
@@ -174,7 +174,7 @@ Demand Capacity Ratio | DCR | 0.83 | ✅
 
 ### shear_results_detailed_doc: Beam V101 shear check EN 1992-2004.docx
 Beam V101 shear check
-Made with mento 1.2.0. Design code: EN 1992-2004
+Made with mento <version>. Design code: EN 1992-2004
 Section Data
 Materials | Variable | Value | Unit
 Section Label |  | V101 | 
@@ -222,7 +222,7 @@ Beam V101, $b$=20.00 cm, $h$=50.00 cm, $c_{c}$=2.50 cm,                         
 Top longitudinal rebar: 2Ø16+1Ø12, $A_{s,top}$ = 5.15 cm², $M_{Ed}$ = -80.0 kNm, $M_{Rd}$ = 94.06 kNm → $\color{#439b00}{\text{DCR}=0.85}$ 
 
 Bottom longitudinal rebar: 2Ø20+1Ø16, $A_{s,bot}$ = 8.29 cm², $M_{Ed}$ = 120.0 kNm, $M_{Rd}$ = 143.72 kNm → $\color{#439b00}{\text{DCR}=0.83}$ 
-Shear reinforcing 1eØ8/29 cm, $A_{sw}$=3.47 cm²/m, $V_{Ed,2}$=150.0 kN, $V_{Rd}$=155.15 kN → $\color{#efc200}{\text{DCR}=0.97}$ 
+Shear reinforcing 1sØ8/29 cm, $A_{sw}$=3.47 cm²/m, $V_{Ed,2}$=150.0 kN, $V_{Rd}$=155.15 kN → $\color{#efc200}{\text{DCR}=0.97}$ 
 
 ### flexure_design
 2Ø16 mm
@@ -231,10 +231,10 @@ Shear reinforcing 1eØ8/29 cm, $A_{sw}$=3.47 cm²/m, $V_{Ed,2}$=150.0 kN, $V_{Rd
 1Ø16 mm
 
 ### shear_design
-1eØ8 mm/29 cm
+1sØ8 mm/29 cm
 
 ### reinforcement.transverse
-1eØ8 mm/29 cm
+1sØ8 mm/29 cm
 
 ### warnings
 
@@ -244,4 +244,4 @@ Shear reinforcing 1eØ8/29 cm, $A_{sw}$=3.47 cm²/m, $V_{Ed,2}$=150.0 kN, $V_{Rd
 50 cm
 2Ø20+1Ø16
 2Ø16+1Ø12
-1eØ8/29
+1sØ8/29

@@ -122,7 +122,7 @@ Demand Capacity Ratio                DCR        0.894  ✅
 
 ### flexure_results_detailed_doc: Slab Z1 flexure check EN 1992-2004.docx
 Slab Z1 flexure check
-Made with mento 1.2.0. Design code: EN 1992-2004
+Made with mento <version>. Design code: EN 1992-2004
 Section Data
 Materials | Variable | Value | Unit
 Section Label |  | Z1 | 
@@ -172,7 +172,7 @@ Demand Capacity Ratio | DCR | 0.98 | ✅
 
 ### shear_results_detailed_doc: Slab Z1 shear check EN 1992-2004.docx
 Slab Z1 shear check
-Made with mento 1.2.0. Design code: EN 1992-2004
+Made with mento <version>. Design code: EN 1992-2004
 Section Data
 Materials | Variable | Value | Unit
 Section Label |  | Z1 | 

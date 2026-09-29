@@ -48,7 +48,7 @@
 
 ### results_detailed_doc: Beam_Summary_CIRSOC 201-25.docx
 Análisis del resumen de vigas
-Generado con mento 1.2.0. Código de diseño: CIRSOC 201-25
+Generado con mento <version>. Código de diseño: CIRSOC 201-25
 Este informe presenta los resultados detallados de la primera viga del resumen, seguidos de las tablas resumen de todas las vigas.
 Verificación a flexión de viga V101
 Datos de la sección

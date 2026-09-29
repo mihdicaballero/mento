@@ -124,7 +124,7 @@ Factor de Utilización                      DCR         0.38  ✅
 
 ### flexure_results_detailed_doc: Slab Z1 flexure check ACI 318-19.docx
 Verificación a flexión de losa Z1
-Generado con mento 1.2.0. Código de diseño: ACI 318-19
+Generado con mento <version>. Código de diseño: ACI 318-19
 Datos de la sección
 Materiales | Variable | Valor | Unidad
 Identificación de la sección |  | Z1 | 
@@ -174,7 +174,7 @@ Factor de Utilización | DCR | 0.68 | ✅
 
 ### shear_results_detailed_doc: Slab Z1 shear check ACI 318-19.docx
 Verificación a corte de losa Z1
-Generado con mento 1.2.0. Código de diseño: ACI 318-19
+Generado con mento <version>. Código de diseño: ACI 318-19
 Datos de la sección
 Materiales | Variable | Valor | Unidad
 Identificación de la sección |  | Z1 | 

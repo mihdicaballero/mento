@@ -19,7 +19,7 @@
 
 ### results_detailed_doc: Shear_Wall_Summary_CIRSOC 201-25.docx
 Shear Wall Summary Analysis
-Made with mento 1.2.0. Design code: CIRSOC 201-25
+Made with mento <version>. Design code: CIRSOC 201-25
 Wall Level 1 - M1 shear check
 Section Data
 Materials | Variable | Value | Unit

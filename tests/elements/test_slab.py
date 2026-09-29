@@ -14,6 +14,7 @@ from mento.material import (
 )
 from mento.units import kip, inch, mm, cm, kN, MPa, kNm, ksi
 from mento.forces import Forces
+from tests.helpers import us
 
 
 @pytest.fixture()
@@ -151,15 +152,15 @@ def test_shear_check_ACI_318_19_1(slab_example_ACI_318_19: OneWaySlab) -> None:
     # 0.24 in²/ft of any bar table), so rho_w = 0.236/(12*6.0) = 0.00327 and
     # Table 22.5.5.1(c): V_c = 8*1.0*1.0*0.00327^(1/3)*sqrt(4000)*12*6.0
     # = 8*0.1485*63.25*72 = 5409 lb; phi = 0.75 -> 4057 lb = 18.04 kN.
-    assert results.iloc[1]["Av,min"] == pytest.approx(0, rel=1e-3)
-    assert results.iloc[1]["Av,req"] == pytest.approx(0, rel=1e-3)
-    assert results.iloc[1]["Av"] == pytest.approx(0, rel=1e-3)
-    assert results.iloc[1]["ØVc"] == pytest.approx(18.04, rel=1e-3)
-    assert results.iloc[1]["ØVs"] == pytest.approx(0, rel=1e-3)
-    assert results.iloc[1]["ØVn"] == pytest.approx(18.04, rel=1e-3)
+    assert results.iloc[1]["Av,min"] == pytest.approx(us(0, "cm**2/m", "inch**2/ft"), rel=1e-3, abs=0.0005)
+    assert results.iloc[1]["Av,req"] == pytest.approx(us(0, "cm**2/m", "inch**2/ft"), rel=1e-3, abs=0.0005)
+    assert results.iloc[1]["Av"] == pytest.approx(us(0, "cm**2/m", "inch**2/ft"), rel=1e-3, abs=0.0005)
+    assert results.iloc[1]["ØVc"] == pytest.approx(us(18.04, "kN", "kip"), rel=1e-3, abs=0.005)
+    assert results.iloc[1]["ØVs"] == pytest.approx(us(0, "kN", "kip"), rel=1e-3, abs=0.005)
+    assert results.iloc[1]["ØVn"] == pytest.approx(us(18.04, "kN", "kip"), rel=1e-3, abs=0.005)
     # phi*V_max = phi_v*(V_c + 8*lambda*sqrt(f_c)*b_w*d) carries V_c:
     # 0.75*(5409 + 8*63.25*72) lb = 0.75*41 839 lb = 31 379 lb = 139.58 kN.
-    assert results.iloc[1]["ØVmax"] == pytest.approx(139.58, rel=1e-3)
+    assert results.iloc[1]["ØVmax"] == pytest.approx(us(139.58, "kN", "kip"), rel=1e-3, abs=0.005)
     # 1.52 kip / 4.057 kip = 0.375.
     assert results.iloc[1]["DCR"] == pytest.approx(0.375, rel=1e-2)
 

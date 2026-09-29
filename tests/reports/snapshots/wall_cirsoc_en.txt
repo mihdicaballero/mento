@@ -46,7 +46,7 @@ Demand Capacity Ratio       DCR        0.386
 
 ### shear_results_detailed_doc: Shear Wall M1 shear check CIRSOC 201-25.docx
 Shear Wall M1 shear check
-Made with mento 1.2.0. Design code: CIRSOC 201-25
+Made with mento <version>. Design code: CIRSOC 201-25
 Section Data
 Materials | Variable | Value | Unit
 Section Label |  | M1 | 

@@ -19,7 +19,7 @@
 
 ### results_detailed_doc: Shear_Wall_Summary_CIRSOC 201-25.docx
 Análisis del resumen de tabiques
-Generado con mento 1.2.0. Código de diseño: CIRSOC 201-25
+Generado con mento <version>. Código de diseño: CIRSOC 201-25
 Verificación a corte del tabique Level 1 - M1
 Datos de la sección
 Materiales | Variable | Valor | Unidad

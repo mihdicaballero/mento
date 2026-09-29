@@ -126,7 +126,7 @@ Demand Capacity Ratio                DCR         0.97  ✅
 
 ### flexure_results_detailed_doc: Beam V101 flexure check CIRSOC 201-25.docx
 Beam V101 flexure check
-Made with mento 1.2.0. Design code: CIRSOC 201-25
+Made with mento <version>. Design code: CIRSOC 201-25
 Section Data
 Materials | Variable | Value | Unit
 Section Label |  | V101 | 
@@ -176,7 +176,7 @@ Demand Capacity Ratio | DCR | 0.92 | ✅
 
 ### shear_results_detailed_doc: Beam V101 shear check CIRSOC 201-25.docx
 Beam V101 shear check
-Made with mento 1.2.0. Design code: CIRSOC 201-25
+Made with mento <version>. Design code: CIRSOC 201-25
 Section Data
 Materials | Variable | Value | Unit
 Section Label |  | V101 | 
@@ -226,7 +226,7 @@ Beam V101, $b$=20.00 cm, $h$=50.00 cm, $c_{c}$=2.50 cm,                         
 Top longitudinal rebar: 2Ø16+1Ø12, $A_{s,top}$ = 5.15 cm², $M_u$ = -80.0 kNm, $\phi M_n$ = 84.52 kNm → $\color{#efc200}{\text{DCR}=0.95}$ 
 
 Bottom longitudinal rebar: 2Ø20+1Ø16, $A_{s,bot}$ = 8.29 cm², $M_u$ = 120.0 kNm, $\phi M_n$ = 130.58 kNm → $\color{#439b00}{\text{DCR}=0.92}$ 
-Shear reinforcing 1eØ8/15 cm, $A_v$=6.7 cm²/m, $V_u$=150.0 kN, $\phi V_n$=154.91 kN → $\color{#efc200}{\text{DCR}=0.97}$ 
+Shear reinforcing 1sØ8/15 cm, $A_v$=6.7 cm²/m, $V_u$=150.0 kN, $\phi V_n$=154.91 kN → $\color{#efc200}{\text{DCR}=0.97}$ 
 
 ### flexure_design
 2Ø16 mm
@@ -235,10 +235,10 @@ Shear reinforcing 1eØ8/15 cm, $A_v$=6.7 cm²/m, $V_u$=150.0 kN, $\phi V_n$=154.
 1Ø16 mm
 
 ### shear_design
-1eØ8 mm/15 cm
+1sØ8 mm/15 cm
 
 ### reinforcement.transverse
-1eØ8 mm/15 cm
+1sØ8 mm/15 cm
 
 ### warnings
 
@@ -248,4 +248,4 @@ Shear reinforcing 1eØ8/15 cm, $A_v$=6.7 cm²/m, $V_u$=150.0 kN, $\phi V_n$=154.
 50 cm
 2Ø20+1Ø16
 2Ø16+1Ø12
-1eØ8/15
+1sØ8/15

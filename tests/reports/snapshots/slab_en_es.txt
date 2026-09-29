@@ -124,7 +124,7 @@ Factor de Utilización                DCR        0.691  ✅
 
 ### flexure_results_detailed_doc: Slab L1 flexure check EN 1992-2004.docx
 Verificación a flexión de losa L1
-Generado con mento 1.2.0. Código de diseño: EN 1992-2004
+Generado con mento <version>. Código de diseño: EN 1992-2004
 Datos de la sección
 Materiales | Variable | Valor | Unidad
 Identificación de la sección |  | L1 | 
@@ -174,7 +174,7 @@ Factor de Utilización | DCR | 0.88 | ✅
 
 ### shear_results_detailed_doc: Slab L1 shear check EN 1992-2004.docx
 Verificación a corte de losa L1
-Generado con mento 1.2.0. Código de diseño: EN 1992-2004
+Generado con mento <version>. Código de diseño: EN 1992-2004
 Datos de la sección
 Materiales | Variable | Valor | Unidad
 Identificación de la sección |  | L1 | 

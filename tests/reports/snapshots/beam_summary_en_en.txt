@@ -2,15 +2,15 @@
    Beam   b   h     As,top        As,bot       Av   MEd    VEd   NEd DCRb,top DCRb,bot   DCRv Ok?
 0        cm  cm                                     kNm     kN    kN                             
 1  V101  20  50        2Ø8     2Ø12+1Ø10        -   0.0   20.0   0.0      0.0      0.0  0.539   ✅
-2  V102  20  50  2Ø12+1Ø16           2Ø8  1eØ6/20 -35.0   50.0   0.0    0.439      0.0  0.391   ✅
-3  V103  25  60        2Ø8  3Ø16 ++ 2Ø12  1eØ8/15  60.0  100.0  10.0      0.0    0.334  0.278   ✅
+2  V102  20  50  2Ø12+1Ø16           2Ø8  1sØ6/20 -35.0   50.0   0.0    0.439      0.0  0.391   ✅
+3  V103  25  60        2Ø8  3Ø16 ++ 2Ø12  1sØ8/15  60.0  100.0  10.0      0.0    0.334  0.278   ✅
 
 ### check capacity
    Beam   b   h     As,top        As,bot       Av As,top,real As,bot,real Av,real MRd,top MRd,bot     VRd
 0        cm  cm                                           cm²         cm²   cm²/m     kNm     kNm      kN
 1  V101  20  50        2Ø8     2Ø12+1Ø10        -         1.0         3.0     0.0    19.9    58.0   37.11
-2  V102  20  50  2Ø12+1Ø16           2Ø8  1eØ6/20         4.3         1.0     2.8    79.7    20.0  127.81
-3  V103  25  60        2Ø8  3Ø16 ++ 2Ø12  1eØ8/15         1.0         8.3     6.7    24.3   179.4  359.55
+2  V102  20  50  2Ø12+1Ø16           2Ø8  1sØ6/20         4.3         1.0     2.8    79.7    20.0  127.81
+3  V103  25  60        2Ø8  3Ø16 ++ 2Ø12  1sØ8/15         1.0         8.3     6.7    24.3   179.4  359.55
 
 ### design
   Label  Comb.         b         h        cc        Nx         Vz           My  ns      dbs        sl  n1       db1  n2       db2  n3 db3  n4 db4
@@ -48,7 +48,7 @@
 
 ### results_detailed_doc: Beam_Summary_EN 1992-2004.docx
 Beam Summary Analysis
-Made with mento 1.2.0. Design code: EN 1992-2004
+Made with mento <version>. Design code: EN 1992-2004
 This report presents the detailed results for the first beam of the summary, followed by summary tables for all beams.
 Beam V101 flexure check
 Section Data
@@ -161,6 +161,6 @@ V103 | ELU 3 | 2.0 | 2.0 | 2.02 | 10.0 | 100.0 | 0.0 | 111.3 | 111.3 | 393.3 | 0
 Design Check Summary
 Beam | b | h | As,top | As,bot | Av | MEd | VEd | NEd | DCRb,top | DCRb,bot | DCRv | Ok?
  | cm | cm |  |  |  | kNm | kN | kN |  |  |  | 
-V101 | 20 | 50 | - | 2Ø10 | 1eØ6/34 | 0.0 | 20.0 | 0.0 | 0.0 | 0.0 | 0.27 | ✅
-V102 | 20 | 50 | 2Ø12 | 2Ø10 | 1eØ6/34 | -35.0 | 50.0 | 0.0 | 0.8 | 0.0 | 0.66 | ✅
-V103 | 25 | 60 | - | 2Ø12+1Ø10 | 1eØ6/28 | 60.0 | 100.0 | 10.0 | 0.0 | 0.83 | 0.9 | ✅
+V101 | 20 | 50 | - | 2Ø10 | 1sØ6/34 | 0.0 | 20.0 | 0.0 | 0.0 | 0.0 | 0.27 | ✅
+V102 | 20 | 50 | 2Ø12 | 2Ø10 | 1sØ6/34 | -35.0 | 50.0 | 0.0 | 0.8 | 0.0 | 0.66 | ✅
+V103 | 25 | 60 | - | 2Ø12+1Ø10 | 1sØ6/28 | 60.0 | 100.0 | 10.0 | 0.0 | 0.83 | 0.9 | ✅

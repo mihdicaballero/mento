@@ -126,7 +126,7 @@ Factor de Utilización                      DCR         0.89  ✅
 
 ### flexure_results_detailed_doc: Slab L1 flexure check CIRSOC 201-25.docx
 Verificación a flexión de losa L1
-Generado con mento 1.2.0. Código de diseño: CIRSOC 201-25
+Generado con mento <version>. Código de diseño: CIRSOC 201-25
 Datos de la sección
 Materiales | Variable | Valor | Unidad
 Identificación de la sección |  | L1 | 
@@ -176,7 +176,7 @@ Factor de Utilización | DCR | 0.92 | ✅
 
 ### shear_results_detailed_doc: Slab L1 shear check CIRSOC 201-25.docx
 Verificación a corte de losa L1
-Generado con mento 1.2.0. Código de diseño: CIRSOC 201-25
+Generado con mento <version>. Código de diseño: CIRSOC 201-25
 Datos de la sección
 Materiales | Variable | Valor | Unidad
 Identificación de la sección |  | L1 | 
