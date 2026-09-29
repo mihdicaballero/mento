@@ -49,7 +49,9 @@ The available languages are ``"en"`` and ``"es"``:
     mento.available_languages()   # ('en', 'es')
     mento.get_language()          # 'es'
 
-Passing anything else raises ``ValueError`` and leaves the current language in place.
+Passing anything else raises ``ValueError`` and leaves the current language in place. So
+does an explicit ``language`` argument of ``notation()``, ``arrangement()`` and the
+functions behind them: ``notation("es-AR")`` raises rather than falling back to English.
 
 What is translated
 ------------------
@@ -91,9 +93,11 @@ left as they are:
 - **The design code designation** — ``CIRSOC 201-25`` keeps its official name.
 - **Generated file names** — a project keeps one naming scheme regardless of the language
   its reports are written in.
-- **The API itself** — arguments, attributes, ``str()`` of every result object and error
-  messages remain English; ``notation()``, ``arrangement()`` and the warning messages
-  follow the language.
+- **The API itself** — arguments, attributes, ``str()`` of the reinforcement, design and
+  check results (``mento.design_results``) and error messages remain English;
+  ``notation()``, ``arrangement()`` and the warning messages follow the language. A
+  ``DesignWarning`` is the one result whose ``str()`` follows it too: its ``str()`` is its
+  ``message``.
 
 A label with no translation is written in English rather than raising, so a report always
 renders.

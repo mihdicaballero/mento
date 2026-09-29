@@ -695,7 +695,7 @@ class TransverseReinforcement:
         return _transverse_arrangement(self.layout, self.n_stirrups, language)
 
     def __str__(self) -> str:
-        """Always English, like every ``str()`` of a result; :meth:`notation` follows the language."""
+        """Always English, like the ``str()`` of every result of this module; :meth:`notation` follows the language."""
         return self.notation(language="en")
 
 
@@ -891,7 +891,7 @@ class StirrupOption:
         return _transverse_arrangement(self.layout, self.n_stirrups, language)
 
     def __str__(self) -> str:
-        """Always English, like every ``str()`` of a result; :meth:`notation` follows the language."""
+        """Always English, like the ``str()`` of every result of this module; :meth:`notation` follows the language."""
         return self.notation(language="en")
 
 
@@ -996,7 +996,7 @@ class ShearDesign:
         return _transverse_arrangement(self.layout, self.n_stirrups, language)
 
     def __str__(self) -> str:
-        """Always English, like every ``str()`` of a result; :meth:`notation` follows the language."""
+        """Always English, like the ``str()`` of every result of this module; :meth:`notation` follows the language."""
         return self.notation(language="en")
 
 

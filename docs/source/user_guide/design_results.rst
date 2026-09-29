@@ -129,9 +129,15 @@ maximum it is checked against. ``str()`` is always English; ``notation(language)
 in another language (the one of :func:`mento.set_language` by default), and
 ``notation(compact=True)`` the short form of a table cell, ``2 legs Ø10/27``.
 ``arrangement()`` says how the legs are tied into a cage: ``perimeter stirrup + 4 inner
-stirrups`` for ten legs -- one stirrup around the whole section and inner stirrups on legs
-(2, 3), (4, 5)... The configuration, ``beam.reinforcement.transverse``, reads the same
-without the maximum: it has not been checked.
+stirrups`` for ten legs -- one stirrup around the whole section and inner stirrups on the
+2nd and 3rd legs, the 4th and 5th... The configuration, ``beam.reinforcement.transverse``,
+reads the same without the maximum: it has not been checked.
+
+An explicit ``language`` must be one of :func:`mento.available_languages`; anything else
+raises ``ValueError``, as :func:`mento.set_language` does. The compact form prints bare
+numbers, the bar in mm and the spacing in cm; ``notation(compact=True, imperial=True)``
+prints both in inches. Left unsaid, it follows the unit of ``s_l``. The "Av" cell of
+``BeamSummary.check()`` is always in mm and cm, like the "As" cells beside it.
 
 The limits are envelopes, the tightest of every combination checked. ``s_max_l`` is the
 along-length limit the stirrups are held to: Table 9.7.6.2.2 (``s_max_l_table``) or, on a
@@ -196,7 +202,10 @@ The per-combination results are available too, one per combination of the last c
 ``beam.shear_design.notation()``. ``V_s_threshold`` is the ``0.33·√f'c·bw·d``
 (``4·√f'c·bw·d`` in psi) past which Table 9.7.6.2.2 halves its limits, and
 ``spacing_halved`` says whether that combination passed it; EN 1992-1-1 has no such row,
-and gives ``None``.
+and gives ``None``. Enveloped with :func:`mento.design_results.envelope_shear`, the three
+agree with the limits the envelope reports: ``V_s_req`` is the largest of any combination,
+``V_s_threshold`` the one it was compared with, and ``spacing_halved`` is True when any
+combination took the halved row -- the row the tightest limits come from.
 
 Section geometry
 ----------------
@@ -224,8 +233,11 @@ a quantity in the display unit of the section (cm, or in). The positions are the
 - **Legs**: ``2·n_stirrups`` legs spread evenly between the centres of the outermost pair,
   ``x_i = c_c + d_st/2 + i·s_w``, with ``s_w = (b - 2·c_c - d_st)/(n_legs - 1)`` -- the
   spacing the shear check holds to Table 9.7.6.2.2.
-- **Cage**: a perimeter stirrup on the outermost legs and inner closed stirrups on legs
-  (2, 3), (4, 5)...; an odd leg left over would be a crosstie with a 135° and a 90° hook.
+- **Cage**: a perimeter stirrup on the outermost legs and inner closed stirrups on the
+  2nd and 3rd legs, the 4th and 5th...; an odd leg left over would be a crosstie with a
+  135° and a 90° hook. ``ClosedStirrup.legs`` and ``Crosstie.leg`` hold the leg indices
+  into ``leg_x``, counting from 0: ten legs are ``(0, 9)``, ``(1, 2)``, ``(3, 4)``,
+  ``(5, 6)``, ``(7, 8)``.
   The design only ever produces even counts.
 - **Bars**: each layer spread between the inner faces of the outer legs, one clear
   spacing apart -- the clear spacing the checks read -- with the ``n1`` bars of a layer at

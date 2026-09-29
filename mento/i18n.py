@@ -23,7 +23,9 @@ section drawing (``beam.plot()``), the warning messages (``DesignWarning.message
 worded when ``warnings`` is read), and the stirrup notation and cage description
 when asked for through ``notation()`` / ``arrangement()`` of a transverse result,
 which follow the language of the moment unless given one. Not translated: the
-``str()`` of any result object, which is always English, variable names (``fc``,
+``str()`` of the result objects of :mod:`mento.design_results` -- the reinforcement,
+design and check results -- which stays English (``DesignWarning`` is the exception:
+its ``str()`` is its ``message``, worded as above), variable names (``fc``,
 ``Av``, ``DCR``), units, numbers, the design code designation, generated file
 names, attribute names and error messages.
 """
@@ -293,7 +295,7 @@ ES.update(
 )
 
 # The stirrup notation and the description of the cage (mento.design_results),
-# asked for through ``notation()`` / ``arrangement()``. The wording is JPR's:
+# asked for through ``notation()`` / ``arrangement()``. The wording is the one the notation was specified with:
 # legs first, "c/" for the spacing along the member. "Gancho suplementario" is
 # the CIRSOC 201 name of the ACI crosstie.
 ES.update(
@@ -364,7 +366,8 @@ def set_language(language: str) -> None:
 
     Every detailed report and summary, the drawing, the warning messages, and
     the ``notation()`` / ``arrangement()`` of a transverse result asked for
-    without a language. ``str()`` of a result stays English.
+    without a language. ``str()`` of the results of :mod:`mento.design_results`
+    stays English; that of a ``DesignWarning`` is its message, which follows.
 
     Parameters
     ----------

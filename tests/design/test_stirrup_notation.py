@@ -7,7 +7,7 @@ the most Table 9.7.6.2.2 allows it. ``str()`` is always English;
 ``notation()`` and ``arrangement()`` follow :func:`mento.set_language`.
 
 Spanish expectations are built from the catalog (``ES[...]``), as the i18n
-tests do, except one test that pins JPR's own wording on purpose.
+tests do, except one test that pins the specified Spanish wording on purpose.
 """
 
 import pandas as pd
@@ -38,8 +38,8 @@ from mento.units import MPa, cm, inch, kN, kNm, ksi, mm
 pytestmark = pytest.mark.filterwarnings("ignore::UserWarning")
 
 
-def _users_beam(concrete: object = None, **kwargs: object) -> RectangularBeam:
-    """JPR's case: 150x150 cm, c_c 30 mm, CIRSOC 201-25 H-25 unless another concrete is given."""
+def _wide_cirsoc_beam(concrete: object = None, **kwargs: object) -> RectangularBeam:
+    """The wide CIRSOC beam: 150x150 cm, c_c 30 mm, CIRSOC 201-25 H-25 unless another concrete is given."""
     return RectangularBeam(
         label="V1",
         concrete=concrete or Concrete_CIRSOC_201_25(name="H-25", f_c=25 * MPa),  # type: ignore[arg-type]
@@ -50,13 +50,13 @@ def _users_beam(concrete: object = None, **kwargs: object) -> RectangularBeam:
     )
 
 
-USER_FORCES = [Forces(label="C1", M_y=5000 * kNm, V_z=5000 * kN)]
+WIDE_FORCES = [Forces(label="C1", M_y=5000 * kNm, V_z=5000 * kN)]
 
 
 @pytest.fixture(scope="module")
 def designed() -> RectangularBeam:
-    beam = _users_beam()
-    Node(section=beam, forces=USER_FORCES).design()
+    beam = _wide_cirsoc_beam()
+    Node(section=beam, forces=WIDE_FORCES).design()
     return beam
 
 
@@ -69,11 +69,11 @@ def _es_beam(n_legs: int, d_b: str, s_l: str, s_w: str, s_max_w: str | None = No
 
 
 # ---------------------------------------------------------------------------
-# The user's case
+# The 150x150 CIRSOC beam
 # ---------------------------------------------------------------------------
 
 
-def test_the_users_case_reads_legs_first_in_english(designed: RectangularBeam) -> None:
+def test_the_wide_cirsoc_beam_reads_legs_first_in_english(designed: RectangularBeam) -> None:
     shear = designed.shear_design
     assert str(designed.reinforcement.transverse) == "10 legs Ø12 mm @ 14 cm · 15.87 cm between legs"
     assert str(shear) == "10 legs Ø12 mm @ 14 cm · 15.87 cm between legs (max 20 cm)"
@@ -87,7 +87,7 @@ def test_the_users_case_reads_legs_first_in_english(designed: RectangularBeam) -
     assert shear.options[1].arrangement() == "perimeter stirrup + 7 inner stirrups"
 
 
-def test_the_users_case_in_spanish_is_built_from_the_catalog(designed: RectangularBeam) -> None:
+def test_the_wide_cirsoc_beam_in_spanish_is_built_from_the_catalog(designed: RectangularBeam) -> None:
     shear = designed.shear_design
     assert designed.reinforcement.transverse.notation("es") == _es_beam(10, "12 mm", "14 cm", "15.87 cm")
     assert shear.notation("es") == _es_beam(10, "12 mm", "14 cm", "15.87 cm", "20 cm")
@@ -96,8 +96,8 @@ def test_the_users_case_in_spanish_is_built_from_the_catalog(designed: Rectangul
     assert shear.arrangement("es") == " + ".join([ES["perimeter stirrup"], ES["{n} inner stirrups"].format(n=4)])
 
 
-def test_jprs_own_spanish_wording_for_his_case(designed: RectangularBeam) -> None:
-    """Pinned on purpose: this is JPR's wording (decision 1), the one test that owns how it reads."""
+def test_the_spanish_wording_is_pinned(designed: RectangularBeam) -> None:
+    """Pinned on purpose: the Spanish wording the notation was specified with, the one test that owns how it reads."""
     shear = designed.shear_design
     assert shear.notation("es") == "10 ramas Ø12 mm c/14 cm · 15.87 cm entre ramas (máx. 20 cm)"
     assert designed.reinforcement.transverse.notation("es") == "10 ramas Ø12 mm c/14 cm · 15.87 cm entre ramas"
@@ -134,17 +134,17 @@ def test_every_notation_key_is_translated(key: str) -> None:
 )
 def test_a_checked_cage_prints_the_limit_it_is_checked_against(stirrups: int, expected: str) -> None:
     """Check mode: four stirrups put the legs 20.4 cm apart against 20 cm, and the text says both."""
-    beam = _users_beam()
+    beam = _wide_cirsoc_beam()
     beam.set_longitudinal_rebar_bot(n1=2, d_b1=32 * mm, n2=10, d_b2=32 * mm)
     beam.set_longitudinal_rebar_top(n1=0, d_b1=None)
     beam.set_transverse_rebar(n_stirrups=stirrups, d_b=12 * mm, s_l=14 * cm)
-    Node(section=beam, forces=USER_FORCES).check()
+    Node(section=beam, forces=WIDE_FORCES).check()
     assert str(beam.shear_design) == expected
 
 
-def test_other_codes_on_the_users_beam() -> None:
-    aci = _users_beam(Concrete_ACI_318_19(name="H25", f_c=25 * MPa))
-    Node(section=aci, forces=USER_FORCES).design()
+def test_other_codes_on_the_wide_cirsoc_beam() -> None:
+    aci = _wide_cirsoc_beam(Concrete_ACI_318_19(name="H25", f_c=25 * MPa))
+    Node(section=aci, forces=WIDE_FORCES).design()
     assert str(aci.shear_design) == "6 legs Ø16 mm @ 15 cm · 28.48 cm between legs (max 30 cm)"
     assert aci.shear_design.arrangement() == "perimeter stirrup + 2 inner stirrups"
 
@@ -156,7 +156,7 @@ def test_other_codes_on_the_users_beam() -> None:
         height=150 * cm,
         c_c=30 * mm,
     )
-    Node(section=en, forces=USER_FORCES).design()
+    Node(section=en, forces=WIDE_FORCES).design()
     assert str(en.shear_design) == "4 legs Ø12 mm @ 12 cm · 47.6 cm between legs (max 60 cm)"
 
 
@@ -181,7 +181,7 @@ def test_str_stays_english_whatever_the_language(designed: RectangularBeam) -> N
 
 
 def test_no_stirrups_is_translatable() -> None:
-    beam = _users_beam()
+    beam = _wide_cirsoc_beam()
     beam.set_transverse_rebar(n_stirrups=0, d_b=0 * mm, s_l=0 * cm)
     transverse = beam.reinforcement.transverse
     assert str(transverse) == "no stirrups"
@@ -218,7 +218,7 @@ def test_format_transverse_rebar_keeps_its_positional_call() -> None:
 
 def test_the_width_spacings_read_in_the_unit_of_s_l() -> None:
     """A beam built in mm with its stirrups set in mm prints every spacing in one unit."""
-    beam = _users_beam(width=1500 * mm)
+    beam = _wide_cirsoc_beam(width=1500 * mm)
     beam.set_transverse_rebar(n_stirrups=5, d_b=12 * mm, s_l=140 * mm)
     assert str(beam.reinforcement.transverse) == "10 legs Ø12 mm @ 140 mm · 158.7 mm between legs"
     beam.set_transverse_rebar(n_stirrups=5, d_b=12 * mm, s_l=14 * cm)
@@ -259,7 +259,7 @@ def test_the_compact_form_on_imperial_and_grid_sections() -> None:
 
 def test_the_compact_form_takes_its_unit_system_from_the_caller() -> None:
     """A metric beam with its spacing given in inches: the caller says which system the bare numbers are in."""
-    beam = _users_beam()
+    beam = _wide_cirsoc_beam()
     beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=6 * inch)
     transverse = beam.reinforcement.transverse
     assert transverse.notation(compact=True, imperial=False) == "2 legs Ø8/15.24"
@@ -351,7 +351,7 @@ def test_describe_stirrup_cage(n_legs: int, english: str) -> None:
         assert translated in spanish
 
 
-def test_the_cage_in_jprs_spanish() -> None:
+def test_the_cage_in_spanish_words() -> None:
     assert describe_stirrup_cage(2, "es") == "estribo perimetral"
     assert describe_stirrup_cage(10, "es") == "estribo perimetral + 4 interiores"
     assert describe_stirrup_cage(9, "es") == "estribo perimetral + 3 interiores + 1 gancho suplementario"
@@ -509,7 +509,7 @@ def test_the_language_page_example() -> None:
 
 
 def test_the_beams_page_notebook_line() -> None:
-    """docs/source/user_guide/beams.rst: the shear line of the notebook summary."""
+    """docs/source/user_guide/beams.rst: the flexure and shear lines of the notebook summary."""
     beam = RectangularBeam(
         label="101",
         concrete=Concrete_ACI_318_19(name="C25", f_c=25 * MPa),
@@ -528,3 +528,9 @@ def test_the_beams_page_notebook_line() -> None:
     line = beam._md_shear_results
     assert line.startswith("Shear reinforcing 2 legs Ø10 mm @ 20 cm · 14 cm between legs (max 54.29 cm), ")
     assert "=7.85 cm²/m" in line and "=80.0 kN" in line and "=203.52 kN" in line and "DCR}=0.39" in line
+    beam.flexure_results
+    top, bottom = [row for row in beam._md_flexure_results.splitlines() if row.strip()]
+    assert top.startswith("Top longitudinal rebar: 2Ø16, $A_{s,top}$ = 4.02 cm², $M_u$ = -80.0 kNm, ")
+    assert r"$\phi M_n$ = 81.65 kNm" in top and "DCR}=0.98" in top
+    assert bottom.startswith("Bottom longitudinal rebar: 2Ø16+1Ø12 ++ 2Ø12+1Ø10, $A_{s,bot}$ = 8.2 cm², ")
+    assert r"$\phi M_n$ = 155.7 kNm" in bottom and "DCR}=0.58" in bottom
