@@ -260,6 +260,7 @@ def test_all_exports_in_all() -> None:
         "WallShearDesign",
         "DesignNotRunError",
         "NotABeamError",
+        "SectionGeometry",
     ]
 
     assert set(mento.__all__) == set(expected_exports)

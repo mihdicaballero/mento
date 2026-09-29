@@ -37,7 +37,7 @@ The `RectangularBeam` class is used for this purpose. If no custom settings are 
     steel = SteelBar(name="ADN 420", f_y=420*MPa)
 
     # Define beam geometry
-    beam = RectangularBeam(label="101", concrete=concrete, steel_bar=steel, width=20*cm, height=50*cm, c_c = 2.5*cm)
+    beam = RectangularBeam(label="101", concrete=concrete, steel_bar=steel, width=20*cm, height=60*cm, c_c = 2.5*cm)
 
 2. Setting Reinforcement
 ************************
@@ -73,8 +73,8 @@ For example, if a positive moment is so large that the section must be reinforce
 
 .. code-block:: python
 
-    # Set bottom longitudinal reinforcement
-    beam.set_longitudinal_rebar_bot(n1=2, d_b1=16*mm, n2=1, d_b2=12*mm)
+    # Set bottom longitudinal reinforcement: two layers
+    beam.set_longitudinal_rebar_bot(n1=2, d_b1=16*mm, n2=1, d_b2=12*mm, n3=2, d_b3=12*mm, n4=1, d_b4=10*mm)
 
     # Set top longitudinal reinforcement
     beam.set_longitudinal_rebar_top(n1=2, d_b1=16*mm)
@@ -120,7 +120,9 @@ The output is formatted using LaTeX math notation for clarity and precision.
 Example Output
 --------------
 
-Here’s an example of the output from `beam.results`:
+Here’s an example of the output from `beam.results`, for the beam set up above checked under two
+combinations, :math:`M_u = -80 \, \textsf{kNm}` with :math:`V_u = 80 \, \textsf{kN}`, and
+:math:`M_u = 90 \, \textsf{kNm}`:
 
 .. math::
 
@@ -128,9 +130,9 @@ Here’s an example of the output from `beam.results`:
 
     \textsf{Top longitudinal rebar: } 2\phi16, \, A_{s,\text{top}} = 4.02 \, \textsf{cm}^2, \, M_u = -80 \, \textsf{kNm}, \, \phi M_n = 81.65 \, \textsf{kNm} \rightarrow \textsf{DCR} = 0.98
 
-    \textsf{Bottom longitudinal rebar: } 2\phi16 + 1\phi12 ++ 2\phi12 + 1\phi10, \, A_{s,\text{bot}} = 8.2 \, \textsf{cm}^2, \, M_u = 90 \, \textsf{kNm}, \, \phi M_n = 154.95 \, \textsf{kNm} \rightarrow \textsf{DCR} = 0.58
+    \textsf{Bottom longitudinal rebar: } 2\phi16 + 1\phi12 ++ 2\phi12 + 1\phi10, \, A_{s,\text{bot}} = 8.2 \, \textsf{cm}^2, \, M_u = 90 \, \textsf{kNm}, \, \phi M_n = 155.7 \, \textsf{kNm} \rightarrow \textsf{DCR} = 0.58
 
-    \textsf{Shear reinforcing: } 1s\phi10/20 \, \textsf{cm}, \, A_v = 7.85 \, \textsf{cm}^2/\textsf{m}, \, V_u = 80 \, \textsf{kN}, \, \phi V_n = 196.24 \, \textsf{kN} \rightarrow \textsf{DCR} = 0.41
+    \textsf{Shear reinforcing: 2 legs } \phi10 \, \textsf{mm @ 20 cm} \cdot \textsf{14 cm between legs (max 54.29 cm)}, \, A_v = 7.85 \, \textsf{cm}^2/\textsf{m}, \, V_u = 80 \, \textsf{kN}, \, \phi V_n = 203.52 \, \textsf{kN} \rightarrow \textsf{DCR} = 0.39
 
 
 Interpreting the Output
@@ -162,18 +164,20 @@ The first line provides the beam's geometry and material properties:
   - :math:`2\phi16 + 1\phi12 ++ 2\phi12 + 1\phi10`: Combination of bars.
   - :math:`A_{s,\text{bot}} = 8.2 \, \textsf{cm}^2`: Area of bottom reinforcement.
   - :math:`M_u = 90 \, \textsf{kNm}`: Applied moment at the bottom.
-  - :math:`\phi M_n = 154.95 \, \textsf{kNm}`: Design moment capacity at the bottom.
+  - :math:`\phi M_n = 155.7 \, \textsf{kNm}`: Design moment capacity at the bottom.
   - :math:`\textsf{DCR} = 0.58`: Design capacity ratio :math:`\textsf{DCR} = M_u / \phi M_n`.
 
 **Shear Reinforcement**
 
 - **Shear reinforcing**: Shear reinforcement details.
 
-  - :math:`1s\phi10/20 \, \textsf{cm}`: 10 mm diameter stirrups spaced at 20 cm.
+  - ``2 legs Ø10 mm @ 20 cm · 14 cm between legs (max 54.29 cm)``: one closed stirrup of
+    10 mm, so two legs across the shear plane, every 20 cm along the beam; the legs are
+    14 cm apart across the width, against the 54.29 cm Table 9.7.6.2.2 allows.
   - :math:`A_v = 7.85 \, \textsf{cm}^2/\textsf{m}`: Area of shear reinforcement per meter.
   - :math:`V_u = 80 \, \textsf{kN}`: Applied shear force.
-  - :math:`\phi V_n = 196.24 \, \textsf{kN}`: Design shear capacity.
-  - :math:`\textsf{DCR} = 0.41`: Design capacity ratio :math:`\textsf{DCR} = V_u / \phi V_n`.
+  - :math:`\phi V_n = 203.52 \, \textsf{kN}`: Design shear capacity.
+  - :math:`\textsf{DCR} = 0.39`: Design capacity ratio :math:`\textsf{DCR} = V_u / \phi V_n`.
 
 - **Check DCR Values**: A DCR less than 1.0 indicates that the beam is safe under the applied loads.
 - **Review Warnings**: If the output includes warnings, review the design to ensure compliance with code requirements. You can check detailed results for more information.
@@ -195,3 +199,18 @@ You can use the method `plot()` to visualize the beam's cross-section and reinfo
 
 The `plot()` method generates a graphical representation of the beam, including its geometry and reinforcement details.
 This can be useful for verifying the input data and for presentation purposes.
+
+The drawing is the section the checks assume, read from ``beam.section_geometry`` (see
+:ref:`user_guide/design_results`): every stirrup of the cage at the legs the shear check
+spreads across the width, the bars where the clear-spacing model puts them, the label of
+each layer on the right, and under the section the stirrup text in three lines -- legs,
+bar and spacing; the spacing of the legs with its maximum once a shear check has run; and
+the arrangement of the cage -- in the language of ``mento.set_language``. The limits of the
+drawing are widened until every text fits the figure at its default size, and two layer
+labels that would print over one another are moved apart. The legs are not tied to the
+bars, so an inner leg may be drawn where there is no bar. An inner stirrup whose legs are
+closer than its two bends need is drawn as a hairpin.
+
+On a US customary section the dimensions and the stirrup text are in inches, while the
+bar labels keep the bare millimetres every bar label of mento uses (``2Ø32+1Ø29``), as in
+the flexure line of the notebook and the summary tables.

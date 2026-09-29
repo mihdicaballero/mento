@@ -187,7 +187,8 @@ def shear_report_doc(self: "RectangularBeam", force: Optional[Forces] = None) ->
     df_materials = pd.DataFrame(self._materials_shear)
     df_geometry = pd.DataFrame(self._geometry_shear)
     df_forces = pd.DataFrame(result_data["forces"])
-    df_shear_reinforcement = pd.DataFrame(result_data["shear_reinforcement"])
+    # Object columns: a count of stirrups or legs prints as the whole number it is.
+    df_shear_reinforcement = pd.DataFrame(result_data["shear_reinforcement"], dtype=object)
     df_data_min_max = pd.DataFrame(result_data["min_max"])
     df_shear_concrete = pd.DataFrame(result_data["shear_concrete"])
 

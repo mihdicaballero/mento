@@ -1,4 +1,4 @@
-"""Language of the detailed report output.
+"""Language of the text mento presents: reports, drawings, warnings, stirrup notation.
 
 ``flexure_results_detailed``, ``shear_results_detailed`` and their ``_doc``
 counterparts print English by default. Switch the whole package once and every
@@ -18,8 +18,16 @@ instead of raising, so a new label always renders, translated or not.
 Adding a language is data, not code: write a ``{english: translation}`` mapping
 and register it in ``_CATALOGS``.
 
-Scope: report text only. Variable names (``fc``, ``Av``, ``DCR``), units,
-numbers, the design code designation and generated file names stay as they are.
+Scope. Translated: the detailed reports and the summaries, the text of the
+section drawing (``beam.plot()``), the warning messages (``DesignWarning.message``,
+worded when ``warnings`` is read), and the stirrup notation and cage description
+when asked for through ``notation()`` / ``arrangement()`` of a transverse result,
+which follow the language of the moment unless given one. Not translated: the
+``str()`` of the result objects of :mod:`mento.design_results` -- the reinforcement,
+design and check results -- which stays English (``DesignWarning`` is the exception:
+its ``str()`` is its ``message``, worded as above), variable names (``fc``,
+``Av``, ``DCR``), units, numbers, the design code designation, generated file
+names, attribute names and error messages.
 """
 
 from __future__ import annotations
@@ -286,6 +294,58 @@ ES.update(
     }
 )
 
+# The stirrup notation and the description of the cage (mento.design_results),
+# asked for through ``notation()`` / ``arrangement()``. The wording is the one the notation was specified with:
+# legs first, "c/" for the spacing along the member. "Gancho suplementario" is
+# the CIRSOC 201 name of the ACI crosstie.
+ES.update(
+    {
+        "{n_legs} legs Ø{d_b} @ {s_l}": "{n_legs} ramas Ø{d_b} c/{s_l}",
+        "{s_w} between legs": "{s_w} entre ramas",
+        "(max {s_max_w})": "(máx. {s_max_w})",
+        "{n_legs} legs Ø{d_b}/{s_l}": "{n_legs} ramas Ø{d_b}/{s_l}",
+        "no stirrups": "sin estribos",
+        "single perimeter stirrup": "estribo perimetral",
+        "perimeter stirrup": "estribo perimetral",
+        "1 inner stirrup": "1 interior",
+        "{n} inner stirrups": "{n} interiores",
+        "1 crosstie": "1 gancho suplementario",
+    }
+)
+
+# The rows that say how many legs the cage has, how far apart, and which row of
+# Table 9.7.6.2.2 set the spacing limits (mento.reports.tables). Across the width
+# is "en el ancho", along the member "en la dirección longitudinal", as in the
+# rows and warnings above.
+ES.update(
+    {
+        "Number of legs": "Número de ramas",
+        "Leg spacing across width": "Separación de ramas en el ancho",
+        "Leg spacing across width (Table 9.7.6.2.2)": "Separación de ramas en el ancho (Tabla 9.7.6.2.2)",
+        "Leg spacing across width (§9.2.2(8))": "Separación de ramas en el ancho (§9.2.2(8))",
+        "Stirrup spacing along width (Table 9.7.6.2.2)": (
+            "Separación de estribos en la dirección transversal (Tabla 9.7.6.2.2)"
+        ),
+        "Nominal shear the stirrups must carry (Vu/φ − Vc)": "Corte nominal que deben resistir los estribos (Vu/φ − Vc)",
+        "Threshold of Table 9.7.6.2.2 (0.33√f'c·bw·d)": "Umbral de la Tabla 9.7.6.2.2 (0.33√f'c·bw·d)",
+        "Threshold of Table 9.7.6.2.2 (4√f'c·bw·d)": "Umbral de la Tabla 9.7.6.2.2 (4√f'c·bw·d)",
+        "Vs,req > Vs,lim → Table 9.7.6.2.2: d/4 along, d/2 across": (
+            "Vs,req > Vs,lim → Tabla 9.7.6.2.2: d/4 a lo largo, d/2 en el ancho"
+        ),
+        "Vs,req ≤ Vs,lim → Table 9.7.6.2.2: d/2 along, d across": (
+            "Vs,req ≤ Vs,lim → Tabla 9.7.6.2.2: d/2 a lo largo, d en el ancho"
+        ),
+        "Absolute cap of Table 9.7.6.2.2 in this row": "Tope absoluto de la Tabla 9.7.6.2.2 en esta fila",
+        "Stirrup spacing, lateral support of compression bars (§9.7.6.4.3)": (
+            "Separación de estribos, sujeción de barras comprimidas (§9.7.6.4.3)"
+        ),
+        "Expression (9.6N) along: 0.75·d·(1 + cot α), capped at 400 mm by mento": (
+            "Expresión (9.6N) a lo largo: 0.75·d·(1 + cot α), tope de 400 mm de mento"
+        ),
+        "Expression (9.8N) across: 0.75·d, at most 600 mm": "Expresión (9.8N) en el ancho: 0.75·d, como máximo 600 mm",
+    }
+)
+
 # English is the source language, so its catalog is empty: every lookup falls
 # through to the key itself.
 _CATALOGS: Dict[str, Dict[str, str]] = {
@@ -302,7 +362,12 @@ def available_languages() -> Tuple[str, ...]:
 
 
 def set_language(language: str) -> None:
-    """Set the language of every detailed report produced from now on.
+    """Set the language of the text mento presents from now on.
+
+    Every detailed report and summary, the drawing, the warning messages, and
+    the ``notation()`` / ``arrangement()`` of a transverse result asked for
+    without a language. ``str()`` of the results of :mod:`mento.design_results`
+    stays English; that of a ``DesignWarning`` is its message, which follows.
 
     Parameters
     ----------
@@ -314,14 +379,32 @@ def set_language(language: str) -> None:
     ValueError
         If the language has no catalog.
     """
-    if language not in _CATALOGS:
-        raise ValueError(f"Unknown language {language!r}. Available: {', '.join(available_languages())}.")
+    checked_language(language)
     global _language
     _language = language
 
 
+def checked_language(language: Optional[str]) -> Optional[str]:
+    """``language`` itself, once it is known to have a catalog; ``None`` stays ``None``.
+
+    For a function that takes a ``language`` argument: an explicit code is held
+    to the same rule as :func:`set_language`, so a typo or a locale such as
+    ``"es-AR"`` raises instead of falling back to English, while ``None`` --
+    the language of the moment, which ``set_language`` already checked --
+    passes through.
+
+    Raises
+    ------
+    ValueError
+        If ``language`` is given and has no catalog.
+    """
+    if language is not None and language not in _CATALOGS:
+        raise ValueError(f"Unknown language {language!r}. Available: {', '.join(available_languages())}.")
+    return language
+
+
 def get_language() -> str:
-    """The language detailed reports are currently rendered in."""
+    """The language mento currently presents its text in (see :func:`set_language`)."""
     return _language
 
 

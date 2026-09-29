@@ -31,6 +31,7 @@ from mento.settings import BeamSettings
 from mento.reports import views
 from mento.reports.documents import flexure_report_doc, shear_report_doc
 from mento.plots.sections import plot_beam_section
+from mento.section_geometry import SectionGeometry, build_section_geometry
 from mento.reports.tables import build_flexure_report, build_shear_report
 from mento.design_results import (
     FlexureCheck,
@@ -47,6 +48,11 @@ from mento.design_results import (
     capture_flexure_check,
     capture_shear_check,
 )
+
+
+def _positive_or_none(value: Quantity) -> Optional[Quantity]:
+    """A spacing limit of a search row, or None where the row set none (zero)."""
+    return value if value.magnitude > 0 else None
 
 
 class _Verdict(NamedTuple):
@@ -663,6 +669,10 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
                 functional=float(row["functional"]),
                 layout=layout,
                 section_DCR=DCR,
+                # The limits the search held this row to, at the depth its own
+                # stirrup gives the section: §9.7.6.4.3 folded into s_max_l.
+                s_max_l=_positive_or_none(row["s_max_l"]),
+                s_max_w=_positive_or_none(row["s_max_w"]),
             )
 
         options = []
@@ -1323,7 +1333,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         if report:
             code.apply_shear_state(self, state)
         if report:
-            self._shear_report_row = build_shear_report(self, force)
+            self._shear_report_row = build_shear_report(self, force, state)
         return state
 
     def check_flexure(self, forces: list[Forces]) -> DataFrame:
@@ -1765,6 +1775,23 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         ``DCR``), use :attr:`flexure_design` and :attr:`shear_design`.
         """
         return build_reinforcement(self)
+
+    @property
+    def section_geometry(self) -> SectionGeometry:
+        """Where the bars and the stirrup legs of this section are, as data.
+
+        Configuration, like :attr:`reinforcement`: readable at any time. The
+        positions are the model the checks use -- the legs evenly spread at
+        the ``s_w`` the shear check reads, the bars one clear spacing apart --
+        so a drawing can show that section without deriving anything::
+
+            geometry = beam.section_geometry
+            geometry.leg_x, geometry.stirrups, geometry.bars_on("bottom")
+            geometry.to_dict("cm")
+
+        See :mod:`mento.section_geometry`.
+        """
+        return build_section_geometry(self)
 
     @property
     def flexure_design(self) -> FlexureDesign:

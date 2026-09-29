@@ -237,7 +237,8 @@ def beam_summary_doc(self: "BeamSummary", index: int = 1) -> None:
     df_shear_materials = pd.DataFrame(beam._materials_shear)
     df_shear_geometry = pd.DataFrame(beam._geometry_shear)
     df_shear_forces = pd.DataFrame(result_data["forces"])
-    df_shear_reinforcement = pd.DataFrame(result_data["shear_reinforcement"])
+    # Object columns: a count of stirrups or legs prints as the whole number it is.
+    df_shear_reinforcement = pd.DataFrame(result_data["shear_reinforcement"], dtype=object)
     df_shear_min_max = pd.DataFrame(result_data["min_max"])
     df_shear_concrete = pd.DataFrame(result_data["shear_concrete"])
 

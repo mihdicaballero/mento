@@ -53,7 +53,7 @@ The Excel file should contain the following columns:
 - **Nx**: Axial force in kN.
 - **Vz**: Shear force in kN.
 - **My**: Moment in kNm.
-- **ns**: Number of stirrup legs.
+- **ns**: Number of closed stirrups; each has 2 legs.
 - **dbs**: Stirrup diameter in mm.
 - **sl**: Stirrup spacing in cm.
 - **n1, n2, n3, n4**: Number of longitudinal bars per group.
@@ -117,6 +117,10 @@ all beams. Two modes are available:
 .. code-block:: python
 
     beam_summary.check()
+
+The ``Av`` column holds the stirrups in the compact notation, legs first (``2 legs Ø6/20``,
+``2 ramas Ø6/20`` in Spanish), in the language of ``mento.set_language``; ``-`` for a beam
+without stirrups.
 
 **Capacity check** (zeros all forces to report section capacity only):
 
