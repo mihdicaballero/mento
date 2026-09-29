@@ -208,14 +208,14 @@ Validation
      - Verified against
    * - Shear check, ACI, no stirrups
      - ``test_shear_check_ACI_318_19_1`` (``tests/elements/test_slab.py``)
-     - Calcpad *ACI 318-19 Slab Shear 01 — Imperial*, corrected for the
-       :math:`\lambda_s \le 1.0` cap
+     - Regression against a Calcpad sheet, corrected for the
+       :math:`\lambda_s \le 1.0` cap; no published example yet
    * - :math:`\lambda_s` cap, both unit systems
      - ``test_lambda_s_is_capped_at_one_imperial`` / ``_metric``
      - ACI 318-19 §22.5.5.1.3
    * - Flexure check, ACI, metric
      - ``test_check_flexure_ACI_318_19_1``, ``_2``
-     - Calcpad *ACI 318-19 Slab Flexure 01 — Metric*
+     - Regression against a Calcpad sheet; no published example yet
    * - Spacing to bar count
      - ``test_longitudinal_rebar_spacing_updates_counts``
      - Internal consistency

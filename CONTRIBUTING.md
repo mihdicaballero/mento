@@ -108,8 +108,10 @@ When you add code, add tests for it:
   `mento/beam.py` is tested in `tests/elements/test_beam.py`. The folders of `tests/`
   follow the package: `equations/`, `materials/`, `sections/`, `elements/`, `design/`,
   `reports/`, `architecture/`.
-- A test whose numbers come from a book, a guide, a Calcpad sheet or another program goes
-  in `tests/validation/`, and only those go there (see step 5 below).
+- A test whose numbers come from a published source — a book, a code or design guide
+  example, a software verification manual, a recorded run of another program — goes in
+  `tests/validation/`, and only those go there (see step 5 below). A test checked only
+  against a Calcpad sheet is a regression test and goes with the rest.
 - Prefer plain test functions over test classes.
 - Use `pytest.mark.parametrize` for families of similar cases, and fixtures instead of
   constructing the same beam or material over and over.
@@ -158,24 +160,32 @@ that touches a design calculation.
 
 Before implementing a new check or design routine:
 
-1. **Find a reference example.** A worked example from the design code itself, from an
-   official design guide, or from a recognised structural engineering textbook. Tell us
-   which one in the issue or pull request.
-2. **Reproduce it in [CalcPad](https://github.com/Proektsoftbg/Calcpad)**, with units,
-   including the edge cases you expect the implementation to handle.
-3. **Include the CalcPad file with your pull request**, so a reviewer can follow the
-   calculation independently of the Python code.
-4. **Reference the validation source in your test module** — a comment naming the standard,
-   the clause and the example number is enough for the next person to trace where the
-   expected numbers came from.
+1. **Find a published reference example.** A worked example from the design code itself,
+   an official design guide (the CRSI design guide, the Concrete Centre guides), a
+   recognised structural engineering textbook, or a software verification manual (CSI's
+   ETABS/SAFE examples). Tell us which one in the issue or pull request.
+2. **Include the reference with your pull request: the PDF of the book, code or guide, or
+   the pages you used, with the page numbers where the calculation is.** A reviewer has to
+   be able to open the page the expected numbers were read from. When the document may not
+   be redistributed, give its full citation (title, edition, section, example and page)
+   instead, so a reviewer can find it.
+3. **Reproduce it in [CalcPad](https://github.com/Proektsoftbg/Calcpad)**, with units,
+   including the edge cases you expect the implementation to handle, and **include the
+   CalcPad file with your pull request**, so a reviewer can follow the calculation
+   independently of the Python code. The CalcPad sheet is the working reproduction; it
+   does not replace the published reference in step 2.
+4. **Reference the validation source in your test module** — the document, the section,
+   the example number and the page, so the next person can trace where the expected
+   numbers came from.
 5. **Mark the test `@pytest.mark.published_example`** when its expected numbers come from
-   that source and not from mento — the release counts these tests for the home page of
-   mento-web, so the mark is a public claim. A marked test says where the number is, in a
-   docstring paragraph that starts with `Source:` (the sheet, the row and column or cell,
-   the page or table), and lives in `tests/validation/`;
-   `tests/architecture/test_published_examples.py` checks both. A test that pins mento's
-   own output, or a reading of the code the reference does not share, is not marked and
-   goes with the rest.
+   that published source and not from mento — the release counts these tests for the
+   home page of mento-web, so the mark is a public claim. A marked test says where the
+   number is, in a docstring paragraph that starts with `Source:` (the page, table, example
+   or section; for a workbook of program runs, the sheet and the row and column), and lives
+   in `tests/validation/`; `tests/architecture/test_published_examples.py` checks both, and
+   fails a `Source:` that names a CalcPad sheet. A test checked only against a CalcPad
+   sheet, one that pins mento's own output, or a reading of the code the reference does
+   not share, is not marked and goes with the rest.
 
 If you cannot find a published example for what you are implementing, say so in the pull
 request and we will work out an acceptable validation path together.
@@ -185,7 +195,8 @@ request and we will work out an acceptable validation path together.
 - [ ] Tests added or updated, and the full suite passes locally
 - [ ] `mypy mento/` passes
 - [ ] `pre-commit run --all-files` reports no changes
-- [ ] Calculations validated in CalcPad, with the file included and the source named
+- [ ] Calculations validated against a published example, with the PDF or pages (or the
+      full citation) included, and reproduced in CalcPad with the file included
 - [ ] Documentation updated (user guide, docstrings, and an example notebook if the feature
       is user facing)
 - [ ] Public API naming left unchanged unless the change was agreed in advance

@@ -537,8 +537,13 @@ both faces carry steel.
 Validation
 ----------
 
-Every row is pinned by a test in ``tests/elements/test_beam.py`` or ``tests/validation/`` (the rows whose source is external) and is verified against the
-external source named.
+Every row is pinned by a test. The rows verified against a published source — a
+design guide, a software verification manual, a recorded program run — are tests in
+``tests/validation/``, marked ``published_example``, each citing the page, table or
+row its numbers come from. The other rows are tests in the rest of ``tests/``: checks
+against the code clause itself, internal consistency, or regression cases whose only
+reference is a Calcpad sheet, which reproduces a calculation but publishes none and
+so is not counted as a validation.
 
 .. list-table::
    :header-rows: 1
@@ -547,15 +552,27 @@ external source named.
    * - Check
      - Test
      - Verified against
+   * - :math:`A_{s,req}`, :math:`A_{s,min}`, :math:`A_{s,max}` at the critical
+       sections of continuous beams, joists and edge beams (rectangular web and T
+       sections solved as a rectangle of width :math:`b_f`)
+     - ``test_flexure_ACI_318_19_CRSI_example_6_2``, ``_6_6``, ``_6_11``,
+       ``_6_16``, ``_6_18``
+     - CRSI, *Design Guide on the ACI 318 Building Code Requirements for Structural
+       Concrete*, §6.9, Examples 6.2, 6.6, 6.11, 6.16 and 6.18 (Tables 6.24, 6.28,
+       6.31, 6.34 and 6.35)
+   * - :math:`A_{s,req}` and :math:`A_{s,min}`, singly reinforced rectangle
+     - ``test_flexure_ACI_318_19_ETABS_example_001``
+     - CSI Software Verification, ETABS, *ACI 318-19 Example 001*, pp. 2–3
    * - :math:`M_n`, singly reinforced
      - ``test_determine_nominal_moment_simple_reinf_ACI_318_19_Test_Etabs_03``
-     - Calcpad *BEAM-01-Flexure-Rectangle ACI 318-19-v6*
+     - ETABS run *Test_Etabs_03*, recorded in the workbook
+       *BEAM-01-Flexure-Rectangle ACI 318-19-v6*
    * - :math:`M_n`, doubly reinforced (steel not yielding)
      - ``test_determine_nominal_moment_double_reinf_ACI_318_19_Test_Etabs_01``
-     - Calcpad, same sheet
+     - ETABS run *Test_Etabs_01*, same workbook
    * - :math:`M_n`, doubly reinforced (steel yielding)
      - ``test_determine_nominal_moment_double_reinf_ACI_318_19_Test_Etabs_23_yielding``
-     - Calcpad, same sheet
+     - ETABS run *Test_Etabs_23*, same workbook
    * - :math:`A_{s,req}`, :math:`A_{s,min}` governing
      - ``test_calculate_flexural_reinforcement_ACI_318_19_Test_Etabs_05``
      - ETABS, :math:`A_{s,req} = 1.7041\ \text{in}^2`
@@ -564,19 +581,21 @@ external source named.
      - ETABS
    * - :math:`\rho_{max}`
      - ``test_maximum_flexural_reinforcement_ratio_ACI_318_19_Test_Etabs_05``
-     - CRSI Guide, Beam Theory p. 6-3
+       (``tests/elements/test_beam.py``)
+     - Regression: the workbook's own hand calculation; the published values of
+       :math:`A_{s,max}` are the CRSI rows above
    * - :math:`\rho_{min}`
      - ``test_minimum_flexural_reinforcement_ratio_ACI_318_19_Test_Etabs_05``
-     - §9.6.1.2
+     - ETABS run *Test_Etabs_05*, where the minimum governs; §9.6.1.2
    * - Flexure check, full section
-     - ``test_check_flexure_ACI_318_19_3``
-     - Calcpad, same sheet
+     - ``test_check_flexure_ACI_318_19_3`` (``tests/elements/test_beam.py``)
+     - Regression against a Calcpad sheet, with the Whitney block redone by hand in
+       the test
    * - Flexure check, past the tension-controlled limit
      - ``test_check_flexure_ACI_318_19_1``, ``_2``,
        ``test_check_flexure_ACI_318_19_over_reinforced_*``,
        ``test_check_flexure_CIRSOC_201_25_over_reinforced_reports_its_real_strength``
-     - Strain compatibility written apart from mento (the Calcpad sheet capped
-       :math:`A_s` and is no longer the reference)
+     - Strain compatibility written apart from mento, in the tests
    * - Design passes its own check; capacity is the section's
      - ``test_a_design_passes_its_own_check`` (``tests/design/test_flexure_design_properties.py``)
      - Sweep over width, depth, :math:`f'_c` and moment, against the same independent
@@ -587,15 +606,25 @@ external source named.
    * - Flexure design, doubly reinforced
      - ``test_design_flexure_ACI_318_19_Test_Etabs_01``
      - ETABS, verified through :math:`\phi M_n \ge M_u`
+   * - Shear: :math:`\phi V_c`, :math:`V_u - \phi V_c`, :math:`A_{v,min}/s`,
+       :math:`A_v/s` required and :math:`s_{max}` along and across the beam
+     - ``test_shear_check_ACI_318_19_CRSI_example_6_3``, ``_6_7``, ``_6_12``,
+       ``_6_17``, ``_6_18``
+     - CRSI, *Design Guide on the ACI 318 Building Code Requirements for Structural
+       Concrete*, §6.9, Examples 6.3, 6.7, 6.12, 6.17 and 6.18
+   * - Shear: :math:`\phi V_c`, :math:`\phi V_{max}`, :math:`A_v/s` and
+       :math:`A_{v,min}/s`
+     - ``test_shear_check_ACI_318_19_ETABS_example_001``
+     - CSI Software Verification, ETABS, *ACI 318-19 Example 001*, pp. 2, 6–7
    * - Shear check, with stirrups
-     - ``test_shear_check_ACI_318_19_1``, ``_2``
-     - Calcpad *ACI 318-19 Beam Shear 01 — Imperial*
+     - ``test_shear_check_ACI_318_19_1``, ``_2`` (``tests/elements/test_beam.py``)
+     - Regression against a Calcpad sheet (axial load included)
    * - Shear check, no stirrups
-     - ``test_shear_check_ACI_318_19_no_rebar_1``, ``_2``
-     - Calcpad, same sheet
+     - ``test_shear_check_ACI_318_19_no_rebar_1``, ``_2`` (``tests/elements/test_beam.py``)
+     - Regression against a Calcpad sheet (row (c) of Table 22.5.5.1)
    * - Shear design
-     - ``test_shear_design_ACI_318_19``
-     - Calcpad, same sheet
+     - ``test_shear_design_ACI_318_19`` (``tests/elements/test_beam.py``)
+     - Regression against a Calcpad sheet
    * - Shear design, CIRSOC catalogue
      - ``test_shear_design_CIRSOC_201_2025``
      - CIRSOC 201-25 bar catalogue

@@ -137,7 +137,7 @@ tests/
 ├── elements/        beam, slab, footing, shear_wall, punching
 ├── design/          design_results, design_options, design_warnings, flexure_design_properties, ...
 ├── reports/         results, headings, table_style, i18n, beam_summary, shear_wall_summary
-└── validation/      ONLY the tests marked published_example: Calcpad, ETABS, Concrete Centre, eurocodeapplied
+└── validation/      ONLY the tests marked published_example: CRSI guide, CSI/ETABS verification, ETABS runs, Concrete Centre, eurocodeapplied
 
 scripts/
 └── modules_testing.py    Manual/exploratory script; not part of the test suite
@@ -146,8 +146,11 @@ scripts/
 `tests/validation/` holds exactly the tests that reproduce a case validated outside
 mento, each marked `published_example` with a `Source:` paragraph in its docstring;
 `tests/architecture/test_published_examples.py` fails if a marked test lives elsewhere
-or an unmarked one lives there. Tests written against mento itself go in the other
-folders. The release publishes the count of that folder.
+or an unmarked one lives there, and fails a `Source:` that names a Calcpad sheet: a
+Calcpad sheet reproduces a calculation but is not a published source, so tests checked
+only against one are regression tests in the other folders (the beam ones sit at the
+end of `elements/test_beam.py`). Tests written against mento itself go there too.
+The release publishes the count of that folder.
 
 `pyproject.toml` is the only pytest config. A `tests/pytest.ini` would change the
 rootdir and silently disable the coverage `addopts`, so there is none.

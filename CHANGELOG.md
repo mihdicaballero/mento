@@ -201,6 +201,28 @@ stirrups Ø12 every 14 cm.
   dimensions, while the bar labels keep the bare millimetres every bar label of mento uses
   (`2Ø32+1Ø29`), as do the flexure line of the notebook and the summary tables.
 
+## [1.3.1] - 2026-09-29
+
+### Changed
+
+- **A Calcpad sheet no longer counts as a validation source.** It reproduces a calculation,
+  it does not publish one. The tests marked `published_example` — the number the release
+  sends to mento-web — now reproduce only numbers printed outside mento: the worked
+  examples of CRSI's *Design Guide on the ACI 318 Building Code Requirements for Structural
+  Concrete* (§6.9, Examples 6.2, 6.3, 6.6, 6.7, 6.11, 6.12, 6.16, 6.17 and 6.18, flexure
+  and shear), CSI's ETABS verification examples *ACI 318-19 Example 001* and *EN 2-2004
+  Example 001*, the recorded ETABS runs of the flexure suite, The Concrete Centre and the
+  eurocodeapplied.com calculators. The count goes from 39 to 58. The nine beam tests whose
+  only reference was a Calcpad sheet, and the ρ_max test that read the ETABS workbook's
+  own hand calculation, stay as regression tests at the end of `tests/elements/test_beam.py`,
+  unmarked. `tests/architecture/test_published_examples.py` fails a `Source:` that names a
+  Calcpad sheet.
+- **The contribution guide asks for the published source itself.** A calculation is
+  validated against a published example whose PDF or pages, with the page numbers, come
+  with the pull request (or its full citation, when it cannot be redistributed); the
+  Calcpad sheet that reproduces it is still included. The Validation tables of the Theory
+  pages say which rows are published sources and which are Calcpad regression cases.
+
 ## [1.3.0] - 2026-09-27
 
 ### Migration notes
@@ -1275,7 +1297,8 @@ First public release on PyPI: rectangular concrete beam check and design for fle
 shear under ACI 318-19 and CIRSOC 201-25, unit aware calculations, results as pandas
 DataFrames, and Word calculation reports.
 
-[Unreleased]: https://github.com/mihdicaballero/mento/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/mihdicaballero/mento/compare/v1.3.1...HEAD
+[1.3.1]: https://github.com/mihdicaballero/mento/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/mihdicaballero/mento/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/mihdicaballero/mento/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/mihdicaballero/mento/compare/v1.0.1...v1.1.0

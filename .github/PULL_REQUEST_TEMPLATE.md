@@ -24,6 +24,8 @@ Closes #
 <!-- Required when this PR adds or modifies a design calculation. Delete this section if it
      does not apply. -->
 
-- [ ] Validated in CalcPad, and the file is included in this PR
-- **Reference example:** <!-- standard, clause, example number and page, or textbook -->
+- [ ] Validated against a published example, and its PDF or pages (or its full citation) are included in this PR
+- [ ] Reproduced in CalcPad, and the file is included in this PR
+- **Reference example:** <!-- document, section, example number and the page the numbers are read from -->
+- **Where the reference is:** <!-- file in this PR, or full citation if it cannot be redistributed -->
 - **Result comparison:** <!-- expected vs. mento, and the tolerance used in the test -->
