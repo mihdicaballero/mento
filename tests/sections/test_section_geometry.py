@@ -25,7 +25,7 @@ from mento.section_geometry import (
     SectionGeometry,
     _cage,
     build_section_geometry,
-    group_order,
+    _group_order,
 )
 from mento.shear_wall import NotABeamError
 from mento.units import MPa, cm, inch, kN, kNm, ksi, m, mm
@@ -51,24 +51,24 @@ def _beam(
 
 
 @pytest.fixture(scope="module")
-def users_beam() -> RectangularBeam:
-    """JPR's case: CIRSOC 201-25 H-25, 150x150, c_c 30 mm, Mu 5000 kNm, Vu 5000 kN."""
+def wide_cirsoc_beam() -> RectangularBeam:
+    """The wide CIRSOC beam: CIRSOC 201-25 H-25, 150x150, c_c 30 mm, Mu 5000 kNm, Vu 5000 kN."""
     beam = _beam(150, 150, 30 * mm, Concrete_CIRSOC_201_25(name="H-25", f_c=25 * MPa))
     Node(section=beam, forces=[Forces(label="C1", M_y=5000 * kNm, V_z=5000 * kN)]).design()
     return beam
 
 
 # ---------------------------------------------------------------------------
-# The user's case
+# The 150x150 CIRSOC beam
 # ---------------------------------------------------------------------------
 
 
-def test_the_users_legs_and_cage(users_beam: RectangularBeam) -> None:
-    geometry = users_beam.section_geometry
+def test_the_wide_cirsoc_legs_and_cage(wide_cirsoc_beam: RectangularBeam) -> None:
+    geometry = wide_cirsoc_beam.section_geometry
     assert isinstance(geometry, SectionGeometry)
     assert geometry.s_w.to("cm").magnitude == pytest.approx(15.8667, abs=1e-4)
     assert _cm(geometry.leg_x) == [3.6, 19.4667, 35.3333, 51.2, 67.0667, 82.9333, 98.8, 114.6667, 130.5333, 146.4]
-    assert len(geometry.leg_x) == users_beam.reinforcement.transverse.n_legs == 10
+    assert len(geometry.leg_x) == wide_cirsoc_beam.reinforcement.transverse.n_legs == 10
 
     stirrups = geometry.stirrups
     assert [s.legs for s in stirrups] == [(0, 9), (1, 2), (3, 4), (5, 6), (7, 8)]
@@ -85,8 +85,8 @@ def test_the_users_legs_and_cage(users_beam: RectangularBeam) -> None:
     assert geometry.arrangement("es") == "estribo perimetral + 4 interiores"
 
 
-def test_the_users_bars(users_beam: RectangularBeam) -> None:
-    geometry = users_beam.section_geometry
+def test_the_wide_cirsoc_bars(wide_cirsoc_beam: RectangularBeam) -> None:
+    geometry = wide_cirsoc_beam.section_geometry
     bottom = geometry.bars_on("bottom")
     assert _cm([b.x for b in bottom]) == [
         5.8,
@@ -112,7 +112,7 @@ def test_the_users_bars(users_beam: RectangularBeam) -> None:
     assert [round(v, 3) for v in nearest] == [2.2, 1.085, 4.37, 4.927, 1.642, 1.642, 4.927, 4.37, 1.085, 2.2]
 
 
-def test_aci_variant_of_the_users_beam() -> None:
+def test_aci_variant_of_the_wide_cirsoc_beam() -> None:
     beam = _beam(150, 150, 30 * mm)
     Node(section=beam, forces=[Forces(label="C1", M_y=5000 * kNm, V_z=5000 * kN)]).design()
     geometry = beam.section_geometry
@@ -172,8 +172,8 @@ def _check_invariants(beam: RectangularBeam) -> None:
             assert height - _centroid_from_face(bars, face, height) == pytest.approx(d, rel=1e-12)
 
 
-def test_the_invariants_hold_on_the_users_beam(users_beam: RectangularBeam) -> None:
-    _check_invariants(users_beam)
+def test_the_invariants_hold_on_the_wide_cirsoc_beam(wide_cirsoc_beam: RectangularBeam) -> None:
+    _check_invariants(wide_cirsoc_beam)
 
 
 @pytest.mark.parametrize(
@@ -236,7 +236,7 @@ def test_a_beam_never_given_stirrups_still_reserves_the_starter_diameter() -> No
     ],
 )
 def test_group_order(n_a: int, n_b: int, order: list[int]) -> None:
-    assert group_order(n_a, n_b) == order
+    assert _group_order(n_a, n_b) == order
 
 
 def test_mixed_diameters_follow_the_models_single_clear_gap() -> None:
@@ -338,8 +338,8 @@ def test_an_imperial_section_is_in_inches() -> None:
     _check_invariants(beam)
 
 
-def test_to_dict_gives_plain_floats(users_beam: RectangularBeam) -> None:
-    data = users_beam.section_geometry.to_dict("cm")
+def test_to_dict_gives_plain_floats(wide_cirsoc_beam: RectangularBeam) -> None:
+    data = wide_cirsoc_beam.section_geometry.to_dict("cm")
     assert data["unit"] == "cm" and data["layout"] == "stirrups"
     assert data["width"] == pytest.approx(150.0)
     assert data["stirrup_bend_inner_diameter"] == pytest.approx(4.8)
@@ -362,7 +362,7 @@ def test_to_dict_gives_plain_floats(users_beam: RectangularBeam) -> None:
         "group": 1,
     }
     assert all(isinstance(v, float) for v in data["leg_x"])
-    assert users_beam.section_geometry.to_dict("mm")["width"] == pytest.approx(1500.0)
+    assert wide_cirsoc_beam.section_geometry.to_dict("mm")["width"] == pytest.approx(1500.0)
 
 
 def test_to_dict_carries_a_crosstie() -> None:

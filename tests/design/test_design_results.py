@@ -871,7 +871,7 @@ def test_changing_the_bars_by_hand_drops_the_results_until_the_next_check() -> N
 
 
 def _user_beam() -> RectangularBeam:
-    """JPR's case: CIRSOC 201-25, H-25, ADN 420, 150x150 cm, c_c 30 mm."""
+    """The wide CIRSOC beam: CIRSOC 201-25, H-25, ADN 420, 150x150 cm, c_c 30 mm."""
     return RectangularBeam(
         label="V1",
         concrete=Concrete_CIRSOC_201_25(name="H-25", f_c=25 * MPa),
@@ -882,7 +882,7 @@ def _user_beam() -> RectangularBeam:
     )
 
 
-def test_shear_design_exposes_the_spacing_limits_of_the_users_case() -> None:
+def test_shear_design_exposes_the_spacing_limits_of_the_wide_cirsoc_beam() -> None:
     """Both limits are 20 cm, from the halved row of Tabla 9.7.6.2.2 (V_s,req 4828 > 3569 kN)."""
     beam = _user_beam()
     Node(section=beam, forces=[Forces(label="C1", M_y=5000 * kNm, V_z=5000 * kN)]).design()
@@ -953,7 +953,7 @@ def test_the_governing_along_length_limit_folds_in_the_compression_support_cap(
     assert shear.options[0].s_max_l.to("cm").magnitude == pytest.approx(20.0)
 
 
-def test_aci_limits_take_the_300_mm_cap_on_the_users_beam() -> None:
+def test_aci_limits_take_the_300_mm_cap_on_the_wide_cirsoc_beam() -> None:
     beam = RectangularBeam(
         label="V1",
         concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
@@ -1098,10 +1098,10 @@ def test_the_envelope_row_agrees_with_its_demand_and_limits() -> None:
 @pytest.mark.parametrize("kind", ["length", "force"])
 def test_the_scaled_wrap_gives_the_numbers_to_display_gives(kind: str, imperial: bool) -> None:
     """The spacing fields are wrapped with a factor taken once; the result is to_display's."""
-    from mento.codes.check_state import scaled_to_display, to_display
+    from mento.codes.check_state import _scaled_to_display, to_display
 
     for value in (0.0, 1.0, 158.66666666666666, 200.0, 3_568_950.0, 4_828_116.67, 1e-3, 12345.678):
-        fast = scaled_to_display(value, kind, imperial)
+        fast = _scaled_to_display(value, kind, imperial)
         slow = to_display(value, kind, imperial)
         assert fast.units == slow.units
         assert fast.magnitude == pytest.approx(slow.magnitude, rel=1e-15, abs=0.0)

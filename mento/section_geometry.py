@@ -18,8 +18,10 @@ Each position is the check's own model, and a test ties each one to it:
   ``s_w = (b - 2·c_c - d_st)/(n_legs - 1)`` -- the ``s_w`` the check holds to
   Table 9.7.6.2.2 (Expression (9.8N) under EN 1992-1-1).
 - **Cage**: one perimeter closed stirrup on the outermost legs and inner
-  closed stirrups on legs (2, 3), (4, 5)...; an odd leg left over is a
-  crosstie (see :func:`mento.design_results.cage_legs`).
+  closed stirrups on the 2nd and 3rd legs, the 4th and 5th, and so on --
+  indices ``(1, 2)``, ``(3, 4)``... in :attr:`ClosedStirrup.legs`, which
+  counts from 0; an odd leg left over is a crosstie (see
+  :func:`mento.design_results.cage_legs`).
 - **Bars**: each layer spread evenly between the inner faces of the outer
   legs, one clear distance apart -- the clear spacing the check reads
   (``_layer_clear_spacing``) -- with the first bar's face at ``c_c + d_st``
@@ -118,6 +120,12 @@ class SectionGeometry:
     width and ``y`` up. Lengths are in the display unit of the section: cm,
     or in on a US customary one.
 
+    ``layout`` is how the section carries its transverse reinforcement, as
+    :func:`mento.design_results.transverse_layout` says:
+    ``"stirrups"`` (:data:`~mento.design_results.STIRRUPS`) for a beam's cage
+    of closed stirrups, ``"grid"`` (:data:`~mento.design_results.GRID`) for a
+    slab strip, which publishes no legs and no bars.
+
     ``stirrup_d_b`` is the stirrup the effective depth and the clear space of
     the bars are computed with -- also on a section with no stirrups placed,
     which still reserves the diameter it starts from -- so ``c_c +
@@ -162,7 +170,12 @@ class SectionGeometry:
     def to_dict(self, unit: str = "cm") -> Dict[str, Any]:
         """The geometry as plain floats in ``unit``, for a consumer that does not speak pint.
 
-        No text depends on the language: the words are :meth:`arrangement`'s.
+        The keys are the field names, each length a float in ``unit``, plus
+        ``"unit"`` (the unit given) and ``"layout"`` (``"stirrups"`` or
+        ``"grid"``). ``stirrups``, ``crossties`` and ``bars`` are lists of
+        dicts with the fields of :class:`ClosedStirrup`, :class:`Crosstie` and
+        :class:`BarPosition`; leg indices count from 0, as in ``leg_x``. No
+        text depends on the language: the words are :meth:`arrangement`'s.
         """
 
         def f(value: Quantity) -> float:
@@ -230,7 +243,7 @@ def _cage(
     return closed, ties
 
 
-def group_order(n_a: int, n_b: int) -> List[int]:
+def _group_order(n_a: int, n_b: int) -> List[int]:
     """The order of the bars of a layer across the width, as 1 (group a) and 2 (group b).
 
     Symmetric wherever the counts allow: the ``n_a`` bars at the ends -- they
@@ -264,7 +277,7 @@ def _layer_x(width: float, inner: float, n_a: int, d_a: float, n_b: int, d_b: fl
     gap = (width - 2 * inner - n_a * d_a - n_b * d_b) / (total - 1)
     bars = []
     x = inner
-    for group in group_order(n_a, n_b):
+    for group in _group_order(n_a, n_b):
         d = d_a if group == 1 else d_b
         bars.append((group, x + d / 2, d))
         x += d + gap

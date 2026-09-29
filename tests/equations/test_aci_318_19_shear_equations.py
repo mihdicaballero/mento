@@ -373,7 +373,7 @@ def test_max_stirrup_spacing_us():
 
 
 def test_stirrup_spacing_threshold_is_the_table_expression():
-    # The user's CIRSOC beam: f'c = 25 MPa, bw = 1500 mm, d = 1442 mm.
+    # The 150x150 CIRSOC beam: f'c = 25 MPa, bw = 1500 mm, d = 1442 mm.
     # 0.33*sqrt(25)*1500*1442 N = 3568.95 kN, exactly the expression the table prints.
     A_cv = 1500.0 * 1442.0
     assert eq.stirrup_spacing_threshold(25.0, A_cv) == 0.33 * math.sqrt(25.0) * A_cv

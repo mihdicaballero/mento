@@ -722,7 +722,7 @@ def test_min_legs_along_width() -> None:
 
 
 def _wide_cirsoc_beam() -> RectangularBeam:
-    """JPR's case on mentocalc.com: CIRSOC 201-25, H-25, ADN 420, 150x150 cm, c_c 30 mm."""
+    """The wide CIRSOC beam: CIRSOC 201-25, H-25, ADN 420, 150x150 cm, c_c 30 mm."""
     return RectangularBeam(
         label="V1",
         concrete=Concrete_CIRSOC_201_25(name="H-25", f_c=25 * MPa),
@@ -766,7 +766,7 @@ def test_wide_cirsoc_beam_takes_five_stirrups_for_the_across_width_limit() -> No
 def test_check_state_records_the_row_of_table_9_7_6_2_2() -> None:
     """The check keeps the threshold it compared against and the row it took.
 
-    The user's case passes the threshold (the halved row); a combination with
+    The 150x150 CIRSOC beam passes the threshold (the halved row); a combination with
     V_s,req = 161.45 kN stays under it.
     """
     beam = _wide_cirsoc_beam()
@@ -2976,7 +2976,7 @@ def _drawn_leg_gaps(ax: object, d_cm: float) -> list[float]:
 
 
 def test_plot_draws_every_stirrup_at_the_legs_the_check_assumes() -> None:
-    """The 150x150 CIRSOC beam of the user: five stirrups, ten legs 15.87 cm apart, twelve Ø32.
+    """The 150x150 CIRSOC beam under Mu 5000 kN·m, Vu 5000 kN: five stirrups, ten legs 15.87 cm apart, twelve Ø32.
 
     The old drawing capped the cage at three stirrups at fixed places, whose
     legs were up to 36.30 cm apart against the 20 cm the modelled 15.87 cm meets.
