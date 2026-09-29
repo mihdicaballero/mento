@@ -2,8 +2,8 @@
 
 Every test here is marked ``published_example`` and says in a ``Source:`` paragraph of
 its docstring where its numbers come from: the Calcpad beam-shear sheets (kept outside
-the repository), the EN 1992-1-1 shear calculators of eurocodeapplied.com and the
-examples of CRSI's Design Guide on ACI 318.
+the repository), the EN 1992-1-1 shear calculators of eurocodeapplied.com, the
+examples of CRSI's Design Guide on ACI 318 and CSI's ETABS software verification examples.
 ``tests/architecture/test_published_examples.py`` enforces both.
 """
 
@@ -12,10 +12,10 @@ from pint import Quantity
 
 from mento.node import Node
 from mento.beam import RectangularBeam
-from mento.material import Concrete_ACI_318_19, SteelBar
+from mento.material import Concrete_ACI_318_19, Concrete_EN_1992_2004, SteelBar
 from mento.precompute import section_floats
 from mento.rebar import max_stirrup_spacing_ACI_318_19
-from mento.units import kip, inch, mm, kN, cm, psi, ksi
+from mento.units import kip, inch, mm, kN, cm, psi, ksi, MPa
 from mento.forces import Forces
 
 
@@ -583,3 +583,109 @@ def test_shear_check_ACI_318_19_CRSI_example_6_18() -> None:
     assert beam._d_shear.to("inch").magnitude == pytest.approx(26.0, rel=1e-9)
     assert beam._phi_V_c.to(kip).magnitude == pytest.approx(17.3, abs=0.05)
     assert _crsi_demand_on_stirrups(beam) == pytest.approx(15.8, abs=0.05)
+
+
+# ---------------------------------------------------------------------------
+# CSI Software Verification, "ACI 318-19 Example 001" and "EN 2-2004 Example
+# 001" (ETABS): a simply supported singly reinforced rectangle designed for
+# flexure and shear, checked by hand in the same documents. The PDFs are kept
+# outside the repository.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.published_example
+def test_shear_check_ACI_318_19_ETABS_example_001() -> None:
+    """Beam 10 x 16 in., d = 13.5 in., V_u = 37.727 kip at d from the support.
+
+    With A_v >= A_v,min, V_c is the larger of 2*sqrt(f'c) (123.5 psi) and
+    8*rho_w**(1/3)*sqrt(f'c) (93.3 psi), so phi*V_c = 12.807 kip; phi*V_max =
+    phi*V_c + phi*8*sqrt(f'c)*b*d = 64.036 kip; A_v,min/s = max(0.0083, 0.0079) and
+    A_v/s = (V_u - phi*V_c)/(phi*f_yt*d) = 0.041 in.²/in. Stirrup #4 and bars #8 under
+    a 1.5 in. cover put d at the example's 13.5 in.; the stirrups only have to hold
+    A_v,min, which selects the same row of Table 22.5.5.1.
+
+    Source: CSI Software Verification, ETABS, "ACI 318-19 Example 001", p. 2 (Results
+    Comparison) and pp. 6-7 (Hand Calculation, Shear Design, Combo1).
+    """
+    beam = RectangularBeam(
+        label="ETABS-ACI-Ex001",
+        concrete=Concrete_ACI_318_19(name="fc 4000", f_c=4000 * psi),
+        steel_bar=SteelBar(name="Grade 60", f_y=60 * ksi),
+        width=10 * inch,
+        height=16 * inch,
+        c_c=1.5 * inch,
+    )
+    beam.set_longitudinal_rebar_bot(n1=2, d_b1=1.0 * inch)
+    beam.set_longitudinal_rebar_top(n1=2, d_b1=1.0 * inch)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=0.5 * inch, s_l=6 * inch)
+    Node(section=beam, forces=Forces(label="Combo1", V_z=37.727 * kip)).check_shear()
+
+    assert beam._d_shear.to("inch").magnitude == pytest.approx(13.5, rel=1e-9)
+    assert beam._phi_V_c.to(kip).magnitude == pytest.approx(12.807, rel=1e-3)
+    assert beam._phi_V_max.to(kip).magnitude == pytest.approx(64.036, rel=1e-3)
+    check = beam.shear_checks[0]
+    assert check.A_v_min.to("inch**2/inch").magnitude == pytest.approx(0.0083, abs=5e-5)
+    assert check.A_v_req.to("inch**2/inch").magnitude == pytest.approx(0.041, abs=5e-4)
+
+
+def _etabs_en_example_001_beam(c_c: float) -> RectangularBeam:
+    return RectangularBeam(
+        label="ETABS-EN-Ex001",
+        concrete=Concrete_EN_1992_2004(name="C30", f_c=30 * MPa),
+        steel_bar=SteelBar(name="fyk 460", f_y=460 * MPa),
+        width=230 * mm,
+        height=550 * mm,
+        c_c=c_c * mm,
+    )
+
+
+@pytest.mark.published_example
+def test_shear_check_EN_1992_2004_ETABS_example_001() -> None:
+    """Beam 230 x 550 mm, d = 490 mm, V_Ed = 110.01 kN: stirrups with cot(theta) = 2.5.
+
+    z = 0.9*d = 441 mm and the strut runs at its flattest, tan(theta) = 0.4, so
+    A_sw/s = V_Ed/(z*f_ywd*cot(theta)) = 249.5 mm²/m over the minimum
+    0.08*sqrt(f_ck)/f_yk*b = 219.1 mm²/m. V_Rd,max = 369.345 kN is the CEN Default
+    value, with f_cd = 20 MPa: mento takes alpha_cc = 1.0 for shear (the UK annex
+    keeps 0.85 for flexure and axial load only), while the example's UK row reads
+    0.85 there too and prints 313.943 kN. A_sw/s and its minimum are the same in
+    both. mento's strut at 21.8 degrees, the angle the example rounds to, puts
+    V_Rd,max 0.005 % under the value of tan(theta) = 0.4 exactly.
+
+    Source: CSI Software Verification, ETABS/SAFE, "EN 2-2004 Example 001", p. 4 (Table 3)
+    and pp. 23-24 (hand calculation for CEN Default).
+    """
+    beam = _etabs_en_example_001_beam(c_c=40)
+    beam.set_longitudinal_rebar_bot(n1=3, d_b1=20 * mm)
+    beam.set_longitudinal_rebar_top(n1=2, d_b1=20 * mm)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=10 * mm, s_l=20 * cm)
+    Node(section=beam, forces=Forces(label="Combo1", V_z=110.01 * kN)).check_shear()
+
+    assert beam._d_shear.to("mm").magnitude == pytest.approx(490, rel=1e-9)
+    check = beam.shear_checks[0]
+    assert check.A_v_req.to("mm**2/m").magnitude == pytest.approx(249.5, abs=0.1)
+    assert check.A_v_min.to("mm**2/m").magnitude == pytest.approx(219.1, abs=0.05)
+    assert beam._V_Rd_max.to(kN).magnitude == pytest.approx(369.345, rel=1e-3)
+
+
+@pytest.mark.published_example
+def test_shear_check_EN_1992_2004_ETABS_example_001_no_stirrups() -> None:
+    """The same beam without shear or tension reinforcement: V_Rd,c = v_min*b*d.
+
+    The example takes rho_1 = 0 at the support, so C_Rd,c*k*(100*rho_1*f_ck)^(1/3)
+    vanishes and v_min = 0.035*k^(3/2)*sqrt(f_ck) = 0.4022 MPa (k = 1.6389) gives
+    V_Rd,c = 45.3 kN < V_Ed: shear reinforcement is needed. With no bars and no
+    stirrups, a cover of 60 mm puts d at 490 mm.
+
+    Source: CSI Software Verification, ETABS/SAFE, "EN 2-2004 Example 001", p. 23
+    (hand calculation for CEN Default).
+    """
+    beam = _etabs_en_example_001_beam(c_c=60)
+    beam.set_longitudinal_rebar_bot(n1=0, d_b1=0 * mm)
+    beam.set_longitudinal_rebar_top(n1=0, d_b1=0 * mm)
+    beam.set_transverse_rebar(n_stirrups=0, d_b=0 * mm, s_l=0 * mm)
+    Node(section=beam, forces=Forces(label="Combo1", V_z=110.01 * kN)).check_shear()
+
+    assert beam._d_shear.to("mm").magnitude == pytest.approx(490, rel=1e-9)
+    assert beam._V_Rd_c.to(kN).magnitude == pytest.approx(45.3, abs=0.05)
+    assert beam.shear_checks[0].DCR > 1

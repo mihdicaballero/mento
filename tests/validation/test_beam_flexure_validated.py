@@ -2,8 +2,8 @@
 
 Every test here is marked ``published_example`` and says in a ``Source:`` paragraph of
 its docstring where its numbers come from: the ETABS/spreadsheet cross-check of the
-flexure suite, the Calcpad beam-flexure sheets, The Concrete Centre's guide and the
-examples of CRSI's Design Guide on ACI 318.
+flexure suite, the Calcpad beam-flexure sheets, The Concrete Centre's guide, the
+examples of CRSI's Design Guide on ACI 318 and CSI's ETABS software verification examples.
 ``tests/architecture/test_published_examples.py`` enforces both.
 """
 
@@ -1094,3 +1094,69 @@ def test_flexure_ACI_318_19_CRSI_example_6_18(
     Structural Concrete, §6.9.18, Example 6.18, p. 6-118, Table 6.35.
     """
     _assert_crsi_flexure(f"CRSI-6.18-{location}", b, 28.5, 26.0, M_u, A_s, A_s_calc, A_s_min, A_s_max)
+
+
+# ---------------------------------------------------------------------------
+# CSI Software Verification, "ACI 318-19 Example 001" and "EN 2-2004 Example
+# 001" (ETABS): a simply supported singly reinforced rectangle designed for
+# flexure and shear, checked by hand in the same documents. The PDFs are kept
+# outside the repository.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.published_example
+def test_flexure_ACI_318_19_ETABS_example_001() -> None:
+    """Beam 10 x 16 in., d = 13.5 in., f'c = 4 ksi, f_y = 60 ksi, M_u = 1460.4 kip·in.
+
+    A_s,min = 200*b_w*d/f_y = 0.450 in.² governs over 3*sqrt(f'c)*b_w*d/f_y = 0.427 in.²;
+    a = 4.183 in. < a_max = 4.266 in., so the section is singly reinforced and
+    A_s = M_u/(phi*f_y*(d - a/2)) = 2.37 in.².
+
+    Source: CSI Software Verification, ETABS, "ACI 318-19 Example 001", p. 2 (Results
+    Comparison) and p. 3 (Hand Calculation, Flexural Design).
+    """
+    beam = RectangularBeam(
+        label="ETABS-ACI-Ex001",
+        concrete=Concrete_ACI_318_19(name="fc 4000", f_c=4000 * psi),
+        steel_bar=SteelBar(name="Grade 60", f_y=60 * ksi),
+        width=10 * inch,
+        height=16 * inch,
+        c_c=1.5 * inch,
+    )
+    A_s_min, _A_s_max, A_s, A_s_calc = _required_flexural_steel_in_pint(
+        beam, 1460.4 * kip * inch, 13.5 * inch, 2.5 * inch
+    )
+    assert A_s_min.to("inch**2").magnitude == pytest.approx(0.450, abs=5e-4)
+    assert A_s_calc.to("inch**2").magnitude == pytest.approx(2.37, abs=5e-3)
+    assert A_s.to("inch**2").magnitude == pytest.approx(2.37, abs=5e-3)
+
+
+@pytest.mark.published_example
+def test_flexure_EN_1992_2004_ETABS_example_001() -> None:
+    """Beam 230 x 550 mm, d = 490 mm, C30, f_yk = 460 MPa, M_Ed = 165.015 kN·m.
+
+    mento takes alpha_cc = 0.85, gamma_c = 1.5 and gamma_s = 1.15, the factors of the
+    national annexes that give A_s = 933 mm² in Table 2 (Finland, Germany, Ireland,
+    Norway, Portugal, Singapore, UK): f_cd = 17 MPa, m = 0.1758, omega = 0.1947. The
+    minimum is max(0.26*f_ctm/f_yk, 0.0013)*b*d = 184.5 mm². Stirrup Ø10 and bars Ø20
+    under a cover of 40 mm put d at the example's 490 mm.
+
+    Source: CSI Software Verification, ETABS/SAFE, "EN 2-2004 Example 001", p. 3 (Table 2),
+    p. 6 (A_s,min) and p. 19 (hand calculation for the United Kingdom).
+    """
+    beam = RectangularBeam(
+        label="ETABS-EN-Ex001",
+        concrete=Concrete_EN_1992_2004(name="C30", f_c=30 * MPa),
+        steel_bar=SteelBar(name="fyk 460", f_y=460 * MPa),
+        width=230 * mm,
+        height=550 * mm,
+        c_c=40 * mm,
+    )
+    beam.set_transverse_rebar(n_stirrups=1, d_b=10 * mm, s_l=20 * cm)
+    beam.set_longitudinal_rebar_bot(n1=3, d_b1=20 * mm)
+    beam.set_longitudinal_rebar_top(n1=2, d_b1=20 * mm)
+    assert beam._d_bot.to("mm").magnitude == pytest.approx(490, rel=1e-9)
+    Node(section=beam, forces=Forces(label="Combo1", M_y=165.015 * kNm)).check_flexure()
+    bottom = beam.flexure_checks[0].bottom
+    assert bottom.A_s_req.to("mm**2").magnitude == pytest.approx(933, abs=0.5)
+    assert bottom.A_s_min.to("mm**2").magnitude == pytest.approx(184.5, abs=0.05)
