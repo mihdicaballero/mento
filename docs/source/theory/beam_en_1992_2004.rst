@@ -413,6 +413,11 @@ versa. For shear, :math:`d_{shear} = \min(d_{bot},\ d_{top})`.
 Validation
 ----------
 
+As for ACI 318-19, the rows verified against a published source are tests in
+``tests/validation/``, marked ``published_example`` and citing the page they
+reproduce; the regression rows, whose only reference is a Calcpad sheet, are tests in
+``tests/elements/test_beam.py`` and are not counted as a validation.
+
 .. list-table::
    :header-rows: 1
    :widths: 30 40 30
@@ -420,22 +425,27 @@ Validation
    * - Check
      - Test
      - Verified against
-   * - :math:`A_{s,req}`, singly reinforced
-     - ``test_flexure_check_EN_1992_2004_01``
-     - Calcpad *EN 1992-1-1_2004 Beam Flexure 01 — Metric v2*
+   * - :math:`A_{s,req}` and :math:`A_{s,min}`, singly reinforced
+     - ``test_flexure_EN_1992_2004_ETABS_example_001``
+     - CSI Software Verification, ETABS/SAFE, *EN 2-2004 Example 001*, Table 2 (the
+       annexes with :math:`\alpha_{cc} = 0.85`), pp. 3, 6 and 19
    * - Closed-form agreement
      - ``test_flexure_EN_1992_2004_matches_concise_eurocode_closed_form``
      - *Concise Eurocode 2*, The Concrete Centre —
        :math:`z/d = [1 + \sqrt{1 - 3.529K}]/2`, recomputed inside the test
+   * - :math:`A_{s,req}`, singly reinforced
+     - ``test_flexure_check_EN_1992_2004_01``
+     - Regression against a Calcpad sheet, with :math:`A_{s,req}` and
+       :math:`M_{Rd}` redone in the test by the Concise Eurocode 2 closed form
    * - :math:`A_{s,req}`, doubly reinforced
      - ``test_flexure_check_EN_1992_2004_02``
-     - Calcpad, same sheet
+     - Regression against a Calcpad sheet
    * - :math:`A_{s,req}`, C35 section
      - ``test_flexure_check_EN_1992_2004_03``
-     - Calcpad
+     - Regression against a Calcpad sheet
    * - :math:`A_{s,req}`, C60 (:math:`\lambda,\eta \ne 1`)
      - ``test_flexure_check_EN_1992_2004_04``
-     - Calcpad
+     - Regression against a Calcpad sheet
    * - Ductility limits on :math:`x_u/d`
      - ``test_compression_zone_limits_EN_1992_2004_are_expressed_on_the_neutral_axis``
      - :math:`K' = 0.453\,\xi\,(1 - 0.4\xi)`, which reproduces the published
@@ -446,15 +456,28 @@ Validation
    * - Design layout passes its own check
      - ``test_design_flexure_EN_1992_2004_layout_passes_its_own_check``
      - Internal consistency, design ↔ check
+   * - Shear: :math:`A_{sw}/s` required with :math:`\cot\theta = 2.5`,
+       :math:`A_{sw,min}/s` and :math:`V_{Rd,max}`
+     - ``test_shear_check_EN_1992_2004_ETABS_example_001``
+     - CSI Software Verification, ETABS/SAFE, *EN 2-2004 Example 001*, Table 3 and
+       pp. 23–24 (CEN Default; mento takes :math:`\alpha_{cc} = 1.0` for shear)
+   * - Shear: :math:`V_{Rd,c}` from :math:`v_{min}`, no stirrups and
+       :math:`\rho_1 = 0`
+     - ``test_shear_check_EN_1992_2004_ETABS_example_001_no_stirrups``
+     - Same example, p. 23
    * - Shear check, with stirrups
      - ``test_shear_check_EN_1992_2004_rebar_1`` … ``_3``
-     - Calcpad
+     - eurocodeapplied.com, shear resistance of a reinforced concrete beam
+       (EN 1992-1-1 §6.2)
    * - Shear check, no stirrups
-     - ``test_shear_check_EN_1992_2004_no_rebar_1`` … ``_3``
-     - Calcpad
+     - ``test_shear_check_EN_1992_2004_no_rebar_2``, ``_3``
+     - eurocodeapplied.com, same calculator
+   * - Shear check, no stirrups
+     - ``test_shear_check_EN_1992_2004_no_rebar_1`` (``tests/elements/test_beam.py``)
+     - Regression against a Calcpad sheet
    * - Shear design
      - ``test_shear_design_EN_1992_2004_1``
-     - Calcpad
+     - eurocodeapplied.com, same calculator
    * - Never raises on an unfittable section
      - ``test_design_flexure_EN_1992_2004_infeasible_does_not_crash``
      - Public contract

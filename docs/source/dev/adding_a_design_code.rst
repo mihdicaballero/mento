@@ -18,7 +18,9 @@ Open a `discussion <https://github.com/mihdicaballero/mento/discussions>`_ first
 are worth settling before you start:
 
 * **A validation source.** Every calculation has to be validated against a worked example
-  from the standard itself, an official design guide, or a recognised textbook. Agreeing on
+  published outside mento: the standard itself, an official design guide, a recognised
+  textbook or a software verification manual. A Calcpad sheet reproduces the example but
+  does not stand in for it. Agreeing on
   which examples you will reproduce is the single best predictor of the pull request being
   mergeable. See :ref:`dev/contributing` for the validation workflow.
 * **Scope.** A standard is large. One pull request that implements shear for one element
@@ -155,7 +157,9 @@ Step 6 — documentation
 What a reviewable pull request looks like
 -----------------------------------------
 
-* The calculations match a named published example, and the validation files are included.
+* The calculations match a named published example, and the validation files are included:
+  the PDF or pages of the source with the page numbers (or its full citation), and the
+  Calcpad sheet that reproduces it.
 * The new module does not import from other code modules; shared behaviour belongs to the
   element class or to ``rebar.py``.
 * No unit assumptions are hard-coded.
