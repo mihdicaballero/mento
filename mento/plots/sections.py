@@ -19,7 +19,7 @@ from matplotlib.figure import Figure
 from matplotlib.patches import Circle, FancyBboxPatch, Rectangle
 from mento.units import Quantity
 
-from mento.design_results import format_transverse_rebar, placed_bars
+from mento.design_results import GRID, format_transverse_rebar, placed_bars
 from mento.results import CUSTOM_COLORS
 
 if TYPE_CHECKING:
@@ -272,22 +272,25 @@ def _annotate_stirrups_text(
 ) -> None:
     """
     Escribe la leyenda de estribos a la derecha, a media altura.
-    Ejemplo: '1eØ6/20' en una viga, 'Ø10/8×15' en una losa.
+    Ejemplo: '2 legs Ø6/20' en una viga, 'Ø10/8×15' en una losa.
     """
     if self._stirrup_n == 0:
         return  # nothing to show
 
     transverse = self.reinforcement.transverse
-    # Bare magnitudes, as the drawing has always shown them: mm for the bar,
-    # cm for the spacings, no unit suffix. The shape of the label is the
-    # element's, which is what format_transverse_rebar decides.
-    text = format_transverse_rebar(
-        transverse.layout,
-        transverse.n_stirrups,
-        f"{self._stirrup_d_b.to('mm').magnitude:.0f}",
-        f"{self._stirrup_s_l.to('cm').magnitude:.0f}",
-        f"{transverse.s_w.to('cm').magnitude:.0f}",
-    )
+    if transverse.layout == GRID:
+        # Bare magnitudes, as the drawing has always shown them: mm for the
+        # bar, cm for the spacings, no unit suffix.
+        text = format_transverse_rebar(
+            transverse.layout,
+            transverse.n_stirrups,
+            f"{self._stirrup_d_b.to('mm').magnitude:.0f}",
+            f"{self._stirrup_s_l.to('cm').magnitude:.0f}",
+            f"{transverse.s_w.to('cm').magnitude:.0f}",
+        )
+    else:
+        # The legs lead, in the language of the drawing: ``10 legs Ø12/14``.
+        text = transverse.notation(compact=True)
 
     x_text = width_cm + 0.1 * width_cm
     y_text = height_cm / 2.0

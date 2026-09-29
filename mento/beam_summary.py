@@ -29,8 +29,11 @@ def _translated(df: DataFrame) -> DataFrame:
     """A summary table in the language reports are currently rendered in.
 
     Only the columns holding words are touched. The symbol columns -- ``b``,
-    ``As,bot``, ``Av``, ``Mu``, ``DCRv`` -- are variable names, and units and
-    numbers read the same in every language, so they are left alone.
+    ``As,bot``, ``Mu``, ``DCRv`` -- are variable names, and units and
+    numbers read the same in every language, so they are left alone. The
+    ``Av`` cells of :meth:`BeamSummary.check` hold the compact stirrup
+    notation (``10 legs Ø12/14``), which is written in the current language
+    when the row is built, so it needs nothing here.
     """
     out = df.copy()
     for column in _WORD_COLUMNS:
@@ -193,11 +196,8 @@ class BeamSummary:
             beam: RectangularBeam = node.section  # type: ignore
             original_forces = [copy.deepcopy(force) for force in node.get_forces_list()]
 
-            rebar_v = (
-                "-"
-                if beam._stirrup_n == 0
-                else f"{int(beam._stirrup_n)}eØ{int(beam._stirrup_d_b.to('mm').magnitude)}/{int(beam._stirrup_s_l.to('cm').magnitude)}"
-            )  # noqa: E501
+            # The compact notation, in the language of the table: ``10 legs Ø12/14``.
+            rebar_v = "-" if beam._stirrup_n == 0 else beam.reinforcement.transverse.notation(compact=True)
             rebar_f_top = (
                 "-"
                 if beam._n1_t == 0

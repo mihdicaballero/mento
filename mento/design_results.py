@@ -21,10 +21,11 @@ import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Optional, Sequence, Tuple
 
-from mento.units import Quantity
+from mento.units import Quantity, ureg
 
 from mento.codes.check_state import to_display
 from mento.codes.registry import design_code
+from mento.i18n import translate
 from mento.precompute import DISPLAY
 from mento.design_warnings import steel_above_maximum
 
@@ -461,23 +462,165 @@ STIRRUPS = "stirrups"
 GRID = "grid"
 
 
-def format_transverse_rebar(layout: str, n_stirrups: int, d_b: str, s_l: str, s_w: str) -> str:
+def format_transverse_rebar(
+    layout: str,
+    n_stirrups: int,
+    d_b: str,
+    s_l: str,
+    s_w: str,
+    *,
+    n_legs: Optional[int] = None,
+    s_max_w: Optional[str] = None,
+    language: Optional[str] = "en",
+    separator: str = " · ",
+) -> str:
     """Label the transverse reinforcement in the notation of its element.
 
-    A beam is a number of closed stirrups of one diameter at one spacing along
-    the length, so the count leads: ``2eØ10/15cm``. A slab strip has no cage --
-    the same bar sits on a grid -- so what identifies it is the diameter once
-    and a spacing each way, longitudinal first: ``Ø10/15cm×20cm``. The diameter
-    is not repeated: both directions are the same bar.
+    A beam is a cage of closed stirrups, and what the shear check counts is
+    its legs, so the legs lead, then the bar and the spacing along the
+    length, then the spacing of the legs across the width -- which is what
+    ``s_max_w`` limits, and is printed after it when given:
+    ``10 legs Ø12 mm @ 14 cm · 15.87 cm between legs (max 20 cm)``. ``n_legs``
+    defaults to two per stirrup. A slab strip has no cage -- the same bar sits
+    on a grid -- so what identifies it is the diameter once and a spacing each
+    way, longitudinal first: ``Ø10/15cm×20cm``. The diameter is not repeated:
+    both directions are the same bar.
 
     Takes the numbers already formatted, so each caller keeps its own precision
-    and units while the shape of the label is decided in one place.
+    and units while the shape of the label is decided in one place. The words
+    are looked up in the catalog of ``language`` (English by default, the
+    language of the moment with ``None``; see :mod:`mento.i18n`), and
+    ``separator`` joins the two halves of a beam's label -- a line break
+    splits it in two for a drawing.
     """
     if n_stirrups == 0:
-        return "no stirrups"
+        return translate("no stirrups", language)
     if layout == GRID:
         return f"Ø{d_b}/{s_l}×{s_w}"
-    return f"{n_stirrups}eØ{d_b}/{s_l}"
+    legs = 2 * n_stirrups if n_legs is None else n_legs
+    text = translate("{n_legs} legs Ø{d_b} @ {s_l}", language, n_legs=legs, d_b=d_b, s_l=s_l)
+    text += separator + translate("{s_w} between legs", language, s_w=s_w)
+    if s_max_w is not None:
+        text += " " + translate("(max {s_max_w})", language, s_max_w=s_max_w)
+    return text
+
+
+def _is_imperial_length(value: Quantity) -> bool:
+    """Whether a spacing is in US customary units (inches or feet)."""
+    return value.units in (ureg.inch, ureg.foot)
+
+
+def transverse_notation(
+    layout: str,
+    n_stirrups: int,
+    d_b: Quantity,
+    s_l: Quantity,
+    s_w: Quantity,
+    s_max_w: Optional[Quantity] = None,
+    language: Optional[str] = None,
+    *,
+    separator: str = " · ",
+    compact: bool = False,
+) -> str:
+    """The notation of a transverse reinforcement given as quantities.
+
+    What :meth:`TransverseReinforcement.notation` and its siblings print. The
+    spacings across the width are shown in the unit of ``s_l``, so a beam
+    built in millimetres and designed in centimetres reads in one unit;
+    ``d_b`` keeps its own. Numbers take mento's ``.4g`` format with a dot.
+
+    ``compact`` is the form for a narrow column: bare numbers, the bar in mm
+    and the spacing in cm (in and in on a US customary section), and neither
+    the spacing across the width nor its maximum -- ``10 legs Ø12/14`` on a
+    beam, ``Ø10/8×16`` on a slab strip.
+    """
+    if compact:
+        if n_stirrups == 0:
+            return translate("no stirrups", language)
+        imperial = _is_imperial_length(s_l)
+        d_unit, s_unit = ("inch", "inch") if imperial else ("mm", "cm")
+        d_shown = f"{d_b.to(d_unit).magnitude:.4g}"
+        s_shown = f"{s_l.to(s_unit).magnitude:.4g}"
+        if layout == GRID:
+            return f"Ø{d_shown}/{s_shown}×{s_w.to(s_unit).magnitude:.4g}"
+        return translate("{n_legs} legs Ø{d_b}/{s_l}", language, n_legs=2 * n_stirrups, d_b=d_shown, s_l=s_shown)
+    if layout == GRID:
+        # The grid is written as it always was, each spacing in its own unit.
+        s_w_shown = f"{s_w:.4g~P}"
+        max_shown = None
+    else:
+        s_w_shown = f"{s_w.to(s_l.units):.4g~P}"
+        max_shown = None if s_max_w is None else f"{s_max_w.to(s_l.units):.4g~P}"
+    return format_transverse_rebar(
+        layout,
+        n_stirrups,
+        f"{d_b:.4g~P}",
+        f"{s_l:.4g~P}",
+        s_w_shown,
+        n_legs=2 * n_stirrups,
+        s_max_w=max_shown,
+        language=language,
+        separator=separator,
+    )
+
+
+def cage_legs(n_legs: int) -> Tuple[Tuple[Tuple[int, int], ...], Tuple[int, ...]]:
+    """How ``n_legs`` legs are tied into a cage: ``(closed_stirrups, crossties)``.
+
+    Legs are numbered 0 to ``n_legs - 1`` across the width. One perimeter
+    stirrup spans the whole section, on the outermost legs, and comes first;
+    each inner closed stirrup embraces two adjacent inner legs, (1, 2), (3, 4)
+    and so on. An odd count leaves one inner leg over, the last one, which is
+    a single crosstie. Ten legs are the perimeter stirrup (0, 9) and four
+    inner ones; nine legs, the perimeter (0, 8), three inner stirrups and a
+    crosstie on leg 7. A single leg is a lone crosstie.
+
+    mento's shear design only ever produces an even count -- closed stirrups,
+    two legs each -- so the crosstie is here for a cage described or drawn
+    from a given count, not for one the design picks.
+    """
+    if n_legs <= 0:
+        return (), ()
+    if n_legs == 1:
+        return (), (0,)
+    stirrups = [(0, n_legs - 1)]
+    inner = list(range(1, n_legs - 1))
+    stirrups += [(inner[i], inner[i + 1]) for i in range(0, len(inner) - 1, 2)]
+    crossties = (inner[-1],) if len(inner) % 2 else ()
+    return tuple(stirrups), crossties
+
+
+def describe_stirrup_cage(n_legs: int, language: Optional[str] = None) -> str:
+    """The cage of :func:`cage_legs` in words, for whoever details it.
+
+    ``perimeter stirrup + 4 inner stirrups`` for ten legs,
+    ``single perimeter stirrup`` for two, ``no stirrups`` for none; a crosstie
+    is added as ``+ 1 crosstie``. In the language of the moment unless
+    ``language`` says otherwise.
+    """
+    if n_legs <= 0:
+        return translate("no stirrups", language)
+    stirrups, crossties = cage_legs(n_legs)
+    parts = []
+    if len(stirrups) == 1 and not crossties:
+        return translate("single perimeter stirrup", language)
+    if stirrups:
+        parts.append(translate("perimeter stirrup", language))
+    inner = len(stirrups) - 1
+    if inner == 1:
+        parts.append(translate("1 inner stirrup", language))
+    elif inner > 1:
+        parts.append(translate("{n} inner stirrups", language, n=inner))
+    if crossties:
+        parts.append(translate("1 crosstie", language))
+    return " + ".join(parts)
+
+
+def transverse_arrangement(layout: str, n_stirrups: int, language: Optional[str] = None) -> str:
+    """The cage of a beam's stirrups in words; empty on a slab strip, which has no cage."""
+    if layout == GRID:
+        return ""
+    return describe_stirrup_cage(2 * n_stirrups, language)
 
 
 @dataclass(frozen=True)
@@ -502,14 +645,31 @@ class TransverseReinforcement:
         """Number of stirrup legs crossing the shear plane."""
         return self.n_stirrups * 2
 
-    def __str__(self) -> str:
-        return format_transverse_rebar(
+    def notation(self, language: Optional[str] = None, *, separator: str = " · ", compact: bool = False) -> str:
+        """The stirrups in the notation of the element, in ``language`` (the current one by default).
+
+        The configuration carries no limit, so no maximum is printed.
+        See :func:`transverse_notation` for ``separator`` and ``compact``.
+        """
+        return transverse_notation(
             self.layout,
             self.n_stirrups,
-            f"{self.d_b:.4g~P}",
-            f"{self.s_l:.4g~P}",
-            f"{self.s_w:.4g~P}",
+            self.d_b,
+            self.s_l,
+            self.s_w,
+            None,
+            language,
+            separator=separator,
+            compact=compact,
         )
+
+    def arrangement(self, language: Optional[str] = None) -> str:
+        """How the legs are tied into a cage, in words (see :func:`describe_stirrup_cage`); empty on a slab."""
+        return transverse_arrangement(self.layout, self.n_stirrups, language)
+
+    def __str__(self) -> str:
+        """Always English, like every ``str()`` of a result; :meth:`notation` follows the language."""
+        return self.notation(language="en")
 
 
 @dataclass(frozen=True)
@@ -673,14 +833,31 @@ class StirrupOption:
         """Number of stirrup legs crossing the shear plane."""
         return self.n_stirrups * 2
 
-    def __str__(self) -> str:
-        return format_transverse_rebar(
+    def notation(self, language: Optional[str] = None, *, separator: str = " · ", compact: bool = False) -> str:
+        """The stirrups in the notation of the element, in ``language`` (the current one by default).
+
+        Ends with the maximum spacing of the legs, ``s_max_w``, when there is one.
+        See :func:`transverse_notation` for ``separator`` and ``compact``.
+        """
+        return transverse_notation(
             self.layout,
             self.n_stirrups,
-            f"{self.d_b:.4g~P}",
-            f"{self.s_l:.4g~P}",
-            f"{self.s_w:.4g~P}",
+            self.d_b,
+            self.s_l,
+            self.s_w,
+            self.s_max_w,
+            language,
+            separator=separator,
+            compact=compact,
         )
+
+    def arrangement(self, language: Optional[str] = None) -> str:
+        """How the legs are tied into a cage, in words (see :func:`describe_stirrup_cage`); empty on a slab."""
+        return transverse_arrangement(self.layout, self.n_stirrups, language)
+
+    def __str__(self) -> str:
+        """Always English, like every ``str()`` of a result; :meth:`notation` follows the language."""
+        return self.notation(language="en")
 
 
 @dataclass(frozen=True)
@@ -753,14 +930,31 @@ class ShearDesign:
         """Number of stirrup legs crossing the shear plane."""
         return self.n_stirrups * 2
 
-    def __str__(self) -> str:
-        return format_transverse_rebar(
+    def notation(self, language: Optional[str] = None, *, separator: str = " · ", compact: bool = False) -> str:
+        """The stirrups in the notation of the element, in ``language`` (the current one by default).
+
+        Ends with the maximum spacing of the legs, ``s_max_w``, when there is one.
+        See :func:`transverse_notation` for ``separator`` and ``compact``.
+        """
+        return transverse_notation(
             self.layout,
             self.n_stirrups,
-            f"{self.d_b:.4g~P}",
-            f"{self.s_l:.4g~P}",
-            f"{self.s_w:.4g~P}",
+            self.d_b,
+            self.s_l,
+            self.s_w,
+            self.s_max_w,
+            language,
+            separator=separator,
+            compact=compact,
         )
+
+    def arrangement(self, language: Optional[str] = None) -> str:
+        """How the legs are tied into a cage, in words (see :func:`describe_stirrup_cage`); empty on a slab."""
+        return transverse_arrangement(self.layout, self.n_stirrups, language)
+
+    def __str__(self) -> str:
+        """Always English, like every ``str()`` of a result; :meth:`notation` follows the language."""
+        return self.notation(language="en")
 
 
 def transverse_layout(beam: RectangularBeam) -> str:

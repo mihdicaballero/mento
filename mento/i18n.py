@@ -1,4 +1,4 @@
-"""Language of the detailed report output.
+"""Language of the text mento presents: reports, drawings, warnings, stirrup notation.
 
 ``flexure_results_detailed``, ``shear_results_detailed`` and their ``_doc``
 counterparts print English by default. Switch the whole package once and every
@@ -18,8 +18,14 @@ instead of raising, so a new label always renders, translated or not.
 Adding a language is data, not code: write a ``{english: translation}`` mapping
 and register it in ``_CATALOGS``.
 
-Scope: report text only. Variable names (``fc``, ``Av``, ``DCR``), units,
-numbers, the design code designation and generated file names stay as they are.
+Scope. Translated: the detailed reports and the summaries, the text of the
+section drawing (``beam.plot()``), the warning messages (``DesignWarning.message``,
+worded when ``warnings`` is read), and the stirrup notation and cage description
+when asked for through ``notation()`` / ``arrangement()`` of a transverse result,
+which follow the language of the moment unless given one. Not translated: the
+``str()`` of any result object, which is always English, variable names (``fc``,
+``Av``, ``DCR``), units, numbers, the design code designation, generated file
+names, attribute names and error messages.
 """
 
 from __future__ import annotations
@@ -286,6 +292,25 @@ ES.update(
     }
 )
 
+# The stirrup notation and the description of the cage (mento.design_results),
+# asked for through ``notation()`` / ``arrangement()``. The wording is JPR's:
+# legs first, "c/" for the spacing along the member. "Gancho suplementario" is
+# the CIRSOC 201 name of the ACI crosstie.
+ES.update(
+    {
+        "{n_legs} legs Ø{d_b} @ {s_l}": "{n_legs} ramas Ø{d_b} c/{s_l}",
+        "{s_w} between legs": "{s_w} entre ramas",
+        "(max {s_max_w})": "(máx. {s_max_w})",
+        "{n_legs} legs Ø{d_b}/{s_l}": "{n_legs} ramas Ø{d_b}/{s_l}",
+        "no stirrups": "sin estribos",
+        "single perimeter stirrup": "estribo perimetral",
+        "perimeter stirrup": "estribo perimetral",
+        "1 inner stirrup": "1 interior",
+        "{n} inner stirrups": "{n} interiores",
+        "1 crosstie": "1 gancho suplementario",
+    }
+)
+
 # English is the source language, so its catalog is empty: every lookup falls
 # through to the key itself.
 _CATALOGS: Dict[str, Dict[str, str]] = {
@@ -302,7 +327,11 @@ def available_languages() -> Tuple[str, ...]:
 
 
 def set_language(language: str) -> None:
-    """Set the language of every detailed report produced from now on.
+    """Set the language of the text mento presents from now on.
+
+    Every detailed report and summary, the drawing, the warning messages, and
+    the ``notation()`` / ``arrangement()`` of a transverse result asked for
+    without a language. ``str()`` of a result stays English.
 
     Parameters
     ----------
@@ -321,7 +350,7 @@ def set_language(language: str) -> None:
 
 
 def get_language() -> str:
-    """The language detailed reports are currently rendered in."""
+    """The language mento currently presents its text in (see :func:`set_language`)."""
     return _language
 
 

@@ -597,8 +597,8 @@ def test_shear_design_always_gives_a_beam_stirrups(code: str) -> None:
     assert beam.shear_design.A_v.to("cm**2/m").magnitude > 0
 
 
-def test_a_designed_beam_is_labelled_by_its_stirrup_count() -> None:
-    """The beam notation is unchanged by the slab one: count, diameter, spacing."""
+def test_a_designed_beam_is_labelled_by_its_legs() -> None:
+    """A beam is written legs first, then the bar, s_l and the spacing of the legs across the width."""
     beam = RectangularBeam(
         label="B1",
         concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
@@ -611,7 +611,11 @@ def test_a_designed_beam_is_labelled_by_its_stirrup_count() -> None:
 
     transverse = beam.reinforcement.transverse
     assert transverse.layout == "stirrups"
-    assert str(transverse) == f"{transverse.n_stirrups}eØ{transverse.d_b:.4g~P}/{transverse.s_l:.4g~P}"
+    assert str(transverse) == (
+        f"{transverse.n_legs} legs Ø{transverse.d_b:.4g~P} @ {transverse.s_l:.4g~P}"
+        f" · {transverse.s_w.to(transverse.s_l.units):.4g~P} between legs"
+    )
+    assert str(transverse) == "2 legs Ø10 mm @ 23 cm · 14 cm between legs"
     assert beam._shear_reinforcement["Variable"][:3] == ["ns", "db", "s"]
 
 
@@ -2923,7 +2927,7 @@ def test_plot_annotates_stirrups_and_draws_two_legs() -> None:
     beam = _plot_beam(n_stirrups=2, d_b_stirrup=6 * mm, s_l=20 * cm)
 
     texts = [t.get_text() for t in beam._ax.texts]
-    assert "2eØ6/20" in texts
+    assert "4 legs Ø6/20" in texts
 
     fancy_bboxes = [p for p in beam._ax.patches if isinstance(p, FancyBboxPatch)]
     assert len(fancy_bboxes) == 4, "Two stirrups are drawn as two patches each (outer + inner line)."
@@ -2938,7 +2942,7 @@ def test_plot_three_stirrups_adds_two_inner_ones() -> None:
     assert len(fancy_bboxes) == 6, "Outer stirrup plus two inner stirrups."
 
     texts = [t.get_text() for t in beam._ax.texts]
-    assert "3eØ6/15" in texts
+    assert "6 legs Ø6/15" in texts
 
     plt.close()
 
@@ -2947,7 +2951,7 @@ def test_plot_without_stirrups_has_no_stirrup_text() -> None:
     beam = _plot_beam(n_stirrups=0, d_b_stirrup=0 * mm, s_l=0 * cm)
 
     texts = [t.get_text() for t in beam._ax.texts]
-    assert not any("eØ" in t for t in texts)
+    assert not any("legs" in t for t in texts)
 
     plt.close()
 

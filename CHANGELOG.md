@@ -12,6 +12,50 @@ from the release history and are summaries rather than complete lists.
 
 ## [Unreleased]
 
+Nothing is removed, but the stirrup text and some report rows change. `str()` of a result
+and the report text are presentation, not API; a program should read the fields.
+
+### Migration notes
+
+- `str()` of `TransverseReinforcement`, `ShearDesign` and `StirrupOption` on a beam reads
+  `10 legs Ø12 mm @ 14 cm · 15.87 cm between legs (max 20 cm)` instead of
+  `5eØ12 mm/14 cm`, and is always English. Read `n_stirrups`, `n_legs`, `d_b`, `s_l`, `s_w`
+  and `s_max_w` instead of parsing it; use `notation(language)` for another language.
+- `format_transverse_rebar(...)` returns the new text for the same positional call.
+- `str(beam.reinforcement)` changes in its stirrup part.
+- The `BeamSummary.check()` "Av" cell changes text (`10 legs Ø12/14`) and follows
+  `set_language` (a program that exported it with `to_excel` sees the new text). The Word
+  Beam Data table keeps `ns`, the number of closed stirrups.
+
+### Changed
+
+- **Stirrups are written legs first.** A beam's transverse reinforcement reads
+  `10 legs Ø12 mm @ 14 cm · 15.87 cm between legs`, and a design or check result adds the
+  limit the legs are checked against: `… (max 20 cm)`. `5eØ12/14` read like five stirrups
+  one behind the other, and said nothing of the legs or of how far apart they are across
+  the width — the spacing the CIRSOC 201-25 Tabla 9.7.6.2.2 limit forces five stirrups for
+  on the user's 150×150 beam. `notation(language=None, *, separator=" · ", compact=False)`
+  and `arrangement(language=None)` on `TransverseReinforcement`, `ShearDesign` and
+  `StirrupOption` give it in the language of `set_language` (Spanish:
+  `10 ramas Ø12 mm c/14 cm · 15.87 cm entre ramas (máx. 20 cm)`) and describe the cage
+  for whoever details it: `perimeter stirrup + 4 inner stirrups` /
+  `estribo perimetral + 4 interiores`. `cage_legs(n_legs)` and
+  `describe_stirrup_cage(n_legs, language)` are that cage as data and as words — one
+  perimeter stirrup on the outer legs and inner closed stirrups on legs (2,3), (4,5)…,
+  an odd leg left as a crosstie. The spacings across the width are printed in the unit
+  of `s_l`. `compact=True` is the form for a narrow column, `10 legs Ø12/14`, which the
+  `BeamSummary.check()` "Av" cell now shows with `.4g` spacings instead of truncating them.
+  The slab grid notation (`Ø10 mm/8 cm×16 cm`) is unchanged; `no stirrups` is translatable.
+- **Language scope.** `set_language` now also covers the stirrup notation and the cage
+  description asked for through `notation()` / `arrangement()`. `str()` of every result
+  stays English.
+
+### Fixed
+
+- The notebook shear line of a slab (`slab.shear_results`) printed `10eØ8/16.0 cm` for a
+  `Ø10/8×16` grid: it read the detail table by position, and a slab's has other rows. It
+  now prints the element's own notation, and reads `A_v` by its row label.
+
 ### Added
 
 - **The row of Table 9.7.6.2.2 is recorded by the check.** The ACI 318-19 / CIRSOC 201-25

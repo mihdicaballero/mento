@@ -160,10 +160,8 @@ def shear_results(self: "RectangularBeam") -> None:
         if self._A_v == 0 * cm:
             rebar_v = "not assigned"
         else:
-            rebar_v = (
-                f"{int(_details(limiting_reinforcement)['Value'][0])}eØ{_details(limiting_reinforcement)['Value'][1]}/"
-                f"{_details(limiting_reinforcement)['Value'][2]} cm"
-            )
+            # English on purpose: the notebook summary line is (see language.rst).
+            rebar_v = self.shear_design.notation(language="en")
         # Limitng cases checks
         warning = "⚠️ Some checks failed, see detailed results." if not checks_pass else ""
         # Each code names these quantities its own way, and puts its capacity
@@ -172,7 +170,7 @@ def shear_results(self: "RectangularBeam") -> None:
         capacity = _details(limiting_shear_concrete)["Value"][symbols["capacity_row"]]
         markdown_content = (
             f"Shear reinforcing {rebar_v}, ${symbols['reinforcement']}$"
-            f"={_details(limiting_reinforcement)['Value'][6]} cm²/m"
+            f"={_row_value(_details(limiting_reinforcement), 'Defined shear reinforcing')} cm²/m"
             f", ${symbols['demand']}$={_details(limiting_forces)['Value'][1]} kN"
             f", ${symbols['capacity']}$={capacity} kN → {formatted_DCR} {warning}"
         )
@@ -182,6 +180,16 @@ def shear_results(self: "RectangularBeam") -> None:
     _show(markdown_content)
 
     return None
+
+
+def _row_value(table: Dict[str, Any], label: str) -> Any:
+    """The value of the row of a detail table whose label is ``label``.
+
+    Read by label, not by position: the rows a table carries depend on the
+    element and the code, and the English label is the key every builder uses.
+    """
+    labels = next(iter(table.values()))
+    return table["Value"][labels.index(label)]
 
 
 def results(self: "RectangularBeam") -> None:
