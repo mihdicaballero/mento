@@ -21,6 +21,7 @@ from mento.material import (
     Concrete_CIRSOC_201_25,
 )
 from mento.precompute import section_floats
+from mento.codes.registry import design_code
 from mento.units import psi, kip, inch, ksi, mm, kN, cm, MPa, ft, kNm
 from mento.forces import Forces
 from mento.codes.ACI_318_19_beam import (
@@ -713,6 +714,100 @@ def test_min_legs_along_width() -> None:
 
     # A degenerate limit falls back to a single stirrup rather than looping forever.
     assert rebar.min_legs_along_width(10 * mm, 0 * cm) == 2
+
+
+def _wide_cirsoc_beam() -> RectangularBeam:
+    """JPR's case on mentocalc.com: CIRSOC 201-25, H-25, ADN 420, 150x150 cm, c_c 30 mm."""
+    return RectangularBeam(
+        label="V1",
+        concrete=Concrete_CIRSOC_201_25(name="H-25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=150 * cm,
+        height=150 * cm,
+        c_c=30 * mm,
+    )
+
+
+def test_wide_cirsoc_beam_takes_five_stirrups_for_the_across_width_limit() -> None:
+    """Five closed stirrups, ten legs, because of the across-width limit of Tabla 9.7.6.2.2.
+
+    Mu = 5000 kN·m, Vu = 5000 kN. V_s,req = 4828.12 kN passes 0.33·√f'c·bw·d =
+    3568.95 kN, so both limits are the halved row's, capped at 200 mm by CIRSOC:
+    s_max,l = min(d/4, 200 mm) and s_max,w = min(d/2, 200 mm), 20 cm each. Four
+    stirrups would put eight legs (150 - 6 - 1.2)/7 = 20.40 cm apart; five put
+    ten at 15.87 cm. A_v, not the width, is what the diameter and s_l follow.
+    """
+    beam = _wide_cirsoc_beam()
+    node = Node(section=beam, forces=[Forces(label="C1", M_y=5000 * kNm, V_z=5000 * kN)])
+    node.design()
+
+    bottom = beam.reinforcement.bottom
+    assert [(layer.n, layer.d_b.to("mm").magnitude) for layer in bottom.layers] == [(2, 32), (10, 32)]
+    assert beam.reinforcement.top.layers == ()
+    shear = beam.shear_design
+    assert (shear.n_stirrups, shear.n_legs) == (5, 10)
+    assert shear.d_b.to("mm").magnitude == pytest.approx(12)
+    assert shear.s_l.to("cm").magnitude == pytest.approx(14)
+    assert shear.s_w.to("cm").magnitude == pytest.approx(15.8667, abs=1e-4)
+    assert beam._stirrup_s_max_l.to("cm").magnitude == pytest.approx(20.0)
+    assert beam._stirrup_s_max_w.to("cm").magnitude == pytest.approx(20.0)
+    assert beam._V_s_req.to("kN").magnitude == pytest.approx(4828.12, abs=0.01)
+    threshold = 0.33 * math.sqrt(25) * beam._A_cv.to("mm**2").magnitude / 1000
+    assert threshold == pytest.approx(3568.95, abs=0.01)
+    assert shear.DCR == pytest.approx(0.9904, abs=1e-4)
+    assert node.warnings == ()
+
+
+def test_check_state_records_the_row_of_table_9_7_6_2_2() -> None:
+    """The check keeps the threshold it compared against and the row it took.
+
+    The user's case passes the threshold (the halved row); a combination with
+    V_s,req = 161.45 kN stays under it.
+    """
+    beam = _wide_cirsoc_beam()
+    Node(section=beam, forces=[Forces(label="C1", M_y=5000 * kNm, V_z=5000 * kN)]).design()
+    code = design_code(beam.concrete)
+
+    high = code.check_shear(beam, Forces(label="C1", M_y=5000 * kNm, V_z=5000 * kN))
+    assert high.V_s_threshold / 1000 == pytest.approx(3568.95, abs=0.01)
+    assert high.V_s_threshold == 0.33 * math.sqrt(25.0) * high.A_cv
+    assert high.spacing_halved is True
+    V_s_req, V_s_threshold, halved, s_max_l_table, s_max_w = high.spacing_quantities(False)
+    assert V_s_req.to("kN").magnitude == pytest.approx(4828.12, abs=0.01)
+    assert V_s_threshold.to("kN").magnitude == pytest.approx(3568.95, abs=0.01)
+    assert halved is True
+    assert s_max_l_table.to("cm").magnitude == pytest.approx(20.0)
+    assert s_max_w.to("cm").magnitude == pytest.approx(20.0)
+
+    low = code.check_shear(beam, Forces(label="C2", M_y=1000 * kNm, V_z=1500 * kN))
+    assert low.V_s_req / 1000 == pytest.approx(161.45, abs=0.01)
+    assert low.spacing_halved is False
+    # Under the threshold the row is d/2 and d, capped at 400 mm.
+    assert low.stirrup_s_max_l == pytest.approx(400.0)
+    assert low.stirrup_s_max_w == pytest.approx(400.0)
+
+
+def test_en_check_state_has_no_threshold_and_no_limits_without_stirrups() -> None:
+    """EN 1992-1-1 has no threshold row; with no stirrups the check sets no limit."""
+    beam = RectangularBeam(
+        label="E1",
+        concrete=Concrete_EN_1992_2004(name="C25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="B500S", f_y=500 * MPa),
+        width=30 * cm,
+        height=60 * cm,
+        c_c=25 * mm,
+    )
+    beam.set_longitudinal_rebar_bot(n1=3, d_b1=16 * mm)
+    code = design_code(beam.concrete)
+    bare = code.check_shear(beam, Forces(label="C1", V_z=20 * kN))
+    assert bare.spacing_quantities(False) == (None, None, None, None, None)
+
+    beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=20 * cm)
+    braced = code.check_shear(beam, Forces(label="C1", V_z=20 * kN))
+    V_s_req, V_s_threshold, halved, s_max_l_table, s_max_w = braced.spacing_quantities(False)
+    assert (V_s_req, V_s_threshold, halved) == (None, None, None)
+    assert s_max_l_table.to("mm").magnitude == pytest.approx(braced.stirrup_s_max_l)
+    assert s_max_w.to("mm").magnitude == pytest.approx(braced.stirrup_s_max_w)
 
 
 # # ------- FLEXURE TEST --------------

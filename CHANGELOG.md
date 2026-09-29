@@ -12,6 +12,17 @@ from the release history and are summaries rather than complete lists.
 
 ## [Unreleased]
 
+### Added
+
+- **The row of Table 9.7.6.2.2 is recorded by the check.** The ACI 318-19 / CIRSOC 201-25
+  shear equations gain `stirrup_spacing_threshold(f_c, A_cv)` — 0.33·√f'c·bw·d, 4·√f'c·bw·d
+  in psi, with the plain root (the table has no §22.5.3.1 ceiling and no λ) — and
+  `stirrup_spacing_halved(V_s_req, f_c, A_cv)`, which `max_stirrup_spacing` now calls, so
+  the row is decided in one place and every limit is the same number as before. The
+  check state keeps both (`V_s_threshold`, `spacing_halved`) beside the limits it set. On
+  the 150×150 CIRSOC beam of the user's case (Mu 5000 kN·m, Vu 5000 kN) V_s,req =
+  4828.12 kN passes 3568.95 kN, which is why both limits are 20 cm.
+
 ## [1.3.0] - 2026-09-27
 
 ### Migration notes

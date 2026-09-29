@@ -335,6 +335,10 @@ def _calculate_rebar_spacing_aci(self: "RectangularBeam", st: ShearCheckState) -
         st.stirrup_s_max_l,
         st.stirrup_s_max_w,
     ) = max_stirrup_spacing_ACI_318_19(self, st.V_s_req, st.A_cv)
+    # Which row of the table that was, from the same floats, so the public
+    # result and the report can say it without comparing again.
+    st.V_s_threshold = shear_eq.stirrup_spacing_threshold(sec.f_c, st.A_cv, is_imperial=sec.is_imperial)
+    st.spacing_halved = shear_eq.stirrup_spacing_halved(st.V_s_req, sec.f_c, st.A_cv, is_imperial=sec.is_imperial)
 
 
 def _stirrup_compression_support_ACI_318_19(
