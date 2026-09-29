@@ -1,7 +1,7 @@
 """Tests for the public design results API (mento.design_results)."""
 
 import math
-from typing import Any
+from typing import Any, Dict
 
 import pytest
 from pandas import DataFrame
@@ -1015,7 +1015,7 @@ def test_results_keep_their_positional_construction_of_1_3_0() -> None:
 
 
 def test_envelope_of_the_spacing_fields() -> None:
-    """Tightest limits, largest V_s,req, the governing combination's row; None with nothing set."""
+    """Tightest limits, largest V_s,req with its threshold, halved if any combination was; None with nothing set."""
 
     def shear(label: str, DCR: float, s_l: Any, s_w: Any, halved: Any, V_s: Any) -> ShearCheck:
         return ShearCheck(
@@ -1048,14 +1048,50 @@ def test_envelope_of_the_spacing_fields() -> None:
     )
     nothing = envelope_shear([shear("C1", 0.5, None, None, None, None)])
     assert (nothing.V_s_req, nothing.spacing_halved, nothing.s_max_l_table, nothing.s_max_w) == (None, None, None, None)
-    # Among combinations tied on DCR, one with no capacity loses to one that has it.
-    tied = envelope_shear(
-        [
-            ShearCheck("C1", None, None, 0.5, None, spacing_halved=False),
-            ShearCheck("C2", None, None, 0.5, 100 * kN, spacing_halved=True),
-        ]
+    # A row recorded without a demand still counts; with none halved, the envelope is not.
+    rows_only = [
+        ShearCheck("C1", None, None, 0.5, None, spacing_halved=False),
+        ShearCheck("C2", None, None, 0.5, 100 * kN, spacing_halved=True),
+    ]
+    assert envelope_shear(rows_only).spacing_halved is True
+    assert envelope_shear(rows_only[:1]).spacing_halved is False
+
+
+def test_the_envelope_row_agrees_with_its_demand_and_limits() -> None:
+    """The governing DCR on the low row, another combination past the threshold: the envelope is halved.
+
+    Under axial load the combination with the largest DCR need not be the one
+    that asks the stirrups for the most shear. The envelope's limits are the
+    halved row's, so its ``spacing_halved`` must say so, and ``V_s_req`` must
+    read past ``V_s_threshold`` -- as on any single combination.
+    """
+    common: Dict[str, Any] = {"A_v_req": None, "A_v_min": None, "V_s_threshold": 300 * kN}
+    low = ShearCheck(
+        "C1",
+        DCR=0.95,
+        V_capacity=500 * kN,
+        V_s_req=200 * kN,
+        spacing_halved=False,
+        **common,
+        s_max_l_table=30 * cm,
+        s_max_w=60 * cm,
     )
-    assert tied.spacing_halved is True
+    high = ShearCheck(
+        "C2",
+        DCR=0.60,
+        V_capacity=900 * kN,
+        V_s_req=400 * kN,
+        spacing_halved=True,
+        **common,
+        s_max_l_table=15 * cm,
+        s_max_w=30 * cm,
+    )
+    env = envelope_shear([low, high])
+
+    assert env.V_capacity == 500 * kN  # still the governing DCR's
+    assert (env.V_s_req, env.V_s_threshold, env.spacing_halved) == (400 * kN, 300 * kN, True)
+    assert (env.s_max_l_table, env.s_max_w) == (15 * cm, 30 * cm)
+    assert (env.V_s_req > env.V_s_threshold) is env.spacing_halved
 
 
 @pytest.mark.parametrize("imperial", [False, True])

@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Optional, Sequence, Tuple, cast
 
 from mento.units import Quantity, ureg
 
@@ -331,40 +331,43 @@ def envelope_flexure_face(checks: Sequence[FlexureCheck], face: str) -> FlexureF
     )
 
 
-def _governing_check(checks: Sequence[ShearCheck]) -> Optional[ShearCheck]:
-    """The combination whose DCR the envelope reports, or None with none checked.
-
-    The one :func:`_governing` reads the capacity from: the largest DCR, and
-    among ties the smallest capacity.
-    """
-    if not checks:
+def _largest_demand(checks: Sequence[ShearCheck]) -> Optional[ShearCheck]:
+    """The combination that asks the stirrups for the most shear, or None if none set ``V_s_req``."""
+    present = [check for check in checks if check.V_s_req is not None]
+    if not present:
         return None
+    return max(present, key=lambda check: cast(Quantity, check.V_s_req))
 
-    def key(check: ShearCheck) -> Tuple[float, bool, float]:
-        capacity = check.V_capacity
-        return (-check.DCR, capacity is None, 0.0 if capacity is None else float(capacity.magnitude))
 
-    return min(checks, key=key)
+def _any_halved(checks: Sequence[ShearCheck]) -> Optional[bool]:
+    """Whether some combination took the halved row of Table 9.7.6.2.2; None if none recorded a row."""
+    rows = [check.spacing_halved for check in checks if check.spacing_halved is not None]
+    return any(rows) if rows else None
 
 
 def envelope_shear(checks: Sequence[ShearCheck]) -> ShearCheck:
     """Worst shear demand across every combination checked.
 
     The spacing limits are the tightest of any combination, which is what the
-    warnings hold each one to; ``V_s_req`` is the largest; the threshold and
-    the row of Table 9.7.6.2.2 are those of the combination whose DCR governs,
-    the one ``V_capacity`` comes from.
+    warnings hold each one to. The fields that say why agree with them:
+    ``V_s_req`` is the largest of any combination, ``V_s_threshold`` is the
+    one that same combination was compared with, and ``spacing_halved`` is
+    True when any combination took the halved row of Table 9.7.6.2.2 -- the
+    row the tightest limits come from. So the envelope reads as one
+    combination would: halved exactly when ``V_s_req`` is past
+    ``V_s_threshold``. ``V_capacity`` follows the governing DCR, as on
+    :func:`envelope_flexure_face`.
     """
-    governing = _governing_check(checks)
+    demand = _largest_demand(checks)
     return ShearCheck(
         label="envelope",
         A_v_req=_worst([c.A_v_req for c in checks]),
         A_v_min=_worst([c.A_v_min for c in checks]),
         DCR=max([c.DCR for c in checks], default=0.0),
         V_capacity=_governing([(c.DCR, c.V_capacity) for c in checks]),
-        V_s_req=_worst([c.V_s_req for c in checks]),
-        V_s_threshold=None if governing is None else governing.V_s_threshold,
-        spacing_halved=None if governing is None else governing.spacing_halved,
+        V_s_req=None if demand is None else demand.V_s_req,
+        V_s_threshold=None if demand is None else demand.V_s_threshold,
+        spacing_halved=_any_halved(checks),
         s_max_l_table=_least([c.s_max_l_table for c in checks]),
         s_max_w=_least([c.s_max_w for c in checks]),
     )
