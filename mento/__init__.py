@@ -92,6 +92,7 @@ __all__ = [
     "WallShearDesign",
     "DesignNotRunError",
     "NotABeamError",
+    "SectionGeometry",
 ]
 
 if TYPE_CHECKING:
@@ -120,6 +121,7 @@ if TYPE_CHECKING:
     from mento.wall_results import MeshDirection, WallMesh, WallShearCheck, WallShearDesign
     from mento.design_results import DesignNotRunError
     from mento.shear_wall import NotABeamError
+    from mento.section_geometry import SectionGeometry
 
 
 def __getattr__(name: str) -> object:
@@ -163,6 +165,7 @@ def __getattr__(name: str) -> object:
         "WallShearDesign": "wall_results",
         "DesignNotRunError": "design_results",
         "NotABeamError": "shear_wall",
+        "SectionGeometry": "section_geometry",
     }
 
     if name in module_mapping:

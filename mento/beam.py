@@ -31,6 +31,7 @@ from mento.settings import BeamSettings
 from mento.reports import views
 from mento.reports.documents import flexure_report_doc, shear_report_doc
 from mento.plots.sections import plot_beam_section
+from mento.section_geometry import SectionGeometry, build_section_geometry
 from mento.reports.tables import build_flexure_report, build_shear_report
 from mento.design_results import (
     FlexureCheck,
@@ -1774,6 +1775,23 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         ``DCR``), use :attr:`flexure_design` and :attr:`shear_design`.
         """
         return build_reinforcement(self)
+
+    @property
+    def section_geometry(self) -> SectionGeometry:
+        """Where the bars and the stirrup legs of this section are, as data.
+
+        Configuration, like :attr:`reinforcement`: readable at any time. The
+        positions are the model the checks use -- the legs evenly spread at
+        the ``s_w`` the shear check reads, the bars one clear spacing apart --
+        so a drawing can show that section without deriving anything::
+
+            geometry = beam.section_geometry
+            geometry.leg_x, geometry.stirrups, geometry.bars_on("bottom")
+            geometry.to_dict("cm")
+
+        See :mod:`mento.section_geometry`.
+        """
+        return build_section_geometry(self)
 
     @property
     def flexure_design(self) -> FlexureDesign:

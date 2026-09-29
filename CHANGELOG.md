@@ -84,6 +84,23 @@ and the report text are presentation, not API; a program should read the fields.
   defaults, so a result built positionally with the 1.3.0 arguments still builds
   (ADR-0001).
 
+- **The section geometry is public.** `beam.section_geometry` returns a frozen
+  `SectionGeometry` (exported from `mento`; module `mento.section_geometry`): the stirrup
+  legs (`leg_x`), the closed stirrups (`ClosedStirrup`, perimeter first) and crossties
+  (`Crosstie`), and every bar (`BarPosition`: centre, diameter, face, layer, group), as
+  quantities in the display unit of the section, origin at the bottom-left corner. They
+  are the positions the checks assume, not a drawing's: the legs evenly spread at the
+  `s_w` the shear check reads (`x_i = c_c + d_st/2 + i·s_w`), one perimeter stirrup plus
+  inner stirrups on legs (2,3), (4,5)…, and the bars one clear spacing apart with the
+  first face at `c_c + d_st` and the layers at the offsets of the effective depth. On the
+  user's 150×150 beam that is ten legs 15.87 cm apart, from 3.6 to 146.4 cm, and twelve
+  Ø32 from 5.8 to 144.2 cm. `to_dict(unit)` gives the same as plain floats, for a
+  consumer that does not speak pint, and `arrangement(language)` the cage in words. A
+  slab strip publishes the section and no bars or legs: it is detailed by spacings, and
+  bars at the beam's clear-spacing rule would contradict its `Ø10/14` label. The legs are
+  not tied to the bars — the checks do not do that either — so an inner leg may sit where
+  there is no bar. A `ShearWall` raises `NotABeamError`.
+
 ## [1.3.0] - 2026-09-27
 
 ### Migration notes
