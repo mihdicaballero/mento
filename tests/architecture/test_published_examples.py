@@ -7,10 +7,17 @@ marked asserted mento's own output. So every marked test
 carries, in its docstring, a paragraph that starts with ``Source:`` and says which
 document the number comes from and where in it it sits::
 
-    Source: BEAM-01-Flexure-Rectangle ACI 318-19-v6.xlsm, sheet Flexion, row 29, column BC.
-    Source: Calcpad "ACI 318-19 Beam Shear 01 - Imperial.cpd".
-    Source: The Concrete Centre, "How to design concrete structures using Eurocode 2",
-    3. Slabs, p. 3, Table 5.
+    Source: CRSI, Design Guide on the ACI 318 Building Code Requirements for
+    Structural Concrete, §6.9.2, Example 6.2, p. 6-66, Table 6.24.
+    Source: CSI Software Verification, ETABS, "ACI 318-19 Example 001", p. 2.
+    Source: ETABS run recorded in BEAM-01-Flexure-Rectangle ACI 318-19-v6.xlsm, sheet
+    Flexion, row 29, column BC.
+
+A Calcpad sheet is not a source. It reproduces a calculation with units, which
+is how a contributor checks one, but it publishes nothing a reader can hold mento
+to: the number has to come from the book, code, design guide or program run the
+sheet follows. A ``Source:`` that names a Calcpad sheet fails, and the tests
+that once rested on one stay in ``tests/`` as regression tests, unmarked.
 
 The test modules are read with ``ast``, as ``test_architecture_boundaries`` does,
 so a mark added without its source fails CI instead of needing to be noticed in
@@ -33,14 +40,16 @@ TEST_MODULES = sorted(TESTS_ROOT.rglob("test_*.py"))
 VALIDATION = TESTS_ROOT / "validation"
 MARK = "published_example"
 
-# Where in the document the number is. A Calcpad sheet is one computation, so
-# its file name is enough; a workbook needs the sheet and the row, column or
-# cell; a publication needs the page, table, figure, equation, example or section.
+# Where in the document the number is. A workbook of program runs needs the
+# sheet and the row, column or cell; a publication needs the page, table,
+# figure, equation, example or section.
 _LOCATOR = re.compile(
-    r"\.cpd\b|\bsheet\b|\brow\b|\bcolumn\b|\bcell\b|\bpage\b|\bp\.\s*\d|\bpp\.\s*\d|§"
+    r"\bsheet\b|\brow\b|\bcolumn\b|\bcell\b|\bpage\b|\bp\.\s*\d|\bpp\.\s*\d|§"
     r"|\btable\b|\bfig\.|\bfigure\b|\beq\.|\bequation\b|\bexample\b|\bsection\b",
     re.IGNORECASE,
 )
+# A Calcpad sheet, by name or by file: a reproduction, not a source.
+_CALCPAD = re.compile(r"\bcalcpad\b|\.cpd\b", re.IGNORECASE)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -114,16 +123,20 @@ def test_each_marked_test_cites_its_source(marked: MarkedTest) -> None:
     assert marked.docstring, f"{where} is marked {MARK} but has no docstring: say where its numbers come from"
     source = _source_paragraph(marked.docstring)
     assert source, f"{where} is marked {MARK} but its docstring has no 'Source:' paragraph"
+    assert not _CALCPAD.search(source), (
+        f"{where}: the 'Source:' paragraph names a Calcpad sheet, which reproduces a calculation "
+        f"but does not publish one; cite the book, code, guide or program run it follows: {source!r}"
+    )
     assert _LOCATOR.search(source), (
         f"{where}: the 'Source:' paragraph names no place in the document "
-        f"(a .cpd sheet; sheet + row/column/cell; page, table, figure, equation or section): {source!r}"
+        f"(sheet + row/column/cell; page, table, figure, equation, example or section): {source!r}"
     )
 
 
 def test_the_marked_tests_live_in_validation_and_nothing_else_does() -> None:
     """``tests/validation/`` holds the tests that reproduce a case validated outside mento.
 
-    So a reader goes to one folder for the book, guide and Calcpad cases, and to
+    So a reader goes to one folder for the book, guide and program-run cases, and to
     the rest of ``tests/`` for the ones written against mento itself. A marked
     test elsewhere, or an unmarked one in there, fails.
     """

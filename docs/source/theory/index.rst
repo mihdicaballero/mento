@@ -11,8 +11,17 @@ decisions mento makes where the code leaves room for judgement.
 The intent is auditability. A structural engineer signing off on a design needs to
 verify that the tool agrees with the code, and to know exactly where it does not
 follow the most common interpretation. Every page therefore ends with a
-**Validation** table mapping each check to the test that pins it and to the external
-source that test is verified against.
+**Validation** table mapping each check to the test that pins it and to what that
+test is verified against.
+
+A check counts as *validated* when its test reproduces numbers printed in a document
+outside mento — a design guide, a textbook or code example, a software verification
+manual such as CSI's ETABS examples, or a recorded run of another program — and cites
+the page, table or row they come from. Those tests live in ``tests/validation/`` and
+are the ones the release counts. A Calcpad sheet does not qualify on its own: it
+reproduces a calculation with units, which is a good way to check one, but it
+publishes nothing a reader can hold mento to. Rows whose only reference is a Calcpad
+sheet are listed as regression tests.
 
 .. toctree::
    :hidden:

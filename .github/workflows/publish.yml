@@ -107,8 +107,9 @@ jobs:
 
       # The number on the home page of mento-web. It counts the tests marked
       # `published_example` -- the ones that reproduce a case validated outside
-      # mento: a Calcpad sheet, a published example or design guide, an ETABS
-      # or spreadsheet cross-check, each citing its source in its docstring
+      # mento: a published example or design guide, a software verification
+      # manual, a recorded ETABS run, each citing the page or row of its source
+      # in its docstring; a Calcpad sheet alone does not count
       # (tests/architecture/test_published_examples.py). It is only ever that count: with
       # nothing marked it publishes 0 and warns, never the size of the whole
       # suite, which is not what the number means. Collecting imports every
