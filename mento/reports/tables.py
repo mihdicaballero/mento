@@ -37,12 +37,15 @@ def _transverse_rebar_rows(
     d_b_shown: Quantity,
     round_to: int | None = 3,
 ) -> tuple[list[str], list[str], list[Any], list[str]]:
-    """The three rows that identify the transverse reinforcement of a section.
+    """The rows that identify the transverse reinforcement of a section.
 
-    A beam is a stirrup count, a diameter and a spacing along the length. A slab
-    strip has no cage to count, so the count gives way to the spacing across the
-    width, which is what actually detailed it and had no row of its own. Three
-    rows either way, so every column of the table stays the same length.
+    A beam is a cage: the closed stirrups, the legs they put across the shear
+    plane -- two each, what ``A_v`` counts -- a diameter, a spacing along the
+    length, and the spacing of the legs across the width that falls out of
+    the count, the one Table 9.7.6.2.2 limits. Five rows. A slab strip has no
+    cage to count, so the count gives way to the spacing across the width,
+    which is what actually detailed it: three rows. The columns of the table
+    stay the same length either way.
     """
 
     def shown(value: Quantity, unit: str) -> Any:
@@ -59,10 +62,16 @@ def _transverse_rebar_rows(
             ["mm", "cm", "cm"],
         )
     return (
-        ["Number of stirrups", "Stirrup diameter", "Stirrup spacing"],
-        ["ns", "db", "s"],
-        [self._stirrup_n, diameter, s_l],
-        ["", "mm", "cm"],
+        ["Number of stirrups", "Number of legs", "Stirrup diameter", "Stirrup spacing", "Leg spacing across width"],
+        ["ns", "nl", "db", "s", "sw"],
+        [
+            self._stirrup_n,
+            2 * int(self._stirrup_n),
+            diameter,
+            s_l,
+            round(self._leg_spacing_across_width().to("cm").magnitude, 2),
+        ],
+        ["", "", "mm", "cm", "cm"],
     )
 
 
@@ -243,11 +252,15 @@ def _builders_for(self: "RectangularBeam") -> Dict[str, Any]:
         ) from None
 
 
-def build_shear_report(self: "RectangularBeam", force: Forces) -> pd.DataFrame:
-    """Result row and detail tables for the shear combination just checked."""
+def build_shear_report(self: "RectangularBeam", force: Forces, state: Any) -> pd.DataFrame:
+    """Result row and detail tables for the shear combination just checked.
+
+    ``state`` is what the check returned; the detail tables read from it what
+    the compatibility layer does not carry, such as the row of Table 9.7.6.2.2.
+    """
     builders = _builders_for(self)
     row = builders["shear_row"](self, force)
-    builders["shear_details"](self)
+    builders["shear_details"](self, state)
     return row if isinstance(row, pd.DataFrame) else pd.DataFrame([row], index=[0])
 
 
@@ -314,8 +327,61 @@ def _compile_results_ACI_flexure_metric(self: "RectangularBeam", force: Forces) 
     return result
 
 
-def _initialize_dicts_ACI_318_19_shear(self: "RectangularBeam") -> None:
-    """Initialize the dictionaries used in check and design methods."""
+#: The row of Table 9.7.6.2.2 the check took, as the report words it.
+_TABLE_9_7_6_2_2_HALVED = "Vs,req > Vs,lim: Table 9.7.6.2.2 limits the spacing to d/4 along and d/2 across"
+_TABLE_9_7_6_2_2_LOW = "Vs,req ≤ Vs,lim: Table 9.7.6.2.2 limits the spacing to d/2 along and d across"
+
+
+def _spacing_table_rows(
+    self: "RectangularBeam", state: Any, support: Any
+) -> tuple[list[str], list[str], list[Any], list[str]]:
+    """Why the spacing limits are what they are: the rows of Table 9.7.6.2.2.
+
+    ACI 318-19 / CIRSOC 201-25 Table 9.7.6.2.2 halves the limits once the
+    shear the stirrups must carry passes 0.33·√f'c·bw·d (4·√f'c·bw·d in psi).
+    The rows print that shear, the threshold, which row of the table the
+    check took -- read off the ``state``, where the equation decided it, so
+    nothing is compared again here -- and the absolute cap of that row
+    (ACI 600/300 mm, CIRSOC 400/200 mm). The limits themselves are the
+    ``Max.`` column of the limits table, not repeated. Where the stirrups
+    also brace compression bars, the cap of §9.7.6.4.3 follows: it is a
+    limit of the section, which the warnings already check.
+    """
+    imperial = self.concrete.is_imperial
+    V_s_req, V_s_threshold, halved, _, _ = state.spacing_quantities(imperial)
+    cap_low, cap_high = design_code(self.concrete).requires("stirrup_spacing_caps")(self.concrete)
+    cap = cap_high if halved else cap_low
+    threshold = (
+        "Threshold of Table 9.7.6.2.2 (4√f'c·bw·d)" if imperial else "Threshold of Table 9.7.6.2.2 (0.33√f'c·bw·d)"
+    )
+    labels = [
+        "Shear the stirrups must carry",
+        threshold,
+        _TABLE_9_7_6_2_2_HALVED if halved else _TABLE_9_7_6_2_2_LOW,
+        "Absolute cap of Table 9.7.6.2.2 in this row",
+    ]
+    variables = ["Vs,req", "Vs,lim", "", "s,cap"]
+    values: list[Any] = [
+        round(V_s_req.to("kN").magnitude, 2),
+        round(V_s_threshold.to("kN").magnitude, 2),
+        "",
+        round(cap.to("cm").magnitude, 2),
+    ]
+    units = ["kN", "kN", "", "cm"]
+    if support is not None:
+        labels.append("Maximum spacing for lateral support of compression bars (§9.7.6.4.3)")
+        variables.append("s,max,cs")
+        values.append(round(support.s_max.to("cm").magnitude, 2))
+        units.append("cm")
+    return labels, variables, values, units
+
+
+def _initialize_dicts_ACI_318_19_shear(self: "RectangularBeam", state: Any) -> None:
+    """Initialize the dictionaries used in check and design methods.
+
+    ``state`` is the check state of the combination just run: the rows of
+    Table 9.7.6.2.2 read the row the check took from it.
+    """
     # This builder serves only ACI 318-19 and CIRSOC 201-25,
     # which is what the registry routes here.
     concrete_aci = cast("Concrete_ACI_318_19", self.concrete)
@@ -409,10 +475,18 @@ def _initialize_dicts_ACI_318_19_shear(self: "RectangularBeam") -> None:
         for curr, min_val, max_val in zip(current_values, min_values, max_values)
     ]
     self._all_shear_checks_passed = all(check == "✅" for check in checks)
+    # On a beam the spacing across the width is that of the legs of the cage;
+    # a slab strip details it as the second spacing of its grid. Both limits
+    # are Table 9.7.6.2.2's (the slab's through §7.7.5).
+    across = (
+        "Stirrup spacing along width (Table 9.7.6.2.2)"
+        if transverse_layout(self) == GRID
+        else "Leg spacing across width (Table 9.7.6.2.2)"
+    )
     self._data_min_max_shear = {
         "Check": [
             "Stirrup spacing along length",
-            "Stirrup spacing along width",
+            across,
             "Minimum shear reinforcement",
             "Minimum rebar diameter",
         ],
@@ -441,6 +515,7 @@ def _initialize_dicts_ACI_318_19_shear(self: "RectangularBeam") -> None:
     # that names a stirrup count gives way to the second spacing that actually
     # detailed it. Same three rows either way, so the columns stay aligned.
     rebar_rows, rebar_vars, rebar_values, rebar_units = _transverse_rebar_rows(self, d_b_shown)
+    table_rows, table_vars, table_values, table_units = _spacing_table_rows(self, state, support)
     self._shear_reinforcement = {
         "Shear reinforcement strength": [
             *rebar_rows,
@@ -449,8 +524,9 @@ def _initialize_dicts_ACI_318_19_shear(self: "RectangularBeam") -> None:
             "Required shear reinforcing",
             "Defined shear reinforcing",
             "Shear rebar strength",
+            *table_rows,
         ],
-        "Variable": [*rebar_vars, "d", "Av,min", "Av,req", "Av", "ØVs"],
+        "Variable": [*rebar_vars, "d", "Av,min", "Av,req", "Av", "ØVs", *table_vars],
         "Value": [
             *rebar_values,
             round(self._d_shear.to("cm").magnitude, 2),
@@ -458,8 +534,9 @@ def _initialize_dicts_ACI_318_19_shear(self: "RectangularBeam") -> None:
             round(self._A_v_req.to("cm**2/m").magnitude, 2),
             round(self._A_v.to("cm**2/m").magnitude, 2),
             round(self._phi_V_s.to("kN").magnitude, 2),
+            *table_values,
         ],
-        "Unit": [*rebar_units, "cm", "cm²/m", "cm²/m", "cm²/m", "kN"],
+        "Unit": [*rebar_units, "cm", "cm²/m", "cm²/m", "cm²/m", "kN", *table_units],
     }
     check_max = "✅" if self._max_shear_ok else "❌"
     check_FU = "✅" if self._DCRv < 1 else "❌"
@@ -808,8 +885,19 @@ def _compile_results_EN_1992_2004_flexure_metric(self: "RectangularBeam", force:
     return result
 
 
-def _initialize_dicts_EN_1992_2004_shear(self: "RectangularBeam") -> None:
-    """Initialize the dictionaries used in check and design methods."""
+#: Where the EN spacing limits come from, for the strength table of a beam. The
+#: 400 mm on the along-length limit is mento's own: Expression (9.6N) has no cap.
+_EN_SPACING_ROW = (
+    "Expressions (9.6N) and (9.8N): 0.75·d·(1 + cot α) along, capped at 400 mm by mento; 0.75·d, at most 600 mm, across"
+)
+
+
+def _initialize_dicts_EN_1992_2004_shear(self: "RectangularBeam", state: Any) -> None:
+    """Initialize the dictionaries used in check and design methods.
+
+    ``state`` is taken for the same signature as the ACI builder; EN 1992-1-1
+    has no threshold row to read from it.
+    """
     # This builder serves only EN 1992-2004,
     # which is what the registry routes here.
     concrete_en = cast("Concrete_EN_1992_2004", self.concrete)
@@ -889,10 +977,11 @@ def _initialize_dicts_EN_1992_2004_shear(self: "RectangularBeam") -> None:
         for curr, min_val, max_val in zip(current_values, min_values, max_values)
     ]
     self._all_shear_checks_passed = all(check == "✅" for check in checks)
+    grid = transverse_layout(self) == GRID
     self._data_min_max_shear = {
         "Check": [
             "Stirrup spacing along length",
-            "Stirrup spacing along width",
+            "Stirrup spacing along width" if grid else "Leg spacing across width (§9.2.2(8))",
             "Minimum shear reinforcement",
         ],
         "Unit": ["cm", "cm", "cm²/m"],
@@ -910,6 +999,9 @@ def _initialize_dicts_EN_1992_2004_shear(self: "RectangularBeam") -> None:
         "Ok?": checks,
     }
     rebar_rows, rebar_vars, rebar_values, rebar_units = _transverse_rebar_rows(self, d_b_shown, round_to=None)
+    # A beam says where its limits come from; a slab strip's grid is
+    # detailed by its own spacings.
+    source: list[str] = [] if grid else [_EN_SPACING_ROW]
     self._shear_reinforcement = {
         "Shear reinforcement strength": [
             *rebar_rows,
@@ -918,8 +1010,9 @@ def _initialize_dicts_EN_1992_2004_shear(self: "RectangularBeam") -> None:
             "Required shear reinforcing",
             "Defined shear reinforcing",
             "Shear rebar strength",
+            *source,
         ],
-        "Variable": [*rebar_vars, "d", "Asw,min", "Asw,req", "Asw", "VRd,s"],
+        "Variable": [*rebar_vars, "d", "Asw,min", "Asw,req", "Asw", "VRd,s", *["" for _ in source]],
         "Value": [
             *rebar_values,
             round(self._d_shear.to("cm").magnitude, 2),
@@ -927,8 +1020,9 @@ def _initialize_dicts_EN_1992_2004_shear(self: "RectangularBeam") -> None:
             round(self._A_v_req.to("cm**2/m").magnitude, 2),
             round(self._A_v.to("cm**2/m").magnitude, 2),
             round(self._V_Rd_s.to("kN").magnitude, 2),
+            *["" for _ in source],
         ],
-        "Unit": [*rebar_units, "cm", "cm²/m", "cm²/m", "cm²/m", "kN"],
+        "Unit": [*rebar_units, "cm", "cm²/m", "cm²/m", "cm²/m", "kN", *["" for _ in source]],
     }
     check_max = "✅" if self._max_shear_ok else "❌"
     check_DCR = "✅" if self._DCRv < 1 else "❌"

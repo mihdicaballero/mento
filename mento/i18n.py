@@ -311,6 +311,44 @@ ES.update(
     }
 )
 
+# The rows that say how many legs the cage has, how far apart, and which row of
+# Table 9.7.6.2.2 set the spacing limits (mento.reports.tables). Across the width
+# is "en el ancho", along the member "en la dirección longitudinal", as in the
+# rows and warnings above.
+ES.update(
+    {
+        "Number of legs": "Número de ramas",
+        "Leg spacing across width": "Separación de ramas en el ancho",
+        "Leg spacing across width (Table 9.7.6.2.2)": "Separación de ramas en el ancho (Tabla 9.7.6.2.2)",
+        "Leg spacing across width (§9.2.2(8))": "Separación de ramas en el ancho (§9.2.2(8))",
+        "Stirrup spacing along width (Table 9.7.6.2.2)": (
+            "Separación de estribos en la dirección transversal (Tabla 9.7.6.2.2)"
+        ),
+        "Shear the stirrups must carry": "Corte que deben resistir los estribos",
+        "Threshold of Table 9.7.6.2.2 (0.33√f'c·bw·d)": "Umbral de la Tabla 9.7.6.2.2 (0.33√f'c·bw·d)",
+        "Threshold of Table 9.7.6.2.2 (4√f'c·bw·d)": "Umbral de la Tabla 9.7.6.2.2 (4√f'c·bw·d)",
+        "Vs,req > Vs,lim: Table 9.7.6.2.2 limits the spacing to d/4 along and d/2 across": (
+            "Vs,req > Vs,lim: la Tabla 9.7.6.2.2 limita la separación a d/4 en la dirección longitudinal "
+            "y d/2 en el ancho"
+        ),
+        "Vs,req ≤ Vs,lim: Table 9.7.6.2.2 limits the spacing to d/2 along and d across": (
+            "Vs,req ≤ Vs,lim: la Tabla 9.7.6.2.2 limita la separación a d/2 en la dirección longitudinal "
+            "y d en el ancho"
+        ),
+        "Absolute cap of Table 9.7.6.2.2 in this row": "Tope absoluto de la Tabla 9.7.6.2.2 en esta fila",
+        "Maximum spacing for lateral support of compression bars (§9.7.6.4.3)": (
+            "Separación máxima por sujeción lateral de las barras comprimidas (§9.7.6.4.3)"
+        ),
+        (
+            "Expressions (9.6N) and (9.8N): 0.75·d·(1 + cot α) along, capped at 400 mm by mento; "
+            "0.75·d, at most 600 mm, across"
+        ): (
+            "Expresiones (9.6N) y (9.8N): 0.75·d·(1 + cot α) en la dirección longitudinal, con el tope "
+            "de 400 mm propio de mento; 0.75·d, como máximo 600 mm, en el ancho"
+        ),
+    }
+)
+
 # English is the source language, so its catalog is empty: every lookup falls
 # through to the key itself.
 _CATALOGS: Dict[str, Dict[str, str]] = {

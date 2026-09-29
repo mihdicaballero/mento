@@ -1333,7 +1333,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         if report:
             code.apply_shear_state(self, state)
         if report:
-            self._shear_report_row = build_shear_report(self, force)
+            self._shear_report_row = build_shear_report(self, force, state)
         return state
 
     def check_flexure(self, forces: list[Forces]) -> DataFrame:

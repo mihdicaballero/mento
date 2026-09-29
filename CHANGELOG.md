@@ -26,6 +26,11 @@ and the report text are presentation, not API; a program should read the fields.
 - The `BeamSummary.check()` "Av" cell changes text (`10 legs Ø12/14`) and follows
   `set_language` (a program that exported it with `to_excel` sees the new text). The Word
   Beam Data table keeps `ns`, the number of closed stirrups.
+- The shear strength table has two more rows for every beam (`nl`, `sw`); under ACI 318-19
+  and CIRSOC 201-25 it adds four rows for every element — beams, slabs and footings — plus
+  one when §9.7.6.4.3 applies, and under EN 1992-1-1 one for beams. The across-width row
+  of the limits table is renamed. A program that reads these tables by position should
+  read them by label.
 
 ### Changed
 
@@ -61,6 +66,11 @@ and the report text are presentation, not API; a program should read the fields.
   sits at the height of its bars. The legs are not tied to the bars, so an inner leg may
   be drawn where there is no bar: that is the model, shown as it is. A slab strip keeps
   its drawing.
+- **The limits row across the width names its table.** `Leg spacing across width (Table
+  9.7.6.2.2)` on an ACI 318-19 / CIRSOC 201-25 beam (ES `Separación de ramas en el ancho
+  (Tabla 9.7.6.2.2)`), `Stirrup spacing along width (Table 9.7.6.2.2)` on a slab strip, and
+  `Leg spacing across width (§9.2.2(8))` on an EN 1992-1-1 beam, where it read `Stirrup
+  spacing along width`.
 
 ### Fixed
 
@@ -73,6 +83,10 @@ and the report text are presentation, not API; a program should read the fields.
 - The notebook shear line of a slab (`slab.shear_results`) printed `10eØ8/16.0 cm` for a
   `Ø10/8×16` grid: it read the detail table by position, and a slab's has other rows. It
   now prints the element's own notation, and reads `A_v` by its row label.
+- The Word shear report printed `ns 5.0` (and `db 12.0`, `s 14.0`): the column of a
+  pandas DataFrame built from a mix of ints and floats is float. The detail tables are
+  built with object columns now, and `round_for_display` keeps each value's type, so a
+  count prints as the whole number it is (`ns 5`, `nl 10`); a float column reads as before.
 
 ### Added
 
@@ -118,6 +132,20 @@ and the report text are presentation, not API; a program should read the fields.
   bars at the beam's clear-spacing rule would contradict its `Ø10/14` label. The legs are
   not tied to the bars — the checks do not do that either — so an inner leg may sit where
   there is no bar. A `ShearWall` raises `NotABeamError`.
+
+- **The shear report says how many legs, how far apart, and why the limits are what
+  they are.** The strength table of a beam gains `Number of legs` (`nl`) and `Leg spacing
+  across width` (`sw`). Under ACI 318-19 and CIRSOC 201-25 every element's table then
+  prints the shear the stirrups must carry (`Vs,req`), the threshold of Table 9.7.6.2.2
+  (`Vs,lim`, 0.33√f'c·bw·d; 4√f'c·bw·d in psi), the row of the table the check took —
+  `Vs,req > Vs,lim: Table 9.7.6.2.2 limits the spacing to d/4 along and d/2 across`, or
+  the `≤` row with d/2 and d — and that row's absolute cap (`s,cap`: ACI 600/300 mm,
+  CIRSOC 400/200 mm), plus the §9.7.6.4.3 cap (`s,max,cs`) where the stirrups brace
+  compression bars. The row is read from the check state, where the equation decided it;
+  nothing is compared again. On the user's beam: `nl 10`, `sw 15.87 cm`,
+  `Vs,req 4828.12 kN`, `Vs,lim 3568.95 kN`, the halved row, `s,cap 20.0 cm`. An EN
+  1992-1-1 beam prints where its limits come from: Expressions (9.6N) and (9.8N), with the
+  400 mm cap on the first named as mento's own. Spanish for every new row.
 
 ## [1.3.0] - 2026-09-27
 
