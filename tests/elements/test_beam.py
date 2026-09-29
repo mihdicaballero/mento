@@ -1,5 +1,6 @@
 import math
 import warnings
+from typing import Any
 
 import pytest
 import numpy as np
@@ -3074,6 +3075,103 @@ def test_plot_follows_the_language() -> None:
     texts = [t.get_text() for t in beam._ax.texts]
     assert texts[-1] == "estribo perimetral + 4 interiores"
     assert texts[-3].startswith("10 ramas")
+    plt.close()
+
+
+def _text_extents(beam: RectangularBeam) -> list[tuple[str, Any]]:
+    """Every non-empty text of the drawing with its extent on the canvas, at the default figure size."""
+    beam._fig.canvas.draw()
+    return [(t.get_text(), t.get_window_extent()) for t in beam._ax.texts if t.get_text()]
+
+
+@pytest.mark.parametrize("language", ["en", "es"])
+def test_plot_text_fits_the_default_figure(language: str) -> None:
+    """The three stirrup lines of the 150x150 beam stay inside a plain 640x480 savefig, in both languages."""
+    import mento
+
+    mento.set_language(language)
+    beam = _wide_cirsoc_beam()
+    Node(section=beam, forces=[Forces(label="C1", M_y=5000 * kNm, V_z=5000 * kN)]).design()
+    beam.plot()
+    figure_box = beam._fig.bbox
+    assert (figure_box.width, figure_box.height) == (640, 480)
+    for text, extent in _text_extents(beam):
+        assert figure_box.x0 <= extent.x0 and extent.x1 <= figure_box.x1, text
+        assert figure_box.y0 <= extent.y0 and extent.y1 <= figure_box.y1, text
+
+
+def test_plot_text_of_a_flat_beam_does_not_overlap() -> None:
+    """120x25 with two bottom layers: layer labels and stirrup text each print clear of the others.
+
+    The stirrup lines sit under the section, below its width, and two layer
+    labels closer than a line are moved apart.
+    """
+    beam = RectangularBeam(
+        label="FLAT",
+        concrete=Concrete_CIRSOC_201_25(name="H-25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=120 * cm,
+        height=25 * cm,
+        c_c=25 * mm,
+    )
+    beam.set_longitudinal_rebar_bot(n1=2, d_b1=16 * mm, n2=8, d_b2=16 * mm, n3=2, d_b3=12 * mm)
+    beam.set_longitudinal_rebar_top(n1=2, d_b1=12 * mm, n2=6, d_b2=10 * mm)
+    beam.set_transverse_rebar(n_stirrups=4, d_b=8 * mm, s_l=13 * cm)
+    beam.plot()
+    extents = _text_extents(beam)
+    for i, (text_a, a) in enumerate(extents):
+        for text_b, b in extents[i + 1 :]:
+            assert not a.overlaps(b), (text_a, text_b)
+    # The stirrup text reads under the section.
+    section_bottom = beam._ax.transData.transform((0.0, 0.0))[1]
+    stirrup_lines = [t for t in beam._ax.texts if t.get_gid() == "stirrup_text"]
+    assert len(stirrup_lines) == 3
+    assert all(t.get_window_extent().y1 < section_bottom for t in stirrup_lines)
+    # A label with room stays at its layer: the top layer's is at the middle of its bars.
+    top = beam.section_geometry.bars_on("top", 1)
+    low = min((bar.y - bar.d_b / 2).to("cm").magnitude for bar in top)
+    high = max((bar.y + bar.d_b / 2).to("cm").magnitude for bar in top)
+    label = next(t for t in beam._ax.texts if t.get_text() == "2Ø12+6Ø10")
+    assert label.get_position()[1] == pytest.approx((low + high) / 2)
+    plt.close()
+
+
+def test_plot_spread_keeps_labels_with_room_and_parts_those_without() -> None:
+    from mento.plots.sections import _spread
+
+    assert _spread([0.0, 50.0], 10.0) == [0.0, 50.0]
+    assert _spread([0.0, 4.0], 10.0) == pytest.approx([-3.0, 7.0])
+    # A group that runs into the next one merges with it.
+    assert _spread([0.0, 4.0, 12.0], 10.0) == pytest.approx([16 / 3 - 10, 16 / 3, 16 / 3 + 10])
+
+
+def test_plot_narrow_inner_stirrup_is_a_hairpin() -> None:
+    """ACI 20x30, Vu 100 kN: two Ø10 stirrups, legs 4.67 cm apart, less than the 5·d_st two bends take.
+
+    The rounding of each line is capped at half its width, so the inner
+    stirrup is drawn as the hairpin it would be instead of a crossed arch.
+    """
+    beam = RectangularBeam(
+        label="N",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=20 * cm,
+        height=30 * cm,
+        c_c=25 * mm,
+    )
+    Node(section=beam, forces=[Forces(label="C1", V_z=100 * kN)]).design()
+    assert beam.shear_design.n_stirrups == 2
+    assert beam.shear_design.s_w.to("cm").magnitude < 5 * beam._stirrup_d_b.to("cm").magnitude
+    beam.plot()
+    fancy = [p for p in beam._ax.patches if isinstance(p, FancyBboxPatch)]
+    assert len(fancy) == 4
+    for line in fancy:
+        rounding = line.get_boxstyle().rounding_size
+        assert rounding <= min(line.get_width(), line.get_height()) / 2 + 1e-12
+    # The perimeter stirrup keeps its full bend: 2·d_st inside, 3·d_st outside.
+    d = beam._stirrup_d_b.to("cm").magnitude
+    assert fancy[0].get_boxstyle().rounding_size == pytest.approx(3 * d)
+    assert fancy[1].get_boxstyle().rounding_size == pytest.approx(2 * d)
     plt.close()
 
 

@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Dict, List, Sequence, Tuple, cast
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.patches import Circle, FancyBboxPatch, Rectangle
+from matplotlib.transforms import Bbox
 from mento.units import Quantity
 
 from mento.design_results import GRID, DesignNotRunError, format_transverse_rebar, placed_bars
@@ -31,6 +32,7 @@ from mento.section_geometry import BarPosition, Crosstie, SectionGeometry
 
 if TYPE_CHECKING:
     from matplotlib.axes import Axes
+    from matplotlib.text import Text
 
     from mento.beam import RectangularBeam
     from mento.settings import BeamSettings
@@ -329,9 +331,16 @@ def _add_rounded_stirrup(
 
     All dimensions in cm. (x0, y0) is the bottom-left of the OUTER stirrup
     line, and ``bend_cm`` the inside diameter of its bends.
+
+    A stirrup narrower than its two bends -- an inner stirrup whose legs sit
+    closer than ``bend_cm + db_cm`` apart -- cannot take that bend. It is drawn
+    as the hairpin it would be, each radius capped at half the width of its
+    line, instead of letting the rounding overrun the straight segments.
     """
-    inner_radius = bend_cm / 2
-    outer_radius = inner_radius + db_cm
+    inner_width = width - 2 * db_cm
+    inner_height = height - 2 * db_cm
+    inner_radius = max(0.0, min(bend_cm / 2, inner_width / 2, inner_height / 2))
+    outer_radius = min(inner_radius + db_cm, width / 2, height / 2)
 
     outer = FancyBboxPatch(
         (x0, y0),
@@ -346,8 +355,8 @@ def _add_rounded_stirrup(
 
     inner = FancyBboxPatch(
         (x0 + db_cm, y0 + db_cm),
-        width - 2 * db_cm,
-        height - 2 * db_cm,
+        inner_width,
+        inner_height,
         boxstyle=f"Round, pad=0, rounding_size={inner_radius}",
         edgecolor=CUSTOM_COLORS["dark_blue"],
         facecolor=facecolor,
@@ -434,9 +443,15 @@ def _layer_text(bars: Tuple[BarPosition, ...]) -> str:
     return "+".join(f"{n}Ø{d:.0f}" for n, d in counts)
 
 
-def _annotate_layers(ax: "Axes", geometry: SectionGeometry) -> None:
-    """Write each layer's bars to the right of the section, at the height the bars are drawn."""
+def _annotate_layers(ax: "Axes", geometry: SectionGeometry) -> List[Tuple["Text", float]]:
+    """Write each layer's bars to the right of the section, at the height the bars are drawn.
+
+    Returns each label with the height it belongs at -- the middle of the band
+    its bars occupy -- so :func:`_fit_texts` can move labels that would print
+    over one another apart, and back to that height when they have room.
+    """
     x_text = 1.1 * _cm(geometry.width)
+    labels: List[Tuple["Text", float]] = []
     for face in ("bottom", "top"):
         for layer in (1, 2):
             bars = geometry.bars_on(face, layer)
@@ -445,35 +460,108 @@ def _annotate_layers(ax: "Axes", geometry: SectionGeometry) -> None:
             # The middle of the band the layer's bars occupy.
             low = min(_cm(bar.y) - _cm(bar.d_b) / 2 for bar in bars)
             high = max(_cm(bar.y) + _cm(bar.d_b) / 2 for bar in bars)
-            ax.text(
+            anchor = (low + high) / 2
+            label = ax.text(
                 x_text,
-                (low + high) / 2,
+                anchor,
                 _layer_text(bars),
                 ha="left",
                 va="center",
                 color=CUSTOM_COLORS["dark_gray"],
             )
+            labels.append((label, anchor))
+    return labels
 
 
-def _annotate_cage_text(ax: "Axes", geometry: SectionGeometry, lines: Sequence[str]) -> None:
-    """The stirrup text, one artist per line, to the right of the section at mid-height.
+def _spread(anchors: Sequence[float], pitch: float) -> List[float]:
+    """Positions for ``anchors`` (ascending), in their order, each as near its anchor as ``pitch`` apart allows.
+
+    Labels that would come closer than ``pitch`` are merged into a group,
+    centred on the mean of their anchors and laid out ``pitch`` apart; groups
+    merge again until none overlaps the next. Labels with room stay at their
+    anchors.
+    """
+    groups: List[List[float]] = [[anchor] for anchor in anchors]
+
+    def placed(group: List[float]) -> List[float]:
+        start = sum(group) / len(group) - pitch * (len(group) - 1) / 2
+        return [start + k * pitch for k in range(len(group))]
+
+    merged = True
+    while merged:
+        merged = False
+        for j in range(len(groups) - 1):
+            if placed(groups[j])[-1] + pitch > placed(groups[j + 1])[0] + 1e-9:
+                groups[j : j + 2] = [groups[j] + groups[j + 1]]
+                merged = True
+                break
+    return [y for group in groups for y in placed(group)]
+
+
+def _separate_labels(ax: "Axes", labels: Sequence[Tuple["Text", float]]) -> None:
+    """Move the layer labels apart where two would print over one another, at the current scale."""
+    if len(labels) < 2:
+        return
+    to_points = 72.0 / ax.figure.dpi
+    ordered = sorted(labels, key=lambda pair: pair[1])
+    anchors = [ax.transData.transform((0.0, anchor))[1] * to_points for _, anchor in ordered]
+    pitch = max(label.get_window_extent().height for label, _ in ordered) * to_points + 1.0
+    inverse = ax.transData.inverted()
+    for (label, _), y_points in zip(ordered, _spread(anchors, pitch)):
+        label.set_y(inverse.transform((0.0, y_points / to_points))[1])
+
+
+def _fit_texts(ax: "Axes", labels: Sequence[Tuple["Text", float]] = (), margin_pt: float = 3.0) -> None:
+    """Keep every text of the drawing inside the axes, and the layer labels off one another.
+
+    The texts are sized in points and the section in cm, so how much room they
+    take depends on the scale, which the limits set. Each round separates the
+    layer labels at the current scale and, if some text still reaches past
+    the axes, widens the limits to take it; with the aspect fixed that
+    shrinks the scale, so a few rounds settle it. The drawing then fits the
+    figure at its default size, with no ``bbox_inches="tight"`` needed.
+    """
+    for _ in range(12):
+        ax.apply_aspect()
+        _separate_labels(ax, labels)
+        extents = [text.get_window_extent() for text in ax.texts if text.get_text()]
+        pad = margin_pt * ax.figure.dpi / 72.0
+        union = Bbox.union(extents)
+        need = Bbox.from_extents(union.x0 - pad, union.y0 - pad, union.x1 + pad, union.y1 + pad)
+        box = ax.get_window_extent()
+        if box.x0 <= need.x0 and box.y0 <= need.y0 and need.x1 <= box.x1 and need.y1 <= box.y1:
+            return
+        (x0, y0), (x1, y1) = ax.transData.inverted().transform([(need.x0, need.y0), (need.x1, need.y1)])
+        (x_min, x_max), (y_min, y_max) = ax.get_xlim(), ax.get_ylim()
+        ax.set_xlim(min(x_min, x0), max(x_max, x1))
+        ax.set_ylim(min(y_min, y0), max(y_max, y1))
+
+
+#: Line pitch of the stirrup text under the section, in points.
+_LINE_PT = 14.0
+
+
+def _annotate_cage_text(ax: "Axes", lines: Sequence[str]) -> None:
+    """The stirrup text, one artist per line, under the section, below its width.
 
     ``lines`` are the two lines of the notation and the arrangement of the
-    cage; they are stacked around the middle of the section with a fixed
-    offset in points, so the spacing reads the same at any section size.
+    cage. They start at the left face of the section, one line under the
+    width dimension, and are stacked a fixed pitch in points apart, so they
+    read the same at any section size. Under the section they are clear of
+    the layer labels on its right, however shallow the section is; the
+    limits of the drawing are then widened to take them (:func:`_fit_texts`).
     """
-    x_text = 1.1 * _cm(geometry.width)
-    y_text = _cm(geometry.height) / 2.0
-    offsets = [14 * (len(lines) - 1) / 2 - 14 * i for i in range(len(lines))]
-    for line, offset in zip(lines, offsets):
+    y_anchor = -_TEXT_OFFSET_CM
+    for i, line in enumerate(lines):
         ax.annotate(
             line,
-            xy=(x_text, y_text),
-            xytext=(0, offset),
+            xy=(0.0, y_anchor),
+            xytext=(0, -_LINE_PT * (i + 1)),
             textcoords="offset points",
             ha="left",
-            va="center",
+            va="top",
             color=CUSTOM_COLORS["dark_gray"],
+            gid="stirrup_text",
         )
 
 
@@ -493,11 +581,15 @@ def _cage_lines(self: "RectangularBeam") -> List[str]:
     return [*notation.split("\n"), transverse.arrangement()]
 
 
+#: How far the dimension lines and their text sit off the section, in cm.
+_DIM_OFFSET_CM = 2.5
+_TEXT_OFFSET_CM = _DIM_OFFSET_CM + 2
+
+
 def _dimensions(self: "RectangularBeam", width_cm: float, height_cm: float) -> None:
     """The width and height of the section, with their arrows."""
-    # Text and dimension offsets
-    dim_offset = 2.5
-    text_offset = dim_offset + 2
+    dim_offset = _DIM_OFFSET_CM
+    text_offset = _TEXT_OFFSET_CM
     # Add width dimension
     _axes(self).annotate(
         "",  # No text here, text is added separately
@@ -608,10 +700,12 @@ def plot_beam_section(self: "RectangularBeam", show: bool = False) -> Figure:
 
     A beam is drawn from its :attr:`~mento.beam.RectangularBeam.section_geometry`:
     every stirrup of the cage at the legs the shear check assumes, every bar
-    where the clear-spacing model puts it, and the stirrup text in three
-    lines -- the legs, bar and spacing; the spacing of the legs across the
-    width with its maximum; and the arrangement of the cage. A slab strip
-    keeps the drawing it always had.
+    where the clear-spacing model puts it, the label of each layer on the
+    right, and the stirrup text in three lines under the section -- the legs,
+    bar and spacing; the spacing of the legs across the width with its
+    maximum; and the arrangement of the cage. The limits are then widened
+    until every text fits inside the figure at its default size. A slab
+    strip keeps the drawing it always had.
     """
 
     # Convert dimensions to consistent units (cm)
@@ -649,12 +743,14 @@ def plot_beam_section(self: "RectangularBeam", show: bool = False) -> Figure:
     # Remove axes for better visualization
     ax.axis("off")
 
+    labels: List[Tuple["Text", float]] = []
     if geometry.layout == GRID:
         _plot_grid_section(self, width_cm, height_cm)
     else:
         _plot_bars(ax, geometry)
-        _annotate_layers(ax, geometry)
-        _annotate_cage_text(ax, geometry, _cage_lines(self))
+        labels = _annotate_layers(ax, geometry)
+        _annotate_cage_text(ax, _cage_lines(self))
+    _fit_texts(ax, labels)
 
     # Store the section figure
     self._fig = fig
