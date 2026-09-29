@@ -257,6 +257,55 @@ def test_the_compact_form_on_imperial_and_grid_sections() -> None:
     assert "Ø10/8×16" in [text.get_text() for text in slab._ax.texts]
 
 
+def test_the_compact_form_takes_its_unit_system_from_the_caller() -> None:
+    """A metric beam with its spacing given in inches: the caller says which system the bare numbers are in."""
+    beam = _users_beam()
+    beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=6 * inch)
+    transverse = beam.reinforcement.transverse
+    assert transverse.notation(compact=True, imperial=False) == "2 legs Ø8/15.24"
+    assert transverse.notation(compact=True, imperial=True) == "2 legs Ø0.315/6"
+    # Left unsaid, it follows the unit of s_l, as documented.
+    assert transverse.notation(compact=True) == "2 legs Ø0.315/6"
+
+
+def test_the_beam_summary_av_cell_stays_in_mm_and_cm_with_sl_in_inches() -> None:
+    """The As cells of the same row write their bars in mm; the Av cell does too, whatever unit sl came in."""
+    beams = _summary_list()
+    beams["sl"] = ["inch", 0, 8]
+    summary = BeamSummary(
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        beam_list=beams,
+    )
+    assert list(summary.check()["Av"])[1:] == ["-", "2 legs Ø6/20.32"]
+
+
+@pytest.mark.parametrize("language", ["ES", "es-AR", "sp", "fr", ""])
+def test_an_unknown_language_raises_like_set_language(designed: RectangularBeam, language: str) -> None:
+    """An explicit language is held to set_language's rule instead of falling back to English."""
+    shear = designed.shear_design
+    calls = [
+        lambda: shear.notation(language),
+        lambda: shear.notation(language, compact=True),
+        lambda: shear.arrangement(language),
+        lambda: shear.options[0].notation(language),
+        lambda: shear.options[0].arrangement(language),
+        lambda: designed.reinforcement.transverse.notation(language),
+        lambda: designed.reinforcement.transverse.arrangement(language),
+        lambda: designed.section_geometry.arrangement(language),
+        lambda: describe_stirrup_cage(10, language),
+        lambda: format_transverse_rebar(STIRRUPS, 5, "12", "14", "15.87", language=language),
+    ]
+    for call in calls:
+        with pytest.raises(ValueError, match="Unknown language"):
+            call()
+    with pytest.raises(ValueError) as from_set_language:
+        mento.set_language(language)
+    with pytest.raises(ValueError) as from_notation:
+        shear.notation(language)
+    assert str(from_notation.value) == str(from_set_language.value)
+
+
 # ---------------------------------------------------------------------------
 # The cage
 # ---------------------------------------------------------------------------

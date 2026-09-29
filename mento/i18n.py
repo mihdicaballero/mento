@@ -381,10 +381,28 @@ def set_language(language: str) -> None:
     ValueError
         If the language has no catalog.
     """
-    if language not in _CATALOGS:
-        raise ValueError(f"Unknown language {language!r}. Available: {', '.join(available_languages())}.")
+    checked_language(language)
     global _language
     _language = language
+
+
+def checked_language(language: Optional[str]) -> Optional[str]:
+    """``language`` itself, once it is known to have a catalog; ``None`` stays ``None``.
+
+    For a function that takes a ``language`` argument: an explicit code is held
+    to the same rule as :func:`set_language`, so a typo or a locale such as
+    ``"es-AR"`` raises instead of falling back to English, while ``None`` --
+    the language of the moment, which ``set_language`` already checked --
+    passes through.
+
+    Raises
+    ------
+    ValueError
+        If ``language`` is given and has no catalog.
+    """
+    if language is not None and language not in _CATALOGS:
+        raise ValueError(f"Unknown language {language!r}. Available: {', '.join(available_languages())}.")
+    return language
 
 
 def get_language() -> str:

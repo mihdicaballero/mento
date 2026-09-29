@@ -197,7 +197,11 @@ class BeamSummary:
             original_forces = [copy.deepcopy(force) for force in node.get_forces_list()]
 
             # The compact notation, in the language of the table: ``10 legs Ø12/14``.
-            rebar_v = "-" if beam._stirrup_n == 0 else beam.reinforcement.transverse.notation(compact=True)
+            # In mm and cm whatever unit the ``sl`` column was given in, like the
+            # As cells beside it, which write every bar in mm.
+            rebar_v = (
+                "-" if beam._stirrup_n == 0 else beam.reinforcement.transverse.notation(compact=True, imperial=False)
+            )
             rebar_f_top = (
                 "-"
                 if beam._n1_t == 0

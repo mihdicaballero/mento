@@ -25,7 +25,7 @@ from mento.units import Quantity, ureg
 
 from mento.codes.check_state import to_display
 from mento.codes.registry import design_code
-from mento.i18n import translate
+from mento.i18n import checked_language, translate
 from mento.precompute import DISPLAY
 from mento.design_warnings import steel_above_maximum
 
@@ -494,8 +494,10 @@ def format_transverse_rebar(
     are looked up in the catalog of ``language`` (English by default, the
     language of the moment with ``None``; see :mod:`mento.i18n`), and
     ``separator`` joins the two halves of a beam's label -- a line break
-    splits it in two for a drawing.
+    splits it in two for a drawing. An explicit ``language`` without a
+    catalog raises ``ValueError``, as :func:`mento.set_language` does.
     """
+    checked_language(language)
     if n_stirrups == 0:
         return translate("no stirrups", language)
     if layout == GRID:
@@ -524,6 +526,7 @@ def transverse_notation(
     *,
     separator: str = " · ",
     compact: bool = False,
+    imperial: Optional[bool] = None,
 ) -> str:
     """The notation of a transverse reinforcement given as quantities.
 
@@ -533,14 +536,24 @@ def transverse_notation(
     ``d_b`` keeps its own. Numbers take mento's ``.4g`` format with a dot.
 
     ``compact`` is the form for a narrow column: bare numbers, the bar in mm
-    and the spacing in cm (in and in on a US customary section), and neither
-    the spacing across the width nor its maximum -- ``10 legs Ø12/14`` on a
-    beam, ``Ø10/8×16`` on a slab strip.
+    and the spacing in cm -- in and in when ``imperial`` is True -- and neither
+    the spacing across the width nor its maximum: ``10 legs Ø12/14`` on a
+    beam, ``Ø10/8×16`` on a slab strip. The numbers carry no unit, so the
+    caller says which system they are in: pass the section's
+    (``beam.concrete.is_imperial``), or the system of the table they sit in.
+    With ``imperial`` left as ``None`` the compact form follows the unit of
+    ``s_l``: in and in when it is in inches or feet, mm and cm otherwise.
+
+    ``language`` is the catalog the words come from, the current one with
+    ``None``; an explicit code without a catalog raises ``ValueError``, as
+    :func:`mento.set_language` does.
     """
+    checked_language(language)
     if compact:
         if n_stirrups == 0:
             return translate("no stirrups", language)
-        imperial = _is_imperial_length(s_l)
+        if imperial is None:
+            imperial = _is_imperial_length(s_l)
         d_unit, s_unit = ("inch", "inch") if imperial else ("mm", "cm")
         d_shown = f"{d_b.to(d_unit).magnitude:.4g}"
         s_shown = f"{s_l.to(s_unit).magnitude:.4g}"
@@ -599,8 +612,10 @@ def describe_stirrup_cage(n_legs: int, language: Optional[str] = None) -> str:
     ``perimeter stirrup + 4 inner stirrups`` for ten legs,
     ``single perimeter stirrup`` for two, ``no stirrups`` for none; a crosstie
     is added as ``+ 1 crosstie``. In the language of the moment unless
-    ``language`` says otherwise.
+    ``language`` says otherwise; an explicit code without a catalog raises
+    ``ValueError``, as :func:`mento.set_language` does.
     """
+    checked_language(language)
     if n_legs <= 0:
         return translate("no stirrups", language)
     stirrups, crossties = cage_legs(n_legs)
@@ -619,8 +634,9 @@ def describe_stirrup_cage(n_legs: int, language: Optional[str] = None) -> str:
     return " + ".join(parts)
 
 
-def transverse_arrangement(layout: str, n_stirrups: int, language: Optional[str] = None) -> str:
+def _transverse_arrangement(layout: str, n_stirrups: int, language: Optional[str] = None) -> str:
     """The cage of a beam's stirrups in words; empty on a slab strip, which has no cage."""
+    checked_language(language)
     if layout == GRID:
         return ""
     return describe_stirrup_cage(2 * n_stirrups, language)
@@ -648,11 +664,18 @@ class TransverseReinforcement:
         """Number of stirrup legs crossing the shear plane."""
         return self.n_stirrups * 2
 
-    def notation(self, language: Optional[str] = None, *, separator: str = " · ", compact: bool = False) -> str:
+    def notation(
+        self,
+        language: Optional[str] = None,
+        *,
+        separator: str = " · ",
+        compact: bool = False,
+        imperial: Optional[bool] = None,
+    ) -> str:
         """The stirrups in the notation of the element, in ``language`` (the current one by default).
 
         The configuration carries no limit, so no maximum is printed.
-        See :func:`transverse_notation` for ``separator`` and ``compact``.
+        See :func:`transverse_notation` for ``separator``, ``compact`` and ``imperial``.
         """
         return transverse_notation(
             self.layout,
@@ -664,11 +687,12 @@ class TransverseReinforcement:
             language,
             separator=separator,
             compact=compact,
+            imperial=imperial,
         )
 
     def arrangement(self, language: Optional[str] = None) -> str:
         """How the legs are tied into a cage, in words (see :func:`describe_stirrup_cage`); empty on a slab."""
-        return transverse_arrangement(self.layout, self.n_stirrups, language)
+        return _transverse_arrangement(self.layout, self.n_stirrups, language)
 
     def __str__(self) -> str:
         """Always English, like every ``str()`` of a result; :meth:`notation` follows the language."""
@@ -836,11 +860,18 @@ class StirrupOption:
         """Number of stirrup legs crossing the shear plane."""
         return self.n_stirrups * 2
 
-    def notation(self, language: Optional[str] = None, *, separator: str = " · ", compact: bool = False) -> str:
+    def notation(
+        self,
+        language: Optional[str] = None,
+        *,
+        separator: str = " · ",
+        compact: bool = False,
+        imperial: Optional[bool] = None,
+    ) -> str:
         """The stirrups in the notation of the element, in ``language`` (the current one by default).
 
         Ends with the maximum spacing of the legs, ``s_max_w``, when there is one.
-        See :func:`transverse_notation` for ``separator`` and ``compact``.
+        See :func:`transverse_notation` for ``separator``, ``compact`` and ``imperial``.
         """
         return transverse_notation(
             self.layout,
@@ -852,11 +883,12 @@ class StirrupOption:
             language,
             separator=separator,
             compact=compact,
+            imperial=imperial,
         )
 
     def arrangement(self, language: Optional[str] = None) -> str:
         """How the legs are tied into a cage, in words (see :func:`describe_stirrup_cage`); empty on a slab."""
-        return transverse_arrangement(self.layout, self.n_stirrups, language)
+        return _transverse_arrangement(self.layout, self.n_stirrups, language)
 
     def __str__(self) -> str:
         """Always English, like every ``str()`` of a result; :meth:`notation` follows the language."""
@@ -933,11 +965,18 @@ class ShearDesign:
         """Number of stirrup legs crossing the shear plane."""
         return self.n_stirrups * 2
 
-    def notation(self, language: Optional[str] = None, *, separator: str = " · ", compact: bool = False) -> str:
+    def notation(
+        self,
+        language: Optional[str] = None,
+        *,
+        separator: str = " · ",
+        compact: bool = False,
+        imperial: Optional[bool] = None,
+    ) -> str:
         """The stirrups in the notation of the element, in ``language`` (the current one by default).
 
         Ends with the maximum spacing of the legs, ``s_max_w``, when there is one.
-        See :func:`transverse_notation` for ``separator`` and ``compact``.
+        See :func:`transverse_notation` for ``separator``, ``compact`` and ``imperial``.
         """
         return transverse_notation(
             self.layout,
@@ -949,11 +988,12 @@ class ShearDesign:
             language,
             separator=separator,
             compact=compact,
+            imperial=imperial,
         )
 
     def arrangement(self, language: Optional[str] = None) -> str:
         """How the legs are tied into a cage, in words (see :func:`describe_stirrup_cage`); empty on a slab."""
-        return transverse_arrangement(self.layout, self.n_stirrups, language)
+        return _transverse_arrangement(self.layout, self.n_stirrups, language)
 
     def __str__(self) -> str:
         """Always English, like every ``str()`` of a result; :meth:`notation` follows the language."""

@@ -50,6 +50,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple
 
 from mento.design_results import GRID, cage_legs, describe_stirrup_cage, transverse_layout
+from mento.i18n import checked_language
 from mento.precompute import CANONICAL, DISPLAY, section_floats
 from mento.units import Quantity, ureg
 
@@ -149,6 +150,7 @@ class SectionGeometry:
 
     def arrangement(self, language: Optional[str] = None) -> str:
         """The cage in words (see :func:`mento.design_results.describe_stirrup_cage`); empty on a slab strip."""
+        checked_language(language)
         if self.layout == GRID:
             return ""
         return describe_stirrup_cage(len(self.leg_x), language)
