@@ -23,6 +23,23 @@ from the release history and are summaries rather than complete lists.
   the 150×150 CIRSOC beam of the user's case (Mu 5000 kN·m, Vu 5000 kN) V_s,req =
   4828.12 kN passes 3568.95 kN, which is why both limits are 20 cm.
 
+- **The stirrup spacing limits are public.** One name, one meaning:
+  `ShearDesign.s_max_w` is the across-width limit on the legs (Table 9.7.6.2.2; EN
+  Expression (9.8N)), `s_max_l_table` the along-length limit of that same table (EN
+  (9.6N), with the 400 mm cap that is mento's own), `s_max_l_support` the §9.7.6.4.3 cap
+  on stirrups that brace compression bars (`None` where the code has no such clause or
+  the section relies on none), and `s_max_l` the along-length limit the stirrups are held
+  to, the least of the two. They are envelopes, the tightest of every combination — what
+  the warnings hold the stirrups to: on the user's beam checked with a second combination
+  under the threshold (1000 kN·m, 1500 kN, which runs last), `shear_design.s_max_w` is
+  20 cm while the private `_stirrup_s_max_w` it used to be read from says 40 cm. Each
+  `ShearCheck` carries its own combination's `V_s_req`, `V_s_threshold`,
+  `spacing_halved`, `s_max_l_table` and `s_max_w` (`None` where the code has no such
+  quantity: EN has no threshold, and no limit without stirrups), and each `StirrupOption`
+  the `s_max_l` and `s_max_w` the search held it to. The fields are added at the end with
+  defaults, so a result built positionally with the 1.3.0 arguments still builds
+  (ADR-0001).
+
 ## [1.3.0] - 2026-09-27
 
 ### Migration notes

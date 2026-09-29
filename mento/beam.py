@@ -49,6 +49,11 @@ from mento.design_results import (
 )
 
 
+def _positive_or_none(value: Quantity) -> Optional[Quantity]:
+    """A spacing limit of a search row, or None where the row set none (zero)."""
+    return value if value.magnitude > 0 else None
+
+
 class _Verdict(NamedTuple):
     """What values-only checks of the section as it stands found, over every combination.
 
@@ -663,6 +668,10 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
                 functional=float(row["functional"]),
                 layout=layout,
                 section_DCR=DCR,
+                # The limits the search held this row to, at the depth its own
+                # stirrup gives the section: §9.7.6.4.3 folded into s_max_l.
+                s_max_l=_positive_or_none(row["s_max_l"]),
+                s_max_w=_positive_or_none(row["s_max_w"]),
             )
 
         options = []

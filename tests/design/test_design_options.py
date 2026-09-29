@@ -704,6 +704,11 @@ def test_options_read_like_the_reinforcement() -> None:
     assert bottom.n_bars == beam.reinforcement.bottom.n_bars
     assert str(stirrups) == str(beam.shear_design)
     assert stirrups.n_legs == beam.shear_design.n_legs
+    # The same, field by field: the applied option is the design, its limits included.
+    design = beam.shear_design
+    assert (stirrups.n_stirrups, stirrups.d_b, stirrups.s_l) == (design.n_stirrups, design.d_b, design.s_l)
+    assert stirrups.s_max_w == design.s_max_w
+    assert stirrups.s_max_l == design.s_max_l
     assert str(RebarOption(layers=(), A_s=0 * cm**2)) == "no reinforcement"
 
 

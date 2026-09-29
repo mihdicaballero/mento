@@ -6,7 +6,15 @@ from typing import Any
 import pytest
 from pandas import DataFrame
 
-from mento import Concrete_ACI_318_19, Concrete_EN_1992_2004, Forces, Node, RectangularBeam, SteelBar
+from mento import (
+    Concrete_ACI_318_19,
+    Concrete_CIRSOC_201_25,
+    Concrete_EN_1992_2004,
+    Forces,
+    Node,
+    RectangularBeam,
+    SteelBar,
+)
 from mento import MPa, cm, kN, kNm, m, mm
 from mento.design_results import (
     DesignNotRunError,
@@ -17,6 +25,7 @@ from mento.design_results import (
     SectionReinforcement,
     ShearCheck,
     ShearDesign,
+    StirrupOption,
     envelope_flexure_face,
     envelope_shear,
     format_longitudinal_rebar,
@@ -854,3 +863,209 @@ def test_changing_the_bars_by_hand_drops_the_results_until_the_next_check() -> N
     slab.set_slab_transverse_rebar(d_b=8 * mm, s_long=20 * cm, s_trans=20 * cm)
     with pytest.raises(DesignNotRunError):
         slab.shear_design
+
+
+# ============================================================================
+# Spacing limits on the public results (new in 1.4.0)
+# ============================================================================
+
+
+def _user_beam() -> RectangularBeam:
+    """JPR's case: CIRSOC 201-25, H-25, ADN 420, 150x150 cm, c_c 30 mm."""
+    return RectangularBeam(
+        label="V1",
+        concrete=Concrete_CIRSOC_201_25(name="H-25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=150 * cm,
+        height=150 * cm,
+        c_c=30 * mm,
+    )
+
+
+def test_shear_design_exposes_the_spacing_limits_of_the_users_case() -> None:
+    """Both limits are 20 cm, from the halved row of Tabla 9.7.6.2.2 (V_s,req 4828 > 3569 kN)."""
+    beam = _user_beam()
+    Node(section=beam, forces=[Forces(label="C1", M_y=5000 * kNm, V_z=5000 * kN)]).design()
+    shear = beam.shear_design
+
+    assert shear.s_max_l.to("cm").magnitude == pytest.approx(20.0)
+    assert shear.s_max_w.to("cm").magnitude == pytest.approx(20.0)
+    assert shear.s_max_l_table.to("cm").magnitude == pytest.approx(20.0)
+    assert shear.s_max_l_support is None
+    assert shear.s_w <= shear.s_max_w and shear.s_l <= shear.s_max_l
+
+    check = beam.shear_checks[0]
+    assert check.V_s_req.to("kN").magnitude == pytest.approx(4828.12, abs=0.01)
+    assert check.V_s_threshold.to("kN").magnitude == pytest.approx(3568.95, abs=0.01)
+    assert check.spacing_halved is True
+    assert check.s_max_l_table.to("cm").magnitude == pytest.approx(20.0)
+    assert check.s_max_w.to("cm").magnitude == pytest.approx(20.0)
+
+    assert shear.options[0].s_max_l == shear.s_max_l
+    assert shear.options[0].s_max_w == shear.s_max_w
+
+
+def test_shear_design_limits_are_the_envelope_not_the_last_combination() -> None:
+    """C2 (V_s,req 161 kN) runs last and leaves 40 cm on the section; C1 holds it to 20."""
+    beam = _user_beam()
+    forces = [
+        Forces(label="C1", M_y=5000 * kNm, V_z=5000 * kN),
+        Forces(label="C2", M_y=1000 * kNm, V_z=1500 * kN),
+    ]
+    Node(section=beam, forces=forces).design()
+
+    assert beam._stirrup_s_max_w.to("cm").magnitude == pytest.approx(40.0)
+    shear = beam.shear_design
+    assert shear.s_max_w.to("cm").magnitude == pytest.approx(20.0)
+    assert shear.s_max_l.to("cm").magnitude == pytest.approx(20.0)
+    c1, c2 = beam.shear_checks
+    assert (c1.spacing_halved, c2.spacing_halved) == (True, False)
+    assert c2.s_max_w.to("cm").magnitude == pytest.approx(40.0)
+
+
+@pytest.mark.parametrize(
+    "code, M_kNm, V_kN, table_cm",
+    [("CIRSOC", 300, 100, 21.73), ("ACI", 260, 60, 21.62)],
+)
+def test_the_governing_along_length_limit_folds_in_the_compression_support_cap(
+    code: str, M_kNm: float, V_kN: float, table_cm: float
+) -> None:
+    """§9.7.6.4.3 caps s at the least dimension of a 20x50 that relies on compression bars."""
+    concrete: Concrete_ACI_318_19 = (
+        Concrete_CIRSOC_201_25(name="H-25", f_c=25 * MPa)
+        if code == "CIRSOC"
+        else Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
+    )
+    beam = RectangularBeam(
+        label="D",
+        concrete=concrete,
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=20 * cm,
+        height=50 * cm,
+        c_c=25 * mm,
+    )
+    Node(section=beam, forces=[Forces(label="C1", M_y=M_kNm * kNm, V_z=V_kN * kN)]).design()
+    shear = beam.shear_design
+
+    assert shear.s_max_l_table.to("cm").magnitude == pytest.approx(table_cm, abs=0.005)
+    assert shear.s_max_l_support.to("cm").magnitude == pytest.approx(20.0)
+    assert shear.s_max_l.to("cm").magnitude == pytest.approx(20.0)
+    assert shear.options[0].s_max_l.to("cm").magnitude == pytest.approx(20.0)
+
+
+def test_aci_limits_take_the_300_mm_cap_on_the_users_beam() -> None:
+    beam = RectangularBeam(
+        label="V1",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=150 * cm,
+        height=150 * cm,
+        c_c=30 * mm,
+    )
+    Node(section=beam, forces=[Forces(label="C1", M_y=5000 * kNm, V_z=5000 * kN)]).design()
+    shear = beam.shear_design
+    assert (shear.n_stirrups, shear.n_legs) == (3, 6)
+    assert shear.s_max_l.to("cm").magnitude == pytest.approx(30.0)
+    assert shear.s_max_w.to("cm").magnitude == pytest.approx(30.0)
+
+
+def test_en_limits_with_and_without_stirrups() -> None:
+    """EN has no threshold; (9.6N) with mento's 400 mm cap and (9.8N); none with no stirrups."""
+    beam = RectangularBeam(
+        label="V1",
+        concrete=Concrete_EN_1992_2004(name="C25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="B500S", f_y=500 * MPa),
+        width=150 * cm,
+        height=150 * cm,
+        c_c=30 * mm,
+    )
+    Node(section=beam, forces=[Forces(label="C1", M_y=5000 * kNm, V_z=5000 * kN)]).design()
+    shear = beam.shear_design
+    assert shear.s_max_l.to("cm").magnitude == pytest.approx(40.0)
+    assert shear.s_max_l_table == shear.s_max_l
+    assert shear.s_max_w.to("cm").magnitude == pytest.approx(60.0)
+    assert shear.s_max_l_support is None
+    check = beam.shear_checks[0]
+    assert (check.V_s_req, check.V_s_threshold, check.spacing_halved) == (None, None, None)
+
+    bare = RectangularBeam(
+        label="V2",
+        concrete=Concrete_EN_1992_2004(name="C25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="B500S", f_y=500 * MPa),
+        width=30 * cm,
+        height=60 * cm,
+        c_c=25 * mm,
+    )
+    bare.set_longitudinal_rebar_bot(n1=3, d_b1=16 * mm)
+    Node(section=bare, forces=[Forces(label="C1", V_z=20 * kN)]).check()
+    shear = bare.shear_design
+    assert (shear.s_max_l, shear.s_max_w, shear.s_max_l_table, shear.s_max_l_support) == (None, None, None, None)
+
+
+def test_results_keep_their_positional_construction_of_1_3_0() -> None:
+    """ADR-0001: the new fields come last, with defaults, so 1.3.0 calls still build."""
+    check = ShearCheck("C1", 1 * cm**2 / m, 1 * cm**2 / m, 0.5, 100 * kN)
+    assert check.V_s_req is None and check.s_max_w is None and check.spacing_halved is None
+    option = StirrupOption(1, 10 * mm, 20 * cm, 30 * cm, 5 * cm**2 / m, 0.1, "stirrups", 0.9)
+    assert option.s_max_l is None and option.s_max_w is None
+    design = ShearDesign(
+        1, 10 * mm, 20 * cm, 5 * cm**2 / m, 4 * cm**2 / m, 2 * cm**2 / m, 0.8, 100 * kN, 30 * cm, "stirrups", ()
+    )
+    assert (design.s_max_l, design.s_max_w, design.s_max_l_table, design.s_max_l_support) == (None, None, None, None)
+
+
+def test_envelope_of_the_spacing_fields() -> None:
+    """Tightest limits, largest V_s,req, the governing combination's row; None with nothing set."""
+
+    def shear(label: str, DCR: float, s_l: Any, s_w: Any, halved: Any, V_s: Any) -> ShearCheck:
+        return ShearCheck(
+            label=label,
+            A_v_req=None,
+            A_v_min=None,
+            DCR=DCR,
+            V_capacity=100 * kN,
+            V_s_req=V_s,
+            V_s_threshold=None if V_s is None else 300 * kN,
+            spacing_halved=halved,
+            s_max_l_table=s_l,
+            s_max_w=s_w,
+        )
+
+    env = envelope_shear(
+        [shear("C1", 0.9, 20 * cm, 40 * cm, True, 400 * kN), shear("C2", 0.4, 30 * cm, 30 * cm, False, 100 * kN)]
+    )
+    assert (env.s_max_l_table, env.s_max_w) == (20 * cm, 30 * cm)
+    assert env.V_s_req == 400 * kN
+    assert (env.V_s_threshold, env.spacing_halved) == (300 * kN, True)
+
+    empty = envelope_shear([])
+    assert (empty.V_s_req, empty.V_s_threshold, empty.spacing_halved, empty.s_max_l_table, empty.s_max_w) == (
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    nothing = envelope_shear([shear("C1", 0.5, None, None, None, None)])
+    assert (nothing.V_s_req, nothing.spacing_halved, nothing.s_max_l_table, nothing.s_max_w) == (None, None, None, None)
+    # Among combinations tied on DCR, one with no capacity loses to one that has it.
+    tied = envelope_shear(
+        [
+            ShearCheck("C1", None, None, 0.5, None, spacing_halved=False),
+            ShearCheck("C2", None, None, 0.5, 100 * kN, spacing_halved=True),
+        ]
+    )
+    assert tied.spacing_halved is True
+
+
+@pytest.mark.parametrize("imperial", [False, True])
+@pytest.mark.parametrize("kind", ["length", "force"])
+def test_the_scaled_wrap_gives_the_numbers_to_display_gives(kind: str, imperial: bool) -> None:
+    """The spacing fields are wrapped with a factor taken once; the result is to_display's."""
+    from mento.codes.check_state import scaled_to_display, to_display
+
+    for value in (0.0, 1.0, 158.66666666666666, 200.0, 3_568_950.0, 4_828_116.67, 1e-3, 12345.678):
+        fast = scaled_to_display(value, kind, imperial)
+        slow = to_display(value, kind, imperial)
+        assert fast.units == slow.units
+        assert fast.magnitude == pytest.approx(slow.magnitude, rel=1e-15, abs=0.0)

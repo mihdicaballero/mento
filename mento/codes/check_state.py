@@ -13,12 +13,12 @@ The fields are pre-zeroed in the section's own unit system by
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Optional, TYPE_CHECKING, Tuple
+from typing import Any, Dict, Optional, TYPE_CHECKING, Tuple
 
 from mento.units import Quantity
 
 from mento.precompute import CANONICAL, DISPLAY
-from mento.units import cm, inch, kip, kN, mm, psi, MPa, dimensionless
+from mento.units import cm, inch, kip, kN, mm, psi, MPa, dimensionless, ureg
 
 if TYPE_CHECKING:
     from mento.beam import RectangularBeam
@@ -62,9 +62,32 @@ def to_display(value: float, kind: str, imperial: bool) -> Any:
     return (value * CANONICAL[imperial][kind]).to(DISPLAY[imperial][kind])
 
 
+#: ``(imperial, kind)`` -> the factor from the canonical unit to the display one,
+#: taken once from pint. See :func:`scaled_to_display`.
+_DISPLAY_FACTORS: Dict[Tuple[bool, str], float] = {}
+
+
+def scaled_to_display(value: float, kind: str, imperial: bool) -> Any:
+    """:func:`to_display` for a length or a force, without a unit conversion per call.
+
+    The factor from the canonical unit to the display one is asked of pint
+    once per kind and kept; each call only multiplies and builds the quantity,
+    about 3 us against the 20 us of a ``.to()``. The spacing fields every
+    shear check now publishes are wrapped this way, so that publishing them
+    keeps the check within 5 % of its cost without them. The numbers are those
+    :func:`to_display` gives -- a test holds them to it.
+    """
+    key = (imperial, kind)
+    factor = _DISPLAY_FACTORS.get(key)
+    if factor is None:
+        factor = (1.0 * CANONICAL[imperial][kind]).to(DISPLAY[imperial][kind]).magnitude
+        _DISPLAY_FACTORS[key] = factor
+    return ureg.Quantity(value * factor, DISPLAY[imperial][kind])
+
+
 def _length_or_none(value: float, imperial: bool) -> Any:
     """A spacing limit as a quantity, or ``None`` where the check set none (zero)."""
-    return to_display(value, "length", imperial) if value > 0 else None
+    return scaled_to_display(value, "length", imperial) if value > 0 else None
 
 
 def _face_quantities(state: Any, face: str, capacity: str, imperial: bool) -> tuple[Any, Any, Any, Any, Any, Any, Any]:
@@ -148,8 +171,8 @@ class ShearCheckState:
         where the check set none (zero).
         """
         return (
-            to_display(self.V_s_req, "force", imperial),
-            to_display(self.V_s_threshold, "force", imperial),
+            scaled_to_display(self.V_s_req, "force", imperial),
+            scaled_to_display(self.V_s_threshold, "force", imperial),
             bool(self.spacing_halved),
             _length_or_none(self.stirrup_s_max_l, imperial),
             _length_or_none(self.stirrup_s_max_w, imperial),
