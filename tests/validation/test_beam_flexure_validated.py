@@ -2,7 +2,8 @@
 
 Every test here is marked ``published_example`` and says in a ``Source:`` paragraph of
 its docstring where its numbers come from: the ETABS/spreadsheet cross-check of the
-flexure suite, the Calcpad beam-flexure sheets and The Concrete Centre's guide.
+flexure suite, the Calcpad beam-flexure sheets, The Concrete Centre's guide and the
+examples of CRSI's Design Guide on ACI 318.
 ``tests/architecture/test_published_examples.py`` enforces both.
 """
 
@@ -10,6 +11,7 @@ from tests.helpers import (
     _flexural_reinforcement_in_pint,
     _nominal_moment_double_in_pint,
     _nominal_moment_simple_in_pint,
+    _required_flexural_steel_in_pint,
 )
 
 import math
@@ -895,3 +897,200 @@ def test_check_flexure_ACI_318_19_over_reinforced_but_top_redeems(
     assert min_max["Ok?"][2] == "✅ D.R."
     assert min_max["Max."][2] == pytest.approx(35.17, abs=0.02)
     assert "not_tension_controlled" not in {w.code for w in node.warnings}
+
+
+# ---------------------------------------------------------------------------
+# CRSI, "Design Guide on the ACI 318 Building Code Requirements for Structural
+# Concrete" (ACI 318-19 edition), Chapter 6, §6.9 Examples. The book is kept
+# outside the repository ("CRSI ACI318-19 Beam design examples.pdf").
+#
+# All the examples use f'c = 4000 psi and Grade 60 bars, and size the steel with
+# a fixed d (h - 2.5 in. for one layer, h - 3.5 in. for two), which is why they
+# go through the reinforcement helper with that d rather than through a design
+# that picks bars. A negative section is the web b_w; a positive section is a
+# T-beam whose stress block stays in the flange (a < h_f), which the book solves
+# as a rectangle of width b_f. There only A_s_calc is comparable: the book keeps
+# the minimum of §9.6.1.2 on b_w, and a rectangle of width b_f puts it on b_f.
+#
+# The book prints A_s to 0.01 in.² after rounding R_n to whole psi, so the
+# areas are held to one unit of that last digit. Its A_s,t = 0.018*b*d is the
+# tension-controlled limit written for eps_t = 0.005; mento reads Table 21.2.2
+# exactly (eps_ty + 0.003, rho = 0.0179), 0.5 % less, hence rel=1e-2 there.
+# ---------------------------------------------------------------------------
+
+_CRSI_AREA_TOL = 0.01  # in.², one unit of the last digit the book prints
+
+
+def _crsi_beam(label: str, b: float, h: float) -> RectangularBeam:
+    return RectangularBeam(
+        label=label,
+        concrete=Concrete_ACI_318_19(name="fc 4000", f_c=4000 * psi),
+        steel_bar=SteelBar(name="Grade 60", f_y=60 * ksi),
+        width=b * inch,
+        height=h * inch,
+        c_c=1.5 * inch,
+    )
+
+
+def _assert_crsi_flexure(
+    label: str,
+    b: float,
+    h: float,
+    d: float,
+    M_u: float,
+    A_s: float | None,
+    A_s_calc: float | None,
+    A_s_min: float | None,
+    A_s_max: float | None,
+) -> None:
+    """Size one CRSI section and hold each area the book prints; None is not printed."""
+    beam = _crsi_beam(label, b, h)
+    got_min, got_max, got_final, got_calc = _required_flexural_steel_in_pint(beam, M_u * kip * ft, d * inch, 2.5 * inch)
+    if A_s is not None:
+        assert got_final.to("inch**2").magnitude == pytest.approx(A_s, abs=_CRSI_AREA_TOL)
+    if A_s_calc is not None:
+        assert got_calc.to("inch**2").magnitude == pytest.approx(A_s_calc, abs=_CRSI_AREA_TOL)
+    if A_s_min is not None:
+        assert got_min.to("inch**2").magnitude == pytest.approx(A_s_min, abs=_CRSI_AREA_TOL)
+    if A_s_max is not None:
+        assert got_max.to("inch**2").magnitude == pytest.approx(A_s_max, rel=1e-2)
+
+
+@pytest.mark.published_example
+@pytest.mark.parametrize(
+    ("location", "M_u", "A_s"),
+    [
+        # Only the minimum: A_s_calc = 0.51 in.², and mento takes the 4/3 relief
+        # of §9.6.1.3 (floored at its 1.8 ‰ of b*h, 1.21 in.²), where the book
+        # lays the full A_s,min. Both satisfy the code; the minimum is common.
+        ("exterior_negative", 49.2, None),
+        ("first_interior_negative", 165.0, 2.01),
+        ("interior_negative", 156.1, 2.01),
+    ],
+)
+def test_flexure_ACI_318_19_CRSI_example_6_2(location: str, M_u: float, A_s: float | None) -> None:
+    """Beam 28 x 24 in., d = 21.5 in.: every negative section is governed by A_s,min.
+
+    A_s,min = 200*b_w*d/f_y = 2.01 in.² (§9.6.1.2) and A_s,t = 0.018*b*d = 10.8 in.².
+    For 165.0 and 156.1 kip·ft, 4/3 of A_s_calc (1.75 and 1.65 in.²) exceeds the
+    minimum, so the relief of §9.6.1.3 does not apply and A_s = A_s,min. The
+    positive sections are left out: the book prints only their minimum on b_w.
+
+    Source: CRSI, Design Guide on the ACI 318 Building Code Requirements for
+    Structural Concrete, §6.9.2, Example 6.2, p. 6-66, Table 6.24.
+    """
+    _assert_crsi_flexure(f"CRSI-6.2-{location}", 28, 24, 21.5, M_u, A_s, None, 2.01, 10.8)
+
+
+@pytest.mark.published_example
+@pytest.mark.parametrize(
+    ("location", "b", "d", "M_u", "A_s", "A_s_calc", "A_s_min", "A_s_max"),
+    [
+        ("exterior_negative", 12, 21.5, 84.9, 0.91, 0.91, 0.86, 4.64),
+        ("first_interior_negative", 12, 21.5, 258.3, 2.97, 2.97, 0.86, 4.64),
+        # T-beam, b_f = 76.5 in., two layers (d = 20.5 in.), a = 0.54 in. < h_f.
+        ("positive", 76.5, 20.5, 214.7, None, 2.36, None, None),
+    ],
+)
+def test_flexure_ACI_318_19_CRSI_example_6_6(
+    location: str,
+    b: float,
+    d: float,
+    M_u: float,
+    A_s: float | None,
+    A_s_calc: float,
+    A_s_min: float | None,
+    A_s_max: float | None,
+) -> None:
+    """Beam 12 x 24 in. of the LFRS, end span: strength governs every section.
+
+    Source: CRSI, Design Guide on the ACI 318 Building Code Requirements for
+    Structural Concrete, §6.9.6, Example 6.6, p. 6-80 (b_f, d and a of the positive
+    section) and p. 6-81, Table 6.28.
+    """
+    _assert_crsi_flexure(f"CRSI-6.6-{location}", b, 24, d, M_u, A_s, A_s_calc, A_s_min, A_s_max)
+
+
+@pytest.mark.published_example
+@pytest.mark.parametrize(
+    ("location", "b", "M_u", "A_s", "A_s_calc", "A_s_min", "A_s_max"),
+    [
+        ("end_exterior_negative", 7, 100.9, 0.90, 0.90, 0.61, 3.28),
+        ("end_positive", 60, 172.9, None, 1.49, None, None),
+        ("end_first_interior_negative", 7, 201.3, 1.89, 1.89, 0.61, 3.28),
+        ("interior_positive", 60, 102.7, None, 0.88, None, None),
+        ("interior_negative", 7, 183.0, 1.71, 1.71, 0.61, 3.28),
+    ],
+)
+def test_flexure_ACI_318_19_CRSI_example_6_11(
+    location: str,
+    b: float,
+    M_u: float,
+    A_s: float | None,
+    A_s_calc: float,
+    A_s_min: float | None,
+    A_s_max: float | None,
+) -> None:
+    """Joist 7 x 28.5 in., d = 26.0 in.; positive sections as a T of b_f = 60 in.
+
+    Source: CRSI, Design Guide on the ACI 318 Building Code Requirements for
+    Structural Concrete, §6.9.11, Example 6.11, p. 6-98 (b_f) and p. 6-99, Table 6.31.
+    """
+    _assert_crsi_flexure(f"CRSI-6.11-{location}", b, 28.5, 26.0, M_u, A_s, A_s_calc, A_s_min, A_s_max)
+
+
+@pytest.mark.published_example
+@pytest.mark.parametrize(
+    ("location", "b", "M_u", "A_s", "A_s_calc", "A_s_min", "A_s_max"),
+    [
+        ("end_exterior_negative", 30, 368.7, 3.27, 3.27, 2.60, 14.0),
+        ("end_positive", 57, 421.3, None, 3.68, None, None),
+        ("end_first_interior_negative", 30, 585.6, 5.33, 5.33, 2.60, 14.0),
+        ("interior_positive", 57, 363.3, None, 3.17, None, None),
+        ("interior_negative", 30, 532.4, 4.81, 4.81, 2.60, 14.0),
+    ],
+)
+def test_flexure_ACI_318_19_CRSI_example_6_16(
+    location: str,
+    b: float,
+    M_u: float,
+    A_s: float | None,
+    A_s_calc: float,
+    A_s_min: float | None,
+    A_s_max: float | None,
+) -> None:
+    """Edge beam 30 x 28.5 in., d = 26.0 in.; positive sections as an L of b_f = 57 in.
+
+    Source: CRSI, Design Guide on the ACI 318 Building Code Requirements for
+    Structural Concrete, §6.9.16, Example 6.16, p. 6-112 (b_f) and p. 6-113, Table 6.34.
+    """
+    _assert_crsi_flexure(f"CRSI-6.16-{location}", b, 28.5, 26.0, M_u, A_s, A_s_calc, A_s_min, A_s_max)
+
+
+@pytest.mark.published_example
+@pytest.mark.parametrize(
+    ("location", "b", "M_u", "A_s", "A_s_calc", "A_s_min", "A_s_max"),
+    [
+        # Only the minimum: A_s_calc = 0.07 in.², and mento takes the 4/3 relief
+        # of §9.6.1.3 (floored at its 1.8 ‰ of b*h, 0.36 in.²), where the book
+        # lays the full A_s,min. Both satisfy the code; the minimum is common.
+        ("exterior_negative", 7, 8.5, None, None, 0.61, 3.28),
+        ("positive", 60, 204.5, None, 1.77, None, None),
+        ("first_interior_negative", 7, 245.5, 2.37, 2.37, 0.61, 3.28),
+    ],
+)
+def test_flexure_ACI_318_19_CRSI_example_6_18(
+    location: str,
+    b: float,
+    M_u: float,
+    A_s: float | None,
+    A_s_calc: float | None,
+    A_s_min: float | None,
+    A_s_max: float | None,
+) -> None:
+    """The joist of Example 6.11 with its end moments redistributed for torsion (§22.7.3.3).
+
+    Source: CRSI, Design Guide on the ACI 318 Building Code Requirements for
+    Structural Concrete, §6.9.18, Example 6.18, p. 6-118, Table 6.35.
+    """
+    _assert_crsi_flexure(f"CRSI-6.18-{location}", b, 28.5, 26.0, M_u, A_s, A_s_calc, A_s_min, A_s_max)
