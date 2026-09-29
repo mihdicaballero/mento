@@ -130,7 +130,7 @@ Here’s an example of the output from `beam.results`:
 
     \textsf{Bottom longitudinal rebar: } 2\phi16 + 1\phi12 ++ 2\phi12 + 1\phi10, \, A_{s,\text{bot}} = 8.2 \, \textsf{cm}^2, \, M_u = 90 \, \textsf{kNm}, \, \phi M_n = 154.95 \, \textsf{kNm} \rightarrow \textsf{DCR} = 0.58
 
-    \textsf{Shear reinforcing: } 1s\phi10/20 \, \textsf{cm}, \, A_v = 7.85 \, \textsf{cm}^2/\textsf{m}, \, V_u = 80 \, \textsf{kN}, \, \phi V_n = 196.24 \, \textsf{kN} \rightarrow \textsf{DCR} = 0.41
+    \textsf{Shear reinforcing: 2 legs } \phi10 \, \textsf{mm @ 20 cm} \cdot \textsf{14 cm between legs (max 54.29 cm)}, \, A_v = 7.85 \, \textsf{cm}^2/\textsf{m}, \, V_u = 80 \, \textsf{kN}, \, \phi V_n = 203.52 \, \textsf{kN} \rightarrow \textsf{DCR} = 0.39
 
 
 Interpreting the Output
@@ -169,11 +169,13 @@ The first line provides the beam's geometry and material properties:
 
 - **Shear reinforcing**: Shear reinforcement details.
 
-  - :math:`1s\phi10/20 \, \textsf{cm}`: 10 mm diameter stirrups spaced at 20 cm.
+  - ``2 legs Ø10 mm @ 20 cm · 14 cm between legs (max 54.29 cm)``: one closed stirrup of
+    10 mm, so two legs across the shear plane, every 20 cm along the beam; the legs are
+    14 cm apart across the width, against the 54.29 cm Table 9.7.6.2.2 allows.
   - :math:`A_v = 7.85 \, \textsf{cm}^2/\textsf{m}`: Area of shear reinforcement per meter.
   - :math:`V_u = 80 \, \textsf{kN}`: Applied shear force.
-  - :math:`\phi V_n = 196.24 \, \textsf{kN}`: Design shear capacity.
-  - :math:`\textsf{DCR} = 0.41`: Design capacity ratio :math:`\textsf{DCR} = V_u / \phi V_n`.
+  - :math:`\phi V_n = 203.52 \, \textsf{kN}`: Design shear capacity.
+  - :math:`\textsf{DCR} = 0.39`: Design capacity ratio :math:`\textsf{DCR} = V_u / \phi V_n`.
 
 - **Check DCR Values**: A DCR less than 1.0 indicates that the beam is safe under the applied loads.
 - **Review Warnings**: If the output includes warnings, review the design to ensure compliance with code requirements. You can check detailed results for more information.
@@ -195,3 +197,11 @@ You can use the method `plot()` to visualize the beam's cross-section and reinfo
 
 The `plot()` method generates a graphical representation of the beam, including its geometry and reinforcement details.
 This can be useful for verifying the input data and for presentation purposes.
+
+The drawing is the section the checks assume, read from ``beam.section_geometry`` (see
+:ref:`user_guide/design_results`): every stirrup of the cage at the legs the shear check
+spreads across the width, the bars where the clear-spacing model puts them, and the stirrup
+text in three lines -- legs, bar and spacing; the spacing of the legs with its maximum once a
+shear check has run; and the arrangement of the cage -- in the language of
+``mento.set_language``. The legs are not tied to the bars, so an inner leg may be drawn
+where there is no bar.

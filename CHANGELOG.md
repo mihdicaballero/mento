@@ -32,6 +32,62 @@ and the report text are presentation, not API; a program should read the fields.
   of the limits table is renamed. A program that reads these tables by position should
   read them by label.
 
+### Added
+
+- **The row of Table 9.7.6.2.2 is recorded by the check.** The ACI 318-19 / CIRSOC 201-25
+  shear equations gain `stirrup_spacing_threshold(f_c, A_cv)` — 0.33·√f'c·bw·d, 4·√f'c·bw·d
+  in psi, with the plain root (the table has no §22.5.3.1 ceiling and no λ) — and
+  `stirrup_spacing_halved(V_s_req, f_c, A_cv)`, which `max_stirrup_spacing` now calls, so
+  the row is decided in one place and every limit is the same number as before. The
+  check state keeps both (`V_s_threshold`, `spacing_halved`) beside the limits it set. On
+  the 150×150 CIRSOC beam of the user's case (Mu 5000 kN·m, Vu 5000 kN) V_s,req =
+  4828.12 kN passes 3568.95 kN, which is why both limits are 20 cm.
+- **The stirrup spacing limits are public.** One name, one meaning:
+  `ShearDesign.s_max_w` is the across-width limit on the legs (Table 9.7.6.2.2; EN
+  Expression (9.8N)), `s_max_l_table` the along-length limit of that same table (EN
+  (9.6N), with the 400 mm cap that is mento's own), `s_max_l_support` the §9.7.6.4.3 cap
+  on stirrups that brace compression bars (`None` where the code has no such clause or
+  the section relies on none), and `s_max_l` the along-length limit the stirrups are held
+  to, the least of the two. They are envelopes, the tightest of every combination — what
+  the warnings hold the stirrups to: on the user's beam checked with a second combination
+  under the threshold (1000 kN·m, 1500 kN, which runs last), `shear_design.s_max_w` is
+  20 cm while the private `_stirrup_s_max_w` it used to be read from says 40 cm. Each
+  `ShearCheck` carries its own combination's `V_s_req`, `V_s_threshold`,
+  `spacing_halved`, `s_max_l_table` and `s_max_w` (`None` where the code has no such
+  quantity: EN has no threshold, and no limit without stirrups), and each `StirrupOption`
+  the `s_max_l` and `s_max_w` the search held it to. The fields are added at the end with
+  defaults, so a result built positionally with the 1.3.0 arguments still builds
+  (ADR-0001).
+- **The section geometry is public.** `beam.section_geometry` returns a frozen
+  `SectionGeometry` (exported from `mento`; module `mento.section_geometry`): the stirrup
+  legs (`leg_x`), the closed stirrups (`ClosedStirrup`, perimeter first) and crossties
+  (`Crosstie`), and every bar (`BarPosition`: centre, diameter, face, layer, group), as
+  quantities in the display unit of the section, origin at the bottom-left corner. They
+  are the positions the checks assume, not a drawing's: the legs evenly spread at the
+  `s_w` the shear check reads (`x_i = c_c + d_st/2 + i·s_w`), one perimeter stirrup plus
+  inner stirrups on legs (2,3), (4,5)…, and the bars one clear spacing apart with the
+  first face at `c_c + d_st` and the layers at the offsets of the effective depth. On the
+  user's 150×150 beam that is ten legs 15.87 cm apart, from 3.6 to 146.4 cm, and twelve
+  Ø32 from 5.8 to 144.2 cm. `to_dict(unit)` gives the same as plain floats, for a
+  consumer that does not speak pint, and `arrangement(language)` the cage in words. A
+  slab strip publishes the section and no bars or legs: it is detailed by spacings, and
+  bars at the beam's clear-spacing rule would contradict its `Ø10/14` label. The legs are
+  not tied to the bars — the checks do not do that either — so an inner leg may sit where
+  there is no bar. A `ShearWall` raises `NotABeamError`.
+- **The shear report says how many legs, how far apart, and why the limits are what
+  they are.** The strength table of a beam gains `Number of legs` (`nl`) and `Leg spacing
+  across width` (`sw`). Under ACI 318-19 and CIRSOC 201-25 every element's table then
+  prints the shear the stirrups must carry (`Vs,req`), the threshold of Table 9.7.6.2.2
+  (`Vs,lim`, 0.33√f'c·bw·d; 4√f'c·bw·d in psi), the row of the table the check took —
+  `Vs,req > Vs,lim: Table 9.7.6.2.2 limits the spacing to d/4 along and d/2 across`, or
+  the `≤` row with d/2 and d — and that row's absolute cap (`s,cap`: ACI 600/300 mm,
+  CIRSOC 400/200 mm), plus the §9.7.6.4.3 cap (`s,max,cs`) where the stirrups brace
+  compression bars. The row is read from the check state, where the equation decided it;
+  nothing is compared again. On the user's beam: `nl 10`, `sw 15.87 cm`,
+  `Vs,req 4828.12 kN`, `Vs,lim 3568.95 kN`, the halved row, `s,cap 20.0 cm`. An EN
+  1992-1-1 beam prints where its limits come from: Expressions (9.6N) and (9.8N), with the
+  400 mm cap on the first named as mento's own. Spanish for every new row.
+
 ### Changed
 
 - **Stirrups are written legs first.** A beam's transverse reinforcement reads
@@ -54,7 +110,6 @@ and the report text are presentation, not API; a program should read the fields.
 - **Language scope.** `set_language` now also covers the stirrup notation and the cage
   description asked for through `notation()` / `arrangement()`. `str()` of every result
   stays English.
-
 - **The section drawing is the checked section.** `beam.plot()` draws from
   `beam.section_geometry`: the perimeter stirrup and every inner stirrup at the legs the
   shear check assumes, the bars where the clear-spacing model puts them, and the stirrup
@@ -87,65 +142,13 @@ and the report text are presentation, not API; a program should read the fields.
   pandas DataFrame built from a mix of ints and floats is float. The detail tables are
   built with object columns now, and `round_for_display` keeps each value's type, so a
   count prints as the whole number it is (`ns 5`, `nl 10`); a float column reads as before.
-
-### Added
-
-- **The row of Table 9.7.6.2.2 is recorded by the check.** The ACI 318-19 / CIRSOC 201-25
-  shear equations gain `stirrup_spacing_threshold(f_c, A_cv)` — 0.33·√f'c·bw·d, 4·√f'c·bw·d
-  in psi, with the plain root (the table has no §22.5.3.1 ceiling and no λ) — and
-  `stirrup_spacing_halved(V_s_req, f_c, A_cv)`, which `max_stirrup_spacing` now calls, so
-  the row is decided in one place and every limit is the same number as before. The
-  check state keeps both (`V_s_threshold`, `spacing_halved`) beside the limits it set. On
-  the 150×150 CIRSOC beam of the user's case (Mu 5000 kN·m, Vu 5000 kN) V_s,req =
-  4828.12 kN passes 3568.95 kN, which is why both limits are 20 cm.
-
-- **The stirrup spacing limits are public.** One name, one meaning:
-  `ShearDesign.s_max_w` is the across-width limit on the legs (Table 9.7.6.2.2; EN
-  Expression (9.8N)), `s_max_l_table` the along-length limit of that same table (EN
-  (9.6N), with the 400 mm cap that is mento's own), `s_max_l_support` the §9.7.6.4.3 cap
-  on stirrups that brace compression bars (`None` where the code has no such clause or
-  the section relies on none), and `s_max_l` the along-length limit the stirrups are held
-  to, the least of the two. They are envelopes, the tightest of every combination — what
-  the warnings hold the stirrups to: on the user's beam checked with a second combination
-  under the threshold (1000 kN·m, 1500 kN, which runs last), `shear_design.s_max_w` is
-  20 cm while the private `_stirrup_s_max_w` it used to be read from says 40 cm. Each
-  `ShearCheck` carries its own combination's `V_s_req`, `V_s_threshold`,
-  `spacing_halved`, `s_max_l_table` and `s_max_w` (`None` where the code has no such
-  quantity: EN has no threshold, and no limit without stirrups), and each `StirrupOption`
-  the `s_max_l` and `s_max_w` the search held it to. The fields are added at the end with
-  defaults, so a result built positionally with the 1.3.0 arguments still builds
-  (ADR-0001).
-
-- **The section geometry is public.** `beam.section_geometry` returns a frozen
-  `SectionGeometry` (exported from `mento`; module `mento.section_geometry`): the stirrup
-  legs (`leg_x`), the closed stirrups (`ClosedStirrup`, perimeter first) and crossties
-  (`Crosstie`), and every bar (`BarPosition`: centre, diameter, face, layer, group), as
-  quantities in the display unit of the section, origin at the bottom-left corner. They
-  are the positions the checks assume, not a drawing's: the legs evenly spread at the
-  `s_w` the shear check reads (`x_i = c_c + d_st/2 + i·s_w`), one perimeter stirrup plus
-  inner stirrups on legs (2,3), (4,5)…, and the bars one clear spacing apart with the
-  first face at `c_c + d_st` and the layers at the offsets of the effective depth. On the
-  user's 150×150 beam that is ten legs 15.87 cm apart, from 3.6 to 146.4 cm, and twelve
-  Ø32 from 5.8 to 144.2 cm. `to_dict(unit)` gives the same as plain floats, for a
-  consumer that does not speak pint, and `arrangement(language)` the cage in words. A
-  slab strip publishes the section and no bars or legs: it is detailed by spacings, and
-  bars at the beam's clear-spacing rule would contradict its `Ø10/14` label. The legs are
-  not tied to the bars — the checks do not do that either — so an inner leg may sit where
-  there is no bar. A `ShearWall` raises `NotABeamError`.
-
-- **The shear report says how many legs, how far apart, and why the limits are what
-  they are.** The strength table of a beam gains `Number of legs` (`nl`) and `Leg spacing
-  across width` (`sw`). Under ACI 318-19 and CIRSOC 201-25 every element's table then
-  prints the shear the stirrups must carry (`Vs,req`), the threshold of Table 9.7.6.2.2
-  (`Vs,lim`, 0.33√f'c·bw·d; 4√f'c·bw·d in psi), the row of the table the check took —
-  `Vs,req > Vs,lim: Table 9.7.6.2.2 limits the spacing to d/4 along and d/2 across`, or
-  the `≤` row with d/2 and d — and that row's absolute cap (`s,cap`: ACI 600/300 mm,
-  CIRSOC 400/200 mm), plus the §9.7.6.4.3 cap (`s,max,cs`) where the stirrups brace
-  compression bars. The row is read from the check state, where the equation decided it;
-  nothing is compared again. On the user's beam: `nl 10`, `sw 15.87 cm`,
-  `Vs,req 4828.12 kN`, `Vs,lim 3568.95 kN`, the halved row, `s,cap 20.0 cm`. An EN
-  1992-1-1 beam prints where its limits come from: Expressions (9.6N) and (9.8N), with the
-  400 mm cap on the first named as mento's own. Spanish for every new row.
+- Docs: the ACI 318-19 theory page stated the threshold of Table 9.7.6.2.2 as
+  0.083λ√f'c·Acv; the table, the code and mento use 0.33√f'c·bw·d, with no λ. The page now
+  also gives the CIRSOC 201-25 caps, the leg model and the §9.7.6.4.3 cap. The EN
+  theory page says the 400 mm on Expression (9.6N) is mento's own.
+- Docs: the BeamSummary guide called `ns` the number of stirrup legs; it is the number
+  of closed stirrups, each with two legs, so a list filled in with legs asked for twice
+  the stirrups.
 
 ## [1.3.0] - 2026-09-27
 

@@ -66,6 +66,21 @@ and to the summaries, :doc:`beam_summary` and :doc:`shear_wall_summary`:
   with their headers translated
 - ``results_detailed_doc()``, written to Word
 
+It also applies to:
+
+- the text of the section drawing, ``beam.plot()``;
+- the warning messages, ``DesignWarning.message``, worded when ``warnings`` is read;
+- the stirrup notation and the description of the cage, asked for through ``notation()``
+  and ``arrangement()`` of ``reinforcement.transverse``, ``shear_design`` or an option.
+
+.. code-block:: python
+
+    mento.set_language("es")
+    beam.shear_design.notation()      # '2 ramas Ø6 mm c/28 cm · 14.4 cm entre ramas (máx. 40 cm)'
+    beam.shear_design.arrangement()   # 'estribo perimetral'
+    beam.shear_design.notation("en")  # '2 legs Ø6 mm @ 28 cm · 14.4 cm between legs (max 40 cm)'
+    str(beam.shear_design)            # always English, whatever the language
+
 Table headers, row labels and document headings are translated. These are deliberately
 left as they are:
 
@@ -76,7 +91,9 @@ left as they are:
 - **The design code designation** — ``CIRSOC 201-25`` keeps its official name.
 - **Generated file names** — a project keeps one naming scheme regardless of the language
   its reports are written in.
-- **The API itself** — arguments, attributes and error messages remain English.
+- **The API itself** — arguments, attributes, ``str()`` of every result object and error
+  messages remain English; ``notation()``, ``arrangement()`` and the warning messages
+  follow the language.
 
 A label with no translation is written in English rather than raising, so a report always
 renders.

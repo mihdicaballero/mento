@@ -392,3 +392,90 @@ def test_the_notebook_shear_line_of_a_slab_reads_its_grid() -> None:
     line = slab._md_shear_results
     assert line.startswith("Shear reinforcing Ø10 mm/8 cm×16 cm, ")
     assert f"={round(slab._A_v.to('cm**2/m').magnitude, 2)} cm²/m" in line
+
+
+# ---------------------------------------------------------------------------
+# The examples the user guides print
+# ---------------------------------------------------------------------------
+
+
+def test_the_design_results_page_example() -> None:
+    """docs/source/user_guide/design_results.rst: the shear block and the section geometry."""
+    beam = RectangularBeam(
+        label="101",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=20 * cm,
+        height=60 * cm,
+        c_c=25 * mm,
+    )
+    Node(section=beam, forces=[Forces(label="C1", V_z=80 * kN, M_y=100 * kNm)]).design()
+    shear = beam.shear_design
+    assert str(shear) == "2 legs Ø10 mm @ 27 cm · 14 cm between legs (max 55.74 cm)"
+    assert shear.notation("es") == "2 ramas Ø10 mm c/27 cm · 14 cm entre ramas (máx. 55.74 cm)"
+    assert shear.notation(compact=True) == "2 legs Ø10/27"
+    assert shear.arrangement() == "single perimeter stirrup"
+    assert f"{shear.s_w.to('cm'):.4g~P}" == "14 cm"
+    assert f"{shear.s_max_w:.4g~P}" == "55.74 cm"
+    assert f"{shear.s_max_l:.4g~P}" == "27.87 cm"
+    assert shear.s_max_l_table == shear.s_max_l
+    assert shear.s_max_l_support is None
+    geometry = beam.section_geometry
+    assert [f"{x:.4g~P}" for x in geometry.leg_x] == ["3 cm", "17 cm"]
+    assert geometry.arrangement() == "single perimeter stirrup"
+
+    # Where the spacing limit governs, the alternatives share one spacing.
+    shallow = RectangularBeam(
+        label="x",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=20 * cm,
+        height=40 * cm,
+        c_c=25 * mm,
+    )
+    Node(section=shallow, forces=[Forces(label="C1", V_z=100 * kN, M_y=30 * kNm)]).design()
+    assert [option.notation(compact=True) for option in shallow.shear_design.options] == [
+        "2 legs Ø10/17",
+        "2 legs Ø12/17",
+        "2 legs Ø16/17",
+    ]
+
+
+def test_the_language_page_example() -> None:
+    """docs/source/user_guide/language.rst: a CIRSOC 20x60 in Spanish."""
+    beam = RectangularBeam(
+        label="101",
+        concrete=Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=20 * cm,
+        height=60 * cm,
+        c_c=25 * mm,
+    )
+    Node(section=beam, forces=[Forces(label="C1", V_z=80 * kN, M_y=100 * kNm)]).design()
+    mento.set_language("es")
+    assert beam.shear_design.notation() == "2 ramas Ø6 mm c/28 cm · 14.4 cm entre ramas (máx. 40 cm)"
+    assert beam.shear_design.arrangement() == "estribo perimetral"
+    assert beam.shear_design.notation("en") == "2 legs Ø6 mm @ 28 cm · 14.4 cm between legs (max 40 cm)"
+    assert str(beam.shear_design) == beam.shear_design.notation("en")
+
+
+def test_the_beams_page_notebook_line() -> None:
+    """docs/source/user_guide/beams.rst: the shear line of the notebook summary."""
+    beam = RectangularBeam(
+        label="101",
+        concrete=Concrete_ACI_318_19(name="C25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=20 * cm,
+        height=60 * cm,
+        c_c=2.5 * cm,
+    )
+    beam.set_longitudinal_rebar_bot(n1=2, d_b1=16 * mm, n2=1, d_b2=12 * mm, n3=2, d_b3=12 * mm, n4=1, d_b4=10 * mm)
+    beam.set_longitudinal_rebar_top(n1=2, d_b1=16 * mm)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=10 * mm, s_l=20 * cm)
+    Node(
+        section=beam, forces=[Forces(label="C1", M_y=-80 * kNm, V_z=80 * kN), Forces(label="C2", M_y=90 * kNm)]
+    ).check()
+    beam.shear_results
+    line = beam._md_shear_results
+    assert line.startswith("Shear reinforcing 2 legs Ø10 mm @ 20 cm · 14 cm between legs (max 54.29 cm), ")
+    assert "=7.85 cm²/m" in line and "=80.0 kN" in line and "=203.52 kN" in line and "DCR}=0.39" in line
