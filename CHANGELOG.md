@@ -12,6 +12,8 @@ from the release history and are summaries rather than complete lists.
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-09-29
+
 ### Changed
 
 - **A Calcpad sheet no longer counts as a validation source.** It reproduces a calculation,
@@ -1106,7 +1108,8 @@ First public release on PyPI: rectangular concrete beam check and design for fle
 shear under ACI 318-19 and CIRSOC 201-25, unit aware calculations, results as pandas
 DataFrames, and Word calculation reports.
 
-[Unreleased]: https://github.com/mihdicaballero/mento/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/mihdicaballero/mento/compare/v1.3.1...HEAD
+[1.3.1]: https://github.com/mihdicaballero/mento/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/mihdicaballero/mento/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/mihdicaballero/mento/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/mihdicaballero/mento/compare/v1.0.1...v1.1.0
