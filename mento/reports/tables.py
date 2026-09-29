@@ -327,25 +327,27 @@ def _compile_results_ACI_flexure_metric(self: "RectangularBeam", force: Forces) 
     return result
 
 
-#: The row of Table 9.7.6.2.2 the check took, as the report words it.
-_TABLE_9_7_6_2_2_HALVED = "Vs,req > Vs,lim: Table 9.7.6.2.2 limits the spacing to d/4 along and d/2 across"
-_TABLE_9_7_6_2_2_LOW = "Vs,req ≤ Vs,lim: Table 9.7.6.2.2 limits the spacing to d/2 along and d across"
+#: The row of Table 9.7.6.2.2 the check took, as the report words it: short
+#: enough that the console table, which does not wrap, keeps its width.
+_TABLE_9_7_6_2_2_HALVED = "Vs,req > Vs,lim → Table 9.7.6.2.2: d/4 along, d/2 across"
+_TABLE_9_7_6_2_2_LOW = "Vs,req ≤ Vs,lim → Table 9.7.6.2.2: d/2 along, d across"
+#: V_s,req is nominal, (Vu - φVc)/φ, where the row above it, ØVs, is factored.
+_V_S_REQ_ROW = "Nominal shear the stirrups must carry (Vu/φ − Vc)"
+#: The limits-table row of §9.7.6.4.3, on a section whose stirrups brace compression bars.
+_SUPPORT_ROW = "Stirrup spacing, lateral support of compression bars (§9.7.6.4.3)"
 
 
-def _spacing_table_rows(
-    self: "RectangularBeam", state: Any, support: Any
-) -> tuple[list[str], list[str], list[Any], list[str]]:
+def _spacing_table_rows(self: "RectangularBeam", state: Any) -> tuple[list[str], list[str], list[Any], list[str]]:
     """Why the spacing limits are what they are: the rows of Table 9.7.6.2.2.
 
     ACI 318-19 / CIRSOC 201-25 Table 9.7.6.2.2 halves the limits once the
-    shear the stirrups must carry passes 0.33·√f'c·bw·d (4·√f'c·bw·d in psi).
-    The rows print that shear, the threshold, which row of the table the
-    check took -- read off the ``state``, where the equation decided it, so
-    nothing is compared again here -- and the absolute cap of that row
-    (ACI 600/300 mm, CIRSOC 400/200 mm). The limits themselves are the
-    ``Max.`` column of the limits table, not repeated. Where the stirrups
-    also brace compression bars, the cap of §9.7.6.4.3 follows: it is a
-    limit of the section, which the warnings already check.
+    nominal shear the stirrups must carry, ``(Vu - φVc)/φ``, passes
+    0.33·√f'c·bw·d (4·√f'c·bw·d in psi). The rows print that shear, the
+    threshold, which row of the table the check took -- read off the
+    ``state``, where the equation decided it, so nothing is compared again
+    here -- and the absolute cap of that row (ACI 600/300 mm, CIRSOC
+    400/200 mm). The limits themselves are the ``Max.`` column of the limits
+    table, not repeated; so is the cap of §9.7.6.4.3 (:func:`_support_row`).
     """
     imperial = self.concrete.is_imperial
     V_s_req, V_s_threshold, halved, _, _ = state.spacing_quantities(imperial)
@@ -355,7 +357,7 @@ def _spacing_table_rows(
         "Threshold of Table 9.7.6.2.2 (4√f'c·bw·d)" if imperial else "Threshold of Table 9.7.6.2.2 (0.33√f'c·bw·d)"
     )
     labels = [
-        "Shear the stirrups must carry",
+        _V_S_REQ_ROW,
         threshold,
         _TABLE_9_7_6_2_2_HALVED if halved else _TABLE_9_7_6_2_2_LOW,
         "Absolute cap of Table 9.7.6.2.2 in this row",
@@ -368,12 +370,36 @@ def _spacing_table_rows(
         round(cap.to("cm").magnitude, 2),
     ]
     units = ["kN", "kN", "", "cm"]
-    if support is not None:
-        labels.append("Maximum spacing for lateral support of compression bars (§9.7.6.4.3)")
-        variables.append("s,max,cs")
-        values.append(round(support.s_max.to("cm").magnitude, 2))
-        units.append("cm")
     return labels, variables, values, units
+
+
+def _support_row(self: "RectangularBeam", support: Any, support_hook: Any) -> list[Any]:
+    """The limits-table row of §9.7.6.4.3: ``[label, unit, s_l, min, max, ok]``.
+
+    Its ``Ok?`` is the verdict of the warnings, for display only: the spacing
+    is past the cap exactly when ``stirrup_spacing_exceeds_compression_support``
+    is raised, and a section with no stirrups at all fails it, as
+    ``stirrups_required_for_compression_support`` says -- quoting the cap of
+    the smallest stirrup §9.7.6.4.2 allows, as that warning does. The row
+    does not enter ``_all_shear_checks_passed``, which keeps reading the four
+    rows above it.
+    """
+    s_l = self._stirrup_s_l
+    if self._stirrup_n == 0:
+        s_max = support_hook(self, support.d_b_min).s_max.to(s_l.units)
+        ok = False
+    else:
+        s_max = support.s_max.to(s_l.units)
+        # The comparison of mento.design_warnings: past the cap and not equal to it.
+        ok = not (s_l > s_max and not math.isclose(s_l.magnitude, s_max.magnitude))
+    return [
+        _SUPPORT_ROW,
+        "cm",
+        round(s_l.to("cm").magnitude, 2),
+        "",
+        round(s_max.to("cm").magnitude, 2),
+        "✅" if ok else "❌",
+    ]
 
 
 def _initialize_dicts_ACI_318_19_shear(self: "RectangularBeam", state: Any) -> None:
@@ -511,11 +537,17 @@ def _initialize_dicts_ACI_318_19_shear(self: "RectangularBeam", state: Any) -> N
         ],
         "Ok?": checks,
     }
+    if support is not None:
+        # A section whose stirrups brace compression bars is held to the cap of
+        # §9.7.6.4.3 too, on the spacing along the member: its own row, with
+        # the warnings' verdict, beside the Table 9.7.6.2.2 row it may undercut.
+        for column, cell in zip(self._data_min_max_shear, _support_row(self, support, support_hook)):
+            self._data_min_max_shear[column] = [*self._data_min_max_shear[column], cell]
     # A slab strip has no cage to count: the same bar sits on a grid, so the row
     # that names a stirrup count gives way to the second spacing that actually
     # detailed it. Same three rows either way, so the columns stay aligned.
     rebar_rows, rebar_vars, rebar_values, rebar_units = _transverse_rebar_rows(self, d_b_shown)
-    table_rows, table_vars, table_values, table_units = _spacing_table_rows(self, state, support)
+    table_rows, table_vars, table_values, table_units = _spacing_table_rows(self, state)
     self._shear_reinforcement = {
         "Shear reinforcement strength": [
             *rebar_rows,
@@ -885,10 +917,12 @@ def _compile_results_EN_1992_2004_flexure_metric(self: "RectangularBeam", force:
     return result
 
 
-#: Where the EN spacing limits come from, for the strength table of a beam. The
-#: 400 mm on the along-length limit is mento's own: Expression (9.6N) has no cap.
-_EN_SPACING_ROW = (
-    "Expressions (9.6N) and (9.8N): 0.75·d·(1 + cot α) along, capped at 400 mm by mento; 0.75·d, at most 600 mm, across"
+#: Where the EN spacing limits come from, for the strength table of a beam, one
+#: row per direction. The 400 mm on the along-length limit is mento's own:
+#: Expression (9.6N) has no cap.
+_EN_SPACING_ROWS = (
+    "Expression (9.6N) along: 0.75·d·(1 + cot α), capped at 400 mm by mento",
+    "Expression (9.8N) across: 0.75·d, at most 600 mm",
 )
 
 
@@ -1001,7 +1035,7 @@ def _initialize_dicts_EN_1992_2004_shear(self: "RectangularBeam", state: Any) ->
     rebar_rows, rebar_vars, rebar_values, rebar_units = _transverse_rebar_rows(self, d_b_shown, round_to=None)
     # A beam says where its limits come from; a slab strip's grid is
     # detailed by its own spacings.
-    source: list[str] = [] if grid else [_EN_SPACING_ROW]
+    source: list[str] = [] if grid else list(_EN_SPACING_ROWS)
     self._shear_reinforcement = {
         "Shear reinforcement strength": [
             *rebar_rows,

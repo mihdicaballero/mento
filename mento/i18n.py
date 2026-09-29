@@ -324,28 +324,23 @@ ES.update(
         "Stirrup spacing along width (Table 9.7.6.2.2)": (
             "Separación de estribos en la dirección transversal (Tabla 9.7.6.2.2)"
         ),
-        "Shear the stirrups must carry": "Corte que deben resistir los estribos",
+        "Nominal shear the stirrups must carry (Vu/φ − Vc)": "Corte nominal que deben resistir los estribos (Vu/φ − Vc)",
         "Threshold of Table 9.7.6.2.2 (0.33√f'c·bw·d)": "Umbral de la Tabla 9.7.6.2.2 (0.33√f'c·bw·d)",
         "Threshold of Table 9.7.6.2.2 (4√f'c·bw·d)": "Umbral de la Tabla 9.7.6.2.2 (4√f'c·bw·d)",
-        "Vs,req > Vs,lim: Table 9.7.6.2.2 limits the spacing to d/4 along and d/2 across": (
-            "Vs,req > Vs,lim: la Tabla 9.7.6.2.2 limita la separación a d/4 en la dirección longitudinal "
-            "y d/2 en el ancho"
+        "Vs,req > Vs,lim → Table 9.7.6.2.2: d/4 along, d/2 across": (
+            "Vs,req > Vs,lim → Tabla 9.7.6.2.2: d/4 a lo largo, d/2 en el ancho"
         ),
-        "Vs,req ≤ Vs,lim: Table 9.7.6.2.2 limits the spacing to d/2 along and d across": (
-            "Vs,req ≤ Vs,lim: la Tabla 9.7.6.2.2 limita la separación a d/2 en la dirección longitudinal "
-            "y d en el ancho"
+        "Vs,req ≤ Vs,lim → Table 9.7.6.2.2: d/2 along, d across": (
+            "Vs,req ≤ Vs,lim → Tabla 9.7.6.2.2: d/2 a lo largo, d en el ancho"
         ),
         "Absolute cap of Table 9.7.6.2.2 in this row": "Tope absoluto de la Tabla 9.7.6.2.2 en esta fila",
-        "Maximum spacing for lateral support of compression bars (§9.7.6.4.3)": (
-            "Separación máxima por sujeción lateral de las barras comprimidas (§9.7.6.4.3)"
+        "Stirrup spacing, lateral support of compression bars (§9.7.6.4.3)": (
+            "Separación de estribos, sujeción de barras comprimidas (§9.7.6.4.3)"
         ),
-        (
-            "Expressions (9.6N) and (9.8N): 0.75·d·(1 + cot α) along, capped at 400 mm by mento; "
-            "0.75·d, at most 600 mm, across"
-        ): (
-            "Expresiones (9.6N) y (9.8N): 0.75·d·(1 + cot α) en la dirección longitudinal, con el tope "
-            "de 400 mm propio de mento; 0.75·d, como máximo 600 mm, en el ancho"
+        "Expression (9.6N) along: 0.75·d·(1 + cot α), capped at 400 mm by mento": (
+            "Expresión (9.6N) a lo largo: 0.75·d·(1 + cot α), tope de 400 mm de mento"
         ),
+        "Expression (9.8N) across: 0.75·d, at most 600 mm": "Expresión (9.8N) en el ancho: 0.75·d, como máximo 600 mm",
     }
 )
 
