@@ -2145,7 +2145,7 @@ def test_rectangular_section_plot_components(
 ) -> None:
     """
     Test that the plot method adds the expected matplotlib components
-    (main rectangle, stirrup rectangles, annotations).
+    (main rectangle, annotations). The fixture carries no stirrups, so none is drawn.
     """
     beam_example_flexure_ACI.plot()
     ax = beam_example_flexure_ACI._ax  # Access the private _ax created by plot
@@ -2153,7 +2153,7 @@ def test_rectangular_section_plot_components(
     assert ax is not None, "Plot method should create and assign an Axes object."
 
     # Check for patches (rectangles, FancyBboxPatch)
-    # Expecting: 1 main Rectangle, 2 FancyBboxPatches for stirrup
+    # Expecting: 1 main Rectangle and no stirrup: the fixture has none
     # + potentially other internal patches depending on matplotlib's rendering
     # It's safer to check for specific types and properties if possible.
 
@@ -2162,7 +2162,8 @@ def test_rectangular_section_plot_components(
     fancy_bboxes = [p for p in ax.patches if isinstance(p, FancyBboxPatch)]
 
     assert len(rectangles) >= 1, "Expected at least one Rectangle patch (the main section)."
-    assert len(fancy_bboxes) == 2, "Expected exactly two FancyBboxPatch objects for the stirrup."
+    assert beam_example_flexure_ACI._stirrup_n == 0
+    assert len(fancy_bboxes) == 0, "A beam with no stirrups draws none."
 
     # Check for annotations (dimensions)
     # Annotations are stored in ax.texts for text, ax.lines or ax.artists for arrows
@@ -2916,9 +2917,8 @@ def test_plot_single_bar_layer_is_centered() -> None:
     circles = [p for p in beam._ax.patches if isinstance(p, Circle)]
 
     bottom_bar = next(c for c in circles if np.isclose(c.get_radius(), 0.8))
-    # centered on the section, plus the inward corner offset applied to the outermost bar
-    corner_offset = 0.43 * beam.reinforcement.transverse.d_b.to("cm").magnitude
-    assert np.isclose(bottom_bar.get_center()[0], beam.width.to("cm").magnitude / 2 + corner_offset)
+    # Centred on the section, where the clear-spacing model puts it: no corner nudge.
+    assert np.isclose(bottom_bar.get_center()[0], beam.width.to("cm").magnitude / 2)
 
     plt.close()
 
@@ -2927,7 +2927,12 @@ def test_plot_annotates_stirrups_and_draws_two_legs() -> None:
     beam = _plot_beam(n_stirrups=2, d_b_stirrup=6 * mm, s_l=20 * cm)
 
     texts = [t.get_text() for t in beam._ax.texts]
-    assert "4 legs Ø6/20" in texts
+    # Unchecked: the configuration, with no maximum; three lines.
+    assert texts[-3:] == [
+        "4 legs Ø6 mm @ 20 cm",
+        f"{beam.reinforcement.transverse.s_w.to('cm'):.4g~P} between legs",
+        "perimeter stirrup + 1 inner stirrup",
+    ]
 
     fancy_bboxes = [p for p in beam._ax.patches if isinstance(p, FancyBboxPatch)]
     assert len(fancy_bboxes) == 4, "Two stirrups are drawn as two patches each (outer + inner line)."
@@ -2942,7 +2947,8 @@ def test_plot_three_stirrups_adds_two_inner_ones() -> None:
     assert len(fancy_bboxes) == 6, "Outer stirrup plus two inner stirrups."
 
     texts = [t.get_text() for t in beam._ax.texts]
-    assert "6 legs Ø6/15" in texts
+    assert "6 legs Ø6 mm @ 15 cm" in texts
+    assert "perimeter stirrup + 2 inner stirrups" in texts
 
     plt.close()
 
@@ -2952,7 +2958,122 @@ def test_plot_without_stirrups_has_no_stirrup_text() -> None:
 
     texts = [t.get_text() for t in beam._ax.texts]
     assert not any("legs" in t for t in texts)
+    assert not [p for p in beam._ax.patches if isinstance(p, FancyBboxPatch)]
 
+    plt.close()
+
+
+def _outer_patches(ax: object) -> list[FancyBboxPatch]:
+    """The outer line of each drawn stirrup: every other FancyBboxPatch, in drawing order."""
+    return [p for p in ax.patches if isinstance(p, FancyBboxPatch)][::2]  # type: ignore[attr-defined]
+
+
+def _drawn_leg_gaps(ax: object, d_cm: float) -> list[float]:
+    """Centre-to-centre gaps between every drawn leg, left to right."""
+    legs = sorted(x for p in _outer_patches(ax) for x in (p.get_x() + d_cm / 2, p.get_x() + p.get_width() - d_cm / 2))
+    return [b - a for a, b in zip(legs, legs[1:])]
+
+
+def test_plot_draws_every_stirrup_at_the_legs_the_check_assumes() -> None:
+    """The 150x150 CIRSOC beam of the user: five stirrups, ten legs 15.87 cm apart, twelve Ø32.
+
+    The old drawing capped the cage at three stirrups at fixed places, whose
+    legs were up to 36.30 cm apart against the 20 cm the modelled 15.87 cm meets.
+    """
+    beam = _wide_cirsoc_beam()
+    Node(section=beam, forces=[Forces(label="C1", M_y=5000 * kNm, V_z=5000 * kN)]).design()
+    beam.plot()
+    ax = beam._ax
+    geometry = beam.section_geometry
+
+    fancy = [p for p in ax.patches if isinstance(p, FancyBboxPatch)]
+    assert len(fancy) == 10
+    d = geometry.stirrup_d_b.to("cm").magnitude
+    for outer, stirrup in zip(_outer_patches(ax), geometry.stirrups):
+        assert outer.get_x() == pytest.approx(stirrup.x_left.to("cm").magnitude - d / 2)
+        assert outer.get_width() == pytest.approx((stirrup.x_right - stirrup.x_left).to("cm").magnitude + d)
+    gaps = _drawn_leg_gaps(ax, d)
+    assert max(gaps) == pytest.approx(15.8667, abs=1e-4)
+    assert gaps == pytest.approx([15.8667] * 9, abs=1e-4)
+
+    circles = [p for p in ax.patches if isinstance(p, Circle)]
+    assert len(circles) == 12
+    assert [c.get_center()[0] for c in circles] == pytest.approx([b.x.to("cm").magnitude for b in geometry.bars])
+    assert [c.get_center()[1] for c in circles] == pytest.approx([b.y.to("cm").magnitude for b in geometry.bars])
+
+    texts = [t.get_text() for t in ax.texts]
+    assert texts[-3:] == [
+        "10 legs Ø12 mm @ 14 cm",
+        "15.87 cm between legs (max 20 cm)",
+        "perimeter stirrup + 4 inner stirrups",
+    ]
+    assert "12Ø32" in texts
+    plt.close()
+
+
+def test_plot_of_the_aci_beam_keeps_its_legs_within_30_cm() -> None:
+    beam = RectangularBeam(
+        label="V1",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=150 * cm,
+        height=150 * cm,
+        c_c=30 * mm,
+    )
+    Node(section=beam, forces=[Forces(label="C1", M_y=5000 * kNm, V_z=5000 * kN)]).design()
+    beam.plot()
+    fancy = [p for p in beam._ax.patches if isinstance(p, FancyBboxPatch)]
+    assert len(fancy) == 6
+    gaps = _drawn_leg_gaps(beam._ax, beam._stirrup_d_b.to("cm").magnitude)
+    assert max(gaps) == pytest.approx(28.48, abs=0.005)
+    assert [t.get_text() for t in beam._ax.texts][-2] == "28.48 cm between legs (max 30 cm)"
+    plt.close()
+
+
+def test_plot_draws_a_crosstie_from_the_geometry() -> None:
+    """The helpers take the axes and a geometry, so an odd cage can be drawn."""
+    from dataclasses import replace
+
+    from mento.plots.sections import _plot_stirrups_in_section
+    from mento.section_geometry import Crosstie
+
+    beam = _plot_beam(n_stirrups=1, d_b_stirrup=8 * mm, s_l=20 * cm)
+    geometry = beam.section_geometry
+    perimeter = geometry.stirrups[0]
+    with_tie = replace(
+        geometry,
+        crossties=(Crosstie(leg=1, x=20 * cm, y_bottom=perimeter.y_bottom, y_top=perimeter.y_top),),
+    )
+    fig, ax = plt.subplots()
+    _plot_stirrups_in_section(ax, with_tie)
+    ties = [p for p in ax.patches if p.get_gid() == "crosstie"]
+    assert len(ties) == 1
+    assert ties[0].get_x() == pytest.approx(20 - 0.4)
+    assert len([line for line in ax.lines if line.get_gid() == "crosstie_hook"]) == 2
+    assert len([p for p in ax.patches if isinstance(p, FancyBboxPatch)]) == 2
+    plt.close(fig)
+    plt.close()
+
+
+def test_plot_layer_text_follows_the_bars() -> None:
+    """With d_b2 > d_b1 the label sits at the middle of the band the bars occupy."""
+    beam = _plot_beam(n1=2, d_b1=12 * mm, n2=1, d_b2=25 * mm)
+    label = next(t for t in beam._ax.texts if t.get_text() == "2Ø12+1Ø25")
+    inner = 2.5 + beam._stirrup_d_b.to("cm").magnitude
+    assert label.get_position()[1] == pytest.approx(inner + 2.5 / 2)
+    plt.close()
+
+
+def test_plot_follows_the_language() -> None:
+    import mento
+
+    beam = _wide_cirsoc_beam()
+    Node(section=beam, forces=[Forces(label="C1", M_y=5000 * kNm, V_z=5000 * kN)]).design()
+    mento.set_language("es")
+    beam.plot()
+    texts = [t.get_text() for t in beam._ax.texts]
+    assert texts[-1] == "estribo perimetral + 4 interiores"
+    assert texts[-3].startswith("10 ramas")
     plt.close()
 
 

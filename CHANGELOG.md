@@ -50,8 +50,26 @@ and the report text are presentation, not API; a program should read the fields.
   description asked for through `notation()` / `arrangement()`. `str()` of every result
   stays English.
 
+- **The section drawing is the checked section.** `beam.plot()` draws from
+  `beam.section_geometry`: the perimeter stirrup and every inner stirrup at the legs the
+  shear check assumes, the bars where the clear-spacing model puts them, and the stirrup
+  text in three lines — `10 legs Ø12 mm @ 14 cm`, `15.87 cm between legs (max 20 cm)`
+  (the maximum once a shear check has run) and `perimeter stirrup + 4 inner stirrups` —
+  in the current language. The corner bars are drawn where the model has them, faces on
+  the legs, without the 0.43·d_st push into the bend the drawing used to add (the model's
+  corner is square; placing bars in the bends is for a later release). A layer's label
+  sits at the height of its bars. The legs are not tied to the bars, so an inner leg may
+  be drawn where there is no bar: that is the model, shown as it is. A slab strip keeps
+  its drawing.
+
 ### Fixed
 
+- **The section drawing showed a different cage from the one checked.** It drew at most
+  three stirrups at fixed places: on the user's 150×150 beam, five stirrups Ø12 whose ten
+  legs the check spreads 15.87 cm apart (within the 20 cm of Tabla 9.7.6.2.2) were drawn
+  as three, with legs up to 36.30 cm apart. It drew one stirrup for a beam with none, and
+  put the label of a second layer of bars behind the first layer's first-group diameter
+  rather than behind its bars.
 - The notebook shear line of a slab (`slab.shear_results`) printed `10eØ8/16.0 cm` for a
   `Ø10/8×16` grid: it read the detail table by position, and a slab's has other rows. It
   now prints the element's own notation, and reads `A_v` by its row label.
