@@ -92,6 +92,8 @@ __all__ = [
     "WallShearDesign",
     "DesignNotRunError",
     "NotABeamError",
+    "bar_designation",
+    "bar_diameter",
 ]
 
 if TYPE_CHECKING:
@@ -120,12 +122,15 @@ if TYPE_CHECKING:
     from mento.wall_results import MeshDirection, WallMesh, WallShearCheck, WallShearDesign
     from mento.design_results import DesignNotRunError
     from mento.shear_wall import NotABeamError
+    from mento.bar_sizes import bar_designation, bar_diameter
 
 
 def __getattr__(name: str) -> object:
     # Map class names to their actual module files
     module_mapping = {
         "RectangularBeam": "beam",
+        "bar_designation": "bar_sizes",
+        "bar_diameter": "bar_sizes",
         "OneWaySlab": "slab",
         "Footing": "slab",
         "Node": "node",

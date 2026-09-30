@@ -41,6 +41,19 @@ class Concrete(Material):
                 f"Unsupported unit system for f_c ({self.f_c.units}). Please use MPa, Pa, kPa, psi, or ksi."
             )
 
+    def _require_metric(self) -> None:
+        """Refuse US customary units for a code written only in SI.
+
+        CIRSOC 201-25 and EN 1992-1-1 publish their coefficients in SI alone:
+        an f'c in psi would run ACI's US customary formulas under CIRSOC's
+        name, or divide by a metric constant that is not there under EN.
+        """
+        if self.is_imperial:
+            raise ValueError(
+                f"{self.design_code} is written in SI units: give f_c in MPa, not {self.f_c.units:~P}. "
+                "US customary units (psi, ksi) are supported under ACI 318-19 only."
+            )
+
     @property
     def is_imperial(self) -> bool:
         """True when the material was given in US customary units.
@@ -264,6 +277,7 @@ class Concrete_CIRSOC_201_25(Concrete_ACI_318_19):
         super().__post_init__()
         # Override the design code for this specific class
         self.design_code = "CIRSOC 201-25"
+        self._require_metric()
 
 
 @dataclass
@@ -298,6 +312,7 @@ class Concrete_EN_1992_2004(Concrete):
         # Crucial: Call parent's __post_init__ first to set unit_system and density
         super().__post_init__()
         self.design_code = "EN 1992-2004"
+        self._require_metric()
 
         # The f_c passed to Concrete is the f_ck for Eurocode
         self._delta = 0.85

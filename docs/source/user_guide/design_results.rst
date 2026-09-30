@@ -112,7 +112,7 @@ Shear
     shear.DCR               # 0.462
     shear.V_capacity        # 173 kN, ØVn here; VRd under EN 1992
 
-    str(shear)              # '1eØ10 mm/27 cm'
+    str(shear)              # '1sØ10 mm/27 cm' ('1eØ10 mm/27 cm' after set_language("es"))
 
 Several load combinations
 -------------------------
@@ -198,7 +198,7 @@ ranked it by.
 The stirrup alternatives are one layout per other bar diameter the code offers, lighter and
 heavier alike, in order of diameter: each is the widest spacing with the fewest legs that
 covers the demand read at the depth that bar gives the section. Where the spacing limit
-governs they share one spacing (``1eØ10/13``, ``1eØ12/13``, ``1eØ16/13``); where the demand
+governs they share one spacing (``1sØ10/13``, ``1sØ12/13``, ``1sØ16/13``); where the demand
 governs, a lighter bar sits closer and a heavier one further apart. Every alternative is
 built on the finished section and checked there -- shear and flexure, since a heavier
 stirrup lowers the effective depth -- and only the ones the section passes with are kept, so

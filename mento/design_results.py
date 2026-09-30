@@ -23,7 +23,9 @@ from typing import TYPE_CHECKING, Any, Optional, Sequence, Tuple
 
 from mento.units import Quantity
 
+from mento.bar_sizes import bar_designation, is_us_customary
 from mento.codes.check_state import to_display
+from mento.i18n import stirrup_mark
 from mento.design_warnings import steel_above_maximum
 
 if TYPE_CHECKING:
@@ -34,24 +36,45 @@ class DesignNotRunError(RuntimeError):
     """Raised when results are read before a check or design has been run."""
 
 
-def format_longitudinal_rebar(n: float, d_b: str, s: Optional[str] = None) -> str:
+def spacing_separator(imperial: bool) -> str:
+    """What stands between a bar and its spacing: ``Ø12/17cm``, but ``#4@12 in``.
+
+    A slash after a US bar size would read as a fraction -- ``#3/4 in`` is
+    three quarters of an inch -- so US customary writes the spacing with ``@``,
+    as its drawings do.
+    """
+    return "@" if imperial else "/"
+
+
+def bar_mark(d_b: Quantity) -> str:
+    """A bar as the result dataclasses write it: ``Ø16 mm``, or its ASTM size, ``#6``.
+
+    The dataclasses carry no unit system, so the unit of the diameter, in the
+    display units of the section it came from, is what decides.
+    """
+    return bar_designation(d_b) if is_us_customary(d_b) else f"Ø{d_b:.4g~P}"
+
+
+def format_longitudinal_rebar(n: float, bar: str, s: Optional[str] = None, *, imperial: bool = False) -> str:
     """Label one layer of longitudinal bars in the notation of its element.
 
     A beam is detailed as a number of bars of a diameter, so the count leads:
-    ``4Ø16``. A slab is one bar repeated at a spacing across the strip, and the
-    count that falls out of it -- ``width / s``, not a whole number -- says
-    nothing about how it is drawn, so the spacing takes its place:
-    ``Ø12/17cm`` -- the same notation its grid of stirrups is written in.
+    ``4Ø16``, ``4#5``. A slab is one bar repeated at a spacing across the strip,
+    and the count that falls out of it -- ``width / s``, not a whole number --
+    says nothing about how it is drawn, so the spacing takes its place:
+    ``Ø12/17cm``, ``#4@12 in`` -- the same notation its grid of stirrups is
+    written in.
 
-    Takes the numbers already formatted, so each caller keeps its own precision
-    and units while the shape of the label is decided in one place. The count
-    is the exception, a bare number: a whole one reads whole whatever its
-    type, since a count entered as ``2.0`` is still two bars, not "2.0Ø16".
+    Takes the bar and the spacing already written -- ``bar`` with its symbol,
+    ``Ø16`` or ``#5`` -- so each caller keeps its own precision and units while
+    the shape of the label is decided in one place. The count is the
+    exception, a bare number: a whole one reads whole whatever its type, since
+    a count entered as ``2.0`` is still two bars, not "2.0Ø16".
     """
     if s is None:
         count = int(n) if float(n).is_integer() else n
-        return f"{count}Ø{d_b}"
-    return f"Ø{d_b}/{s}"
+        return f"{count}{bar}"
+    return f"{bar}{spacing_separator(imperial)}{s}"
 
 
 def placed_bars(n: float) -> int:
@@ -97,8 +120,9 @@ class RebarLayer:
     def __str__(self) -> str:
         return format_longitudinal_rebar(
             self.n,
-            f"{self.d_b:.4g~P}",
+            bar_mark(self.d_b),
             None if self.s is None else f"{self.s:.4g~P}",
+            imperial=is_us_customary(self.d_b),
         )
 
 
@@ -403,23 +427,28 @@ STIRRUPS = "stirrups"
 GRID = "grid"
 
 
-def format_transverse_rebar(layout: str, n_stirrups: int, d_b: str, s_l: str, s_w: str) -> str:
+def format_transverse_rebar(
+    layout: str, n_stirrups: int, bar: str, s_l: str, s_w: str, *, imperial: bool = False
+) -> str:
     """Label the transverse reinforcement in the notation of its element.
 
-    A beam is a number of closed stirrups of one diameter at one spacing along
-    the length, so the count leads: ``2eØ10/15cm``. A slab strip has no cage --
-    the same bar sits on a grid -- so what identifies it is the diameter once
-    and a spacing each way, longitudinal first: ``Ø10/15cm×20cm``. The diameter
-    is not repeated: both directions are the same bar.
+    A beam is a number of closed stirrups of one bar at one spacing along the
+    length, so the count leads, marked as stirrups in the report language:
+    ``2eØ10/15cm`` (*estribos*), ``2sØ10/15cm`` (*stirrups*), ``2s#3@6 in``. A
+    slab strip has no cage -- the same bar sits on a grid -- so what identifies
+    it is the bar once and a spacing each way, longitudinal first:
+    ``Ø10/15cm×20cm``. The bar is not repeated: both directions are the same one.
 
-    Takes the numbers already formatted, so each caller keeps its own precision
-    and units while the shape of the label is decided in one place.
+    Takes the bar (with its symbol) and the spacings already written, so each
+    caller keeps its own precision and units while the shape of the label is
+    decided in one place.
     """
     if n_stirrups == 0:
         return "no stirrups"
+    separator = spacing_separator(imperial)
     if layout == GRID:
-        return f"Ø{d_b}/{s_l}×{s_w}"
-    return f"{n_stirrups}eØ{d_b}/{s_l}"
+        return f"{bar}{separator}{s_l}×{s_w}"
+    return f"{n_stirrups}{stirrup_mark()}{bar}{separator}{s_l}"
 
 
 @dataclass(frozen=True)
@@ -448,9 +477,10 @@ class TransverseReinforcement:
         return format_transverse_rebar(
             self.layout,
             self.n_stirrups,
-            f"{self.d_b:.4g~P}",
+            bar_mark(self.d_b),
             f"{self.s_l:.4g~P}",
             f"{self.s_w:.4g~P}",
+            imperial=is_us_customary(self.d_b),
         )
 
 
@@ -611,9 +641,10 @@ class StirrupOption:
         return format_transverse_rebar(
             self.layout,
             self.n_stirrups,
-            f"{self.d_b:.4g~P}",
+            bar_mark(self.d_b),
             f"{self.s_l:.4g~P}",
             f"{self.s_w:.4g~P}",
+            imperial=is_us_customary(self.d_b),
         )
 
 
@@ -667,9 +698,10 @@ class ShearDesign:
         return format_transverse_rebar(
             self.layout,
             self.n_stirrups,
-            f"{self.d_b:.4g~P}",
+            bar_mark(self.d_b),
             f"{self.s_l:.4g~P}",
             f"{self.s_w:.4g~P}",
+            imperial=is_us_customary(self.d_b),
         )
 
 

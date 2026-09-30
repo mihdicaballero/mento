@@ -514,3 +514,16 @@ def test_steel_strand_str_representation(steel_strand_metric: SteelStrand) -> No
     assert f"  E_s: {steel_strand_metric.E_s.to('MPa')}" in s
     assert f"  Prestress Stress: {steel_strand_metric.prestress_stress}" in s
     assert f"  Density: {steel_strand_metric.density}" in s
+
+
+@pytest.mark.parametrize("f_c", [4000 * psi, 4 * ksi])
+@pytest.mark.parametrize("concrete_class", [Concrete_CIRSOC_201_25, Concrete_EN_1992_2004])
+def test_a_metric_only_code_refuses_us_customary_units(concrete_class: type, f_c: Quantity) -> None:
+    """CIRSOC 201-25 and EN 1992-1-1 publish SI coefficients only.
+
+    Before 1.4.0 a CIRSOC concrete in psi designed with ACI's US customary
+    formulas under CIRSOC's name, and an EN one failed with a ZeroDivisionError
+    deep in a check.
+    """
+    with pytest.raises(ValueError, match="is written in SI units"):
+        concrete_class(name="C", f_c=f_c)

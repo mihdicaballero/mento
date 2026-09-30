@@ -129,6 +129,7 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Tuple
 
+from mento.bar_sizes import bar_designation, is_us_customary
 from mento.codes.check_state import to_display
 from mento.codes.registry import design_code
 from mento.i18n import translate
@@ -218,14 +219,14 @@ _MESSAGES: Dict[str, str] = {
     ),
     "stirrup_spacing_exceeds_compression_support": (
         "Stirrup spacing along the member: {s} exceeds the {s_max} that lateral support of the "
-        "Ø{d_b_comp} compression bars allows (16 d_b, 48 d_b of the stirrup, least dimension of the beam)."
+        "{d_b_comp} compression bars allows (16 d_b, 48 d_b of the stirrup, least dimension of the beam)."
     ),
     "stirrup_diameter_below_compression_support": (
         "Stirrup diameter {d_b} is below the minimum {d_b_min} that lateral support of "
-        "Ø{d_b_comp} compression bars requires."
+        "{d_b_comp} compression bars requires."
     ),
     "stirrups_required_for_compression_support": (
-        "The section relies on Ø{d_b_comp} compression bars and has no stirrups to brace them: "
+        "The section relies on {d_b_comp} compression bars and has no stirrups to brace them: "
         "closed stirrups of at least {d_b_min} at no more than {s_max} are required."
     ),
 }
@@ -266,6 +267,16 @@ def _fields(values: Mapping[str, Any]) -> Dict[str, str]:
             if first != second
         ):
             break
+    # A bar is named, not measured: "#6" in US customary, and a compression bar
+    # "Ø16 mm" in SI, the symbol travelling with the value so that one template
+    # serves both.
+    for name, value in items:
+        if not (name.startswith("d_b") and isinstance(value, Quantity)):
+            continue
+        if is_us_customary(value):
+            fields[name] = bar_designation(value)
+        elif name == "d_b_comp":
+            fields[name] = f"Ø{fields[name]}"
     return fields
 
 

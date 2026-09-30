@@ -1,4 +1,4 @@
-from typing import List, Dict, Optional
+from typing import Any, List, Dict, Optional
 from pandas import DataFrame
 import pandas as pd
 import copy
@@ -10,10 +10,14 @@ from mento.material import (
 )
 from mento.forces import Forces
 from mento.beam import RectangularBeam
+from mento.bar_sizes import bar_designation
 from mento.codes.registry import design_code
-from mento.i18n import translate, translate_dataframe
+from mento.design_results import spacing_separator
+from mento.i18n import stirrup_mark, translate, translate_dataframe
+from mento.precompute import shown, unit_label
 from mento.results import FAIL_MARK, PASS_MARK, VERDICT_COLUMN
-from mento import mm, cm, kN, MPa, m, inch, ft, kNm
+from mento import mm, cm, kN, MPa, m, inch, ft, kNm, kip, psi, ksi
+from mento.units import Quantity
 from mento.node import Node
 from mento.reports.summaries import beam_summary_doc
 
@@ -23,6 +27,30 @@ from mento.reports.summaries import beam_summary_doc
 #: element label -- but "Position" sits in the middle of the flexure table and
 #: would otherwise print "Top"/"Bottom" in an otherwise translated row.
 _WORD_COLUMNS = ("Position",)
+
+
+def _stirrups_label(beam: RectangularBeam) -> str:
+    """The stirrups of a beam as the summary writes them: ``1eØ8/15`` (mm/cm), ``1s#3@6`` (in).
+
+    A whole number of centimetres in SI, as the table has always shown them; in
+    inches up to four significant figures, since truncating 5.5 in to 5 would
+    write a spacing nobody placed.
+    """
+    if beam._stirrup_n == 0:
+        return "-"
+    imperial = beam.concrete.is_imperial
+    spacing = shown(beam._stirrup_s_l, "length", imperial)
+    if imperial:
+        bar, spacing_text = bar_designation(beam._stirrup_d_b), f"{spacing:.4g}"
+    else:
+        bar, spacing_text = f"Ø{int(beam._stirrup_d_b.to('mm').magnitude)}", f"{int(spacing)}"
+    return f"{int(beam._stirrup_n)}{stirrup_mark()}{bar}{spacing_separator(imperial)}{spacing_text}"
+
+
+def _section_dimension(length: Quantity, imperial: bool) -> Any:
+    """A width or height for the summary table: whole where it is whole, else to two decimals."""
+    value = shown(length, "length", imperial, 2)
+    return int(value) if float(value).is_integer() else value
 
 
 def _translated(df: DataFrame) -> DataFrame:
@@ -93,7 +121,25 @@ class BeamSummary:
         # print("Processed Data: Ok")
 
     def validate_units(self, units_row: List) -> None:
-        valid_units = {"m", "mm", "cm", "in", "inch", "ft", "kN", "kNm", "MPa", ""}
+        # A US customary list gives its forces in kip and its moments in kip·ft,
+        # the units the summary writes back ("kipft" as ShearWallSummary reads it).
+        valid_units = {
+            "m",
+            "mm",
+            "cm",
+            "in",
+            "inch",
+            "ft",
+            "kN",
+            "kNm",
+            "MPa",
+            "kip",
+            "kip·ft",
+            "kipft",
+            "psi",
+            "ksi",
+            "",
+        }
         for unit_str in units_row:
             if unit_str and unit_str not in valid_units:
                 raise ValueError(f"Invalid unit '{unit_str}' detected. Allowed units: {valid_units}")
@@ -111,6 +157,11 @@ class BeamSummary:
             "kN": kN,
             "kNm": kNm,
             "MPa": MPa,
+            "kip": kip,
+            "kip·ft": kip * ft,
+            "kipft": kip * ft,
+            "psi": psi,
+            "ksi": ksi,
         }
         if unit_str in unit_map:
             return unit_map[unit_str]
@@ -193,11 +244,8 @@ class BeamSummary:
             beam: RectangularBeam = node.section  # type: ignore
             original_forces = [copy.deepcopy(force) for force in node.get_forces_list()]
 
-            rebar_v = (
-                "-"
-                if beam._stirrup_n == 0
-                else f"{int(beam._stirrup_n)}eØ{int(beam._stirrup_d_b.to('mm').magnitude)}/{int(beam._stirrup_s_l.to('cm').magnitude)}"
-            )  # noqa: E501
+            imperial = beam.concrete.is_imperial
+            rebar_v = _stirrups_label(beam)
             rebar_f_top = (
                 "-"
                 if beam._n1_t == 0
@@ -235,26 +283,26 @@ class BeamSummary:
                 # Common data
                 common_data = {
                     "Beam": beam.label,
-                    "b": beam.width.magnitude,
-                    "h": beam.height.magnitude,
+                    "b": _section_dimension(beam.width, imperial),
+                    "h": _section_dimension(beam.height, imperial),
                     "As,top": rebar_f_top,
                     "As,bot": rebar_f_bot,
                     "Av": rebar_v,
-                    "As,top,real": round(beam._A_s_top.to("cm**2").magnitude, 1),
-                    "As,bot,real": round(beam._A_s_bot.to("cm**2").magnitude, 1),
-                    "Av,real": round(shear_results["Av"][1], 1),
+                    "As,top,real": shown(beam._A_s_top, "area", imperial, 1 if not imperial else 2),
+                    "As,bot,real": shown(beam._A_s_bot, "area", imperial, 1 if not imperial else 2),
+                    "Av,real": round(shear_results["Av"][1], 1 if not imperial else 2),
                 }
 
                 common_units = {
                     "Beam": "",
-                    "b": "cm",
-                    "h": "cm",
+                    "b": unit_label("length", imperial),
+                    "h": unit_label("length", imperial),
                     "As,top": "",
                     "As,bot": "",
                     "Av": "",
-                    "As,top,real": "cm²",
-                    "As,bot,real": "cm²",
-                    "Av,real": "cm²/m",
+                    "As,top,real": unit_label("area", imperial),
+                    "As,bot,real": unit_label("area", imperial),
+                    "Av,real": unit_label("per_length", imperial),
                 }
 
                 # Code-specific data: the column names are the code's own.
@@ -263,9 +311,9 @@ class BeamSummary:
                 capacities = code.requires("capacity_columns")(beam)
                 code_specific_data = {**capacities, cols["shear_capacity"]: shear_results[cols["shear_capacity"]][1]}
                 code_specific_units = {
-                    cols["moment_capacity_top"]: "kNm",
-                    cols["moment_capacity_bot"]: "kNm",
-                    cols["shear_capacity"]: "kN",
+                    cols["moment_capacity_top"]: unit_label("moment", imperial),
+                    cols["moment_capacity_bot"]: unit_label("moment", imperial),
+                    cols["shear_capacity"]: unit_label("force", imperial),
                 }
 
                 # Merge data dictionaries
@@ -294,8 +342,8 @@ class BeamSummary:
                 results_dict = OrderedDict(
                     {
                         "Beam": beam.label,
-                        "b": int(beam.width.magnitude),
-                        "h": int(beam.height.magnitude),
+                        "b": _section_dimension(beam.width, imperial),
+                        "h": _section_dimension(beam.height, imperial),
                         "As,top": rebar_f_top,
                         "As,bot": rebar_f_bot,
                         "Av": rebar_v,
@@ -312,14 +360,14 @@ class BeamSummary:
                         OrderedDict(
                             {
                                 "Beam": "",
-                                "b": "cm",
-                                "h": "cm",
+                                "b": unit_label("length", imperial),
+                                "h": unit_label("length", imperial),
                                 "As,top": "",
                                 "As,bot": "",
                                 "Av": "",
-                                cols["moment_demand"]: "kNm",
-                                cols["shear_demand"]: "kN",
-                                cols["axial_demand"]: "kN",
+                                cols["moment_demand"]: unit_label("moment", imperial),
+                                cols["shear_demand"]: unit_label("force", imperial),
+                                cols["axial_demand"]: unit_label("force", imperial),
                                 "DCRb,top": "",
                                 "DCRb,bot": "",
                                 "DCRv": "",

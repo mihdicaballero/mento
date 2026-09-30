@@ -586,6 +586,31 @@ def test_a_value_just_past_its_limit_prints_with_enough_digits_to_show_it() -> N
     assert ratio[0].message.endswith("ρl = 0.0025 is below the minimum ρl,min = 0.00251.")
 
 
+def test_a_bar_is_named_by_its_size_in_us_customary_and_by_its_diameter_in_si() -> None:
+    """A US bar is called "#8", not 1 in; an SI compression bar carries its Ø."""
+    from mento.design_warnings import _Raw, collect
+    from mento.units import inch
+
+    us = collect(
+        [
+            _Raw(
+                "stirrup_diameter_below_compression_support",
+                {"d_b": 0.375 * inch, "d_b_min": 0.5 * inch, "d_b_comp": 1.41 * inch},
+            )
+        ]
+    )
+    assert (
+        us[0].message
+        == "Stirrup diameter #3 is below the minimum #4 that lateral support of #11 compression bars requires."
+    )
+    si = collect(
+        [_Raw("stirrup_diameter_below_compression_support", {"d_b": 6 * mm, "d_b_min": 10 * mm, "d_b_comp": 32 * mm})]
+    )
+    assert si[0].message == (
+        "Stirrup diameter 6 mm is below the minimum 10 mm that lateral support of Ø32 mm compression bars requires."
+    )
+
+
 def test_the_stirrup_spacing_of_the_review_prints_its_limit() -> None:
     """10x30 designed for 80 kNm gets 1eØ10/13 with d = 300 - 25 - 10 - 4 =
     261 mm (2Ø8 left below), d/2 = 13.05 cm; 1Ø12 set below by hand lowers

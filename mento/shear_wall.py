@@ -17,6 +17,7 @@ from mento.settings import BeamSettings
 from mento.units import cm, dimensionless, kN, mm
 
 from mento.codes.registry import design_code
+from mento.precompute import unit_label
 from mento.design_warnings import DesignWarning, collect, wall_warnings
 from mento.wall_results import (
     WallMesh,
@@ -325,10 +326,7 @@ class ShearWall(RectangularBeam):
     # ------------------------------------------------------------------
 
     def _get_units_row_shear_wall(self) -> pd.DataFrame:
-        if self.concrete.unit_system == "metric":
-            v_unit = "kN"
-        else:
-            v_unit = "kip"
+        v_unit = unit_label("force", self.concrete.is_imperial)
         return pd.DataFrame(
             [
                 {

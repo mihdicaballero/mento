@@ -71,7 +71,10 @@ def flexure_report_doc(self: "RectangularBeam", force: Optional[Forces] = None) 
                 round(self._limiting_case_flexure_top_details["forces"]["Value"][0], 2),
                 round(self._limiting_case_flexure_bot_details["forces"]["Value"][1], 2),
             ],
-            "Unit": ["kNm", "kNm"],
+            "Unit": [
+                self._limiting_case_flexure_top_details["forces"]["Unit"][0],
+                self._limiting_case_flexure_bot_details["forces"]["Unit"][1],
+            ],
         }
         min_max_result = {
             "Check": [
@@ -80,7 +83,10 @@ def flexure_report_doc(self: "RectangularBeam", force: Optional[Forces] = None) 
                 "Min/Max As rebar bottom",
                 "Minimum spacing bottom",
             ],
-            "Unit": ["cm²", "mm", "cm²", "mm"],
+            "Unit": [
+                *self._limiting_case_flexure_top_details["min_max"]["Unit"][:2],
+                *self._limiting_case_flexure_bot_details["min_max"]["Unit"][2:4],
+            ],
             "Value": [
                 round(
                     self._limiting_case_flexure_top_details["min_max"]["Value"][0],

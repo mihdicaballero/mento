@@ -17,7 +17,9 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, cast
 from IPython.display import Markdown, display
 
 from mento.codes.registry import design_code
+from mento.design_results import GRID, STIRRUPS, format_transverse_rebar, transverse_layout
 from mento.i18n import get_language, translate
+from mento.precompute import DISPLAY
 from mento.results import Formatter, TablePrinter
 from mento.units import cm
 
@@ -46,9 +48,10 @@ def _details(value: Optional[Dict[str, Any]]) -> Dict[str, Any]:
 
 def data(self: "RectangularBeam") -> None:
     type = self.mode.capitalize()
+    length = DISPLAY[self.concrete.is_imperial]["length"]
     markdown_content = (
-        f"{type} {self.label}, $b$={self.width.to('cm')}"
-        f", $h$={self.height.to('cm')}, $c_{{c}}$={self.c_c.to('cm')}, \
+        f"{type} {self.label}, $b$={self.width.to(length)}"
+        f", $h$={self.height.to(length)}, $c_{{c}}$={self.c_c.to(length)}, \
                         Concrete {self.concrete.name}, Rebar {self.steel_bar.name}."
     )
     self._md_data = markdown_content
@@ -100,12 +103,15 @@ def flexure_results(self: "RectangularBeam") -> None:
         DCR_top = top_result_data["Value"][10]
 
         rebar_top = f"{top_rebar_1}" + (f" ++ {top_rebar_2}" if top_rebar_2 != "-" else "")
+        # The units come with the table the values were read from.
+        area_unit = top_result_data["Unit"][7]
+        moment_unit = top_result_data["Unit"][9]
         formatted_DCR_top = formatter.DCR(DCR_top)
 
         markdown_content += (
-            f"Top longitudinal rebar: {rebar_top}, $A_{{s,top}}$ = {area_top} cm², "
-            f"${md_demand}$ = {Mu_top} kNm, "
-            f"${md_capacity}$ = {Mn_top} kNm → {formatted_DCR_top} {warning_top}\n\n"
+            f"Top longitudinal rebar: {rebar_top}, $A_{{s,top}}$ = {area_top} {area_unit}, "
+            f"${md_demand}$ = {Mu_top} {moment_unit}, "
+            f"${md_capacity}$ = {Mn_top} {moment_unit} → {formatted_DCR_top} {warning_top}\n\n"
         )
     else:
         markdown_content += "No top moment to check.\n\n"
@@ -120,12 +126,15 @@ def flexure_results(self: "RectangularBeam") -> None:
         DCR_bot = bot_result_data["Value"][10]
 
         rebar_bot = f"{bot_rebar_1}" + (f" ++ {bot_rebar_2}" if bot_rebar_2 != "-" else "")
+        # The units come with the table the values were read from.
+        area_unit = bot_result_data["Unit"][7]
+        moment_unit = bot_result_data["Unit"][9]
         formatted_DCR_bot = formatter.DCR(DCR_bot)
 
         markdown_content += (
-            f"Bottom longitudinal rebar: {rebar_bot}, $A_{{s,bot}}$ = {area_bot} cm², "
-            f"${md_demand}$ = {Mu_bot} kNm, "
-            f"${md_capacity}$ = {Mn_bot} kNm → {formatted_DCR_bot} {warning_bot}"
+            f"Bottom longitudinal rebar: {rebar_bot}, $A_{{s,bot}}$ = {area_bot} {area_unit}, "
+            f"${md_demand}$ = {Mu_bot} {moment_unit}, "
+            f"${md_capacity}$ = {Mn_bot} {moment_unit} → {formatted_DCR_bot} {warning_bot}"
         )
     else:
         markdown_content += "No bottom moment to check."
@@ -134,6 +143,30 @@ def flexure_results(self: "RectangularBeam") -> None:
 
     self._md_flexure_results = markdown_content
     _show(markdown_content)
+
+
+def _transverse_label(self: "RectangularBeam", reinforcement: Dict[str, Any], imperial: bool) -> str:
+    """The stirrups of the shear line, read off the rows of the detail table.
+
+    The three rows are the ones ``_transverse_rebar_rows`` writes, and they are
+    not the same three on every element: a beam reads count, diameter and
+    spacing, a slab strip diameter and a spacing each way. Reading them by
+    position alone once took a slab's Ø10 for ten stirrups.
+    """
+    values, units = reinforcement["Value"], reinforcement["Unit"]
+    if transverse_layout(self) == GRID:
+        diameter, s_l, s_w = values[:3]
+        unit = units[1]
+        # The table writes a US bar by its size already, "#3".
+        bar = diameter if imperial else f"Ø{diameter:g}"
+        # SI writes the unit once, "Ø10/21×43 cm"; after a US spacing each
+        # direction carries its own, "#3@8 in×12 in", as the dataclasses do.
+        if imperial:
+            return format_transverse_rebar(GRID, 1, bar, f"{s_l:g} {unit}", f"{s_w:g} {unit}", imperial=True)
+        return f"{format_transverse_rebar(GRID, 1, bar, f'{s_l:g}', f'{s_w:g}')} {unit}"
+    count, diameter, spacing = values[:3]
+    bar = diameter if imperial else f"Ø{diameter}"
+    return f"{format_transverse_rebar(STIRRUPS, int(count), bar, str(spacing), '', imperial=imperial)} {units[2]}"
 
 
 def shear_results(self: "RectangularBeam") -> None:
@@ -157,24 +190,24 @@ def shear_results(self: "RectangularBeam") -> None:
         # Create FUFormatter instance and format FU value
         formatter = Formatter()
         formatted_DCR = formatter.DCR(_details(limiting_shear_concrete)["Value"][-1])
+        reinforcement = _details(limiting_reinforcement)
+        imperial = self.concrete.is_imperial
         if self._A_v == 0 * cm:
             rebar_v = "not assigned"
         else:
-            rebar_v = (
-                f"{int(_details(limiting_reinforcement)['Value'][0])}eØ{_details(limiting_reinforcement)['Value'][1]}/"
-                f"{_details(limiting_reinforcement)['Value'][2]} cm"
-            )
+            rebar_v = _transverse_label(self, reinforcement, imperial)
         # Limitng cases checks
         warning = "⚠️ Some checks failed, see detailed results." if not checks_pass else ""
         # Each code names these quantities its own way, and puts its capacity
         # on a different row of its own detail table.
         symbols = design_code(self.concrete).shear_symbols
         capacity = _details(limiting_shear_concrete)["Value"][symbols["capacity_row"]]
+        force_unit = _details(limiting_forces)["Unit"][1]
         markdown_content = (
             f"Shear reinforcing {rebar_v}, ${symbols['reinforcement']}$"
-            f"={_details(limiting_reinforcement)['Value'][6]} cm²/m"
-            f", ${symbols['demand']}$={_details(limiting_forces)['Value'][1]} kN"
-            f", ${symbols['capacity']}$={capacity} kN → {formatted_DCR} {warning}"
+            f"={reinforcement['Value'][6]} {reinforcement['Unit'][6]}"
+            f", ${symbols['demand']}$={_details(limiting_forces)['Value'][1]} {force_unit}"
+            f", ${symbols['capacity']}$={capacity} {force_unit} → {formatted_DCR} {warning}"
         )
     else:
         markdown_content += "No shear to check."
@@ -286,7 +319,10 @@ def flexure_results_detailed(self: "RectangularBeam", force: Optional[Forces] = 
                 round(_details(self._limiting_case_flexure_top_details)["forces"]["Value"][0], 2),
                 round(_details(self._limiting_case_flexure_bot_details)["forces"]["Value"][1], 2),
             ],
-            "Unit": ["kNm", "kNm"],
+            "Unit": [
+                _details(self._limiting_case_flexure_top_details)["forces"]["Unit"][0],
+                _details(self._limiting_case_flexure_bot_details)["forces"]["Unit"][1],
+            ],
         }
         min_max_result = {
             "Check": [
@@ -295,7 +331,10 @@ def flexure_results_detailed(self: "RectangularBeam", force: Optional[Forces] = 
                 "Min/Max As rebar bottom",
                 "Minimum spacing bottom",
             ],
-            "Unit": ["cm²", "mm", "cm²", "mm"],
+            "Unit": [
+                *_details(self._limiting_case_flexure_top_details)["min_max"]["Unit"][:2],
+                *_details(self._limiting_case_flexure_bot_details)["min_max"]["Unit"][2:4],
+            ],
             "Value": [
                 round(
                     _details(self._limiting_case_flexure_top_details)["min_max"]["Value"][0],
