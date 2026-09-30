@@ -34,6 +34,10 @@ LANGUAGES = ("en", "es")
 # The Word footer names the installed version, which changes with every release
 # and depends on which distribution Python finds first: not what a snapshot pins.
 _VERSION = re.compile(r"mento [0-9]\S*?(?=\.?(\s|$))")
+# pint writes a product of units with "·" (U+00B7) up to 0.25 and "⋅" (U+22C5)
+# from 0.26 -- "kN·m" or "kN⋅m" for the same quantity. mento supports both
+# (pint>=0.24), so a snapshot pins the unit, not pint's choice of dot.
+_PINT_DOT = "⋅"
 
 
 @contextlib.contextmanager
@@ -99,7 +103,7 @@ class Transcript:
         self._docs_seen: set[str] = set()
 
     def add(self, title: str, text: Any) -> None:
-        text = _VERSION.sub("mento <version>", str(text))
+        text = _VERSION.sub("mento <version>", str(text)).replace(_PINT_DOT, "·")
         self.parts.append(f"### {title}\n{text}\n")
 
     def printed(self, title: str, call: Callable[[], Any]) -> Any:
