@@ -4,7 +4,7 @@ from pint.facets.plain import PlainQuantity
 from typing import Generator
 
 from mento.forces import Forces
-from mento.units import kN, kNm, kip
+from mento.units import ft, kN, kNm, kip
 
 
 # Helper to check if a quantity matches another, allowing for slight float differences
@@ -271,3 +271,15 @@ def test_str_with_nonzero_M_x() -> None:
     s = str(f)
     assert "M_x" in s
     assert "20" in s
+
+
+def test_forces_given_in_us_units_are_shown_in_them() -> None:
+    """A force in kip prints in kip without being told: Forces(V_z=12 * kip) once printed 53.38 kN."""
+    f = Forces(label="1.4D", V_z=12 * kip, M_y=60 * kip * ft)
+    assert f.unit_system == "imperial"
+    # pint writes the product dot as "·" up to 0.25 and "⋅" from 0.26.
+    shown = str(f).replace("⋅", "·")
+    assert shown == "Force ID: {}, Label: 1.4D, N_x: 0.00 kip, V_z: 12.00 kip, M_y: 60.00 ft·kip".format(f.id)
+    assert Forces(V_z=20 * kN).unit_system == "metric"
+    assert Forces().unit_system == "metric"
+    assert Forces(V_z=12 * kip, unit_system="metric").V_z.to("kN").magnitude == pytest.approx(53.379, rel=1e-4)

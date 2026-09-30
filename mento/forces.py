@@ -5,6 +5,18 @@ from mento.units import Quantity
 from mento.units import kN, kNm
 
 
+#: Units whose name marks a force or a moment as US customary.
+_US_UNIT_NAMES = ("kip", "pound", "foot", "inch")
+
+
+def _unit_system_of(*quantities: Quantity) -> str:
+    """``"imperial"`` if any force or moment given is in US customary units, else ``"metric"``."""
+    for quantity in quantities:
+        if quantity.magnitude != 0 and any(name in str(quantity.units) for name in _US_UNIT_NAMES):
+            return "imperial"
+    return "metric"
+
+
 @dataclass
 class Forces:
     """
@@ -18,8 +30,10 @@ class Forces:
         Shear force along the z-axis (default is 0 kN).
     M_y : float
         Bending moment about the y-axis (default is 0 kN*m).
-    unit_system : str
-        The unit system to use for displaying forces ('metric' or 'imperial').
+    unit_system : str, optional
+        The unit system to use for displaying forces ('metric' or 'imperial'). By default
+        the one the forces are given in: 'imperial' when any of them is in kip, lbf or
+        kip·ft, 'metric' otherwise.
 
     Methods
     -------
@@ -47,7 +61,7 @@ class Forces:
         V_z: Quantity = 0 * kN,
         M_y: Quantity = 0 * kNm,
         M_x: Quantity = 0 * kNm,
-        unit_system: str = "metric",
+        unit_system: Optional[str] = None,
     ) -> None:
         # Increment the class variable for the next unique ID
         Forces._last_id += 1
@@ -55,7 +69,9 @@ class Forces:
 
         # Initialize the label
         self.label = label
-        self.unit_system = unit_system  # Set the unit system
+        # Shown in the units the forces were given in unless told otherwise: a
+        # force in kip prints in kip, as one in kN prints in kN.
+        self.unit_system = unit_system if unit_system is not None else _unit_system_of(N_x, V_z, M_y, M_x)
 
         # Set the forces upon initialization
         self.set_forces(N_x, V_z, M_y, M_x)
