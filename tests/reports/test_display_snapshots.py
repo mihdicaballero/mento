@@ -56,6 +56,17 @@ pytestmark = pytest.mark.filterwarnings("ignore::UserWarning")
 UPDATE = os.environ.get("MENTO_UPDATE_SNAPSHOTS") == "1"
 
 
+def _pint_neutral(text: str) -> str:
+    """The rendered text with pint's product dot written one way.
+
+    The summary tables hold Quantities, which print in the registry's ``~P``
+    format, and pint 0.26 changed the dot it joins units with there from ``·``
+    (U+00B7) to ``⋅`` (U+22C5): ``kN·m`` became ``kN⋅m``. That is pint's choice,
+    not an output of mento's, so the snapshots read either as the older one.
+    """
+    return text.replace("⋅", "·")
+
+
 def _concrete(code: str) -> Any:
     if code == "aci":
         return Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
@@ -195,7 +206,8 @@ def test_metric_output_matches_snapshot(element: str, code: str, tmp_path: Path)
             warnings.simplefilter("ignore")
             return CASES[element](code, workdir)
 
-    for language, text in render_in_languages(render).items():
+    for language, rendered in render_in_languages(render).items():
+        text = _pint_neutral(rendered)
         path = SNAPSHOT_DIR / f"{element}_{code}_{language}.txt"
         if UPDATE or not path.exists():
             if not UPDATE:
