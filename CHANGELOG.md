@@ -54,6 +54,10 @@ from the release history and are summaries rather than complete lists.
   customary beam.
 - `BeamSummary.check()` showed `b` and `h` in the unit they were entered in under a `cm`
   heading; they are converted to the heading's unit now.
+- The shear line of `node.results` / `shear_results` read the transverse reinforcement of a
+  slab or footing as a beam's (count, diameter, spacing), so a footing with a Ø10 grid
+  printed "10eØ21/43.0 cm". A slab strip now writes its grid as `format_transverse_rebar`
+  does: `Ø10/21×43 cm`, `#3@8 in×12 in`. The beam label is unchanged.
 
 ## [1.3.1] - 2026-09-29
 

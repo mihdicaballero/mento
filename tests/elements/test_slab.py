@@ -521,6 +521,41 @@ def test_shear_design_of_an_imperial_slab_strip() -> None:
     assert shear.DCR <= 1
 
 
+def test_shear_line_writes_a_slab_grid_as_a_bar_and_two_spacings() -> None:
+    """The shear line reads the slab's rows as what they are: bar, s_l, s_w.
+
+    It read them as a beam's count, bar and spacing, so this grid printed as
+    "10sØ7/15 cm" -- the Ø10 bar taken for ten stirrups.
+    """
+    slab = _slab_needing_stirrups(Concrete_ACI_318_19)
+    slab.set_slab_longitudinal_rebar_bot(d_b1=12 * mm, s_b1=20 * cm)
+    slab.set_slab_transverse_rebar(d_b=10 * mm, s_long=7 * cm, s_trans=15 * cm)
+    Node(section=slab, forces=Forces(label="C1", M_y=30 * kNm, V_z=100 * kN)).check_shear()
+
+    slab.shear_results
+
+    assert slab._md_shear_results.startswith("Shear reinforcing Ø10/7×15 cm, ")
+
+
+def test_shear_line_writes_an_imperial_slab_grid_with_a_unit_per_spacing() -> None:
+    """In US customary the bar is its size and each spacing carries its unit."""
+    slab = OneWaySlab(
+        label="Slab shear imperial",
+        concrete=Concrete_ACI_318_19(name="C4", f_c=4 * ksi),
+        steel_bar=SteelBar(name="G60", f_y=60 * ksi),
+        width=12 * inch,
+        height=10 * inch,
+        c_c=0.75 * inch,
+    )
+    slab.set_slab_longitudinal_rebar_bot(d_b1=0.5 * inch, s_b1=8 * inch)
+    slab.set_slab_transverse_rebar(d_b=0.375 * inch, s_long=4 * inch, s_trans=8 * inch)
+    Node(section=slab, forces=Forces(label="C1", V_z=12 * kip)).check_shear()
+
+    slab.shear_results
+
+    assert slab._md_shear_results.startswith("Shear reinforcing #3@4 in×8 in, ")
+
+
 def test_transverse_rebar_set_on_a_slab_is_credited_by_the_shear_check() -> None:
     """Both codes read ``_stirrup_n`` to decide whether a section carries stirrups.
 

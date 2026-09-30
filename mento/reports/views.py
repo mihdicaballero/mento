@@ -17,8 +17,8 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, cast
 from IPython.display import Markdown, display
 
 from mento.codes.registry import design_code
-from mento.design_results import spacing_separator
-from mento.i18n import get_language, stirrup_mark, translate
+from mento.design_results import GRID, STIRRUPS, format_transverse_rebar, transverse_layout
+from mento.i18n import get_language, translate
 from mento.precompute import DISPLAY
 from mento.results import Formatter, TablePrinter
 from mento.units import cm
@@ -145,6 +145,30 @@ def flexure_results(self: "RectangularBeam") -> None:
     _show(markdown_content)
 
 
+def _transverse_label(self: "RectangularBeam", reinforcement: Dict[str, Any], imperial: bool) -> str:
+    """The stirrups of the shear line, read off the rows of the detail table.
+
+    The three rows are the ones ``_transverse_rebar_rows`` writes, and they are
+    not the same three on every element: a beam reads count, diameter and
+    spacing, a slab strip diameter and a spacing each way. Reading them by
+    position alone once took a slab's Ø10 for ten stirrups.
+    """
+    values, units = reinforcement["Value"], reinforcement["Unit"]
+    if transverse_layout(self) == GRID:
+        diameter, s_l, s_w = values[:3]
+        unit = units[1]
+        # The table writes a US bar by its size already, "#3".
+        bar = diameter if imperial else f"Ø{diameter:g}"
+        # SI writes the unit once, "Ø10/21×43 cm"; after a US spacing each
+        # direction carries its own, "#3@8 in×12 in", as the dataclasses do.
+        if imperial:
+            return format_transverse_rebar(GRID, 1, bar, f"{s_l:g} {unit}", f"{s_w:g} {unit}", imperial=True)
+        return f"{format_transverse_rebar(GRID, 1, bar, f'{s_l:g}', f'{s_w:g}')} {unit}"
+    count, diameter, spacing = values[:3]
+    bar = diameter if imperial else f"Ø{diameter}"
+    return f"{format_transverse_rebar(STIRRUPS, int(count), bar, str(spacing), '', imperial=imperial)} {units[2]}"
+
+
 def shear_results(self: "RectangularBeam") -> None:
     if not self._shear_checked:
         warnings.warn(
@@ -171,12 +195,7 @@ def shear_results(self: "RectangularBeam") -> None:
         if self._A_v == 0 * cm:
             rebar_v = "not assigned"
         else:
-            count, diameter, spacing = reinforcement["Value"][:3]
-            # The table writes a US bar by its size already, "#3".
-            bar = diameter if imperial else f"Ø{diameter}"
-            rebar_v = (
-                f"{int(count)}{stirrup_mark()}{bar}{spacing_separator(imperial)}{spacing} {reinforcement['Unit'][2]}"
-            )
+            rebar_v = _transverse_label(self, reinforcement, imperial)
         # Limitng cases checks
         warning = "⚠️ Some checks failed, see detailed results." if not checks_pass else ""
         # Each code names these quantities its own way, and puts its capacity
