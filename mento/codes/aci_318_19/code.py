@@ -62,6 +62,7 @@ from mento.codes.check_state import (
 )
 from mento.codes.registry import DesignCode, register
 from mento.material import Concrete_ACI_318_19, Concrete_CIRSOC_201_25
+from mento.precompute import shown
 from mento.units import cm, dimensionless, inch, kN, kNm, mm, MPa, psi
 
 if TYPE_CHECKING:
@@ -381,10 +382,11 @@ _SUMMARY_COLUMNS = {
 
 
 def _capacity_columns(section: "RectangularBeam") -> dict:
-    """ACI reports a reduced capacity phi*Mn on each face."""
+    """ACI reports a reduced capacity phi*Mn on each face, in the section's display units."""
+    imperial = section.concrete.is_imperial
     return {
-        "ØMn,top": round(section._phi_M_n_top.to("kN*m").magnitude, 1),
-        "ØMn,bot": round(section._phi_M_n_bot.to("kN*m").magnitude, 1),
+        "ØMn,top": shown(section._phi_M_n_top, "moment", imperial, 1),
+        "ØMn,bot": shown(section._phi_M_n_bot, "moment", imperial, 1),
     }
 
 

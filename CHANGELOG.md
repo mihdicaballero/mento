@@ -12,6 +12,49 @@ from the release history and are summaries rather than complete lists.
 
 ## [Unreleased]
 
+### Changed
+
+- **A US customary section is shown in US customary units.** mento already designed a
+  section whose `f_c` is in `psi` or `ksi` in those units, but it printed the result in SI:
+  the beam and slab DataFrames, detailed printouts, Word reports and Markdown views wrote
+  cm², kNm and MPa (As 8.55 cm², Mu 162.7 kNm, Vu 177.928865 kN for a 12×24 in beam under
+  120 kip·ft and 40 kip), and the wall its geometry in cm and its bar spacings in mm. Now
+  everything shown — the unit row and values of `check_flexure()` / `check_shear()`, the
+  detailed printouts, the Word documents, `node.results`, `BeamSummary`,
+  `ShearWallSummary`, the drawings and the `DesignWarning` messages — uses in, in², in²/ft,
+  psi, ksi (fy), kip and kip·ft, and lb/ft³ for the density: As 1.33 in², Mu 120.0 kip·ft,
+  ØMn 123.91 kip·ft, Vu 40.0 kip. A wall's length and height are in ft. The SI output is
+  unchanged but for the stirrup mark below; snapshot tests of every SI output
+  (`tests/reports/test_display_snapshots.py`) guard it. The DataFrames keep their columns,
+  their order and their unit row first.
+- **US bars are written by their ASTM size.** `3#6`, `2#6+1#5`, a slab or wall curtain
+  `#4@12 in`, stirrups `1s#3@8 in` — the `@` because `#3/4 in` would read as three
+  quarters of an inch. A bar diameter that is no ASTM size reads `Ø0.70"`.
+- **The stirrup mark follows the report language.** `2sØ10 mm/15 cm` (*stirrup*) in
+  English, `2eØ10 mm/15 cm` (*estribo*) in Spanish, in both unit systems. English is the
+  default language, so the `str()` of `shear_design`, `reinforcement.transverse` and the
+  stirrup options, the summaries and the drawings now write `s` unless
+  `set_language("es")` is set.
+- **CIRSOC 201-25 and EN 1992-1-1 refuse US customary units.** `Concrete_CIRSOC_201_25`
+  and `Concrete_EN_1992_2004` with an `f_c` in `psi` or `ksi` raise a `ValueError`. Before,
+  CIRSOC designed with ACI's US customary formulas under its own name, and EN failed with
+  a `ZeroDivisionError` inside a check.
+
+### Added
+
+- **`bar_designation(d_b)` and `bar_diameter(number)`**, in `mento` and `mento.rebar`: the
+  ASTM A615 size of a bar (`"#6"`) and its nominal diameter (`0.75 in`), from the one table
+  (`mento.bar_sizes.ASTM_BAR_DIAMETERS`) the rebar search designs with.
+- **`BeamSummary` reads a US customary list**: its unit row accepts `kip`, `kip·ft`
+  (or `kipft`), `psi` and `ksi`.
+
+### Fixed
+
+- `BeamSummary.check(capacity_check=True)` printed ØMn,top / ØMn,bot in kN·m for a US
+  customary beam.
+- `BeamSummary.check()` showed `b` and `h` in the unit they were entered in under a `cm`
+  heading; they are converted to the heading's unit now.
+
 ## [1.3.1] - 2026-09-29
 
 ### Changed
