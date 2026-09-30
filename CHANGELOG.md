@@ -12,6 +12,8 @@ from the release history and are summaries rather than complete lists.
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-09-30
+
 ### Changed
 
 - **A US customary section is shown in US customary units.** mento already designed a
