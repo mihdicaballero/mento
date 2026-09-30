@@ -249,3 +249,22 @@ def test_imperial_beam_summary_capacities_are_in_kip_ft(tmp_path: Path) -> None:
     capacity = _beam_summary().check(capacity_check=True)
     assert capacity.iloc[0][["ØMn,top", "ØMn,bot", "ØVn"]].tolist() == ["kip·ft", "kip·ft", "kip"]
     assert capacity.iloc[1]["ØMn,bot"] == pytest.approx(123.9, abs=0.05)
+
+
+def test_warnings_name_imperial_bars_by_their_astm_size() -> None:
+    """An 8x20 in beam under 190 kip·ft is designed doubly reinforced, 2#4 + 1#4 on top.
+
+    Its stirrups are then held to §9.7.6.4.3, 16 d_b of the #4 compression bars
+    = 8 in. At 9 in the warning names those bars "#4", as the drawing does,
+    where SI writes "Ø16 mm".
+    """
+    beam = RectangularBeam(
+        label="B", concrete=_concrete(), steel_bar=_steel(), width=8 * inch, height=20 * inch, c_c=1 * inch
+    )
+    node = Node(section=beam, forces=[Forces(label="U", V_z=13 * kip, M_y=190 * kip * ft)])
+    node.design()
+    beam.set_transverse_rebar(n_stirrups=1, d_b=0.375 * inch, s_l=9 * inch)
+    node.check()
+    (spacing,) = [w for w in node.warnings if w.code == "stirrup_spacing_exceeds_compression_support"]
+    assert "the #4 compression bars" in spacing.message
+    assert not SI_BAR.search(spacing.message)

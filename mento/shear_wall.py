@@ -407,6 +407,30 @@ class ShearWall(RectangularBeam):
         mesh = checks[0].mesh if checks else self.mesh
         return collect(wall_warnings(self, mesh, checks))
 
+    # The beam's shear attributes, read off the wall. A wall inherits ``V_c`` and
+    # ``f_yt`` from RectangularBeam, whose shear check fills them; the wall has a
+    # check of its own (§11.5.4) and they used to stay at the zeros the beam starts
+    # with. They name the same quantities on a wall, so they read the wall's. The
+    # setter is what the inherited initialisation writes its zero through.
+
+    @property  # type: ignore[override]
+    def V_c(self) -> Quantity:
+        """Nominal shear strength of the concrete, V_c of ACI 318-19 §11.5.4.3, from the last check."""
+        return self._V_c_wall
+
+    @V_c.setter
+    def V_c(self, value: Quantity) -> None:
+        self._V_c_wall = value
+
+    @property  # type: ignore[override]
+    def f_yt(self) -> Quantity:
+        """Yield strength of the horizontal mesh for shear, f_yt of ACI 318-19 §11.5.4.8, from the last check."""
+        return self._f_yt_wall
+
+    @f_yt.setter
+    def f_yt(self, value: Quantity) -> None:
+        self._f_yt_wall = value
+
     def _not_a_beam(self, name: str) -> NoReturn:
         raise NotABeamError(
             f"ShearWall has no {name}: it is reinforced with a distributed mesh. "

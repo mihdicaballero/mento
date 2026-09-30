@@ -56,6 +56,11 @@ from the release history and are summaries rather than complete lists.
 
 ### Fixed
 
+- **A `ShearWall` reads its own `V_c` and `f_yt`** (#171). Inherited from `RectangularBeam`,
+  they stayed at the zeros a beam starts with; they now return the wall's V_c
+  (ACI 318-19 §11.5.4.3) and the f_yt of its mesh from the last check, in the wall's units.
+  The other half of #171, the detailed report of a US customary wall printing its geometry
+  in cm, is the US customary output above.
 - `BeamSummary.check(capacity_check=True)` printed ØMn,top / ØMn,bot in kN·m for a US
   customary beam.
 - `BeamSummary.check()` showed `b` and `h` in the unit they were entered in under a `cm`
