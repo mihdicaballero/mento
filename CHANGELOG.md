@@ -35,6 +35,9 @@ from the release history and are summaries rather than complete lists.
   default language, so the `str()` of `shear_design`, `reinforcement.transverse` and the
   stirrup options, the summaries and the drawings now write `s` unless
   `set_language("es")` is set.
+- **`Forces` prints in the units it is given in.** Without `unit_system`, a force in kip,
+  lbf or kip·ft is shown in kip and kip·ft (`Forces(V_z=12 * kip)` printed `53.38 kN`); one
+  in kN, or none at all, stays metric. An explicit `unit_system` still wins.
 - **CIRSOC 201-25 and EN 1992-1-1 refuse US customary units.** `Concrete_CIRSOC_201_25`
   and `Concrete_EN_1992_2004` with an `f_c` in `psi` or `ksi` raise a `ValueError`. Before,
   CIRSOC designed with ACI's US customary formulas under its own name, and EN failed with
@@ -45,6 +48,9 @@ from the release history and are summaries rather than complete lists.
 - **`bar_designation(d_b)` and `bar_diameter(number)`**, in `mento` and `mento.rebar`: the
   ASTM A615 size of a bar (`"#6"`) and its nominal diameter (`0.75 in`), from the one table
   (`mento.bar_sizes.ASTM_BAR_DIAMETERS`) the rebar search designs with.
+- **US customary examples.** The single-element ACI 318-19 examples — beam check and design,
+  one-way slab check, shear wall check and design — have US customary twins in the
+  documentation (`*_imperial.ipynb`).
 - **`BeamSummary` reads a US customary list**: its unit row accepts `kip`, `kip·ft`
   (or `kipft`), `psi` and `ksi`.
 
