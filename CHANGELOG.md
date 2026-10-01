@@ -12,6 +12,18 @@ from the release history and are summaries rather than complete lists.
 
 ## [Unreleased]
 
+### Changed
+
+- **`BeamSummary` designs a beam for the envelope of its combinations.** Rows that share a
+  `Label` are now one beam: one node carrying every combination, as a `Node` built by hand,
+  instead of one independent section per row. `check()` gives one row per beam with the
+  largest demands and DCRs over its combinations (it read the last combination before),
+  `design()` writes the same stirrups on every row of the beam and the bars of the face each
+  row puts in tension, and `flexure_results()` / `shear_results()` keep one row per
+  combination, with `index` counting beams. Rows of a beam that disagree on `b`, `h`, `cc`,
+  the stirrups or the bars of a face raise a `ValueError` naming the beam. A list whose
+  labels are all different, or empty, gives the same results as before.
+
 ## [1.4.0] - 2026-09-30
 
 ### Changed

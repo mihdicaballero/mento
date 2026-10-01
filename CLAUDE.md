@@ -232,6 +232,7 @@ PunchingSlab (standalone dataclass); PunchingNode(slab, column, forces) pairs it
 - `TablePrinter`: renders pandas DataFrames as styled tables (Markdown/IPython).
 - `DocumentBuilder`: builds Word (python-docx) report documents.
 - `BeamSummary` (in `mento/beam_summary.py`; `mento/summary.py` is a deprecated shim): aggregates design results across multiple `RectangularBeam` instances.
+  - Rows sharing a `Label` are one beam: one `Node` with all their combinations, checked and designed for the envelope. Rows with no label stay separate.
   - `.check(capacity_check=False)` — DCR summary table for all beams; set `capacity_check=True` to zero forces and report capacities (MRd,top/bot or ØMn,top/bot) instead.
   - `.design()` — runs flexure + shear design for every beam and fills rebar columns.
   - `.flexure_results(capacity_check=False)` / `.shear_results(capacity_check=False)` — per-beam detailed check tables; `capacity_check=True` adds code-specific capacity columns.

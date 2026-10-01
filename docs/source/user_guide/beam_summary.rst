@@ -62,6 +62,38 @@ The Excel file should contain the following columns:
 Bottom reinforcement is checked against positive bending moments; top reinforcement
 against negative bending moments.
 
+One beam, several combinations
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Rows that share a **Label** are one beam under several load combinations. They become a
+single node carrying every combination, so ``check()`` and ``design()`` work on the
+envelope, exactly as a :class:`~mento.node.Node` built by hand does:
+
+.. code-block:: python
+
+    data = {
+        "Label": ["", "V101", "V101"],
+        "Comb.": ["", "1.2D+1.6L", "1.4D"],
+        "b": ["cm", 20, 20],
+        "h": ["cm", 50, 50],
+        "cc": ["mm", 25, 25],
+        "Nx": ["kN", 0, 10],
+        "Vz": ["kN", 60, -110],
+        "My": ["kNm", 45, -70],
+        # ns, dbs, sl, n1-n4, db1-db4 as above
+    }
+
+The rows of a beam must agree on ``b``, ``h`` and ``cc``. The bars on a row are those of
+the face its moment puts in tension (bottom for ``My >= 0``, top otherwise) and the
+stirrups are the beam's; a row may leave them at zero, but rows that give them must give
+the same ones, or a ``ValueError`` names the beam. A row with no label is a beam of its own.
+
+``check()`` reports one row per beam with the envelope: the largest moment, shear and
+axial force with their sign, and the largest DCR of each face and of shear.
+``flexure_results()`` and ``shear_results()`` keep one row per combination, and their
+``index`` counts beams, not rows. ``design()`` writes the same stirrups on every row of a
+beam and, on each row, the bars of the face that row puts in tension.
+
 For a quick test you can build the DataFrame manually:
 
 .. code-block:: python
@@ -160,8 +192,8 @@ For step-by-step detail of a specific beam you can also access the node directly
 Designing Reinforcement
 ------------------------
 
-``design()`` runs automatic flexure and shear design for every beam and returns a
-DataFrame with the filled rebar columns (``n1``–``n4``, ``db1``–``db4``, ``ns``, ``dbs``, ``sl``):
+``design()`` runs automatic flexure and shear design for every beam, for the envelope of
+its combinations, and returns a DataFrame with the filled rebar columns (``n1``–``n4``, ``db1``–``db4``, ``ns``, ``dbs``, ``sl``):
 
 .. code-block:: python
 
