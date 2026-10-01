@@ -19,7 +19,7 @@ from mento.results import FAIL_MARK, PASS_MARK, VERDICT_COLUMN
 from mento import mm, cm, kN, MPa, m, inch, ft, kNm, kip, psi, ksi
 from mento.units import Quantity
 from mento.node import Node
-from mento.reports.summaries import beam_summary_doc
+from mento.reports.summaries import BEAM_REPORT, beam_summary_doc
 
 
 #: Summary-table columns that hold words rather than a number, a symbol or a
@@ -77,19 +77,32 @@ def _is_unlabelled(label: Any) -> bool:
     return bool(pd.isna(label)) or str(label).strip() == ""
 
 
-def _declared(rows: List[pd.Series], columns: tuple[str, ...], label: Any, what: str) -> Optional[tuple]:
+def _declared(
+    rows: List[pd.Series], columns: tuple[str, ...], label: Any, what: str, element: str = "Beam"
+) -> Optional[tuple]:
     """The reinforcement the rows of a beam give in ``columns``, or None if none gives any.
 
     A row gives it when its first column (the count of bars or legs) is not
     zero. Rows that give it must agree: a beam has one set of stirrups and one
     set of bars per face, however many combinations it carries.
     """
+    if not columns:
+        return None
     given = [tuple(row[column] for column in columns) for row in rows if row[columns[0]] != 0]
     if not given:
         return None
     if any(values != given[0] for values in given[1:]):
-        raise ValueError(f"Beam {label!r}: its rows give different {what}; give them once, or the same on every row.")
+        raise ValueError(
+            f"{element} {label!r}: its rows give different {what}; give them once, or the same on every row."
+        )
     return given[0]
+
+
+def _in_unit(value: Any, unit: Any) -> Any:
+    """A cell of the design as the file holds it: a bare number in its column's unit."""
+    if not hasattr(value, "magnitude"):
+        return value
+    return value.to(unit).magnitude if unit is not None else value.magnitude
 
 
 def _peak(values: Any) -> Any:
@@ -107,6 +120,22 @@ def _face_columns(result: Any) -> Dict[str, Any]:
 
 
 class BeamSummary:
+    """Check and design a list of beams read from a table, one row per load combination.
+
+    Rows that share a ``Label`` are one beam; see :meth:`convert_to_nodes`.
+    :class:`~mento.slab_summary.OneWaySlabSummary` reads a list of one-way slabs
+    the same way, overriding the hooks below: the section a row becomes, the
+    columns that hold its reinforcement and how a design writes them back.
+    """
+
+    #: First column of ``check()``: what each row of it is.
+    _ELEMENT_COLUMN = "Beam"
+    #: The columns that give the bars of one face, and the transverse steel.
+    _FACE_COLUMNS: tuple[str, ...] = _LONGITUDINAL_COLUMNS
+    _TRANSVERSE_COLUMNS: tuple[str, ...] = _STIRRUP_COLUMNS
+    #: What the Word report calls the list and which input columns it prints.
+    _REPORT = BEAM_REPORT
+
     def __init__(self, concrete: Concrete, steel_bar: SteelBar, beam_list: DataFrame) -> None:
         self.concrete: Concrete = concrete
         self.steel_bar: SteelBar = steel_bar
@@ -247,33 +276,77 @@ class BeamSummary:
         label = first["Label"]
         for column in _GEOMETRY_COLUMNS:
             if any(row[column] != first[column] for row in rows[1:]):
-                raise ValueError(f"Beam {label!r}: its rows give different values of {column!r}.")
+                raise ValueError(f"{self._ELEMENT_COLUMN} {label!r}: its rows give different values of {column!r}.")
 
-        beam = RectangularBeam(
-            label=label,
-            concrete=self.concrete,
-            steel_bar=self.steel_bar,
-            width=first["b"],
-            height=first["h"],
-            c_c=first["cc"],
-        )
+        section = self._new_section(first)
 
-        stirrups = _declared(rows, _STIRRUP_COLUMNS, label, "stirrups")
-        if stirrups is not None:
-            n_stirrups, d_b, s_l = stirrups
-            beam.set_transverse_rebar(n_stirrups=n_stirrups, d_b=d_b, s_l=s_l)
+        element = self._ELEMENT_COLUMN
+        transverse = _declared(rows, self._TRANSVERSE_COLUMNS, label, "stirrups", element)
+        if transverse is not None:
+            self._set_transverse(section, transverse)
 
         bottom_rows = [row for row in rows if row["My"] >= 0 * kNm]
         top_rows = [row for row in rows if row["My"] < 0 * kNm]
-        bottom = _declared(bottom_rows, _LONGITUDINAL_COLUMNS, label, "bottom bars")
-        top = _declared(top_rows, _LONGITUDINAL_COLUMNS, label, "top bars")
-        if bottom is not None:
-            beam.set_longitudinal_rebar_bot(*bottom)
-        if top is not None:
-            beam.set_longitudinal_rebar_top(*top)
+        for face, face_rows in (("bottom", bottom_rows), ("top", top_rows)):
+            bars = _declared(face_rows, self._FACE_COLUMNS, label, f"{face} bars", element)
+            if bars is not None:
+                self._set_face(section, face, bars)
 
         forces = [Forces(label=row["Comb."], M_y=row["My"], N_x=row["Nx"], V_z=row["Vz"]) for row in rows]
-        return Node(section=beam, forces=forces)
+        return Node(section=section, forces=forces)
+
+    # ------------------------------------------------------------
+    # The section of a row and its reinforcement: what a summary of
+    # another element (OneWaySlabSummary) overrides.
+    # ------------------------------------------------------------
+
+    def _new_section(self, row: pd.Series) -> RectangularBeam:
+        """The section of a beam, from the first of its rows."""
+        return RectangularBeam(
+            label=row["Label"],
+            concrete=self.concrete,
+            steel_bar=self.steel_bar,
+            width=row["b"],
+            height=row["h"],
+            c_c=row["cc"],
+        )
+
+    def _set_transverse(self, section: RectangularBeam, values: tuple) -> None:
+        n_stirrups, d_b, s_l = values
+        section.set_transverse_rebar(n_stirrups=n_stirrups, d_b=d_b, s_l=s_l)
+
+    def _set_face(self, section: RectangularBeam, face: str, values: tuple) -> None:
+        setter = section.set_longitudinal_rebar_bot if face == "bottom" else section.set_longitudinal_rebar_top
+        setter(*values)
+
+    def _designed(self, node: Node) -> tuple[Dict[str, Dict[str, Any]], Dict[str, Any]]:
+        """Design a beam for its combinations: the input columns of each face, and of its stirrups."""
+        beam: RectangularBeam = node.section  # type: ignore
+        node.design_flexure()
+        faces = {
+            "bottom": _face_columns(beam.flexure_design_results_bot),
+            "top": _face_columns(beam.flexure_design_results_top),
+        }
+        node.design_shear()
+        shear_row = beam.shear_design_results.iloc[0]  # take best row
+        transverse = {"ns": int(shear_row["n_stir"]), "dbs": shear_row["d_b"], "sl": shear_row["s_l"]}
+        return faces, transverse
+
+    def _rebar_labels(self, section: RectangularBeam) -> tuple[str, str, str]:
+        """The top bars, the bottom bars and the stirrups, as ``check()`` writes them."""
+
+        def face(n1: Any, d1: Any, n2: Any, d2: Any, n3: Any, d3: Any, n4: Any, d4: Any) -> str:
+            if n1 == 0:
+                return "-"
+            text = section._format_longitudinal_rebar_string(n1, d1, n2, d2)
+            if n3 != 0:
+                text += f" ++ {section._format_longitudinal_rebar_string(n3, d3, n4, d4)}"
+            return text
+
+        b = section
+        top = face(b._n1_t, b._d_b1_t, b._n2_t, b._d_b2_t, b._n3_t, b._d_b3_t, b._n4_t, b._d_b4_t)
+        bottom = face(b._n1_b, b._d_b1_b, b._n2_b, b._d_b2_b, b._n3_b, b._d_b3_b, b._n4_b, b._d_b4_b)
+        return top, bottom, _stirrups_label(section)
 
     def check(self, capacity_check: bool = False) -> DataFrame:
         """
@@ -297,31 +370,7 @@ class BeamSummary:
             original_forces = [copy.deepcopy(force) for force in node.get_forces_list()]
 
             imperial = beam.concrete.is_imperial
-            rebar_v = _stirrups_label(beam)
-            rebar_f_top = (
-                "-"
-                if beam._n1_t == 0
-                else (
-                    f"{beam._format_longitudinal_rebar_string(beam._n1_t, beam._d_b1_t, beam._n2_t, beam._d_b2_t)}"
-                    + (
-                        f" ++ {beam._format_longitudinal_rebar_string(beam._n3_t, beam._d_b3_t, beam._n4_t, beam._d_b4_t)}"
-                        if beam._n3_t != 0
-                        else ""
-                    )
-                )
-            )
-            rebar_f_bot = (
-                "-"
-                if beam._n1_b == 0
-                else (
-                    f"{beam._format_longitudinal_rebar_string(beam._n1_b, beam._d_b1_b, beam._n2_b, beam._d_b2_b)}"
-                    + (
-                        f" ++ {beam._format_longitudinal_rebar_string(beam._n3_b, beam._d_b3_b, beam._n4_b, beam._d_b4_b)}"
-                        if beam._n3_b != 0
-                        else ""
-                    )
-                )
-            )
+            rebar_f_top, rebar_f_bot, rebar_v = self._rebar_labels(beam)
 
             if capacity_check:
                 # Remove all forces assignments
@@ -334,7 +383,7 @@ class BeamSummary:
                 node.check_flexure()
                 # Common data
                 common_data = {
-                    "Beam": beam.label,
+                    self._ELEMENT_COLUMN: beam.label,
                     "b": _section_dimension(beam.width, imperial),
                     "h": _section_dimension(beam.height, imperial),
                     "As,top": rebar_f_top,
@@ -346,7 +395,7 @@ class BeamSummary:
                 }
 
                 common_units = {
-                    "Beam": "",
+                    self._ELEMENT_COLUMN: "",
                     "b": unit_label("length", imperial),
                     "h": unit_label("length", imperial),
                     "As,top": "",
@@ -399,7 +448,7 @@ class BeamSummary:
                 cols = code.summary_columns
                 results_dict = OrderedDict(
                     {
-                        "Beam": beam.label,
+                        self._ELEMENT_COLUMN: beam.label,
                         "b": _section_dimension(beam.width, imperial),
                         "h": _section_dimension(beam.height, imperial),
                         "As,top": rebar_f_top,
@@ -417,7 +466,7 @@ class BeamSummary:
                     [
                         OrderedDict(
                             {
-                                "Beam": "",
+                                self._ELEMENT_COLUMN: "",
                                 "b": unit_label("length", imperial),
                                 "h": unit_label("length", imperial),
                                 "As,top": "",
@@ -476,34 +525,19 @@ class BeamSummary:
         design_df = self.data.reset_index(drop=True).copy()
 
         for node, positions in zip(self.nodes, self._node_rows):
-            beam: RectangularBeam = node.section  # type: ignore
-
-            # --- FLEXURE DESIGN ---
             # For the envelope of the beam's combinations. Each row takes the
             # bars of the face its moment puts in tension, so every row of a
             # beam reads back as the same section.
-            node.design_flexure()
-            faces = {
-                "bottom": _face_columns(beam.flexure_design_results_bot),
-                "top": _face_columns(beam.flexure_design_results_top),
-            }
-
-            # --- SHEAR DESIGN ---
-            node.design_shear()
-            shear_row = beam.shear_design_results.iloc[0]  # take best row
-
+            faces, transverse = self._designed(node)
             for i in positions:
                 face = "bottom" if design_df.loc[i, "My"].magnitude >= 0 else "top"
-                for column, value in faces[face].items():
+                for column, value in {**faces[face], **transverse}.items():
                     design_df.loc[i, column] = value
-                design_df.loc[i, "ns"] = int(shear_row["n_stir"])
-                design_df.loc[i, "dbs"] = shear_row["d_b"]
-                design_df.loc[i, "sl"] = shear_row["s_l"]
 
         # store for export
         self.design_data = design_df
 
-        print("✅ Beam design completed for all beams in Summary.")
+        print(f"✅ {self._ELEMENT_COLUMN} design completed for every element of the summary.")
         return design_df
 
     def shear_results(self, index: Optional[int] = None, capacity_check: bool = False) -> DataFrame:
@@ -628,9 +662,13 @@ class BeamSummary:
         if not hasattr(self, "design_data"):
             raise AttributeError("No design data found. Run .design() before exporting.")
 
+        # Each number in the unit its column declares: a design writes back
+        # quantities in whatever unit mento computed them in (a slab spacing
+        # in mm under a column in cm), and the file holds bare numbers.
         df_numeric = self.design_data.copy()
-        for col in df_numeric.columns:
-            df_numeric[col] = df_numeric[col].apply(lambda x: x.magnitude if hasattr(x, "magnitude") else x)
+        for col, unit_str in zip(df_numeric.columns, self.units_row):
+            unit = self.get_unit_variable(unit_str) if unit_str else None
+            df_numeric[col] = df_numeric[col].apply(lambda x, u=unit: _in_unit(x, u))
         # Recombine units + data before exporting
         df_export = pd.concat(
             [
@@ -640,7 +678,7 @@ class BeamSummary:
             ignore_index=True,
         )
         df_export.to_excel(path, index=False)
-        print(f"✅ Beam design exported to {path}")
+        print(f"✅ {self._ELEMENT_COLUMN} design exported to {path}")
 
     def import_design(self, path: str) -> None:
         """
@@ -658,7 +696,7 @@ class BeamSummary:
         self.beam_list = beam_df
         self.check_and_process_input()
         self.convert_to_nodes()
-        print("✅ Beam design imported and summary data updated.")
+        print(f"✅ {self._ELEMENT_COLUMN} design imported and summary data updated.")
 
     def results_detailed_doc(self, index: int = 1) -> None:
         """Export detailed results for one beam, plus summary tables for all, to Word.
