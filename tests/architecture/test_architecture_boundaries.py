@@ -86,6 +86,7 @@ ELEMENT_MODULES = [
         "shear_wall.py",
         "punching.py",
         "beam_summary.py",
+        "slab_summary.py",
         "shear_wall_summary.py",
     )
 ]
