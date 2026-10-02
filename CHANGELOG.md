@@ -12,6 +12,15 @@ from the release history and are summaries rather than complete lists.
 
 ## [Unreleased]
 
+### Changed
+
+- The README opens with a quick start that designs a beam and shows the result, a table of
+  the elements each design code covers, the validation behind them, and a link to the
+  calculators on [mentocalc.com](https://mentocalc.com). It no longer says mento does
+  structural analysis or designs columns, which it does not yet. Its links are absolute, so
+  they also work on PyPI, and the DOI badge points to the concept DOI that resolves to the
+  latest release, as the citing guide does.
+
 ## [1.4.0] - 2026-09-30
 
 ### Changed
