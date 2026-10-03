@@ -192,7 +192,7 @@ Nothing is removed, but four behaviours of 1.2.0 change in ways a program may no
 
 - **The release workflow publishes a test count.** After uploading to PyPI it attaches
   `stats.json` (`{"tests": N}`) to the GitHub Release and sends a `mento-release`
-  `repository_dispatch` to `mihdicaballero/mento-web`. `N` counts the tests marked
+  `repository_dispatch` to `mento-calc/mento-web`. `N` counts the tests marked
   `published_example`: the 39 whose expected numbers come from a document outside mento —
   the Calcpad sheets of the ACI and EN beam cases (kept outside the repository), the EN
   1992-1-1 shear calculators of eurocodeapplied.com, The Concrete Centre's *How to design
@@ -988,7 +988,7 @@ sections and trust the answer.
   the fewest legs the width admits and adds stirrups rather than only tightening the
   longitudinal spacing. Over a sweep of 168 width and demand combinations across the three
   codes, 95 designs were in violation and none are now. Closes
-  [#94](https://github.com/mihdicaballero/mento/issues/94).
+  [#94](https://github.com/mento-calc/mento/issues/94).
 - The spacing across the width was computed with whatever stirrup diameter the previous
   pass had left on the beam instead of the one being tried, so the value stored for each
   candidate was off by the difference between the two diameters.
@@ -1005,8 +1005,8 @@ sections and trust the answer.
   names, units, the design code designation and the generated file names are not
   translated. A label with no translation is written in English rather than raising. See
   [Report language](https://mento-docs.readthedocs.io/en/latest/user_guide/language.html).
-  Closes [#79](https://github.com/mihdicaballero/mento/issues/79) and
-  [#126](https://github.com/mihdicaballero/mento/issues/126).
+  Closes [#79](https://github.com/mento-calc/mento/issues/79) and
+  [#126](https://github.com/mento-calc/mento/issues/126).
 - A DOI. Releases are archived on Zenodo, and
   [10.5281/zenodo.21956634](https://doi.org/10.5281/zenodo.21956634) always resolves to the
   latest one. It is in `CITATION.cff`, in the README badge and in the citing guide.
@@ -1177,23 +1177,23 @@ First public release on PyPI: rectangular concrete beam check and design for fle
 shear under ACI 318-19 and CIRSOC 201-25, unit aware calculations, results as pandas
 DataFrames, and Word calculation reports.
 
-[Unreleased]: https://github.com/mihdicaballero/mento/compare/v1.3.1...HEAD
-[1.3.1]: https://github.com/mihdicaballero/mento/compare/v1.3.0...v1.3.1
-[1.3.0]: https://github.com/mihdicaballero/mento/compare/v1.2.0...v1.3.0
-[1.2.0]: https://github.com/mihdicaballero/mento/compare/v1.1.0...v1.2.0
-[1.1.0]: https://github.com/mihdicaballero/mento/compare/v1.0.1...v1.1.0
-[1.0.1]: https://github.com/mihdicaballero/mento/compare/v1.0.0...v1.0.1
-[1.0.0]: https://github.com/mihdicaballero/mento/compare/v0.5.2...v1.0.0
-[0.5.2]: https://github.com/mihdicaballero/mento/compare/v0.5.1...v0.5.2
-[0.5.1]: https://github.com/mihdicaballero/mento/compare/v0.5.0...v0.5.1
-[0.5.0]: https://github.com/mihdicaballero/mento/compare/v0.4.1...v0.5.0
-[0.4.1]: https://github.com/mihdicaballero/mento/compare/v0.4.0...v0.4.1
-[0.4.0]: https://github.com/mihdicaballero/mento/compare/v0.3.6...v0.4.0
-[0.3.6]: https://github.com/mihdicaballero/mento/compare/v0.3.5...v0.3.6
-[0.3.5]: https://github.com/mihdicaballero/mento/compare/v0.3.4...v0.3.5
-[0.3.4]: https://github.com/mihdicaballero/mento/compare/v0.3.0...v0.3.4
-[0.3.0]: https://github.com/mihdicaballero/mento/compare/v0.2.8...v0.3.0
-[0.2.8]: https://github.com/mihdicaballero/mento/compare/v0.2.7...v0.2.8
-[0.2.7]: https://github.com/mihdicaballero/mento/compare/v0.2.6...v0.2.7
-[0.2.6]: https://github.com/mihdicaballero/mento/compare/v0.2.5...v0.2.6
-[0.2.5]: https://github.com/mihdicaballero/mento/releases/tag/v0.2.5
+[Unreleased]: https://github.com/mento-calc/mento/compare/v1.3.1...HEAD
+[1.3.1]: https://github.com/mento-calc/mento/compare/v1.3.0...v1.3.1
+[1.3.0]: https://github.com/mento-calc/mento/compare/v1.2.0...v1.3.0
+[1.2.0]: https://github.com/mento-calc/mento/compare/v1.1.0...v1.2.0
+[1.1.0]: https://github.com/mento-calc/mento/compare/v1.0.1...v1.1.0
+[1.0.1]: https://github.com/mento-calc/mento/compare/v1.0.0...v1.0.1
+[1.0.0]: https://github.com/mento-calc/mento/compare/v0.5.2...v1.0.0
+[0.5.2]: https://github.com/mento-calc/mento/compare/v0.5.1...v0.5.2
+[0.5.1]: https://github.com/mento-calc/mento/compare/v0.5.0...v0.5.1
+[0.5.0]: https://github.com/mento-calc/mento/compare/v0.4.1...v0.5.0
+[0.4.1]: https://github.com/mento-calc/mento/compare/v0.4.0...v0.4.1
+[0.4.0]: https://github.com/mento-calc/mento/compare/v0.3.6...v0.4.0
+[0.3.6]: https://github.com/mento-calc/mento/compare/v0.3.5...v0.3.6
+[0.3.5]: https://github.com/mento-calc/mento/compare/v0.3.4...v0.3.5
+[0.3.4]: https://github.com/mento-calc/mento/compare/v0.3.0...v0.3.4
+[0.3.0]: https://github.com/mento-calc/mento/compare/v0.2.8...v0.3.0
+[0.2.8]: https://github.com/mento-calc/mento/compare/v0.2.7...v0.2.8
+[0.2.7]: https://github.com/mento-calc/mento/compare/v0.2.6...v0.2.7
+[0.2.6]: https://github.com/mento-calc/mento/compare/v0.2.5...v0.2.6
+[0.2.5]: https://github.com/mento-calc/mento/releases/tag/v0.2.5

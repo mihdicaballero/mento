@@ -9,7 +9,7 @@ authors:
   - family-names: Romaris
     given-names: "Juan Pablo"
     email: jpromaris@yahoo.com.ar
-repository-code: "https://github.com/mihdicaballero/mento"
+repository-code: "https://github.com/mento-calc/mento"
 url: "https://mento-docs.readthedocs.io/"
 abstract: >-
   mento is a Python package for the design and verification of reinforced concrete elements

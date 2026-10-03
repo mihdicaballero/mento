@@ -79,11 +79,11 @@ docs = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/mihdicaballero/mento"
+Homepage = "https://github.com/mento-calc/mento"
 Documentation = "https://mento-docs.readthedocs.io/"
-Repository = "https://github.com/mihdicaballero/mento"
-Issues = "https://github.com/mihdicaballero/mento/issues"
-Changelog = "https://github.com/mihdicaballero/mento/blob/main/CHANGELOG.md"
+Repository = "https://github.com/mento-calc/mento"
+Issues = "https://github.com/mento-calc/mento/issues"
+Changelog = "https://github.com/mento-calc/mento/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 # Discovered rather than listed: the roadmap adds one subpackage per design code
