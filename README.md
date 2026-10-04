@@ -5,7 +5,7 @@
 [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-ea4aaa?logo=githubsponsors)](https://ko-fi.com/mentoapp)
 [![Tests](https://github.com/mento-calc/mento/actions/workflows/tests.yml/badge.svg)][tests]
 [![Docs](https://readthedocs.org/projects/mento-docs/badge/?version=latest)](https://mento-docs.readthedocs.io/en/latest/?badge=latest)
-[![codecov](https://codecov.io/github/mento-calc/mento/graph/badge.svg?token=9X81ZRKMCX)](https://codecov.io/github/mento-calc/mento)
+[![codecov](https://codecov.io/gh/mento-calc/mento/graph/badge.svg?token=9X81ZRKMCX)](https://codecov.io/gh/mento-calc/mento)
 [![PyPI](https://img.shields.io/pypi/v/mento.svg)](https://pypi.org/project/mento/)
 [![Python versions](https://img.shields.io/pypi/pyversions/mento.svg)](https://pypi.org/project/mento/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/mento-calc/mento/blob/main/LICENSE)
