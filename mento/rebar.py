@@ -7,6 +7,7 @@ import numpy as np
 
 from mento.codes.aci_318_19.equations import shear as aci_shear_eq
 from mento.codes.en_1992_2004.equations import shear as en_shear_eq
+from mento.cage_detailing import LegSeats, leg_seats
 from mento.codes.registry import design_code
 from mento.precompute import CANONICAL, DISPLAY, section_floats
 from mento.section_geometry import end_setback, stirrup_bend_inner_diameter
@@ -127,6 +128,9 @@ class Rebar:
         limit = design_code(self.beam.concrete).max_bar_spacing_tension
         self._tension_cap_mm: float | None = None if limit is None else limit(self.beam).to("mm").magnitude
         self._max_centre_mm: float | None = self._tension_cap_mm
+        # The cage a tension face of a beam is laid out on: its layer nearest
+        # the face puts a bar at every stirrup leg (:meth:`longitudinal_rebar`).
+        self._leg_seats: LegSeats | None = None
         # Unit system default rebar.
         #
         # The metric list is the bar sizes of CIRSOC 201-25 §20.2.1.3,
@@ -826,6 +830,22 @@ class Rebar:
         # to base units, which made the old drop_duplicates on the DataFrame the
         # largest single cost of the flexure design.
         seen_layouts: set[tuple[int, ...]] = set()
+        # The layouts that carry A_s_req and whose first layer cannot sit on
+        # the stirrup legs, as the arguments of :meth:`_long_combo`: built
+        # only if no layout that can is found.
+        unseated: list[tuple[Any, ...]] = []
+        seats = self._leg_seats
+        seated_rows: dict[tuple[int, int, int], bool] = {}
+
+        def sits_on_legs(i1: int, i2: int, n2: int) -> bool:
+            """Whether layer 1 -- two d_b1 at the ends, n2 d_b2 between -- puts a bar at every leg."""
+            if seats is None:
+                return True
+            key = (i1, i2 if n2 > 0 else -1, n2)
+            if key not in seated_rows:
+                row = [diams_mm[i1]] + [diams_mm[i2]] * n2 + [diams_mm[i1]]
+                seated_rows[key] = seats.hold(row, self._vibrator_mm)
+            return seated_rows[key]
 
         def keep_layout(
             i1: int, n2: int, i2: int, n3: int, i3: int, n4: int, i4: int, total_as_cm2: float, clear_mm: float
@@ -835,9 +855,11 @@ class Rebar:
                 return
             seen_layouts.add(key)
             d = valid_rebar_diameters
-            valid_combinations.append(
-                self._long_combo(n1, d[i1], n2, d[i2], n3, d[i3], n4, d[i4], total_as_cm2, clear_mm)
-            )
+            combo = (n1, d[i1], n2, d[i2], n3, d[i3], n4, d[i4], total_as_cm2, clear_mm)
+            if sits_on_legs(i1, i2, n2):
+                valid_combinations.append(self._long_combo(*combo))
+            else:
+                unseated.append(combo)
 
         # valid_rebar_diameters is ascending, so "every diameter <= d_bN" is a
         # prefix of it and the nested loops can walk indices instead of
@@ -971,6 +993,11 @@ class Rebar:
                                                 best_fallback_combination = self._long_combo(
                                                     n1, d_b1, n2, d_b2, n3, d_b3, n4, d_b4, total_as, clear_mm
                                                 )
+
+        # No layout that carries A_s_req sits on the legs: the ones that carry
+        # it are still a design, and its cage says what it could not detail.
+        if not valid_combinations:
+            valid_combinations = [self._long_combo(*combo) for combo in unseated]
 
         # Convert valid combinations to DataFrame (already free of repeated layouts)
         df = pd.DataFrame(valid_combinations)
@@ -1249,7 +1276,12 @@ class Rebar:
         self._vibrator_mm = 0.0 if face == "bot" else vibrator
         self._max_centre_mm = self._tension_cap_mm if tension else None
         # Every stirrup leg holds a bar of the tension face: the first layer
-        # carries at least as many bars as the section has legs. A face only
-        # ever in compression is held by mounting bars where it has none.
-        self._min_layer_bars = leg_count(self.beam) if tension and self.mode != "slab" else 0
+        # carries at least as many bars as the section has legs, and held at
+        # the legs they keep their spacing limits (:class:`LegSeats`). Six
+        # bars on four legs 38 cm apart leave two of them with no bar between,
+        # past the 29.75 cm of §24.3.2; seven do not. A face only ever in
+        # compression is held by mounting bars where it has none.
+        on_legs = tension and self.mode != "slab"
+        self._min_layer_bars = leg_count(self.beam) if on_legs else 0
+        self._leg_seats = leg_seats(self.beam) if on_legs and self._min_layer_bars else None
         return design_code(self.beam.concrete).longitudinal_rebar(self, A_s_req, A_s_max, mech_cover)

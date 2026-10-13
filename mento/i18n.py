@@ -816,6 +816,7 @@ ES.update(
         "This code has no supported stirrup-bend rule.": "Este código no tiene una regla de doblado de estribos implementada.",
         "Stirrup diameter exceeds the transverse-bar bend table's supported range.": "El diámetro del estribo excede el rango de la tabla de doblado de barras transversales.",
         "The resistant bars cannot fit between the stirrup corners with the required spacing.": "Las barras resistentes no entran entre las esquinas del estribo con la separación requerida.",
+        "With a bar at every stirrup leg, the resistant bars sit further apart than their maximum centre spacing.": "Con una barra en cada rama del estribo, las barras resistentes quedan más separadas que su separación máxima entre ejes.",
         "The cage corners are too close, or too far apart, for the bars and spacing limits.": "Las esquinas de la jaula quedan demasiado juntas, o demasiado separadas, para las barras y los límites de separación.",
         "The legs cannot accommodate their supporting bars with the required spacing.": "Las ramas no pueden alojar sus barras de apoyo con la separación requerida.",
         "The resistant bars exceed their maximum centre spacing; mounting steel cannot replace them.": "Las barras resistentes superan su separación máxima entre ejes; la armadura de montaje no puede reemplazarlas.",

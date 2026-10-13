@@ -26,6 +26,7 @@ import pandas as pd
 from pandas import DataFrame
 
 from mento.bar_sizes import bar_designation
+from mento.cage_detailing import first_layer_diameters, leg_seats
 from mento.codes.registry import design_code, units_row
 from mento.design_results import (
     FlexureCheck,
@@ -93,6 +94,12 @@ class _Verdict(NamedTuple):
     on top included -- whatever else the checks found, and ``admissible``
     that the face each combination puts in tension keeps within the code's
     limit on its reinforcement (``DesignCode.flexure_admissible``).
+    ``seated`` says the first layer of each face in tension can sit with a
+    bar at every stirrup leg and keep its spacing limits there
+    (:class:`~mento.cage_detailing.LegSeats`). It is what a design prefers,
+    not what it passes by: a section that carries its loads and whose cage
+    is left to detail is a design, and one that sits well and does not
+    carry them is not.
     """
 
     DCR: float
@@ -100,6 +107,7 @@ class _Verdict(NamedTuple):
     compression_faces: FrozenSet[str] = frozenset()
     fits: bool = True
     admissible: bool = True
+    seated: bool = True
 
     @property
     def passes(self) -> bool:
@@ -568,9 +576,12 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         EN 1992-1-1 §9.2.1.1(3), the same limit the design holds its own
         layout to. Every stirrup leg holds a bar of each face a combination
         puts in tension: its first layer carries at least as many bars as the
-        section has legs, or its bars do not "fit" the cage. It also names the
-        faces the section relies on as compression steel. Values-only checks,
-        so the section is not written to.
+        section has legs, or its bars do not "fit" the cage. Whether, held at
+        the legs, they also keep their spacing limits is ``seated``
+        (:class:`~mento.cage_detailing.LegSeats`, the test the cage is
+        detailed with), which the verdict reports and does not pass by. It
+        also names the faces the section relies on as compression steel.
+        Values-only checks, so the section is not written to.
         """
         admissible = design_code(self.concrete).flexure_admissible
         names = tuple("bottom" if face == "bot" else "top" for face in faces)
@@ -580,6 +591,10 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         within = True
         compression: set[str] = set()
         legs = leg_count(self)
+        seats = leg_seats(self) if legs else None
+        vibrator = float(self.settings.vibrator_size.to("mm").magnitude)
+        # Whether the first layer of each face in tension sits on the legs: asked once.
+        seated: Dict[str, bool] = {}
         for force in forces:
             state = self._run_flexure_check(force, report=False)
             check = capture_flexure_check(self, force.label, state, has_axial_force=force.N_x.magnitude != 0)
@@ -587,6 +602,9 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
             if pulled in faces and legs:
                 bars = (self._n1_b + self._n2_b) if pulled == "bot" else (self._n1_t + self._n2_t)
                 fits = fits and bars >= legs
+                if seats is not None and pulled not in seated:
+                    row = first_layer_diameters(self, pulled)
+                    seated[pulled] = seats.hold(row, vibrator if pulled == "top" else 0.0)
             worst = max(worst, check.bottom.DCR, check.top.DCR)
             clean = clean and not flexure_warnings(self, force.label, state)
             tension = "bot" if force._M_y > 0 * kN * m else "top" if force._M_y < 0 * kN * m else None
@@ -595,7 +613,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
             braced = self._compression_face_of(force, state)
             if braced is not None:
                 compression.add(braced)
-        return _Verdict(worst, clean and fits and within, frozenset(compression), fits, within)
+        return _Verdict(worst, clean and fits and within, frozenset(compression), fits, within, all(seated.values()))
 
     def _verify_longitudinal_options(self, forces: list[Forces]) -> None:
         """Keep, of each face's pooled alternatives, those the finished section passes with.
@@ -627,7 +645,8 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
             # A design records at least the layout each face carries, so there
             # is always a first option to judge.
             options: Tuple[RebarOption, ...] = getattr(self, f"_flexure_options_{suffix}")
-            kept = [replace(options[0], section_DCR=self._section_verdict(forces, (face,)).DCR)]
+            applied = self._section_verdict(forces, (face,))
+            kept = [replace(options[0], section_DCR=applied.DCR)]
             pool: Tuple[Tuple[RebarOption, Dict[str, Any]], ...] = getattr(self, f"_flexure_option_pool_{suffix}")
             if pool:
                 snapshot = self._longitudinal_snapshot(suffix)
@@ -637,7 +656,8 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
                         break
                     apply(row)
                     verdict = self._section_verdict(forces, (face,))
-                    if verdict.passes:
+                    # Beside a layout that sits on the legs, only others that do.
+                    if verdict.passes and (verdict.seated or not applied.seated):
                         kept.append(replace(option, section_DCR=verdict.DCR))
                 self._restore_longitudinal(snapshot)
             setattr(self, f"_flexure_options_{suffix}", tuple(kept))
@@ -670,7 +690,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
                 clean = clean and not shear_warnings(self, force.label, shear_state)
         finally:
             self._compression_faces = braced
-        return _Verdict(worst, clean, flexure.compression_faces, flexure.fits, flexure.admissible)
+        return _Verdict(worst, clean, flexure.compression_faces, flexure.fits, flexure.admissible, flexure.seated)
 
     def _record_transverse_options(self, table: DataFrame, forces: list[Forces]) -> None:
         """Keep the stirrup layouts the search found, the applied one first.
@@ -714,10 +734,14 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
             )
 
         options = []
+        seated = True
         for row in [applied] + alternatives:
             self._apply_transverse_design(row)
             verdict = self._section_verdict(forces)
-            if row is applied or verdict.passes:
+            if row is applied:
+                seated = verdict.seated
+            # Beside a cage the bars sit on, only others they sit on.
+            if row is applied or (verdict.passes and (verdict.seated or not seated)):
                 options.append(option(row, verdict.DCR))
         # Back to the layout the design applied, whatever was tried last.
         self._apply_transverse_design(applied)
@@ -1783,7 +1807,12 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         placeholder bars with that stirrup on the section, and the stirrups
         again for the new bars, until the pair passes or comes back to a
         state already seen -- which means no layout passes at that depth
-        either. Bounded by ``_DESIGN_ROUNDS``; a design that passes at once
+        either. A section that passes with bars its stirrup legs cannot hold
+        within their spacing limits (``seated``) is designed again the same
+        way, now that the search knows the legs: the 6Ø25 of a 120x70 with
+        four legs become 9Ø20. If no round both passes and sits on the legs,
+        the first that passed is kept, and its cage says what is left to
+        detail. Bounded by ``_DESIGN_ROUNDS``; a design that passes at once
         does nothing here, and the sequence is a function of the forces, so
         ``design()`` still gives the same bars every time.
 
@@ -1804,7 +1833,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         that fails says so.
         """
         verdict = self._flexure_verdict(forces, ("bot", "top"))
-        if verdict.passes:
+        if verdict.passes and verdict.seated:
             return
         # Each round's verdict, with the stirrup it started from (None: the
         # starter stirrup of the first).
@@ -1814,7 +1843,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
             start = (self._stirrup_n, self._stirrup_d_b, self._stirrup_s_l)
             self._redesign_from(start, forces)
             verdict = self._flexure_verdict(forces, ("bot", "top"))
-            if verdict.passes:
+            if verdict.passes and verdict.seated:
                 return
             rounds.append((verdict, start))
             state = self._design_state()
@@ -1822,10 +1851,16 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
                 break
             seen.add(state)
         last = len(rounds) - 1
-        closest = min(
-            range(len(rounds)),
-            key=lambda i: (not rounds[i][0].fits, not rounds[i][0].admissible, rounds[i][0].DCR, i != last),
-        )
+
+        def distance(i: int) -> Tuple[bool, bool, bool, float, int]:
+            verdict = rounds[i][0]
+            if verdict.passes:
+                # It carries the loads and its cage is left to detail: the
+                # first round that did, ahead of any that does not pass.
+                return (False, False, False, 0.0, i)
+            return (True, not verdict.fits, not verdict.admissible, verdict.DCR, int(i != last))
+
+        closest = min(range(len(rounds)), key=distance)
         if closest != last:
             self._redesign_from(rounds[closest][1], forces)
         self._record_shortfall(forces)
