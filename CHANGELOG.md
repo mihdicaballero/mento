@@ -12,6 +12,24 @@ from the release history and are summaries rather than complete lists.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A design no longer picks a bar count its own cage cannot hold.** Every stirrup leg
+  holds a bar of a face in tension, and the design asked only that the first layer
+  carry as many bars as the section has legs. Held at the legs, the bars can still
+  pass the cap of ACI 318-19 / CIRSOC 201-25 §24.3.2 that they keep when spread
+  evenly: a 120x70 CIRSOC beam with 4 legs 38 cm apart was given 6Ø25, which leave two
+  legs with no bar between them, past the 29.75 cm of Table 24.3.2, and warned
+  `cage_detailing_infeasible` on its own bars. The search and the alternatives it
+  offers now put a layer to the test the cage is detailed with (`LegSeats` in
+  `mento/cage_detailing.py`): that beam gets 9Ø20 and no warning. Where no layout
+  that carries the moment sits on the legs, the design keeps one that carries it and
+  the warning stays.
+- **`cage_detailing_infeasible` tells bars too far apart from bars that do not fit.**
+  Both read "the resistant bars cannot fit between the stirrup corners with the
+  required spacing". Bars that fit, and are left further apart than their maximum
+  centre spacing by sitting at the legs, now say that.
+
 ## [1.6.0] - 2026-10-10
 
 ### Added

@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import math
 from time import perf_counter
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Sequence
 
 from mento.codes.registry import design_code
@@ -31,6 +31,7 @@ from mento.design_results import DesignNotRunError
 from mento.section_geometry import (
     BarPosition,
     SectionGeometry,
+    _group_order,
     build_section_geometry,
     corner_setback,
     seated_corner,
@@ -51,6 +52,173 @@ class CageDetailingError(ValueError):
 
 def _mm(value: Quantity) -> float:
     return float(value.to(mm).magnitude)
+
+
+def _corner_inset(corner: Sequence[float], d_b: float, d_st: float) -> float:
+    """From the inner face of the leg at ``corner`` to the centre of the bar it holds, in mm."""
+    seated = len(corner) > 3 and corner[3]
+    bend = 2 * corner[2] - d_st
+    if seated:
+        # Seated in the bend: the rule the rebar search and the checks
+        # lay the row out with (section_geometry.end_setback).
+        return seated_corner(bend, d_b)
+    # A crosstie: tangent to the horizontal branch and clear of the hook.
+    return d_b / 2 + corner_setback(bend, d_b, d_b / 2)
+
+
+def _corner_x(corner: Sequence[float], d_b: float, d_st: float) -> float:
+    """Where the centre of the bar held at ``corner`` sits across the width, in mm."""
+    leg, side = corner[:2]
+    return leg + side * (d_st / 2 + _corner_inset(corner, d_b, d_st))
+
+
+def _chain_steps(diameters: Sequence[float], clear: float) -> list[float]:
+    """The least centre distance between each pair of neighbours of a chain of bars."""
+    return [(a + b) / 2 + clear for a, b in zip(diameters, diameters[1:])]
+
+
+def _chain_fits(diameters: Sequence[float], span: float, clear: float, max_gap: float) -> bool:
+    """Whether a chain of bars spans ``span`` between its ends, no closer than ``clear`` nor further than ``max_gap``."""
+    distances = _chain_steps(diameters, clear)
+    return (
+        all(distance <= max_gap + 1e-8 for distance in distances)
+        and sum(distances) <= span + 1e-8
+        and span <= len(distances) * max_gap + 1e-8
+    )
+
+
+def _corner_bars(
+    diameters: Sequence[float],
+    targets: Sequence[float] | None,
+    corners: Sequence[tuple[float, ...]],
+    clear: float,
+    max_gap: float,
+    d_st: float,
+    compression_required: bool = False,
+) -> dict[int, int] | None:
+    """Which bar of an ordered row each cage corner holds: ``{corner: row index}``, or ``None``.
+
+    A small dynamic program over the corners, left to right. The end bars
+    take the end corners; each interval between two corners must fit its
+    chain of bars (:func:`_chain_fits`). Of the assignments that do, the one
+    that moves the corner bars least from ``targets`` -- where the
+    calculation put each bar -- is returned; with no ``targets`` any of them,
+    which is all a caller asking whether the row can be held needs. ``None``
+    when the row has fewer bars than the cage has corners, or no assignment
+    fits.
+    """
+    n, count = len(diameters), len(corners)
+    if n < count:
+        return None
+    # (corner, row index) -> (cost, preceding row index).
+    states: dict[tuple[int, int], tuple[float, int]] = {(0, 0): (0.0, -1)}
+    for corner in range(1, count):
+        candidates = [n - 1] if corner == count - 1 else range(corner, n - (count - corner - 1))
+        for index in candidates:
+            best = (math.inf, -1)
+            x_here = _corner_x(corners[corner], diameters[index], d_st)
+            moved = 0.0 if targets is None else (x_here - targets[index]) ** 2
+            for previous in range(corner - 1, index):
+                if (corner - 1, previous) not in states:
+                    continue
+                if compression_required:
+                    braced = [corners[corner - 1][2] > 0] + [False] * (index - previous - 1) + [corners[corner][2] > 0]
+                    if any(not left and not right for left, right in zip(braced, braced[1:])):
+                        continue  # La regla existente de barras alternadas.
+                span = x_here - _corner_x(corners[corner - 1], diameters[previous], d_st)
+                if not _chain_fits(diameters[previous : index + 1], span, clear, max_gap):
+                    continue
+                cost = states[corner - 1, previous][0] + moved
+                if cost < best[0]:
+                    best = cost, previous
+            if best[1] >= 0:
+                states[corner, index] = best
+    if (count - 1, n - 1) not in states:
+        return None
+    assigned: dict[int, int] = {}
+    index = n - 1
+    for corner in reversed(range(count)):
+        assigned[corner] = index
+        index = states[corner, index][1]
+    return assigned
+
+
+@dataclass(frozen=True)
+class LegSeats:
+    """The corners of a cage, as the row nearest a face has to sit on them.
+
+    Every stirrup leg holds a bar of a face in tension, and held there the
+    bars keep their clear distances and, under a code that caps it, their
+    centre distance (ACI 318-19 / CIRSOC 201-25 §24.3.2). That is the test
+    ``beam.detailing_geometry`` puts a row to; this is the same test without
+    the bars, for a design to ask it of a layout before it chooses one.
+    Lengths in mm.
+    """
+
+    corners: tuple[tuple[float, ...], ...]
+    d_st: float
+    clear: float
+    max_gap: float
+
+    def hold(self, diameters: Sequence[float], vibrator: float = 0.0) -> bool:
+        """Whether a row of these diameters, left to right, sits with a bar at every leg.
+
+        ``vibrator`` is the gap the top bars leave it, zero on the bottom
+        face. Four legs 381 mm apart under a 297.5 mm cap hold seven bars
+        (two gaps between each pair of legs) and not six, which leave one
+        pair of legs with nothing between them.
+        """
+        clear = max(self.clear, vibrator, *diameters)
+        return _corner_bars(diameters, None, self.corners, clear, self.max_gap, self.d_st) is not None
+
+
+def leg_seats(beam: RectangularBeam) -> LegSeats | None:
+    """The :class:`LegSeats` of the stirrups ``beam`` carries now; ``None`` without a cage."""
+    geometry = build_section_geometry(beam)
+    if not geometry.stirrups:
+        return None
+    settings = beam.settings
+    assert settings is not None
+    d_st = _mm(geometry.stirrup_d_b)
+    bend_radius = (_mm(geometry.stirrup_bend_inner_diameter) + d_st) / 2
+    hook = design_code(beam.concrete).max_bar_spacing_tension
+    return LegSeats(
+        corners=tuple(_cage_corners(geometry, d_st, bend_radius)),
+        d_st=d_st,
+        clear=max(_mm(settings.clear_spacing), _mm(settings.mounting_bar_diameter)),
+        max_gap=math.inf if hook is None else _mm(hook(beam)),
+    )
+
+
+def first_layer_diameters(beam: RectangularBeam, face: str) -> list[float]:
+    """The bars of the layer nearest ``face`` (``"bot"`` / ``"top"``), left to right, in mm."""
+    suffix = "b" if face == "bot" else "t"
+    counts = [int(getattr(beam, f"_n{group}_{suffix}")) for group in (1, 2)]
+    sizes = [getattr(beam, f"_d_b{group}_{suffix}") for group in (1, 2)]
+    d = [0.0 if size is None else _mm(size) for size in sizes]
+    return [d[group - 1] for group in _group_order(*counts) if d[group - 1] > 0]
+
+
+def _cage_corners(geometry: SectionGeometry, d_st: float, bend_radius: float) -> list[tuple[float, ...]]:
+    """``(x of the leg, side its bar sits on, bend radius, seated)`` of every corner, left to right."""
+    return sorted(
+        [
+            (x, side, bend_radius, True)
+            for stirrup in geometry.stirrups
+            for x, side in ((_mm(stirrup.x_left), 1), (_mm(stirrup.x_right), -1))
+        ]
+        + [
+            (
+                _mm(tie.x),
+                tie.side
+                if tie.bend_inner_diameter is not None
+                else (1 if _mm(tie.x) <= _mm(geometry.width) / 2 else -1),
+                0.0 if tie.bend_inner_diameter is None else (_mm(tie.bend_inner_diameter) + d_st) / 2,
+                False,
+            )
+            for tie in geometry.crossties
+        ]
+    )
 
 
 def _supported_layer(
@@ -83,62 +251,24 @@ def _supported_layer(
     """
     n, count = len(row), len(corners)
     diameters = {id(bar): _mm(bar.d_b) for bar in (*row, mounting)}
-    row_x = {id(bar): _mm(bar.x) for bar in row}
+    row_d = [diameters[id(bar)] for bar in row]
 
     def inset(corner: int, bar: BarPosition) -> float:
-        """From the inner face of the leg to the centre of the bar at ``corner``."""
-        corner_radius = corners[corner][2]
-        seated = len(corners[corner]) > 3 and corners[corner][3]
-        d_b = diameters[id(bar)]
-        bend = 2 * corner_radius - d_st
-        if seated:
-            # Seated in the bend: the rule the rebar search and the checks
-            # lay the row out with (section_geometry.end_setback).
-            return seated_corner(bend, d_b)
-        # A crosstie: tangent to the horizontal branch and clear of the hook.
-        return d_b / 2 + corner_setback(bend, d_b, d_b / 2)
+        return _corner_inset(corners[corner], diameters[id(bar)], d_st)
 
     def x_at(corner: int, bar: BarPosition) -> float:
-        leg, side = corners[corner][:2]
-        return leg + side * (d_st / 2 + inset(corner, bar))
+        return _corner_x(corners[corner], diameters[id(bar)], d_st)
 
     def steps(items: list[BarPosition]) -> list[float]:
-        return [(diameters[id(a)] + diameters[id(b)]) / 2 + clear for a, b in zip(items, items[1:])]
+        return _chain_steps([diameters[id(bar)] for bar in items], clear)
 
     def fits(items: list[BarPosition], span: float) -> bool:
-        distances = steps(items)
-        return (
-            all(distance <= max_gap + 1e-8 for distance in distances)
-            and sum(distances) <= span + 1e-8
-            and span <= len(distances) * max_gap + 1e-8
-        )
+        return _chain_fits([diameters[id(bar)] for bar in items], span, clear, max_gap)
 
     assigned: dict[int, int] = {}
     if n >= count:
-        # (corner, row index) -> (cost, preceding row index).
-        states: dict[tuple[int, int], tuple[float, int]] = {(0, 0): (0.0, -1)}
-        for corner in range(1, count):
-            candidates = [n - 1] if corner == count - 1 else range(corner, n - (count - corner - 1))
-            for index in candidates:
-                best = (math.inf, -1)
-                for previous in range(corner - 1, index):
-                    if (corner - 1, previous) not in states:
-                        continue
-                    if compression_required:
-                        braced = (
-                            [corners[corner - 1][2] > 0] + [False] * (index - previous - 1) + [corners[corner][2] > 0]
-                        )
-                        if any(not left and not right for left, right in zip(braced, braced[1:])):
-                            continue  # La regla existente de barras alternadas.
-                    span = x_at(corner, row[index]) - x_at(corner - 1, row[previous])
-                    if not fits(list(row[previous : index + 1]), span):
-                        continue
-                    cost = states[corner - 1, previous][0] + (x_at(corner, row[index]) - row_x[id(row[index])]) ** 2
-                    if cost < best[0]:
-                        best = cost, previous
-                if best[1] >= 0:
-                    states[corner, index] = best
-        if (count - 1, n - 1) not in states:
+        found = _corner_bars(row_d, [_mm(bar.x) for bar in row], corners, clear, max_gap, d_st, compression_required)
+        if found is None:
             if compression_required:
                 try:
                     _supported_layer(row, corners, mounting, clear, max_gap, d_st, bend_radius, False)
@@ -149,13 +279,17 @@ def _supported_layer(
                         "The required compression bars cannot be supported by the selected transverse pieces.",
                         reason="compression_support",
                     )
+            if _corner_bars(row_d, None, corners, clear, math.inf, d_st) is not None:
+                # They fit; it is the cap on their centre distance that the
+                # bars held at the legs leave behind.
+                raise CageDetailingError(
+                    "With a bar at every stirrup leg, the resistant bars sit further apart than "
+                    "their maximum centre spacing."
+                )
             raise CageDetailingError(
                 "The resistant bars cannot fit between the stirrup corners with the required spacing."
             )
-        index = n - 1
-        for corner in reversed(range(count)):
-            assigned[corner] = index
-            index = states[corner, index][1]
+        assigned = found
     elif n >= 2:
         available = (
             [i for i, corner in enumerate(corners) if corner[2] > 0] if compression_required else list(range(count))
@@ -379,24 +513,7 @@ def _build_candidate(beam: RectangularBeam, geometry: SectionGeometry, *, includ
     for stirrup in geometry.stirrups:
         if min(_mm(stirrup.x_right - stirrup.x_left), _mm(stirrup.y_top - stirrup.y_bottom)) / 2 < bend_radius - 1e-8:
             raise CageDetailingError("The stirrup is too narrow for its required bends.", reason="bend")
-    corners = sorted(
-        [
-            (x, side, bend_radius, True)
-            for stirrup in geometry.stirrups
-            for x, side in ((_mm(stirrup.x_left), 1), (_mm(stirrup.x_right), -1))
-        ]
-        + [
-            (
-                _mm(tie.x),
-                tie.side
-                if tie.bend_inner_diameter is not None
-                else (1 if _mm(tie.x) <= _mm(geometry.width) / 2 else -1),
-                0.0 if tie.bend_inner_diameter is None else (_mm(tie.bend_inner_diameter) + d_st) / 2,
-                False,
-            )
-            for tie in geometry.crossties
-        ]
-    )
+    corners = _cage_corners(geometry, d_st, bend_radius)
     hook = design_code(beam.concrete).max_bar_spacing_tension
     max_gap = math.inf if hook is None else _mm(hook(beam))
     try:

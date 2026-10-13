@@ -357,6 +357,91 @@ def test_a_designed_beam_reports_the_spacing_of_its_tension_bars() -> None:
     }  # El cálculo cumple; la heurística de jaula se informa aparte.
 
 
+def _four_leg_beam(**settings):  # type: ignore[no-untyped-def]
+    """A 120x70 CIRSOC beam, H25, c_c = 25 mm: four legs of Ø8 across its width."""
+    beam = RectangularBeam(
+        label="V-101",
+        concrete=Concrete_CIRSOC_201_25(name="H25", f_c=25 * MPa),
+        steel_bar=ADN_420,
+        width=120 * cm,
+        height=70 * cm,
+        c_c=25 * mm,
+    )
+    for name, value in settings.items():
+        setattr(beam.settings, name, value)
+    return beam
+
+
+_FOUR_LEG_FORCES = [
+    Forces(label="1.4D", M_y=55 * kNm, V_z=45 * kN),
+    Forces(label="1.2D+1.6L", M_y=500 * kNm, V_z=600 * kN),
+    Forces(label="0.9D+1.0E", M_y=-300 * kNm, V_z=65 * kN, N_x=30 * kN),
+]
+
+
+def test_a_designed_wide_beam_seats_its_bars_on_the_legs_within_table_24_3_2() -> None:
+    """A layer is held to the cap with a bar at every stirrup leg, not only evenly spread.
+
+    The 600 kN of a 120x70 CIRSOC beam take 4 legs of Ø8, (1200 - 2*25 - 8)/3
+    = 380.7 mm apart, and every leg holds a bar of a face in tension. The cap
+    of Table 24.3.2 is min(380 - 2.5*33, 300) = 297.5 mm. Six bars spread
+    evenly sit (1140 - 2*4.3 - 25)/5 = 221 mm centre to centre, inside it,
+    and the design chose 6Ø25 below and 6Ø20 above; but with one at each of
+    the four legs the two left over fill two of the three intervals, and the
+    third is a pair of legs with no bar between them, 381 mm apart. The cage
+    could not be detailed and the design said so of its own bars. Seven is
+    the fewest that put a bar between every pair of legs: 9Ø20 and 9Ø16 it
+    is, and the cage that holds them needs no mounting bar.
+    """
+    beam = _four_leg_beam()
+    node = Node(section=beam, forces=_FOUR_LEG_FORCES)
+    node.design()
+
+    assert beam.reinforcement.transverse.n_legs == 4
+    assert str(beam.reinforcement.bottom) == "2Ø20 mm + 7Ø20 mm"
+    assert str(beam.reinforcement.top) == "2Ø16 mm + 7Ø16 mm"
+    assert node.warnings == ()
+    cage = beam.detailing_geometry
+    assert cage.mounting_bars == ()
+    for face in ("bottom", "top"):
+        xs = [bar.x.to("mm").magnitude for bar in cage.bars_on(face, 1)]
+        assert max(right - left for left, right in zip(xs, xs[1:])) <= 297.5
+        # A bar within a diameter of every leg.
+        for leg in cage.leg_x:
+            assert min(abs(x - leg.to("mm").magnitude) for x in xs) < 25
+
+
+def test_the_alternatives_of_a_wide_beam_sit_on_its_legs_too() -> None:
+    """A layout the cage cannot hold is not offered beside one it can."""
+    beam = _four_leg_beam()
+    Node(section=beam, forces=_FOUR_LEG_FORCES).design()
+
+    for face in (beam.flexure_design.bottom, beam.flexure_design.top):
+        assert len(face.options) == 3
+        assert all(sum(layer.n for layer in option.layers[:2]) >= 7 for option in face.options)
+
+
+def test_a_design_with_no_layout_on_its_legs_keeps_the_bars_that_carry_the_moment() -> None:
+    """Sitting on the legs ranks the layouts; it does not leave a face without steel.
+
+    The same beam with ``max_bars_per_layer = 6`` has no layer of seven. The
+    design keeps the 6Ø25 that carry the 500 kN·m, and its cage says what it
+    could not detail -- that the bars are too far apart, not that they do not
+    fit.
+    """
+    beam = _four_leg_beam(max_bars_per_layer=6)
+    node = Node(section=beam, forces=[Forces(label="U", M_y=500 * kNm, V_z=600 * kN)])
+    node.design()
+
+    assert str(beam.reinforcement.bottom) == "2Ø25 mm + 4Ø25 mm"
+    assert beam.flexure_design.bottom.DCR < 1
+    [warning] = node.warnings
+    assert warning.code == "cage_detailing_infeasible"
+    assert warning.message.endswith(
+        "With a bar at every stirrup leg, the resistant bars sit further apart than their maximum centre spacing."
+    )
+
+
 def test_the_search_cap_leaves_a_compression_face_alone() -> None:
     """§9.7.2.2 sends the bars nearest the tension face to Table 24.3.2, not the compression bars.
 

@@ -16,7 +16,7 @@ from mento import (
     SteelBar,
     set_language,
 )
-from mento.cage_detailing import CageDetailingError
+from mento.cage_detailing import CageDetailingError, leg_seats
 from mento.section_geometry import SectionGeometry, seated_corner
 from mento.units import MPa, cm, ft, inch, kip, kN, kNm, ksi, mm, psi
 
@@ -229,6 +229,58 @@ def test_mounting_bars_do_not_disguise_excessive_resistant_bar_spacing() -> None
     Node(section=beam, forces=[Forces(M_y=100 * kNm)]).check_flexure()
     with pytest.raises(CageDetailingError, match="mounting steel cannot replace"):
         _ = beam.detailing_geometry
+
+
+def test_leg_seats_ask_a_bar_between_every_pair_of_legs_past_the_cap() -> None:
+    """Four legs 380.7 mm apart under the 297.5 mm of Table 24.3.2 hold seven bars, not six.
+
+    (1200 - 2*30 - 8)/3 = 377.3 mm between legs here, c_c = 30 mm, and the
+    cap min(380 - 2.5*38, 300) = 285 mm. A bar at each leg leaves n - 4 for
+    three intervals, and an interval with none is a pair of bars 377 mm
+    apart: n >= 7. EN 1992-1-1 has no such cap, and asks only for a bar per
+    leg.
+    """
+    beam = _beam(120, 70)
+    beam.set_transverse_rebar(2, 8 * mm, 20 * cm)
+    seats = leg_seats(beam)
+    assert seats is not None
+    assert len(seats.corners) == 4
+    assert seats.max_gap == pytest.approx(285.0)
+    assert [seats.hold([25.0] * n) for n in (3, 4, 5, 6, 7, 8)] == [False, False, False, False, True, True]
+
+    en = RectangularBeam(
+        label="EN",
+        concrete=Concrete_EN_1992_2004(name="C25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="B500", f_y=500 * MPa),
+        width=120 * cm,
+        height=70 * cm,
+        c_c=30 * mm,
+    )
+    en.set_transverse_rebar(2, 8 * mm, 20 * cm)
+    seats = leg_seats(en)
+    assert seats is not None
+    assert [seats.hold([25.0] * n) for n in (3, 4, 6)] == [False, True, True]
+
+
+def test_leg_seats_need_a_cage() -> None:
+    assert leg_seats(_beam()) is None
+
+
+def test_bars_too_far_apart_at_the_legs_are_not_reported_as_bars_that_do_not_fit() -> None:
+    """Six Ø25 across 120 cm have room to spare; held at four legs they pass the cap."""
+    beam = _beam(120, 70)
+    beam.set_longitudinal_rebar_bot(n1=2, d_b1=25 * mm, n2=4, d_b2=25 * mm)
+    beam.set_transverse_rebar(2, 8 * mm, 20 * cm)
+    node = Node(section=beam, forces=[Forces(M_y=500 * kNm)])
+    node.check_flexure()
+    with pytest.raises(CageDetailingError, match="further apart than their maximum centre spacing"):
+        _ = beam.detailing_geometry
+    try:
+        set_language("es")
+        [message] = [w.message for w in beam.warnings if w.code == "cage_detailing_infeasible"]
+        assert message.endswith("las barras resistentes quedan más separadas que su separación máxima entre ejes.")
+    finally:
+        set_language("en")
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
