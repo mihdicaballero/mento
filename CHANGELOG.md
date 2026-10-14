@@ -14,6 +14,52 @@ from the release history and are summaries rather than complete lists.
 
 ### Fixed
 
+- **EN 1992-1-1: the resistance credits compression steel at the stress its strain
+  gives it, not at f_yd.** Past the ductility limit M_Rd held the neutral axis at
+  x_u,lim and paired the tension steel past A_s,lim with the compression steel at
+  f_yd, whatever its depth. The sizing reads the same bars at the strain-compatible
+  f_sd of §6.1(2) / §3.2.7(2), so the check passed layouts the sizing could not
+  produce. Bars at or below x_u,lim are in tension at the limit and were still
+  credited in full. `moment_resistance_doubly_reinforced` now takes `f_sd_prime`. The
+  couple is the smaller of `(A_s − A_s,lim)·f_yd` and `A_s'·max(f_sd', 0)`, as in
+  Mosley, Bungey & Hulse, *Reinforced Concrete Design to Eurocode 2*, §4.5. With the
+  areas the sizing asks for, M_Rd is M. A 100x15 footing, c_c 50 mm, Ø25/10 bottom
+  and Ø20/10 top: 62.3 kN·m before, against the 53.1 kN·m that strain compatibility
+  with no ductility limit gives that layout. Now 24.7 kN·m (M_lim). A 15x30 beam,
+  C30, B420, 2Ø25 + 2Ø20 bottom and 2Ø25 top (f_sd' = 320 MPa): 113.2 → 103.9 kN·m.
+  Where d' ≥ d (15 cm strips with 70 mm cover) the old couple had a negative lever
+  arm and gave M_Rd below M_lim, sometimes below zero. It is M_lim now. The ACI 318-19
+  and CIRSOC 201-25 resistances are unchanged.
+
+  What moves, swept over EN beams 20–30 x 30–60 (c_c 25/40, 40–400 kN·m) and
+  one-way slabs and footings 100 x 15–30 (c_c 20–70, 20–300 kN·m), 480 designs:
+
+  | | main → this fix | #204 → #204 + this fix |
+  |---|---|---|
+  | pass → pass | 332 | 332 |
+  | **pass → fail** | **38** | **35** |
+  | fail → fail | 92 | 113 |
+  | fail → pass | 0 | 0 |
+
+  In every pass → fail case the layout the old design left fails the new check too.
+  These are sections that carry their moment only with the neutral axis past
+  x_u,lim: 20x30 beams with 40 mm cover at 80 kN·m, and 15–25 cm footings and
+  slabs with 30–50 mm cover. Over 2112 fixed layouts the check gives 1269 the same
+  M_Rd, 80 a higher one (d' ≥ d) and 763 a lower one (median −19 %). 124 of the
+  lowered values were above what strain compatibility gives the layout, by up to
+  33 %.
+- **A design that fails because of its compression face says so.**
+  `As_below_required` and `section_too_small_for_moment` were held back for a face
+  whose own DCR is at most 1, and the compression face's is 0. A section whose
+  tension face fails only because the bars opposite it fall short of what they were
+  asked for left DCR > 1 with no warning: an EN 15x30 beam, C30, at 93.7 kN·m
+  (2Ø25 on top against 11.16 cm² asked, DCR 1.086), and five of the designs above on
+  main. When no face short of its own moment explains a failing section, the short
+  faces are now named, the compression face among them. The rule is shared,
+  so ACI 318-19 and CIRSOC 201-25 designs that failed this way gain the two warnings
+  too: 4 of the same 480 cases for each code, DCR 1.33–1.59, among them an ACI 100x25
+  slab at 300 kN·m that had no warning at all. Their layouts and DCRs do not change.
+
 - **A design no longer picks a bar count its own cage cannot hold.** Every stirrup leg
   holds a bar of a face in tension, and the design asked only that the first layer
   carry as many bars as the section has legs. Held at the legs, the bars can still
