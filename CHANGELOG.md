@@ -75,6 +75,33 @@ from the release history and are summaries rather than complete lists.
   Both read "the resistant bars cannot fit between the stirrup corners with the
   required spacing". Bars that fit, and are left further apart than their maximum
   centre spacing by sitting at the legs, now say that.
+- **EN 1992-1-1: the doubly reinforced branch no longer reports negative areas (#203).**
+  Past `M_lim` the tension steel of the steel couple was sized at the compression
+  steel's stress `f_sd`. Once the compression bars sat past the limit neutral axis
+  (`d' >= x_u,lim`), `f_sd` turned negative: `A_s_calc` fell as the moment grew,
+  `A_s_req` of the tension face dropped to `A_s_min`, and the compression face asked
+  for a negative area. The tension steel of the couple now works at `f_yd`, as it has
+  yielded at `x_u <= x_u,lim` (Mosley, Bungey & Hulse, *Reinforced Concrete Design to
+  Eurocode 2*, §4.5). The compression steel keeps the `f_sd` of plane sections. Where
+  that is zero or negative, no area of it closes the couple and its `A_s_req` is
+  infinite, the value the area tends to as `d'` nears `x_u,lim`. On the 100x25 cm
+  footing of the issue (C25, B500S, Ø20 only):
+
+  | c_c | M (kN·m) | `A_s_calc` before → after (cm²) | `A_s_req` bottom before → after | `A_s_req` top before → after |
+  |---|---|---|---|---|
+  | 70 mm | 100 | 10.81 → 16.07 | 10.81 → 16.07 | −3.73 → ∞ |
+  | 70 mm | 110 | 5.21 → 18.37 | 5.21 → 18.37 | −9.32 → ∞ |
+  | 70 mm | 125 | −3.18 → 21.82 | 2.95 → 21.82 | −17.71 → ∞ |
+  | 70 mm | 300 | −101.07 → 62.07 | 2.95 → 62.07 | −115.61 → ∞ |
+  | 30 mm | 300 | −1294.51 → 50.34 | 2.95 → 50.34 | −1310.54 → ∞ |
+
+  `A_s_calc` is now the tension steel at which the check's `M_Rd` reaches the moment,
+  provided the compression steel suffices. The DCR and `M_Rd` are unchanged.
+  The design reads the same function, so EN designs that go past `M_lim` change.
+  The tension request is smaller wherever `f_sd < f_yd`, and the design no longer asks
+  for compression bars that `d' >= x_u,lim` leaves uncompressed. It also stops
+  dividing by zero on thin strips with deep cover (a 15 cm `OneWaySlab` or `Footing`
+  with 70 mm cover).
 
 ## [1.6.0] - 2026-10-10
 
