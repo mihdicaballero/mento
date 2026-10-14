@@ -590,13 +590,27 @@ def shortfall_warnings(beam: "RectangularBeam") -> List[_Raw]:
     the other face would need and could reach hundreds of cm², or a face
     that carries its moment but is not tension-controlled, which
     ``not_tension_controlled`` reports.
+
+    Except when no short face qualifies and the section fails all the same:
+    the tension face carries what it was asked for and fails because the bars
+    opposite it fall short of theirs. The short faces are then named, the
+    compression face with its DCR of 0 among them, rather than leaving a
+    DCR past 1 unexplained (EN 1992-1-1 reads deep compression bars at the
+    stress their strain gives them, and a 15x30 web fits no more than 2Ø25
+    on top).
     """
     found: List[_Raw] = []
     checks = getattr(beam, "_flexure_checks", ())
-    for suffix, (needed, _placed) in sorted(getattr(beam, "_short_faces", {}).items()):
+    short = sorted(getattr(beam, "_short_faces", {}).items())
+
+    def _fails(suffix: str) -> bool:
+        return not checks or max(getattr(check, _face_name(suffix)).DCR for check in checks) > 1.0
+
+    reported = [item for item in short if _fails(item[0])]
+    if not reported and any(_fails(suffix) for suffix in ("bot", "top")):
+        reported = short
+    for suffix, (needed, _placed) in reported:
         A_s: Quantity = getattr(beam, f"_A_s_{suffix}")
-        if checks and max(getattr(check, _face_name(suffix)).DCR for check in checks) <= 1.0:
-            continue
         found.append(_Raw("As_below_required", {"A_s": A_s, "A_s_req": needed.to(A_s.units)}, _face_name(suffix)))
     # The section as a whole: the design is limited by what fits and what the
     # code allows, not by the steel it could have asked for, so it quotes the
