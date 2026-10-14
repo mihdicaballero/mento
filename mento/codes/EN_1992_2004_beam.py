@@ -479,7 +479,9 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
     Returns ``(A_s_min, A_s_max, A_s1, A_s2, A_s_calc)``. ``A_s1`` is the
     tension steel to detail, never below the minimum; ``A_s_calc`` is the steel
     the moment alone asks for, before that minimum -- zero with no moment, and
-    ``A_s1_lim + A_s2`` once compression steel is needed. An anchorage scaled by
+    ``A_s1_lim`` plus the tension side of the steel couple once compression
+    steel is needed. ``A_s2`` is the compression steel of that couple, infinite
+    when ``d' >= x_u,lim`` leaves none of it compressed. An anchorage scaled by
     ``A_s,nec / A_s,prov`` reads the second, since a face governed by its
     minimum carries little of the stress the minimum is sized for.
     """
@@ -537,13 +539,29 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
                 f_yd,
             )
 
-            # Extra moment to take with top reinforcement, on the lever arm
-            # (d - d') of the compression steel couple
-            A_s2 = flexure_eq.reinforcement_for_moment(M - M_lim, d_mm - d_prime, f_sd)
-
-            # Required tensile reinforcement area: the couple, or the minimum
-            A_s_calc = A_s1_lim + A_s2
+            # The moment past M_lim is a steel couple on the lever arm (d - d'):
+            # one force, carried by the tension steel at f_yd -- at x_u <= x_u,lim
+            # it has yielded -- and by the compression steel at f_sd. Each face
+            # is sized at its own stress (Mosley, Bungey & Hulse, Reinforced
+            # Concrete Design to Eurocode 2, §4.5). Sizing the tension steel at
+            # f_sd too asked for more of it than the couple needs, and once
+            # d' >= x_u,lim made f_sd negative it asked for less as M grew.
+            # Bars opposite at d' >= d leave the couple no lever arm: no area does.
+            couple = d_mm - d_prime > 0
+            A_s_calc = (
+                A_s1_lim + flexure_eq.reinforcement_for_moment(M - M_lim, d_mm - d_prime, f_yd) if couple else math.inf
+            )
             A_s1 = max(A_s_calc, A_s_min)
+
+            # Compression steel at or below the neutral axis of the limit is not
+            # compressed (§6.1(2), plane sections): no area of it closes the
+            # couple. Infinite is where the area goes as d' nears x_u,lim, not a
+            # negative area or a zero that would read as "none needed".
+            A_s2 = (
+                flexure_eq.reinforcement_for_moment(M - M_lim, d_mm - d_prime, f_sd)
+                if couple and f_sd > 0
+                else math.inf
+            )
 
     return A_s_min, A_s_max, A_s1, A_s2, A_s_calc
 
@@ -729,6 +747,12 @@ def _required_areas_EN_1992_2004(
     A_s_min, A_s_max, A_s1, A_s2, _A_s_calc = _calculate_flexural_reinforcement_EN_1992_2004(
         self, M.to(_Nmm).magnitude, d.to(mm).magnitude, d_prime.to(mm).magnitude
     )
+    # Compression bars at d' >= x_u,lim are not compressed at the ductility
+    # limit, so no area of them is asked for: the design does not lay out bars
+    # that plane sections put in tension. Asking for the f_yd couple the check's
+    # M_Rd credits them with instead made sections past the ductility limit pass.
+    if not math.isfinite(A_s2):
+        A_s2 = 0.0
     # The design path speaks pint on both sides; only the calculation is floats.
     A_s_min, A_s_max, A_s1, A_s2 = (
         to_display(A_s_min, "area", False),
