@@ -103,9 +103,6 @@ def _A_s1_lim(section) -> float:  # type: ignore[no-untyped-def]
         (70, 110, 18.37),
         (70, 125, 21.82),
         (70, 300, 62.07),
-        # c_c 30 mm, two layers per face: d' = 62.5 mm, a millimetre past
-        # x_u,lim = 61.5 mm. Before: -1294.51 cm², with A_s_req = A_s_min.
-        (30, 300, 50.34),
     ],
 )
 def test_the_rows_of_the_issue(c_c: int, M: int, A_s_calc: float) -> None:
@@ -119,34 +116,63 @@ def test_the_rows_of_the_issue(c_c: int, M: int, A_s_calc: float) -> None:
     assert math.isinf(_cm2(check.top.A_s_req)) and _cm2(check.top.A_s_req) > 0
 
 
-def test_the_passing_two_layer_section_asks_for_less_than_it_has() -> None:
-    """The c_c 30 mm row: DCR < 1, so A_s_calc and A_s_req sit below the steel placed."""
+def test_the_two_layer_section_of_the_issue() -> None:
+    """c_c 30 mm, 9 + 9 Ø20 on each face: d' = 62.5 mm, a millimetre past x_u,lim = 61.5 mm.
+
+    The areas were -1294.51 cm², with A_s_req = A_s_min, and the issue's design
+    passed this layout at DCR 0.965 (0.891 once the tension area was sized at
+    f_yd). The top bars are not compressed at the ductility limit, so the
+    resistance credits them nothing and the section saturates at M_lim.
+    """
+    footing = _footing(30 * mm)
+    footing.set_longitudinal_rebar_top(n1=9, d_b1=20 * mm, n3=9, d_b3=20 * mm)
+    footing.set_longitudinal_rebar_bot(n1=9, d_b1=20 * mm, n3=9, d_b3=20 * mm)
+    check = _check(footing, 300 * kNm)
+    d, d_prime, x_u_lim = _limits(footing)
+    assert d_prime == pytest.approx(62.5) and x_u_lim == pytest.approx(61.5)
+    assert _cm2(check.bottom.A_s_calc) == pytest.approx(50.34, abs=0.01)
+    assert _cm2(check.bottom.A_s_req) == pytest.approx(50.34, abs=0.01)
+    assert math.isinf(_cm2(check.top.A_s_req)) and _cm2(check.top.A_s_req) > 0
+    assert check.bottom.M_capacity.to("kN*m").magnitude == pytest.approx(_M_lim(footing), rel=1e-9)
+    assert check.bottom.DCR == pytest.approx(300 / _M_lim(footing), rel=1e-9)
+
+
+def test_the_design_of_the_issue_says_the_section_is_short() -> None:
+    """c_c 30 mm at 300 kN·m: one layer a face, d' = 40 mm < x_u,lim, and still short.
+
+    The two-layer layout the design used to pass on has no compression steel
+    the resistance credits; the best it finds carries 300/1.24 kN·m, and it
+    says so.
+    """
     footing = _footing(30 * mm)
     check = _design_and_check(footing, 300 * kNm)
-    assert check.bottom.DCR <= 1.0
-    A_s = section_floats(footing).A_s_bot / 100
-    assert _cm2(check.bottom.A_s_req) == pytest.approx(_cm2(check.bottom.A_s_calc))
-    assert 0 < _cm2(check.bottom.A_s_calc) <= A_s
+    _, d_prime, x_u_lim = _limits(footing)
+    assert d_prime < x_u_lim
+    assert check.bottom.DCR == pytest.approx(1.240, abs=1e-3)
+    assert {"As_below_required", "section_too_small_for_moment"} <= {w.code for w in footing.warnings}
 
 
 def test_A_s_calc_is_the_tension_steel_at_which_M_Rd_reaches_M() -> None:
     """With compression steel enough for the couple, the check carries M exactly at A_s_calc.
 
-    The 8 + 8 Ø20 bottom of the c_c 30 mm footing is 0.07 cm² short of
-    A_s_calc and fails by 0.13 %; the 9 + 9 has more and passes. The sizing
-    and the resistance read the couple the same way on the tension side.
+    c_c 20 mm, 4Ø20 on top at d' = 30 mm, above x_u,lim = 72.2 mm, so f_sd > 0
+    and 12.57 cm² covers the 6.91 cm² the couple asks for at 210 kN·m. The
+    8Ø20 bottom (25.13 cm²) is 0.18 cm² short of A_s_calc and fails at DCR
+    1.007; the 9Ø20 has more and passes. Sizing and resistance read the
+    couple the same way, on both sides.
     """
-    footing = _footing(30 * mm)
-    footing.set_longitudinal_rebar_top(n1=9, d_b1=20 * mm, n3=9, d_b3=20 * mm)
+    footing = _footing(20 * mm)
+    footing.set_longitudinal_rebar_top(n1=4, d_b1=20 * mm)
     for n in (8, 9):
-        footing.set_longitudinal_rebar_bot(n1=n, d_b1=20 * mm, n3=n, d_b3=20 * mm)
-        check = _check(footing, 300 * kNm)
-        d, d_prime, _ = _limits(footing)
+        footing.set_longitudinal_rebar_bot(n1=n, d_b1=20 * mm)
+        check = _check(footing, 210 * kNm)
+        d, d_prime, x_u_lim = _limits(footing)
+        assert d_prime < x_u_lim
         A_s_calc = float(check.bottom.A_s_calc.to("mm**2").magnitude)
-        assert (check.bottom.DCR <= 1.0) == (section_floats(footing).A_s_bot >= A_s_calc)
+        assert (check.bottom.DCR <= 1.0) == (section_floats(footing).A_s_bot >= A_s_calc) == (n == 9)
         A_s_top = section_floats(footing).A_s_top
         M_Rd = _simple_determine_nominal_moment_EN_1992_2004(footing, A_s_calc, d, A_s_top, d_prime)
-        assert M_Rd / 1e6 == pytest.approx(300, rel=1e-9)
+        assert M_Rd / 1e6 == pytest.approx(210, rel=1e-9)
 
 
 # ---------------------------------------------------------------------------
