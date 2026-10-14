@@ -259,18 +259,35 @@ equilibrium, and any bar on the compression face is a detailing or erection bar:
 
    M_{Rd} = A_s f_{yd}\left(d - \frac{x_{eff}}{2}\right)
 
-Otherwise the concrete saturates and the excess tension steel pairs with the
-compression steel actually available:
+Otherwise the neutral axis is held at the ductility limit: the concrete saturates
+at :math:`M_{lim}` and the excess tension steel pairs with the compression steel
+actually available. Each side of that couple works at its own stress. The tension
+steel has yielded. The compression steel is at the stress plane sections give it with
+the neutral axis at :math:`x_{u,lim}`, the same :math:`f_{sd}` the required area is
+sized with:
 
 .. math::
 
    A_{s,lim} = \frac{\eta f_{cd}\, b\, x_{eff,lim}}{f_{yd}}
    \qquad
-   M_{Rd} = M_{lim} + \min\left(A_s - A_{s,lim},\ A'_s\right) f_{yd}\,(d - d')
+   f_{sd} = \min\left(\frac{x_{u,lim} - d'}{x_{u,lim}}\,\varepsilon_{cu2} E_s,\ f_{yd}\right)
+
+.. math::
+
+   M_{Rd} = M_{lim} + \min\left[(A_s - A_{s,lim})\, f_{yd},\ A'_s \max(f_{sd}, 0)\right](d - d')
+
+Bars at or below the neutral axis (:math:`d' \ge x_{u,lim}`, :math:`f_{sd} \le 0`)
+are not compressed at the limit and add nothing: the section saturates at
+:math:`M_{lim}`, as it does with no compression steel. This is the model of Mosley,
+Bungey & Hulse, *Reinforced Concrete Design to Eurocode 2*, §4.5, which takes the
+compression steel stress from its strain where it has not yielded, read for a given
+layout. Sizing and resistance invert each other: with the areas the sizing asks for,
+:math:`M_{Rd} = M_{Ed}`.
 
 At :math:`x_{eff} = x_{eff,lim}` the two branches coincide, so :math:`M_{Rd}` is
-continuous, and it is monotonic in :math:`A'_s`. See :ref:`en-decisions` for why
-that matters.
+continuous. It is monotonic in :math:`A'_s` and never rises as :math:`d'` deepens,
+reaching :math:`M_{lim}` continuously at :math:`d' = x_{u,lim}`. See
+:ref:`en-decisions` for why that matters.
 
 Shear
 -----
@@ -453,6 +470,29 @@ how much steel happens to sit on the compression face. Below the limit the
 compression bars are ignored, which is the safe side and is also what the mechanics
 say: the concrete alone balances the tension steel.
 
+Compression steel works at its strain, not at f_yd
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The resistance used to credit the compression steel at :math:`f_{yd}` whatever its
+depth, while the sizing read it at :math:`f_{sd}`. The check then passed layouts
+the sizing could not have produced. A 100x15 footing with :math:`c_c = 50` mm,
+Ø25/10 bottom and Ø20/10 top, was given 62.3 kN·m. Its top bars sit at
+:math:`d' = 60` mm, below :math:`x_{u,lim} = 28.7` mm, so at the limit they are in
+tension. Strain compatibility with no ductility limit at all gives that layout
+53.1 kN·m, at :math:`x_u/d = 0.77`. The resistance is now :math:`M_{lim}` =
+24.7 kN·m.
+
+Holding the neutral axis at :math:`x_{u,lim}` is what the ductility limit means.
+A layout that carries more only with a deeper neutral axis is past that limit, and
+the design treats it as too small for the moment. Full strain compatibility would
+lift the limit for every section, singly reinforced ones included, and would no
+longer be the inverse of the sizing. A test bounds :math:`M_{Rd}` by an independent
+strain-compatibility solution over a grid of :math:`d'` on both sides of
+:math:`x_{u,lim}`. It may exceed it by a fraction of a percent where the compression
+bars sit inside the block and below its centroid: the rectangular block does not
+deduct the concrete they displace. The singly reinforced branch shows the same small
+excess.
+
 Effective depth per face
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -503,6 +543,13 @@ reproduce; the regression rows, whose only reference is a Calcpad sheet, are tes
    * - :math:`M_{Rd}` monotonic in :math:`A'_s`
      - ``test_nominal_moment_EN_1992_2004_is_monotonic_in_compression_steel``
      - Physical requirement
+   * - :math:`M_{Rd}` with compression steel at :math:`f_{sd}`, at most strain
+       compatibility
+     - ``test_M_Rd_never_exceeds_strain_compatibility``
+     - Strain-compatibility solution written in the test, with no ductility limit
+   * - Sizing and :math:`M_{Rd}` invert each other
+     - ``test_the_areas_the_sizing_asks_for_carry_exactly_the_moment``
+     - Internal consistency, sizing ↔ resistance
    * - Design layout passes its own check
      - ``test_design_flexure_EN_1992_2004_layout_passes_its_own_check``
      - Internal consistency, design ↔ check

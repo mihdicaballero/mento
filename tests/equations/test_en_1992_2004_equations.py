@@ -347,15 +347,19 @@ def test_moment_resistance_doubly_reinforced():
     # A_s,lim = 1*20*300*200/400 = 3000 mm², M_lim = 480e6 N·mm.
     # A_s = 4000 leaves 1000 mm² to pair with the 1000 mm² on top, on the
     # lever arm d - d' = 450 mm: 1000*400*450 = 180e6 N·mm.
-    got = flex.moment_resistance_doubly_reinforced(4000.0, 1000.0, 400.0, 1.0, 20.0, 300.0, 500.0, 50.0, 200.0)
+    got = flex.moment_resistance_doubly_reinforced(4000.0, 1000.0, 400.0, 400.0, 1.0, 20.0, 300.0, 500.0, 50.0, 200.0)
     assert got == pytest.approx(660e6, rel=1e-9)
 
 
 def test_moment_resistance_doubly_reinforced_is_capped_by_the_top_steel():
     # 5000 mm² of tension steel has 2000 mm² beyond the limit, but only
     # 1000 mm² sits on the compression face, so the couple cannot grow.
-    with_4000 = flex.moment_resistance_doubly_reinforced(4000.0, 1000.0, 400.0, 1.0, 20.0, 300.0, 500.0, 50.0, 200.0)
-    with_5000 = flex.moment_resistance_doubly_reinforced(5000.0, 1000.0, 400.0, 1.0, 20.0, 300.0, 500.0, 50.0, 200.0)
+    with_4000 = flex.moment_resistance_doubly_reinforced(
+        4000.0, 1000.0, 400.0, 400.0, 1.0, 20.0, 300.0, 500.0, 50.0, 200.0
+    )
+    with_5000 = flex.moment_resistance_doubly_reinforced(
+        5000.0, 1000.0, 400.0, 400.0, 1.0, 20.0, 300.0, 500.0, 50.0, 200.0
+    )
     assert with_5000 == pytest.approx(with_4000, rel=1e-12)
 
 
@@ -364,9 +368,43 @@ def test_moment_resistance_is_continuous_at_the_ductility_limit():
     # reinforced branch must reproduce the singly reinforced value exactly.
     A_s_lim = 1.0 * 20.0 * 300.0 * 200.0 / 400.0
     singly = flex.moment_resistance_singly_reinforced(A_s_lim, 400.0, 500.0, 200.0)
-    doubly = flex.moment_resistance_doubly_reinforced(A_s_lim, 1000.0, 400.0, 1.0, 20.0, 300.0, 500.0, 50.0, 200.0)
+    doubly = flex.moment_resistance_doubly_reinforced(
+        A_s_lim, 1000.0, 400.0, 400.0, 1.0, 20.0, 300.0, 500.0, 50.0, 200.0
+    )
     assert doubly == pytest.approx(singly, rel=1e-12)
     assert doubly == pytest.approx(flex.limit_moment(1.0, 20.0, 300.0, 200.0, 500.0), rel=1e-12)
+
+
+def test_moment_resistance_doubly_reinforced_credits_compression_steel_at_its_own_stress():
+    # Same section, the 1000 mm² on top now at f_sd' = 100 MPa: it balances
+    # 100 kN of the 400 kN the 1000 mm² past A_s,lim could pull, so the couple
+    # is 100e3*450 = 45e6 N·mm on top of M_lim = 480e6, not 180e6.
+    got = flex.moment_resistance_doubly_reinforced(4000.0, 1000.0, 400.0, 100.0, 1.0, 20.0, 300.0, 500.0, 50.0, 200.0)
+    assert got == pytest.approx(525e6, rel=1e-9)
+
+
+@pytest.mark.parametrize("f_sd_prime", [0.0, -50.0, -400.0])
+def test_moment_resistance_doubly_reinforced_takes_nothing_from_bars_that_are_not_compressed(f_sd_prime):
+    # At or below the neutral axis the bars on the compression face are not
+    # compressed: the section saturates at M_lim whatever A_s' and A_s are.
+    M_lim = flex.limit_moment(1.0, 20.0, 300.0, 200.0, 500.0)
+    for A_s, A_s_prime in ((4000.0, 1000.0), (6000.0, 5000.0)):
+        got = flex.moment_resistance_doubly_reinforced(
+            A_s, A_s_prime, 400.0, f_sd_prime, 1.0, 20.0, 300.0, 500.0, 50.0, 200.0
+        )
+        assert got == pytest.approx(M_lim, rel=1e-12)
+
+
+def test_moment_resistance_doubly_reinforced_is_monotonic_in_the_compression_stress():
+    # More stress on the same bars never lowers M_Rd, and once they balance
+    # all the tension steel past A_s,lim (f_sd' >= 400 MPa here) it stops rising.
+    stresses = [-100.0, 0.0, 50.0, 100.0, 200.0, 300.0, 400.0]
+    values = [
+        flex.moment_resistance_doubly_reinforced(4000.0, 1000.0, 400.0, f, 1.0, 20.0, 300.0, 500.0, 50.0, 200.0)
+        for f in stresses
+    ]
+    assert values == sorted(values)
+    assert values[-1] == pytest.approx(660e6, rel=1e-9)
 
 
 # ---------------------------------------------------------------------------

@@ -307,6 +307,7 @@ def moment_resistance_doubly_reinforced(
     A_s: float,
     A_s_prime: float,
     f_yd: float,
+    f_sd_prime: float,
     eta: float,
     f_cd: float,
     b: float,
@@ -317,9 +318,20 @@ def moment_resistance_doubly_reinforced(
     """Design bending resistance with compression reinforcement — EN 1992-1-1 §6.1, §5.5(4).
 
     Used only once the block the tension steel would need exceeds the ductility
-    limit. The concrete contribution then saturates at the limit block, and the
-    tension steel beyond ``A_s,lim`` is balanced by whatever compression steel
-    is actually there, on the lever arm ``d - d'``.
+    limit. The neutral axis is then held at that limit: the concrete gives
+    ``M_lim``, and the tension steel beyond ``A_s,lim`` pairs with the steel on
+    the compression face, on the lever arm ``d - d'``. Each side of that couple
+    works at its own stress. The tension steel has yielded (``x_u/d <= 0.45``
+    leaves it past ``eps_yd``), so it gives at most ``(A_s - A_s,lim)*f_yd``. The
+    compression steel gives ``A_s'*f_sd'``, with ``f_sd'`` the stress plane
+    sections (§6.1(2)) and the bilinear diagram (§3.2.7(2)) give it at the same
+    neutral axis: :func:`compression_steel_stress` at ``x_u,lim``. A bar at or
+    below the neutral axis (``f_sd' <= 0``) is not compressed and carries none
+    of the couple. This is the model of Mosley, Bungey & Hulse, *Reinforced
+    Concrete Design to Eurocode 2*, §4.5 (section with compression
+    reinforcement, neutral axis at its limit, ``f_sc`` from the strain where
+    the steel has not yielded), read for a given layout. It is the exact
+    inverse of how the design sizes the two areas.
 
     At ``x_eff = x_eff_lim`` this returns exactly the M_lim of
     :func:`limit_moment`, so the resistance is continuous across the branch.
@@ -328,6 +340,9 @@ def moment_resistance_doubly_reinforced(
         A_s: Tension reinforcement area (mm²).
         A_s_prime: Compression reinforcement area (mm²).
         f_yd: Design yield strength of the reinforcement (MPa).
+        f_sd_prime: Stress of the compression reinforcement at the ductility
+            limit, from :func:`compression_steel_stress` (MPa). Zero or
+            negative where the bars are not compressed there.
         eta: Effective strength factor of §3.1.7(3).
         f_cd: Design compressive strength of the concrete (MPa).
         b: Section width (mm).
@@ -340,7 +355,8 @@ def moment_resistance_doubly_reinforced(
     """
     A_s_lim = eta * f_cd * b * x_eff_lim / f_yd
     M_lim = A_s_lim * f_yd * lever_arm(d, x_eff_lim)
-    # The couple can only develop up to the steel actually on the compression
-    # face; extra tension steel beyond that is simply not usable.
-    A_s_couple = min(A_s - A_s_lim, A_s_prime)
-    return M_lim + A_s_couple * f_yd * (d - d_prime)
+    # The couple is the smaller of the two forces its faces can develop: tension
+    # steel past A_s,lim cannot be used without compression steel to balance
+    # it, and compression steel is worth only the stress its strain gives it.
+    F_couple = min((A_s - A_s_lim) * f_yd, A_s_prime * max(f_sd_prime, 0.0))
+    return M_lim + F_couple * (d - d_prime)

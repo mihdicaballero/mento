@@ -470,6 +470,19 @@ def _compression_zone_limits_EN_1992_2004(self: "RectangularBeam", d: float) -> 
     return x_u_lim, lambda_ * x_u_lim
 
 
+def _compression_steel_stress_EN_1992_2004(self: "RectangularBeam", x_u_lim: float, d_prime: float) -> float:
+    """Stress of the compression steel at depth ``d_prime`` with the neutral axis at ``x_u_lim``, in MPa.
+
+    EN 1992-1-1 §6.1(2) and §3.2.7(2), through
+    :func:`~mento.codes.en_1992_2004.equations.flexure.compression_steel_stress`.
+    One helper for the sizing and the resistance, so both read the compression
+    steel at the same stress. Zero or negative where ``d_prime >= x_u_lim``.
+    """
+    sec = section_floats(self)
+    f_yd = sec.f_y / self.steel_bar.gamma_s
+    return flexure_eq.compression_steel_stress(x_u_lim, d_prime, self.concrete.epsilon_cu2, sec.E_s, f_yd)
+
+
 def _calculate_flexural_reinforcement_EN_1992_2004(
     self: "RectangularBeam", M_Ed: float, d: float, d_prima: float
 ) -> tuple[float, float, float, float, float]:
@@ -531,13 +544,7 @@ def _calculate_flexural_reinforcement_EN_1992_2004(
 
             # Compressive reinforcement stress, from the strain at the neutral
             # axis at the plastic limit (EC2 §5.5)
-            f_sd = flexure_eq.compression_steel_stress(
-                x_u_lim,
-                d_prime,
-                self.concrete.epsilon_cu2,
-                sec.E_s,
-                f_yd,
-            )
+            f_sd = _compression_steel_stress_EN_1992_2004(self, x_u_lim, d_prime)
 
             # The moment past M_lim is a steel couple on the lever arm (d - d'):
             # one force, carried by the tension steel at f_yd -- at x_u <= x_u,lim
@@ -586,10 +593,16 @@ def _simple_determine_nominal_moment_EN_1992_2004(
     ``M_lim`` and the excess tension steel pair with the compression steel,
     which is what changes the lever arm to ``d - d'``.
 
+    The compression steel is credited at the stress its strain gives it with
+    the neutral axis at the limit (:func:`_compression_steel_stress_EN_1992_2004`),
+    not at f_yd: a bar deeper than ``x_u,lim`` is not compressed there and adds
+    nothing, and the section then saturates at ``M_lim``.
+
     This mirrors :func:`_calculate_flexural_reinforcement_EN_1992_2004`, which
-    sizes the tension steel with exactly the same criterion, so that a layout
-    coming out of ``design_flexure`` is verified by ``check_flexure`` under the
-    same mechanical model.
+    sizes the tension steel with exactly the same criterion and the
+    compression steel at the same stress, so that a layout coming out of
+    ``design_flexure`` is verified by ``check_flexure`` under the same
+    mechanical model.
 
     For reference see Jimenez Montoya 16 Ed. P 213.
     """
@@ -608,7 +621,7 @@ def _simple_determine_nominal_moment_EN_1992_2004(
         x_eff = flexure_eq.compression_block_depth_for_steel(A_s_mm2, f_yd, eta, f_cd, b)
 
         # Ductility limit -- same criterion as the reinforcement sizing routine.
-        _, x_eff_lim = _compression_zone_limits_EN_1992_2004(self, d)
+        x_u_lim, x_eff_lim = _compression_zone_limits_EN_1992_2004(self, d)
 
         if x_eff <= x_eff_lim:
             # Singly reinforced: A_s_prime is not required for equilibrium.
@@ -616,9 +629,11 @@ def _simple_determine_nominal_moment_EN_1992_2004(
         else:
             # Doubly reinforced: the concrete contribution saturates at the
             # ductility limit and the excess tension steel is balanced by the
-            # compression reinforcement, with lever arm (d - d').
+            # compression reinforcement, at the stress plane sections give it
+            # there, with lever arm (d - d').
+            f_sd_prime = _compression_steel_stress_EN_1992_2004(self, x_u_lim, d_prime)
             M_Rd = flexure_eq.moment_resistance_doubly_reinforced(
-                A_s_mm2, A_s_prime, f_yd, eta, f_cd, b, d_mm, d_prime, x_eff_lim
+                A_s_mm2, A_s_prime, f_yd, f_sd_prime, eta, f_cd, b, d_mm, d_prime, x_eff_lim
             )
     return M_Rd
 
@@ -661,18 +676,22 @@ def _determine_nominal_moment_EN_1992_2004(self: "RectangularBeam", st: ENFlexur
     st.M_Rd_top = _simple_determine_nominal_moment_EN_1992_2004(
         self, sec.A_s_top, sec.d_top, sec.A_s_bot, sec.c_mec_bot
     )
-    # Registrar la rama doblemente armada real, sin cambiar su resistencia.
+    # Record the face the resistance credits as compression steel, without
+    # changing the resistance: the doubly reinforced branch, and bars that are
+    # compressed with the neutral axis at the limit.
     st.compression_face = None
     if force._M_y != 0 * kNm:
         d = sec.d_bot if tension_at_bottom else sec.d_top
         area = sec.A_s_bot if tension_at_bottom else sec.A_s_top
         opposite = sec.A_s_top if tension_at_bottom else sec.A_s_bot
+        d_prime = sec.c_mec_top if tension_at_bottom else sec.c_mec_bot
         f_yd = sec.f_y / self.steel_bar.gamma_s
         f_cd = self.concrete.alpha_cc * sec.f_c / self.concrete.gamma_c
         eta = self.concrete._eta_factor()
         depth = flexure_eq.compression_block_depth_for_steel(area, f_yd, eta, f_cd, sec.width)
-        _, limit = _compression_zone_limits_EN_1992_2004(self, d)
-        if opposite > 0 and depth > limit:
+        x_u_lim, limit = _compression_zone_limits_EN_1992_2004(self, d)
+        compressed = _compression_steel_stress_EN_1992_2004(self, x_u_lim, d_prime) > 0
+        if opposite > 0 and depth > limit and compressed:
             st.compression_face = "top" if tension_at_bottom else "bot"
     return None
 
