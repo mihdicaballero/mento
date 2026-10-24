@@ -185,3 +185,17 @@ def test_every_label_the_report_writes_is_in_the_spanish_catalog() -> None:
     labels += ["Concrete column shear check", "Column {label} shear check", "Shear along {direction}"]
     missing = sorted({label for label in labels if isinstance(label, str) and label and label not in ES})
     assert missing == []
+
+
+def test_the_notebook_line_renders_and_bare_ties_show_as_a_dash() -> None:
+    """The real Markdown display, outside a notebook, and a column with no ties."""
+    column = _rectangle()
+    column.set_ties(d_b=0 * mm, s=0 * cm)
+    column.data
+    geometry = reports.geometry_table(column)
+    assert dict(zip(geometry["Geometry"], geometry["Value"]))["Ties"] == "-"
+
+
+def test_a_column_has_no_flexure_document() -> None:
+    with pytest.raises(NotImplementedError, match="column-shear-roadmap"):
+        _rectangle().flexure_results_detailed_doc()

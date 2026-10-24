@@ -609,3 +609,106 @@ def test_every_column_message_is_in_the_spanish_catalog() -> None:
     from mento.design_warnings import _MESSAGES
 
     assert [m for code, m in _MESSAGES.items() if code.startswith("column_") and m not in ES] == []
+
+
+# ---------------------------------------------------------------------------
+# Inputs refused, and what each entry point does
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "build, error, message",
+    [
+        (lambda c: c.set_longitudinal_rebar(d_b_corner=20), TypeError, "length Quantity"),
+        (lambda c: c.set_longitudinal_rebar(d_b_corner=-20 * mm), ValueError, "greater than zero"),
+        (lambda c: c.set_ties(d_b=-1 * mm, s=10 * cm), ValueError, "zero or more"),
+        (lambda c: c.set_longitudinal_rebar(d_b_corner=20 * mm, n_width=1.5), TypeError, "integer"),
+        (lambda c: c.set_longitudinal_rebar(d_b_corner=20 * mm, n_width=True), TypeError, "integer"),
+        (lambda c: c.set_longitudinal_rebar(d_b_corner=20 * mm, n_width=-1), ValueError, "zero or more"),
+        (lambda c: c.shear_section("x"), ValueError, "direction"),
+    ],
+    ids=[
+        "not a length",
+        "negative bar",
+        "negative tie",
+        "fractional count",
+        "bool count",
+        "negative count",
+        "bad direction",
+    ],
+)
+def test_bad_inputs_are_refused(build: Any, error: type, message: str) -> None:
+    with pytest.raises(error, match=message):
+        build(_column())
+
+
+def test_a_cover_past_half_the_section_is_refused() -> None:
+    concrete = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
+    with pytest.raises(ValueError, match="half of the smallest"):
+        RectangularColumn(label="C", concrete=concrete, steel_bar=STEEL, width=20 * cm, height=50 * cm, c_c=10 * cm)
+    with pytest.raises(ValueError, match="half of the diameter"):
+        CircularColumn(label="C", concrete=concrete, steel_bar=STEEL, diameter=20 * cm, c_c=10 * cm)
+
+
+def test_a_circle_needs_its_bars() -> None:
+    column = CircularColumn(
+        label="C",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=STEEL,
+        diameter=40 * cm,
+        c_c=30 * mm,
+    )
+    with pytest.raises(ValueError, match="greater than zero"):
+        column.set_longitudinal_rebar(n=0, d_b=20 * mm)
+    with pytest.raises(ValueError, match="longitudinal bars"):
+        column.shear_check_results([Forces(label="A", V_z=10 * kN)])
+
+
+def test_the_gross_areas() -> None:
+    assert _column().A_x.to("cm**2").magnitude == pytest.approx(1500)
+    circle = CircularColumn(
+        label="C",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=STEEL,
+        diameter=40 * cm,
+        c_c=30 * mm,
+    )
+    assert circle.A_x.to("cm**2").magnitude == pytest.approx(math.pi * 40**2 / 4)
+
+
+def test_check_shear_is_the_check() -> None:
+    column = _column()
+    column.set_ties(d_b=10 * mm, s=15 * cm)
+    column.check_shear([Forces(label="A", V_z=80 * kN)])
+    assert [c.direction for c in column.shear_checks] == ["y", "z"]
+
+
+def test_a_code_without_column_shear_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A code registered without ``check_column_shear`` names itself and the roadmap."""
+    import dataclasses
+
+    import mento.column_section
+    from mento.codes.registry import design_code
+
+    column = _column()
+    bare = dataclasses.replace(design_code(column.concrete), title="A code", check_column_shear=None)
+    monkeypatch.setattr(mento.column_section, "design_code", lambda concrete: bare)
+    with pytest.raises(NotImplementedError, match="A code yet: see docs/architecture/column-shear-roadmap.md"):
+        column.shear_check_results([Forces(label="A", V_z=80 * kN)])
+
+
+def test_the_base_section_is_not_built_directly() -> None:
+    from mento.column_section import ColumnSection
+
+    base = ColumnSection(concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa), steel_bar=STEEL, c_c=25 * mm)
+    with pytest.raises(NotImplementedError):
+        base.shear_section("z")
+
+
+def test_past_v_rd_max_at_45_the_strut_stays_at_45_degrees() -> None:
+    """V_Ed past V_Rd,max(45°) = 300·409.9·0.528·20/2 = 649.5 kN: θ = 45° and V_Rd is the strut's."""
+    column = _en_column()
+    column.set_ties(d_b=12 * mm, s=5 * cm)
+    check = _z(column.shear_check_results([Forces(label="U", V_z=900 * kN)]))
+    assert check.V_capacity == check.V_max
+    assert check.DCR > 1
