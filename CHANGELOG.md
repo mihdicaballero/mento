@@ -12,6 +12,27 @@ from the release history and are summaries rather than complete lists.
 
 ## [Unreleased]
 
+### Added
+
+- **`ShearCheck.V_concrete`: the share of the concrete under the combination's axial
+  load.** ØVc of ACI 318-19 / CIRSOC 201-25 Table 22.5.5.1 (the row the stirrups
+  provided select) and VRd,c of EN 1992-1-1 §6.2.2(1), with N_u/(6·A_g) and σ_cp. It is
+  what a column compares the demand with to decide whether it needs shear reinforcement
+  (ACI §10.6.2.1, 0.5·ØVc; EN §6.2.1(3)), which mako read off a second check with no
+  stirrups. `None` on an envelope. First step of the column shear roadmap
+  (`docs/architecture/column-shear-roadmap.md`, phase A).
+
+### Performance
+
+- **`shear_check_results` words its warnings on the first read of `warnings`, not
+  per combination.** Wording them was ~60 % of the check. A loop that never reads them,
+  such as mako's column shear over thousands of spans, skips that cost: a 30x50 beam,
+  10 combinations, goes from about 1,060 to 250 µs per check under ACI 318-19 and from
+  660 to 220 µs under EN 1992-1-1. The warnings are the same as those of `check_shear`,
+  and so are the compression faces they read: those of the check, kept with it, even
+  when a later flexure check replaces them. `check_shear` and the designs word their
+  warnings as before.
+
 ### Fixed
 
 - **EN 1992-1-1: the resistance credits compression steel at the stress its strain

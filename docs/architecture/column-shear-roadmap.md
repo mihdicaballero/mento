@@ -1,7 +1,7 @@
 # Column shear — module roadmap
 
 Status: **accepted** (2026-10-24), with decisions D1–D7 of §6 taken by the owner the same
-day. Phase A in progress. Origin: the five requests mako's column shear (C12) left
+day. Phase A done the same day. Origin: the five requests mako's column shear (C12) left
 for mento, collected in mako issue
 [#117](https://github.com/mihdicaballero/mako/issues/117).
 
@@ -193,6 +193,10 @@ Each phase lands on green tests, in its own PR from `main`.
 - A2. `ShearCheck.V_concrete` (φ·V_c / V_Rd,c of the combination). Exit: hand values on the
   existing ACI and EN examples.
 - Both help mako's beams too, and A2 removes mako's bare re-check before Phase B lands.
+- *Done (2026-10-24).* A1: the warnings are worded on the first read of `warnings`, with
+  the compression faces of the moment of the check. A 30x50 beam, 10 combinations, goes
+  from 1,060 to 250 µs per check (ACI) and from 660 to 220 µs (EN). A2:
+  `ShearCheck.V_concrete`, checked by hand in compression and in tension under both codes.
 
 **Phase B — `RectangularColumn` and `CircularColumn`, ACI 318-19 / CIRSOC 201-25 shear.**
 - The model of §2, `codes/aci_318_19/` checker for columns (float in, state out), the

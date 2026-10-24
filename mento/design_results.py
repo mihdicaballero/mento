@@ -320,6 +320,15 @@ class ShearCheck:
     support, under EN 1992-1-1 -- and ``N_demand`` the axial load of the
     combination (positive in compression), which enters ``V_c``. ``None`` on
     an envelope.
+
+    ``V_concrete`` is the share of the concrete under that axial load --
+    ``ØVc`` under ACI 318-19 and CIRSOC 201-25, from the row of Table
+    22.5.5.1 the stirrups provided select; ``VRd,c`` of EN 1992-1-1
+    §6.2.2(1) under EN 1992-1-1, with σ_cp. It is what a member that asks
+    for shear reinforcement only past a share of it compares the demand
+    with: a column, ACI 318-19 / CIRSOC 201-25 §10.6.2.1 (0.5·ØVc) and
+    EN 1992-1-1 §6.2.1(3) (VRd,c). ``None`` on an envelope, since it moves
+    with the axial load of each combination.
     """
 
     label: str
@@ -334,6 +343,7 @@ class ShearCheck:
     spacing_halved: Optional[bool] = None
     s_max_l_table: Optional[Quantity] = None
     s_max_w: Optional[Quantity] = None
+    V_concrete: Optional[Quantity] = None
 
 
 def _worst(values: Sequence[Optional[Quantity]]) -> Optional[Quantity]:
@@ -506,6 +516,7 @@ def capture_shear_check(beam: RectangularBeam, label: str, state: Any) -> ShearC
         spacing_halved=spacing_halved,
         s_max_l_table=s_max_l_table,
         s_max_w=s_max_w,
+        V_concrete=state.concrete_shear_quantity(imperial),
     )
 
 
