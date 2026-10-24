@@ -39,6 +39,22 @@ mento.column module
    :undoc-members:
    :show-inheritance:
 
+mento.column\_results module
+----------------------------
+
+.. automodule:: mento.column_results
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+mento.column\_section module
+----------------------------
+
+.. automodule:: mento.column_section
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 mento.design\_results module
 ----------------------------
 

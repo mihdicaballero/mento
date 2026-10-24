@@ -25,6 +25,7 @@ __all__ = [
     "max_concrete_shear_stress",
     "shear_stress_capacity_increment",
     "min_shear_reinforcement_threshold_stress",
+    "column_shear_reinforcement_threshold",
     "max_yield_strength_for_shear",
     "min_shear_reinforcement_ratio",
     "shear_strength_of_reinforcement",
@@ -270,6 +271,24 @@ def min_shear_reinforcement_threshold_stress(
     """
     coeff = (1 if is_imperial else 0.083) if coefficient is None else coefficient
     return coeff * lambda_factor * math.sqrt(f_c)
+
+
+def column_shear_reinforcement_threshold(phi_V_c: float) -> float:
+    """Shear past which a column needs shear reinforcement — ACI 318-19 §10.6.2.1 / CIRSOC 201-25 §10.6.2.1.
+
+    A_v,min is required in all regions where V_u > 0.5·φ·V_c, with V_c of
+    §22.5 computed with the column's axial load. Unlike the beam threshold of
+    §9.6.3.1 (:func:`min_shear_reinforcement_threshold_stress`), it follows
+    V_c -- a compressed column gets a higher one, a column in tension a lower
+    one -- and has no exemption for shallow members.
+
+    Args:
+        phi_V_c: Design shear strength of the concrete, φ·V_c (N, or lb).
+
+    Returns:
+        The shear V_u has to pass for A_v,min to be required (N, or lb).
+    """
+    return 0.5 * phi_V_c
 
 
 def max_yield_strength_for_shear(f_y: float, *, is_imperial: bool = False) -> float:

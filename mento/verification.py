@@ -118,6 +118,20 @@ WARNING_CATEGORY: dict[str, str] = {
     "mesh_ratio_below_min": "resistance",
     "mesh_ratio_above_max": "resistance",
     "mesh_spacing_exceeds_max": "failed",
+    # A column section: the code a warning carries, and the template of each direction.
+    "column_ties_below_required": "resistance",
+    "column_ties_below_required_y": "resistance",
+    "column_ties_below_required_z": "resistance",
+    "column_tie_spacing_exceeds_max": "failed",
+    "column_tie_spacing_exceeds_max_y": "failed",
+    "column_tie_spacing_exceeds_max_z": "failed",
+    "column_leg_spacing_exceeds_max": "failed",
+    "column_leg_spacing_exceeds_max_y": "failed",
+    "column_leg_spacing_exceeds_max_z": "failed",
+    "column_shear_exceeds_section_limit": "resistance",
+    "column_shear_exceeds_section_limit_y": "resistance",
+    "column_shear_exceeds_section_limit_z": "resistance",
+    "column_force_component_not_checked": "resistance",
 }
 
 
@@ -131,7 +145,7 @@ def verification_status(beam: RectangularBeam) -> dict[str, str]:
     flexure, shear = beam.flexure_checks, beam.shear_checks
     strength_failed = any(not item.complies for item in flexure) or any(item.DCR > 1 for item in shear)
     warnings = beam.warnings
-    outside = {"axial_load_beyond_beam", "force_component_not_checked"}
+    outside = {"axial_load_beyond_beam", "force_component_not_checked", "column_force_component_not_checked"}
     strength_failed = strength_failed or any(
         warning_category(w.code) == "resistance" and w.code not in outside for w in warnings
     )

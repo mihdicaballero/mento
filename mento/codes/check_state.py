@@ -191,6 +191,10 @@ class ShearCheckState:
         """
         return to_display(min(self.phi_V_n, self.phi_V_max), "force", imperial)
 
+    def concrete_shear_quantity(self, imperial: bool) -> Any:
+        """``phi_V_c``, the share of the concrete with the axial load, as a quantity."""
+        return to_display(self.phi_V_c, "force", imperial)
+
 
 def new_shear_state(section: "RectangularBeam") -> ShearCheckState:
     """A zeroed state. Every field is a float, so there is nothing to convert."""
@@ -361,6 +365,10 @@ class ENShearCheckState:
     def shear_capacity_quantity(self, imperial: bool) -> Any:
         """``V_Rd``, the design shear resistance the DCR was formed from."""
         return to_display(self.V_Rd, "force", imperial)
+
+    def concrete_shear_quantity(self, imperial: bool) -> Any:
+        """``V_Rd,c``, the resistance without shear reinforcement with σ_cp, as a quantity."""
+        return to_display(self.V_Rd_c, "force", imperial)
 
 
 def new_en_shear_state(section: "RectangularBeam") -> ENShearCheckState:

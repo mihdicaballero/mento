@@ -94,6 +94,8 @@ mento/
 ├── slab.py                 OneWaySlab and Footing — one-way slab design
 ├── shear_wall.py           ShearWall — in-plane shear check/design
 ├── column.py               Column — geometry (shape, position, edge distances) for punching shear
+├── column_section.py       RectangularColumn, CircularColumn — column shear in V_y and V_z, ACI/CIRSOC/EN
+├── column_results.py       ColumnShearCheck — frozen result of a column shear check
 ├── punching.py             PunchingSlab, PunchingNode, Opening, Capital — two-way punching shear
 ├── punching_results.py     PunchingCheck — frozen result of a punching check
 ├── wall_results.py         WallMesh, WallShearCheck, WallShearDesign — public results of a ShearWall
@@ -112,7 +114,7 @@ mento/
 ├── summary.py              Deprecated shim re-exporting BeamSummary (emits DeprecationWarning)
 ├── i18n.py                 set_language() — language of reports, drawing, warnings and stirrup notation()
 ├── plots/                  Matplotlib drawings: sections.py, walls.py, punching.py
-├── reports/                Presentation layer: tables, views, documents, summaries, table_style, headings, punching
+├── reports/                Presentation layer: tables, views, documents, summaries, table_style, headings, punching, columns
 └── codes/
     ├── registry.py               DesignCode dataclass and the registered codes — every element dispatches through it
     ├── check_state.py            Check states held off the element; the report path copies them back
@@ -122,9 +124,11 @@ mento/
     ├── en_1992_2004/             code.py + equations/{flexure,shear,wall,punching}.py
     ├── ACI_318_19_beam.py        Beam shear/flexure checks and design (functions typed `self: RectangularBeam`)
     ├── ACI_318_19_wall.py        Wall shear per ACI 318-19
+    ├── ACI_318_19_column.py      Column shear checker (§10.6.2.1, Table 10.7.6.5.2) — float in, result out
     ├── ACI_318_19_punching.py    Punching checker — preconditions enforced, equations pending (Phase 2)
     ├── EN_1992_2004_beam.py      Beam shear/flexure per EN 1992-2004
     ├── EN_1992_2004_wall.py      Wall shear per EN 1992-1-1 §6.2 + §9.6 (d = 0.8 lw, vertical mesh designed first)
+    ├── EN_1992_2004_column.py    Column shear per EN §6.2; a circle by Orr et al. (2010)
     └── EN_1992_2004_punching.py  Punching checker — equations pending (Phase 5)
 ```
 
@@ -140,7 +144,7 @@ tests/
 ├── equations/       Float-only clause functions (ACI flexure / shear / wall, EN, EN wall)
 ├── materials/       material, rebar, units, settings, forces
 ├── sections/        section, rectangular, node
-├── elements/        beam, slab, footing, shear_wall (ACI), shear_wall_en, punching
+├── elements/        beam, slab, footing, shear_wall (ACI), shear_wall_en, punching, column
 ├── design/          design_results, design_options, design_warnings, flexure_design_properties, ...
 ├── reports/         results, headings, table_style, i18n, beam_summary, shear_wall_summary
 └── validation/      ONLY the tests marked published_example: CRSI guide, CSI/ETABS verification, ETABS runs, Concrete Centre, eurocodeapplied

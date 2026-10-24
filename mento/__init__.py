@@ -72,6 +72,9 @@ __all__ = [
     "BeamSummary",
     "OneWaySlabSummary",
     "Column",
+    "RectangularColumn",
+    "CircularColumn",
+    "ColumnShearCheck",
     "PunchingSlab",
     "Opening",
     "Capital",
@@ -114,6 +117,8 @@ if TYPE_CHECKING:
     from mento.compression_detailing import CompressionDetailing, CompressionFaceDetail
     from mento.codes import ACI_318_19_beam, EN_1992_2004_beam
     from mento.column import Column
+    from mento.column_results import ColumnShearCheck
+    from mento.column_section import CircularColumn, RectangularColumn
     from mento.design_results import DesignNotRunError, RebarOption, StirrupOption
     from mento.design_warnings import DesignWarning
     from mento.forces import Forces
@@ -162,6 +167,9 @@ def __getattr__(name: str) -> object:
         "BeamSummary": "beam_summary",
         "OneWaySlabSummary": "slab_summary",
         "Column": "column",
+        "RectangularColumn": "column_section",
+        "CircularColumn": "column_section",
+        "ColumnShearCheck": "column_results",
         "PunchingSlab": "punching",
         "Opening": "punching",
         "Capital": "punching",

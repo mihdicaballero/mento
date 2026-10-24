@@ -314,6 +314,33 @@ ES.update(
         "Shear V = {V} exceeds the most the section can carry, {V_max}: enlarge the section.": (
             "El corte V = {V} supera el máximo que admite la sección, {V_max}: hay que agrandarla."
         ),
+        "Ties for V_y: the legs give A_v = {A_v}, below the A_v,req = {A_v_req} the shear requires.": (
+            "Estribos para V_y: las ramas aportan A_v = {A_v}, menos que el A_v,req = {A_v_req} que pide el corte."
+        ),
+        "Ties for V_z: the legs give A_v = {A_v}, below the A_v,req = {A_v_req} the shear requires.": (
+            "Estribos para V_z: las ramas aportan A_v = {A_v}, menos que el A_v,req = {A_v_req} que pide el corte."
+        ),
+        "Ties for V_y: the spacing {s} exceeds the maximum {s_max} for shear.": (
+            "Estribos para V_y: la separación {s} supera la máxima {s_max} por corte."
+        ),
+        "Ties for V_z: the spacing {s} exceeds the maximum {s_max} for shear.": (
+            "Estribos para V_z: la separación {s} supera la máxima {s_max} por corte."
+        ),
+        "Ties for V_y: the legs are {s} apart across the section, past the maximum {s_max}.": (
+            "Estribos para V_y: las ramas están a {s} en la sección, más que la máxima {s_max}."
+        ),
+        "Ties for V_z: the legs are {s} apart across the section, past the maximum {s_max}.": (
+            "Estribos para V_z: las ramas están a {s} en la sección, más que la máxima {s_max}."
+        ),
+        "Shear V_y = {V} exceeds the most the section can carry, {V_max}: enlarge the section.": (
+            "El corte V_y = {V} supera el máximo que admite la sección, {V_max}: hay que agrandarla."
+        ),
+        "Shear V_z = {V} exceeds the most the section can carry, {V_max}: enlarge the section.": (
+            "El corte V_z = {V} supera el máximo que admite la sección, {V_max}: hay que agrandarla."
+        ),
+        "{component} = {value} is given but not verified: a column is checked for shear only.": (
+            "{component} = {value} está dado pero no se verifica: una columna se verifica sólo a corte."
+        ),
         "Horizontal wall mesh: ρt = {rho} is below the required ρt = {rho_min}.": (
             "Malla horizontal del muro: ρt = {rho} es menor que la requerida ρt = {rho_min}."
         ),
@@ -871,5 +898,40 @@ ES.update(
         "The supplied skin area is insufficient in the bottom tension zone.": "El área de piel es insuficiente en la zona inferior traccionada.",
         "The supplied skin area per lateral face is insufficient.": "El área de piel por cara lateral es insuficiente.",
         "The supplied skin area is insufficient in the top tension zone.": "El área de piel es insuficiente en la zona superior traccionada.",
+    }
+)
+
+# The shear report of a column section (mento/reports/columns.py).
+ES.update(
+    {
+        "===== COLUMN SHEAR DETAILED RESULTS =====": "===== RESULTADOS DETALLADOS DE CORTE DE LA COLUMNA =====",
+        "----- Shear along {direction} -----": "----- Corte según {direction} -----",
+        "Concrete column shear check": "Verificación a corte de columna de hormigón",
+        "Column {label} shear check": "Verificación a corte de la columna {label}",
+        "Shear along {direction}": "Corte según {direction}",
+        "Partial factor for concrete": "Coeficiente parcial del hormigón",
+        "Partial factor for reinforcement": "Coeficiente parcial de la armadura",
+        "Diameter": "Diámetro",
+        "Longitudinal rebar": "Armadura longitudinal",
+        "Spiral": "Espiral",
+        "Hoops": "Estribos circulares",
+        "Depth to the tension chord": "Profundidad al cordón traccionado",
+        "Corner bars": "Barras de esquina",
+        "Bars between corners, each face of the width": "Barras entre esquinas, cada cara del ancho",
+        "Bars between corners, each face of the height": "Barras entre esquinas, cada cara de la altura",
+        "Ties": "Estribos",
+        "Crossties, faces of the width": "Ganchos, caras del ancho",
+        "Crossties, faces of the height": "Ganchos, caras de la altura",
+        "Crosstie bar": "Barra de los ganchos",
+        "Shear along y": "Corte según y",
+        "Shear along z": "Corte según z",
+        "Shear reinforcement": "Armadura de corte",
+        "Tie spacing along the column": "Separación de estribos a lo largo de la columna",
+        "Leg spacing across the section": "Separación de ramas en la sección",
+        "Shear width": "Ancho a corte",
+        "Shear reinforcement required past": "Armadura de corte requerida desde",
+        "Shear reinforcement required": "Armadura de corte requerida",
+        "Yes": "Sí",
+        "No": "No",
     }
 )

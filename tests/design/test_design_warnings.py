@@ -280,6 +280,89 @@ def test_values_only_checks_record_warnings_too() -> None:
     assert {"As_below_min", "stirrup_spacing_exceeds_max"} <= set(_by_code(beam.warnings))
 
 
+def test_values_only_shear_check_words_its_warnings_only_when_read(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Wording the warnings was ~60 % of ``shear_check_results``: a loop that
+    never reads them -- mako's column shear, over thousands of spans -- does
+    not pay for them, and a second read does not word them again."""
+    import mento.beam
+
+    worded = []
+
+    def counting(*args: Any) -> Any:
+        worded.append(args[1])
+        return shear_warnings(*args)
+
+    shear_warnings = mento.beam.shear_warnings
+    monkeypatch.setattr(mento.beam, "shear_warnings", counting)
+    beam = _beam()
+    beam.set_longitudinal_rebar_bot(n1=2, d_b1=10 * mm)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=10 * mm, s_l=35 * cm)
+    beam.shear_check_results(FORCES)
+    assert worded == []
+
+    assert "stirrup_spacing_exceeds_max" in _by_code(beam.warnings)
+    assert len(worded) == len(FORCES)
+    beam.warnings
+    assert len(worded) == len(FORCES)
+
+
+@pytest.mark.parametrize("concrete", [Concrete_ACI_318_19, Concrete_EN_1992_2004], ids=["ACI", "EN"])
+def test_values_only_shear_warnings_are_the_reporting_paths(concrete: type) -> None:
+    """Worded late, the warnings of ``shear_check_results`` are those
+    ``check_shear`` words as it goes, code, face and values."""
+
+    def checked(values_only: bool) -> RectangularBeam:
+        beam = RectangularBeam(
+            label="V",
+            concrete=concrete(name="C25", f_c=25 * MPa),
+            steel_bar=SteelBar(name="B500", f_y=420 * MPa),
+            width=20 * cm,
+            height=60 * cm,
+            c_c=25 * mm,
+        )
+        beam.set_longitudinal_rebar_bot(n1=2, d_b1=10 * mm)
+        beam.set_longitudinal_rebar_top(n1=6, d_b1=25 * mm)
+        beam.set_transverse_rebar(n_stirrups=1, d_b=6 * mm, s_l=35 * cm)
+        beam.flexure_check_results(FORCES)
+        if values_only:
+            beam.shear_check_results(FORCES)
+        else:
+            beam.check_shear(FORCES)
+        return beam
+
+    late, eager = checked(values_only=True).warnings, checked(values_only=False).warnings
+    assert late
+    assert [(w.code, w.face, w.message) for w in late] == [(w.code, w.face, w.message) for w in eager]
+
+
+def test_a_later_flexure_check_does_not_change_the_shear_warnings() -> None:
+    """The stirrups brace the compression bars the flexure check relied on
+    when the shear was checked (ACI 318-19 §9.7.6.4). A flexure check run
+    after it under a smaller moment relies on none, but the shear results it
+    leaves in place still describe the moment of the shear check -- and the
+    faces the newer flexure check found are left as it found them."""
+    beam = RectangularBeam(
+        label="V",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=SteelBar(name="ADN 420", f_y=420 * MPa),
+        width=20 * cm,
+        height=50 * cm,
+        c_c=25 * mm,
+    )
+    beam.set_longitudinal_rebar_bot(n1=4, d_b1=25 * mm)
+    beam.set_longitudinal_rebar_top(n1=2, d_b1=12 * mm)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=6 * mm, s_l=25 * cm)
+    large = [Forces(label="U", V_z=80 * kN, M_y=230 * kNm)]
+    beam.flexure_check_results(large)
+    assert beam._compression_faces == {"top"}
+    beam.shear_check_results(large)
+    beam.flexure_check_results([Forces(label="S", V_z=80 * kN, M_y=40 * kNm)])
+    assert beam._compression_faces == set()
+
+    assert "stirrup_spacing_exceeds_compression_support" in _by_code(beam.warnings)
+    assert beam._compression_faces == set()
+
+
 def test_en_beam_reports_its_own_limits() -> None:
     beam = RectangularBeam(
         label="V",

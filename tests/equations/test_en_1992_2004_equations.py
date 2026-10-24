@@ -435,3 +435,78 @@ def test_max_stirrup_spacing_grows_with_inclined_stirrups():
     assert inclined > vertical
     # 0.75*300*(1+1) = 450 -> capped at 400
     assert inclined == pytest.approx(400.0)
+
+
+# ---------------------------------------------------------------------------
+# alpha_cw under axial compression — §6.2.3(3), Note 3, Expression (6.11aN)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "sigma_cp, expected",
+    [
+        (-2.0, 1.0),  # tension: the Note's 1
+        (0.0, 1.0),
+        (4.0, 1.2),  # 1 + 4/20, under 0.25*f_cd = 5
+        (5.0, 1.25),  # the two first branches meet
+        (8.0, 1.25),  # up to 0.5*f_cd = 10
+        (10.0, 1.25),
+        (15.0, 0.625),  # 2.5*(1 - 15/20)
+        (20.0, 0.0),
+        (25.0, 0.0),  # past f_cd the strut has nothing left
+    ],
+)
+def test_compression_chord_coefficient(sigma_cp, expected):
+    assert eq.compression_chord_coefficient(sigma_cp, 20.0) == pytest.approx(expected)
+
+
+# ---------------------------------------------------------------------------
+# A circle — Orr et al. (2010) on EN 1992-1-1 §6.2
+# ---------------------------------------------------------------------------
+
+
+def test_design_tensile_strength():
+    # §3.1.6(2): 0.7 * 2.896 / 1.5 for C30
+    assert eq.design_tensile_strength(2.896, 1.5) == pytest.approx(1.35147, rel=1e-4)
+
+
+def test_uncracked_shear_resistance_circle_is_expression_6_4():
+    """I·b_w/S of a circle is 3πr²/4: πr⁴/4 · 2r / (2r³/3)."""
+    r, f_ctd, sigma = 250.0, 1.35, 5.0
+    inertia, b_w, S = math.pi * r**4 / 4, 2 * r, 2 * r**3 / 3
+    expected = inertia * b_w / S * math.sqrt(f_ctd**2 + sigma * f_ctd)
+    assert eq.uncracked_shear_resistance_circle(r, f_ctd, sigma) == pytest.approx(expected)
+
+
+def test_uncracked_shear_resistance_circle_is_zero_once_tension_cracks_it():
+    assert eq.uncracked_shear_resistance_circle(250.0, 1.35, -2.0) == 0.0
+
+
+def test_circle_flexural_tension():
+    # M/W - N/A: 50e6/(π·250³/4) - 1e6/(π·250²)
+    expected = 50e6 / (math.pi * 250**3 / 4) - 1e6 / (math.pi * 250**2)
+    assert eq.circle_flexural_tension(50e6, 1e6, 250.0) == pytest.approx(expected)
+
+
+def test_circular_link_efficiency_is_the_integral_of_eq_6():
+    """The closed form against the midpoint rule on Eq. (6)."""
+    z_0, z, r_sv = 127.3, 290.5, 215.0
+    n = 20000
+    numeric = sum(math.sqrt(1 - ((z_0 - z * (i + 0.5) / n) / r_sv) ** 2) for i in range(n)) / n
+    assert eq.circular_link_efficiency(z_0, z, r_sv) == pytest.approx(numeric, rel=1e-6)
+
+
+def test_spiral_efficiency():
+    # p = 2π·r_sv: ((1)² + 1)^-0.5
+    assert eq.spiral_efficiency(2 * math.pi * 200.0, 200.0) == pytest.approx(2**-0.5)
+
+
+def test_circular_equivalent_web_width_is_the_narrower_chord():
+    """Eqs. (10)-(13): r = 250, r_sv = 215, d = 377.3, z = 290.5. c = 86.8:
+    B_w,c = 2√(86.8·413.2) = 378.8; e = 250 + 215 - 377.3 = 87.7:
+    B_w,t = 2√(87.7·342.3) = 346.5, the smaller."""
+    r, r_sv, d, z = 250.0, 215.0, 377.3, 290.5
+    c, e = d - z, r + r_sv - d
+    expected = min(2 * math.sqrt(c * (2 * r - c)), 2 * math.sqrt(e * (2 * r_sv - e)))
+    assert eq.circular_equivalent_web_width(r, r_sv, d, z) == pytest.approx(expected)
+    assert expected == pytest.approx(2 * math.sqrt(e * (2 * r_sv - e)))

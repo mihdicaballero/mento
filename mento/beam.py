@@ -320,6 +320,10 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         # before they are worded; `warnings` collapses and words them.
         self._flexure_warnings: list[Any] = []
         self._shear_warnings: list[Any] = []
+        # What `shear_check_results` found, kept to be worded on the first read
+        # of `warnings`: the compression faces of the moment, and per
+        # combination (label, state, force). See `_shear_warning_raws`.
+        self._pending_shear_warnings: Optional[Tuple[frozenset[str], list[Tuple[str, Any, Forces]]]] = None
 
         # Design checks and effective heights
         self._rho_l_bot: Quantity = 0 * dimensionless
@@ -842,6 +846,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         self._flexure_warnings = []
         self._shear_checks = []
         self._shear_warnings = []
+        self._pending_shear_warnings = None
         # What the last design could not reach is a result of that design too.
         self._short_faces = {}
         self._infeasible_faces = set()
@@ -1420,17 +1425,47 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         value and only the reporting path copies it back. That is what makes a
         loop over many stations safe — see :meth:`flexure_check_results` for the
         flexure counterpart, which still writes.
+
+        The warnings are not worded here but on the first read of
+        :attr:`warnings` (:meth:`_shear_warning_raws`), so a loop that never
+        reads them does not pay for them.
         """
         validate_supported_forces(self, forces)
         self._shear_checks = []
         self._shear_warnings = []
+        pending: list[Tuple[str, Any, Forces]] = []
         for position, force in enumerate(forces, 1):
             state = self._run_shear_check(force, report=False)
             self._shear_checks.append(capture_shear_check(self, force.label, state))
-            self._shear_warnings.extend(shear_warnings(self, combination_label(force.label, position), state))
-            self._shear_warnings.extend(unread_force_warnings(force, combination_label(force.label, position)))
+            pending.append((combination_label(force.label, position), state, force))
+        self._pending_shear_warnings = (frozenset(self._compression_faces), pending)
         self._shear_checked = True
         return tuple(self._shear_checks)
+
+    def _shear_warning_raws(self) -> list[Any]:
+        """The limits the last shear check found, worded on first read.
+
+        :meth:`shear_check_results` keeps what each combination found and
+        leaves the wording for here. Building the warnings was ~60 % of that
+        check, and a loop over many sections that never reads them -- mako's
+        column shear -- does not pay for them. Everything the wording reads
+        off the section is either dropped with the results when it changes
+        (the stirrups, the bars) or kept with them: the compression faces the
+        flexure check left, which a later flexure check may replace without
+        touching the shear results, are put back for the wording, so the
+        warnings are those of the moment of the check.
+        """
+        if self._pending_shear_warnings is not None:
+            faces, pending = self._pending_shear_warnings
+            self._pending_shear_warnings = None
+            current, self._compression_faces = self._compression_faces, set(faces)
+            try:
+                for label, state, force in pending:
+                    self._shear_warnings.extend(shear_warnings(self, label, state))
+                    self._shear_warnings.extend(unread_force_warnings(force, label))
+            finally:
+                self._compression_faces = current
+        return self._shear_warnings
 
     def _run_flexure_check(self, force: Forces, *, report: bool) -> Optional[Any]:
         """Compute one flexure combination, and build its report only if asked.
@@ -1706,6 +1741,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         self._limiting_case_shear_details = None
         self._shear_checks = []
         self._shear_warnings = []
+        self._pending_shear_warnings = None
 
         for position, force in enumerate(forces, 1):
             state = self._run_shear_check(force, report=True)
@@ -2110,7 +2146,7 @@ class RectangularBeam(RectangularSection, _DesignCodeAttributes):
         raws += transverse_proposal_warnings(self)
         raws += skin_warnings(self)
         raws += shortfall_warnings(self)
-        raws += list(self._shear_warnings) if self._shear_checked else []
+        raws += list(self._shear_warning_raws()) if self._shear_checked else []
         return collect(raws)
 
     @property

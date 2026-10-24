@@ -366,7 +366,7 @@ class TestCatalogCoverage:
     def test_catalog_has_no_untranslated_entries(self) -> None:
         """An entry mapping to itself is a leftover, unless the word is the same
         in both languages — which has to be declared here on purpose."""
-        same_in_both = {"Variable"}
+        same_in_both = {"Variable", "No"}
         assert [k for k, v in ES.items() if k == v and k not in same_in_both] == []
 
 

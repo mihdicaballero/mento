@@ -53,6 +53,7 @@ from mento.codes.ACI_318_19_beam import (
     _flexure_ductile_ACI_318_19,
     _stirrup_compression_support_ACI_318_19,
 )
+from mento.codes.ACI_318_19_column import check_column_shear_ACI_318_19
 from mento.codes.ACI_318_19_punching import check_punching_ACI_318_19
 from mento.codes.ACI_318_19_wall import _check_shear_ACI_318_19_wall, _design_shear_ACI_318_19_wall
 from mento.codes.check_state import (
@@ -502,6 +503,19 @@ _COMMON = dict(
     wall_summary_columns={"rho_h": "ρt", "rho_v": "ρl", "shear_demand": "Vu,max", "shear_capacity": "ØVn"},
     # Two-way shear. `design_punching` is Phase 4; requires() names the code.
     check_punching=check_punching_ACI_318_19,
+    # One-way shear of a column: §10.6.2.1, §10.6.2.2 and Table 10.7.6.5.2, the
+    # same clauses in both; the spacing caps come from ``stirrup_spacing_caps``.
+    check_column_shear=check_column_shear_ACI_318_19,
+    column_shear_symbols={
+        "axial": "Nu",
+        "demand": "Vu",
+        "concrete": "ØVc",
+        "threshold": "0.5·ØVc",
+        "threshold_share": 0.5,
+        "capacity": "ØVn",
+        "max": "ØVmax",
+        "required_clause": "§10.6.2.1",
+    },
     flexure_symbols=_FLEXURE_SYMBOLS,
     units_row_shear=_UNITS_ROW_SHEAR,
     units_row_flexure=_UNITS_ROW_FLEXURE,

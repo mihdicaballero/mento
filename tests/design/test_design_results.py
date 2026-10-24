@@ -915,6 +915,58 @@ def test_an_envelope_carries_no_demand(beam_two_combinations: RectangularBeam) -
     """An envelope is not one combination, so it has no demand of its own."""
     assert envelope_shear(beam_two_combinations.shear_checks).V_demand is None
     assert envelope_shear(beam_two_combinations.shear_checks).N_demand is None
+    assert envelope_shear(beam_two_combinations.shear_checks).V_concrete is None
+
+
+@pytest.mark.parametrize("N_kN", [300.0, -300.0], ids=["compression", "tension"])
+def test_shear_check_carries_phi_V_c_with_the_axial_load(N_kN: float) -> None:
+    """ØVc of ACI 318-19 Table 22.5.5.1 with N_u/(6·A_g), by hand.
+
+    30x50, H25, cover 25 mm, 3Ø16 below, 1eØ10/20 cm, N_u = ±300 kN.
+    d = 500 - 25 - 10 - 8 = 457 mm. A_v = 2·78.54/200 = 0.785 mm²/mm, past
+    A_v,min = max(0.062·√25, 0.35)/420·300 = 0.25 mm²/mm (Table 9.6.3.4), so
+    rows (a)/(b) apply: ρ_w = 603.2/(300·457) = 0.00440 makes (b)
+    0.66·0.164·5 = 0.54 MPa, under (a)'s 0.17·5 = 0.85 MPa. N_u/(6·A_g) =
+    ±0.333 MPa (§22.5.5.1.2, under 0.05·f'c in compression). v_c = 0.85 ± 0.333
+    and ØVc = 0.75·v_c·300·457: 121.7 kN in compression, 53.1 kN in tension.
+    """
+    concrete = Concrete_ACI_318_19(name="H25", f_c=25 * MPa)
+    steel = SteelBar(name="ADN 420", f_y=420 * MPa)
+    beam = RectangularBeam(label="C", concrete=concrete, steel_bar=steel, width=30 * cm, height=50 * cm, c_c=25 * mm)
+    beam.set_longitudinal_rebar_bot(n1=3, d_b1=16 * mm)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=10 * mm, s_l=20 * cm)
+    (check,) = beam.shear_check_results([Forces(label="C1", N_x=N_kN * kN, V_z=100 * kN)])
+
+    v_c = 0.17 * math.sqrt(25) + (N_kN * 1e3) / (6 * 300 * 500)
+    assert check.V_concrete.to("kN").magnitude == pytest.approx(0.75 * v_c * 300 * 457 / 1e3, rel=1e-9)
+
+
+@pytest.mark.parametrize("N_kN", [300.0, -300.0], ids=["compression", "tension"])
+def test_shear_check_carries_V_Rd_c_with_sigma_cp(N_kN: float) -> None:
+    """VRd,c of EN 1992-1-1 §6.2.2(1) with σ_cp, by hand.
+
+    30x50, C25, cover 25 mm, 3Ø16 below, 1eØ8/20 cm, N_Ed = ±300 kN.
+    d = 500 - 25 - 8 - 8 = 459 mm; k = 1 + √(200/459) = 1.660;
+    ρ_l = 603.2/(300·459) = 0.00438. σ_cp = ±300000/150000 = ±2 MPa, under
+    0.2·f_cd = 3.33 MPa. Expression (6.2.a), CRd,c = 0.18/1.5 and k1 = 0.15,
+    gives 0.12·k·(100·ρ_l·25)^(1/3) ± 0.3 = 0.442 ± 0.3 MPa; the floor of
+    (6.2.b), 0.035·k^1.5·√25 ± 0.3 = 0.374 ± 0.3 MPa, is lower both ways.
+    VRd,c = v·300·459: 102.2 kN in compression, 19.6 kN in tension.
+    """
+    concrete = Concrete_EN_1992_2004(name="C25", f_c=25 * MPa)
+    steel = SteelBar(name="B500S", f_y=500 * MPa)
+    beam = RectangularBeam(label="C", concrete=concrete, steel_bar=steel, width=30 * cm, height=50 * cm, c_c=25 * mm)
+    beam.set_longitudinal_rebar_bot(n1=3, d_b1=16 * mm)
+    beam.set_transverse_rebar(n_stirrups=1, d_b=8 * mm, s_l=20 * cm)
+    (check,) = beam.shear_check_results([Forces(label="C1", N_x=N_kN * kN, V_z=100 * kN)])
+
+    d = 459.0
+    k = 1 + math.sqrt(200 / d)
+    rho_l = 3 * math.pi * 16**2 / 4 / (300 * d)
+    sigma_cp = N_kN * 1e3 / (300 * 500)
+    v_a = 0.18 / 1.5 * k * (100 * rho_l * 25) ** (1 / 3) + 0.15 * sigma_cp
+    v_b = 0.035 * k**1.5 * math.sqrt(25) + 0.15 * sigma_cp
+    assert check.V_concrete.to("kN").magnitude == pytest.approx(max(v_a, v_b) * 300 * d / 1e3, rel=1e-9)
 
 
 def test_a_us_customary_result_carries_its_demand_in_kip() -> None:

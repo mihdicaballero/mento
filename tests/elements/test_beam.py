@@ -3664,7 +3664,7 @@ def test_shear_check_results_leaves_the_section_completely_untouched(
 
     # Bookkeeping the entry point is expected to update, and the report row it
     # does not build here.
-    bookkeeping = ("_shear_checks", "_shear_warnings", "_shear_checked", "_shear_report_row")
+    bookkeeping = ("_shear_checks", "_shear_warnings", "_pending_shear_warnings", "_shear_checked", "_shear_report_row")
     before = {k: repr(v) for k, v in vars(beam).items() if k not in bookkeeping}
 
     results = beam.shear_check_results([Forces(label="C1", V_z=80 * kN, M_y=90 * kNm)])

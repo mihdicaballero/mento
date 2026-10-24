@@ -12,7 +12,73 @@ from the release history and are summaries rather than complete lists.
 
 ## [Unreleased]
 
+### Added
+
+- **`RectangularColumn` and `CircularColumn`: the shear of a column section in both
+  directions, under ACI 318-19 and CIRSOC 201-25.** The column carries its bars (corners
+  and the bars between them on each face, or `n` round a circle) and its ties: a
+  perimeter tie and crossties that may be thinner and still count as legs, each in the
+  shear it crosses. `shear_check_results(forces)`, `check()` and `Node` return one
+  `ColumnShearCheck` per combination and direction (`V_y`, `V_z`), with the axial load in
+  V_c (Table 22.5.5.1). It has the column's own clauses: shear reinforcement where
+  Vu > 0.5·ØVc (§10.6.2.1), A_v,min of §10.6.2.2 there, the spacings of Table 10.7.6.5.2,
+  and the √f'c cap of §22.5.3.1 kept (§22.5.3.2 lifts it for beams only). A circle is
+  checked with b_w = D and d = 0.8·D (§22.5.2.2), in compression or in tension. On the
+  same rectangle and where the clauses agree, one direction gives the numbers of
+  `RectangularBeam`. Its warnings (`column_ties_below_required`,
+  `column_tie_spacing_exceeds_max`, `column_leg_spacing_exceeds_max`,
+  `column_shear_exceeds_section_limit`, `column_force_component_not_checked`) are worded
+  when read. The column checks shear only: flexure with axial load, tie design and EN
+  1992-1-1 come later (`docs/architecture/column-shear-roadmap.md`, phase B). A new
+  user-guide page, *Columns*.
+- **The shear report of a column.** `shear_results_detailed()` prints, and
+  `shear_results_detailed_doc()` saves as Word, the shear of the governing combination (or
+  the one passed) in both directions: materials, geometry with the ties and crossties,
+  forces, and per direction the limit checks of the ties and the resistances in the
+  code's symbols (`DesignCode.column_shear_symbols`), ending on the DCR. `column.data` and
+  `column.results` give one line each in a notebook. In English and Spanish. Built from
+  the `ColumnShearCheck` results in `mento/reports/columns.py`, which checking a column
+  does not import. Roadmap phase D.
+- **Column shear under EN 1992-1-1, rectangles and circles.** A rectangle is checked as
+  the EN beam of the same section (V_Rd,c with σ_cp, the truss at the angle the demand
+  fixes, V_Rd,max), giving its numbers where the clauses agree. A column needs shear
+  reinforcement only past V_Rd,c (§6.2.1(3)) and is not held to the beam minimum of
+  §9.2.2(5): its ties are §9.5.3. α_cw is 1 unless `alpha_cw_from_axial_load=True`
+  takes Expression (6.11aN) with the axial compression. A circle, which EN 1992-1-1 does
+  not cover, is checked by Orr et al. (*The Structural Engineer* 88(23-24), 2010): the
+  truss on the lever arm between the chords times the share of a circular link (λ1, no
+  more than 0.85) or a spiral (λ2; `set_hoops(..., spiral=True)`), and V_Rd,max on the
+  web of their equivalent rectangle. Its V_Rd,c follows §6.2.2(2): Expression (6.4)
+  (Orr's Eq. (17)) only where the combination's moments leave it uncracked in bending,
+  Expressions (6.2.a)/(6.2.b) on the equivalent rectangle elsewhere. d and z default to a
+  neutral axis at the centre and z = 0.77·d; `CircularColumn.set_lever_arm(d, z)` takes
+  those of a sectional analysis. Roadmap phase C.
+- **`ShearCheck.V_concrete`: the share of the concrete under the combination's axial
+  load.** ØVc of ACI 318-19 / CIRSOC 201-25 Table 22.5.5.1 (the row the stirrups
+  provided select) and VRd,c of EN 1992-1-1 §6.2.2(1), with N_u/(6·A_g) and σ_cp. It is
+  what a column compares the demand with to decide whether it needs shear reinforcement
+  (ACI §10.6.2.1, 0.5·ØVc; EN §6.2.1(3)), which mako read off a second check with no
+  stirrups. `None` on an envelope. First step of the column shear roadmap
+  (`docs/architecture/column-shear-roadmap.md`, phase A).
+
+### Performance
+
+- **`shear_check_results` words its warnings on the first read of `warnings`, not
+  per combination.** Wording them was ~60 % of the check. A loop that never reads them,
+  such as mako's column shear over thousands of spans, skips that cost: a 30x50 beam,
+  10 combinations, goes from about 1,060 to 250 µs per check under ACI 318-19 and from
+  660 to 220 µs under EN 1992-1-1. The warnings are the same as those of `check_shear`,
+  and so are the compression faces they read: those of the check, kept with it, even
+  when a later flexure check replaces them. `check_shear` and the designs word their
+  warnings as before.
+
 ### Fixed
+
+- **No warnings from pandas 3.1 in the bar searches.** pandas 3.1 deprecates the
+  `inplace` keyword of `sort_values` and `reset_index` (PDEP-8), and the stirrup and
+  bar searches of `mento/rebar.py` used it. Every design raised a `Pandas4Warning`, and
+  that warning failed the slab summary's test of the warnings it emits. The searches now
+  assign the sorted frame. The options and their order do not change.
 
 - **EN 1992-1-1: the resistance credits compression steel at the stress its strain
   gives it, not at f_yd.** Past the ductility limit M_Rd held the neutral axis at
