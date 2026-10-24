@@ -14,6 +14,23 @@ from the release history and are summaries rather than complete lists.
 
 ### Added
 
+- **`RectangularColumn` and `CircularColumn`: the shear of a column section in both
+  directions, under ACI 318-19 and CIRSOC 201-25.** The column carries its bars (corners
+  and the bars between them on each face, or `n` round a circle) and its ties: a
+  perimeter tie and crossties that may be thinner and still count as legs, each in the
+  shear it crosses. `shear_check_results(forces)`, `check()` and `Node` return one
+  `ColumnShearCheck` per combination and direction (`V_y`, `V_z`), with the axial load in
+  V_c (Table 22.5.5.1). It has the column's own clauses: shear reinforcement where
+  Vu > 0.5·ØVc (§10.6.2.1), A_v,min of §10.6.2.2 there, the spacings of Table 10.7.6.5.2,
+  and the √f'c cap of §22.5.3.1 kept (§22.5.3.2 lifts it for beams only). A circle is
+  checked with b_w = D and d = 0.8·D (§22.5.2.2), in compression or in tension. On the
+  same rectangle and where the clauses agree, one direction gives the numbers of
+  `RectangularBeam`. Its warnings (`column_ties_below_required`,
+  `column_tie_spacing_exceeds_max`, `column_leg_spacing_exceeds_max`,
+  `column_shear_exceeds_section_limit`, `column_force_component_not_checked`) are worded
+  when read. The column checks shear only: flexure with axial load, tie design and EN
+  1992-1-1 come later (`docs/architecture/column-shear-roadmap.md`, phase B). A new
+  user-guide page, *Columns*.
 - **`ShearCheck.V_concrete`: the share of the concrete under the combination's axial
   load.** ØVc of ACI 318-19 / CIRSOC 201-25 Table 22.5.5.1 (the row the stirrups
   provided select) and VRd,c of EN 1992-1-1 §6.2.2(1), with N_u/(6·A_g) and σ_cp. It is

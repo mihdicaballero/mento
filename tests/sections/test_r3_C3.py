@@ -33,7 +33,9 @@ def test_every_published_warning_has_explicit_category(code):
     assert state["detailing"] == (category if category in {"failed", "pending"} else "passed")
     if category == "resistance":
         assert state["resistance"] == (
-            "pending" if code in {"force_component_not_checked", "axial_load_beyond_beam"} else "failed"
+            "pending"
+            if code in {"force_component_not_checked", "column_force_component_not_checked", "axial_load_beyond_beam"}
+            else "failed"
         )
 
 

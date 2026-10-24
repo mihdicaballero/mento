@@ -17,6 +17,7 @@ User Guide
    slabs
    footings
    shear_wall
+   columns
    node
    design_results
    language

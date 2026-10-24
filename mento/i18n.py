@@ -314,6 +314,37 @@ ES.update(
         "Shear V = {V} exceeds the most the section can carry, {V_max}: enlarge the section.": (
             "El corte V = {V} supera el máximo que admite la sección, {V_max}: hay que agrandarla."
         ),
+        "Ties for V_y: the legs give A_v = {A_v}, below the A_v,req = {A_v_req} the shear requires.": (
+            "Estribos para V_y: las ramas aportan A_v = {A_v}, menos que el A_v,req = {A_v_req} que pide el corte."
+        ),
+        "Ties for V_z: the legs give A_v = {A_v}, below the A_v,req = {A_v_req} the shear requires.": (
+            "Estribos para V_z: las ramas aportan A_v = {A_v}, menos que el A_v,req = {A_v_req} que pide el corte."
+        ),
+        "Ties for V_y: the spacing {s} exceeds the maximum {s_max} for shear.": (
+            "Estribos para V_y: la separación {s} supera la máxima {s_max} por corte."
+        ),
+        "Ties for V_z: the spacing {s} exceeds the maximum {s_max} for shear.": (
+            "Estribos para V_z: la separación {s} supera la máxima {s_max} por corte."
+        ),
+        "Ties for V_y: the legs are {s} apart across the section, past the maximum {s_max}.": (
+            "Estribos para V_y: las ramas están a {s} en la sección, más que la máxima {s_max}."
+        ),
+        "Ties for V_z: the legs are {s} apart across the section, past the maximum {s_max}.": (
+            "Estribos para V_z: las ramas están a {s} en la sección, más que la máxima {s_max}."
+        ),
+        "Shear V_y = {V} exceeds the most the section can carry, {V_max}: enlarge the section.": (
+            "El corte V_y = {V} supera el máximo que admite la sección, {V_max}: hay que agrandarla."
+        ),
+        "Shear V_z = {V} exceeds the most the section can carry, {V_max}: enlarge the section.": (
+            "El corte V_z = {V} supera el máximo que admite la sección, {V_max}: hay que agrandarla."
+        ),
+        (
+            "{component} = {value} is given but not checked: a column is checked for shear only, "
+            "reading N_x, V_y and V_z."
+        ): (
+            "{component} = {value} está dado pero no se verifica: una columna se verifica sólo a corte, "
+            "con N_x, V_y y V_z."
+        ),
         "Horizontal wall mesh: ρt = {rho} is below the required ρt = {rho_min}.": (
             "Malla horizontal del muro: ρt = {rho} es menor que la requerida ρt = {rho_min}."
         ),

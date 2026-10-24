@@ -1,7 +1,8 @@
 # Column shear — module roadmap
 
 Status: **accepted** (2026-10-24), with decisions D1–D7 of §6 taken by the owner the same
-day. Phase A done the same day. Origin: the five requests mako's column shear (C12) left
+day. Phases A and B done the same day, except B's published example (see Phase B).
+Origin: the five requests mako's column shear (C12) left
 for mento, collected in mako issue
 [#117](https://github.com/mihdicaballero/mako/issues/117).
 
@@ -209,6 +210,24 @@ Each phase lands on green tests, in its own PR from `main`.
   - A published example in `tests/validation/` (candidates: the column shear examples in
     Wight & MacGregor or ACI SP-17).
   - The architecture tests (`equations/` float-only, registry dispatch) unchanged and green.
+- *Done (2026-10-24), but for the published example.* `mento/column_section.py`
+  (`RectangularColumn`, `CircularColumn`, `ColumnShearSection`), `mento/column_results.py`
+  (`ColumnShearCheck`), `mento/codes/ACI_318_19_column.py`, the hook `check_column_shear`
+  and `column_shear_reinforcement_threshold` (§10.6.2.1) in the equations. The
+  equivalence holds to 10⁻⁹ against `RectangularBeam` in both directions, under ACI and
+  CIRSOC, with N in compression, zero and tension, with ties and bare
+  (`tests/elements/test_column.py`). Hand calculations cover a compressed rectangle with
+  a thinner crosstie, the §10.6.2.1 threshold against the beam's, a circle in tension, the
+  √f'c cap a column keeps, the CIRSOC caps, the legs across and US customary units. A
+  check costs ~170 µs per direction. **Still open: the published example.** It needs a
+  worked example from a source on paper (Wight & MacGregor, ACI SP-17); it goes to
+  `tests/validation/` once one is transcribed.
+- Two decisions taken while building it:
+  - The crossties are named after the faces whose bars they hold, as mako names them:
+    `crossties_width` hold bars of the faces of length `width` and carry `V_z`.
+  - The moments of a combination are reported as unread
+    (`column_force_component_not_checked`). A column checked only for shear does not
+    verify them, and a DCR below 1 must not read as if it did.
 
 **Phase C — EN 1992-1-1 shear for both shapes.**
 - The same checker for EN, α_cw per D4, the circle by Orr et al. (D3).

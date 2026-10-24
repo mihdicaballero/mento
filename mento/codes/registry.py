@@ -67,6 +67,14 @@ class DesignCode:
     check_punching: Callable[..., Any] | None = None
     design_punching: Callable[..., None] | None = None
 
+    #: One-way shear of a column section in one direction,
+    #: ``(column, force, direction) -> ColumnShearCheck``. A column has its own
+    #: clauses on when shear reinforcement is required (ACI 318-19 / CIRSOC
+    #: 201-25 §10.6.2.1, EN 1992-1-1 §6.2.1(3) with §9.5.3 in place of the beam
+    #: minimum), so it is not the beam's hook. ``None`` until a code implements
+    #: it: see ``docs/architecture/column-shear-roadmap.md``.
+    check_column_shear: Callable[..., Any] | None = None
+
     #: Presentation the code owns: the symbols it names its quantities with and
     #: the unit rows of its summary tables. Not a calculation, but it is
     #: per-code, so a new code must be able to supply it without editing a

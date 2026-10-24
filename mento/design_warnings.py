@@ -146,6 +146,22 @@ Codes
     modelled first row: corner and alternate-bar support, and two-sided
     clear distances. Second-row support and differing CIRSOC
     limit outcomes remain explicitly pending, rather than silently passing.
+
+Codes of a column section (``RectangularColumn``, ``CircularColumn``), each
+with ``values["direction"]``, ``"y"`` or ``"z"``, the shear it was found in:
+
+``column_ties_below_required``
+    Where the column needs shear reinforcement (ACI 318-19 / CIRSOC 201-25
+    §10.6.2.1, Vu > 0.5·ØVc), its legs in that direction give less than
+    ``A_v_req``: what the shear asks for, and never less than A_v,min of
+    §10.6.2.2.
+``column_tie_spacing_exceeds_max`` / ``column_leg_spacing_exceeds_max``
+    There, the tie spacing along the column, or the largest distance between
+    adjacent legs across it, past the limit of Table 10.7.6.5.2.
+``column_shear_exceeds_section_limit``
+    The shear passes the most the section can carry, however it is tied.
+``column_force_component_not_checked``
+    A moment is given that the shear check does not read.
 """
 
 from __future__ import annotations
@@ -164,7 +180,10 @@ from mento.units import Quantity, inch, mm
 
 if TYPE_CHECKING:
     from mento.beam import RectangularBeam
+    from mento.column_results import ColumnShearCheck
+    from mento.column_section import ColumnSection
     from mento.forces import Forces
+    from mento.section import Section
     from mento.wall_results import WallMesh, WallShearCheck
 
 
@@ -273,6 +292,21 @@ _MESSAGES: Dict[str, str] = {
     "stirrup_spacing_exceeds_max_l": "Stirrup spacing along the member: {s} exceeds the maximum {s_max}.",
     "stirrup_spacing_exceeds_max_w": "Stirrup leg spacing across the width: {s} exceeds the maximum {s_max}.",
     "shear_exceeds_section_limit": "Shear V = {V} exceeds the most the section can carry, {V_max}: enlarge the section.",
+    "column_ties_below_required_y": "Ties for V_y: the legs give A_v = {A_v}, below the A_v,req = {A_v_req} the shear requires.",
+    "column_ties_below_required_z": "Ties for V_z: the legs give A_v = {A_v}, below the A_v,req = {A_v_req} the shear requires.",
+    "column_tie_spacing_exceeds_max_y": "Ties for V_y: the spacing {s} exceeds the maximum {s_max} for shear.",
+    "column_tie_spacing_exceeds_max_z": "Ties for V_z: the spacing {s} exceeds the maximum {s_max} for shear.",
+    "column_leg_spacing_exceeds_max_y": "Ties for V_y: the legs are {s} apart across the section, past the maximum {s_max}.",
+    "column_leg_spacing_exceeds_max_z": "Ties for V_z: the legs are {s} apart across the section, past the maximum {s_max}.",
+    "column_shear_exceeds_section_limit_y": (
+        "Shear V_y = {V} exceeds the most the section can carry, {V_max}: enlarge the section."
+    ),
+    "column_shear_exceeds_section_limit_z": (
+        "Shear V_z = {V} exceeds the most the section can carry, {V_max}: enlarge the section."
+    ),
+    "column_force_component_not_checked": (
+        "{component} = {value} is given but not checked: a column is checked for shear only, reading N_x, V_y and V_z."
+    ),
     "mesh_ratio_below_min_h": "Horizontal wall mesh: ρt = {rho} is below the required ρt = {rho_min}.",
     "mesh_ratio_below_min_v": "Vertical wall mesh: ρl = {rho} is below the minimum ρl,min = {rho_min}.",
     "mesh_ratio_above_max_v": "Vertical wall mesh: ρl = {rho} exceeds the maximum ρl,max = {rho_max}.",
@@ -346,7 +380,7 @@ def _q(value: float, kind: str, beam: "RectangularBeam") -> Quantity:
     return to_display(value, kind, beam.concrete.is_imperial)
 
 
-def _shown(values: Dict[str, Any], beam: "RectangularBeam") -> Dict[str, Any]:
+def _shown(values: Dict[str, Any], beam: "Section") -> Dict[str, Any]:
     """The values in the units the detailed reports print them in.
 
     Chosen by name: ``A_s*`` is an area, ``A_v*`` an area per length, ``s*`` a
@@ -368,7 +402,7 @@ def _shown(values: Dict[str, Any], beam: "RectangularBeam") -> Dict[str, Any]:
     return shown
 
 
-def _with_units(raw: _Raw, beam: "RectangularBeam") -> _Raw:
+def _with_units(raw: _Raw, beam: "Section") -> _Raw:
     raw.values = _shown(raw.values, beam)
     return raw
 
@@ -792,6 +826,63 @@ def wall_warnings(wall: "RectangularBeam", mesh: "WallMesh", checks: Tuple["Wall
             severity = float((check.V_u - V_max).magnitude)
             found.append(_Raw("shear_exceeds_section_limit", values, None, label, severity))
     return [_with_units(raw, wall) for raw in found]
+
+
+# ---------------------------------------------------------------------------
+# What a column shear check leaves
+# ---------------------------------------------------------------------------
+
+
+#: What a column's shear check does not read: the moments belong to its flexure.
+_COLUMN_UNREAD_COMPONENTS = ("M_x", "M_y", "M_z")
+
+
+def _past(value: Quantity, limit: Quantity) -> bool:
+    """``value`` past ``limit`` by more than rounding."""
+    limit = limit.to(value.units)
+    return bool(value > limit) and not math.isclose(value.magnitude, limit.magnitude)
+
+
+def column_shear_warnings(
+    column: "ColumnSection", checks: Tuple["ColumnShearCheck", ...], forces: Tuple["Forces", ...]
+) -> List[_Raw]:
+    """The limits the ties of a column miss, over every combination and direction checked.
+
+    Read off the results alone: the section limit everywhere, and where the
+    column needs shear reinforcement (``reinforcement_required``) the area and
+    the two spacings of its legs in that direction. Then the moments the
+    forces carry, which a shear check does not read.
+    """
+    found: List[_Raw] = []
+    for position, check in enumerate(checks):
+        label = combination_label(check.label, position // 2 + 1)
+        direction = check.direction
+        if _past(check.V_demand, check.V_max):
+            values: Dict[str, Any] = {"V": check.V_demand, "V_max": check.V_max, "direction": direction}
+            found.append(_Raw("column_shear_exceeds_section_limit", values, None, label, float(check.DCR)))
+        if not check.reinforcement_required:
+            continue
+        if _past(check.A_v_req, check.A_v):
+            values = {"A_v": check.A_v, "A_v_req": check.A_v_req, "direction": direction}
+            severity = float((check.A_v_req - check.A_v.to(check.A_v_req.units)).magnitude)
+            found.append(_Raw("column_ties_below_required", values, None, label, severity))
+        for code, s, s_max in (
+            ("column_tie_spacing_exceeds_max", check.s_l, check.s_max_l),
+            ("column_leg_spacing_exceeds_max", check.s_w, check.s_max_w),
+        ):
+            if s is not None and s_max is not None and _past(s, s_max):
+                values = {"s": s, "s_max": s_max.to(s.units), "direction": direction}
+                found.append(_Raw(code, values, None, label, float((s - s_max.to(s.units)).magnitude)))
+    for position, force in enumerate(forces, 1):
+        label = combination_label(force.label, position)
+        for name in _COLUMN_UNREAD_COMPONENTS:
+            value = getattr(force, name)
+            if value.magnitude != 0:
+                values = {"component": name, "value": value}
+                found.append(
+                    _Raw("column_force_component_not_checked", values, None, label, abs(float(value.magnitude)))
+                )
+    return [_with_units(raw, column) for raw in found]
 
 
 # ---------------------------------------------------------------------------
