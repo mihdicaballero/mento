@@ -3,16 +3,15 @@ Columns
 
 ``RectangularColumn`` and ``CircularColumn`` describe a column section -- its
 shape, its longitudinal bars and its ties -- and check its **shear in both
-directions**, with the axial load of each combination, under ACI 318-19 and
-CIRSOC 201-25.
+directions**, with the axial load of each combination, under ACI 318-19,
+CIRSOC 201-25 and EN 1992-1-1.
 
 .. note::
 
     The column checks shear only. Flexure with axial load (the P–M
     interaction) is not in mento yet, so ``check_flexure`` raises, and the
-    ties are checked but not designed: ``design`` raises too. EN 1992-1-1 is
-    the next step. The plan is ``docs/architecture/column-shear-roadmap.md``
-    in the repository.
+    ties are checked but not designed: ``design`` raises too. The plan is
+    ``docs/architecture/column-shear-roadmap.md`` in the repository.
 
 Axes and directions
 -------------------
@@ -24,8 +23,10 @@ The column runs along x (:doc:`local_axes`). ``width`` is measured along y and
   tension steel is the bars of a face of length ``width``.
 - ``V_y`` acts across ``width``: the same turned, ``height`` wide.
 
-``N_x`` enters both, positive in compression. The moments are not read, and a
-combination that carries them is warned about (``column_force_component_not_checked``).
+``N_x`` enters both, positive in compression. The moments are not verified,
+and a combination that carries them is warned about
+(``column_force_component_not_checked``); only an EN 1992-1-1 circle reads
+them, to tell whether it is cracked in bending.
 
 A rectangular column
 --------------------
@@ -84,8 +85,8 @@ circle in tension is checked as well as one in compression. A hoop counts as
 two legs. The tension steel of ρ_w is the bars past the centre line,
 ``(n - 1) // 2`` of them.
 
-What a column is checked for
-----------------------------
+What a column is checked for (ACI 318-19, CIRSOC 201-25)
+--------------------------------------------------------
 
 The resistance is the beam's -- V_c of Table 22.5.5.1 with ``N_u/(6·A_g)``,
 V_s of §22.5.8.5.3, the section limit of §22.5.1.2. What the column reads
@@ -109,6 +110,56 @@ Each result, :class:`~mento.column_results.ColumnShearCheck`, carries
 ``A_v_min``, ``V_capacity``, ``V_max``, the ``DCR`` and the spacings. The ties
 of the detailing (ACI 318-19 §25.7.2) are required everywhere and are not
 checked here.
+
+EN 1992-1-1
+-----------
+
+A rectangle is checked as a beam of the same section -- V_Rd,c of
+Expressions (6.2.a)/(6.2.b) with σ_cp, the truss of §6.2.3 at the strut angle
+the demand fixes, V_Rd,max of Expression (6.9) -- with what a column is asked
+for instead of what a beam is:
+
+- **When shear reinforcement is required**: §6.2.1(3), ``VEd > VRd,c``. Below
+  it a column is not held to the beam minimum of §9.2.2(5): its ties are those
+  of §9.5.3, which this check does not read. ``A_v_min`` is zero.
+- **How far apart**: there, §9.2.2(6) along the column and §9.2.2(8) across it.
+- **α_cw** is 1 by default, the value §6.2.3(3) Note 3 recommends "for
+  non-prestressed structures". ``alpha_cw_from_axial_load=True`` takes
+  Expression (6.11aN) with the compression of each combination instead:
+
+  .. code-block:: python
+
+      column = RectangularColumn(label="C1", concrete=concrete, steel_bar=steel,
+                                 width=30 * cm, height=50 * cm, c_c=25 * mm,
+                                 alpha_cw_from_axial_load=True)
+
+**A circle.** EN 1992-1-1 has no clause for one. mento checks it by Orr,
+Darby, Ibell, Denton and Shave, *Shear design of circular concrete sections
+using the Eurocode 2 truss model*, The Structural Engineer 88(23-24), 2010:
+
+- The truss of Expression (6.8) on the lever arm ``z`` between the chords,
+  times the share of the link that crosses the shear: λ1 for a circular link
+  (their Eq. (6), no more than the 0.85 of their Eq. (7)) and λ2 for a spiral
+  (Eq. (9); ``set_hoops(..., spiral=True)``).
+- V_Rd,max of Expression (6.9) on the web of their equivalent rectangle, the
+  narrower of the section at the compression chord and inside the links at
+  the tension chord (Eqs. (10)-(14)).
+- V_Rd,c as §6.2.2(2) asks: Expression (6.4) -- Orr's Eq. (17),
+  ``3πr²/4·√(f_ctd² + σ_cp·f_ctd)`` -- where the combination's flexural
+  tension ``M/W − N/A_c`` stays within f_ctd, with ``M`` the resultant of
+  ``M_y`` and ``M_z``; Expressions (6.2.a)/(6.2.b) on the equivalent rectangle
+  where it does not. Expression (6.4) on a cracked circle gives about twice
+  the cracked resistance at low axial load, which the clause does not allow.
+
+``d`` (to the tension chord) and ``z`` come from a sectional analysis, which
+mento does not run yet. By default the neutral axis is taken at the centre:
+``d = r + 2·r_s/π``, the centroid of the bars of one half, and ``z = 0.77·d``,
+the mean Orr et al. found over 38 tests. A sectional analysis can give its own
+under the moment that governs:
+
+.. code-block:: python
+
+    column.set_lever_arm(d=42 * cm, z=33 * cm)   # EN 1992-1-1 only; ACI takes d = 0.8·D
 
 Warnings
 --------

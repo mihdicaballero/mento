@@ -161,7 +161,9 @@ with ``values["direction"]``, ``"y"`` or ``"z"``, the shear it was found in:
 ``column_shear_exceeds_section_limit``
     The shear passes the most the section can carry, however it is tied.
 ``column_force_component_not_checked``
-    A moment is given that the shear check does not read.
+    A moment is given that nothing verifies: the column's flexure is not
+    checked. (Under EN 1992-1-1 a circle reads it to tell whether it is
+    cracked in bending, §6.2.2(2).)
 """
 
 from __future__ import annotations
@@ -305,7 +307,7 @@ _MESSAGES: Dict[str, str] = {
         "Shear V_z = {V} exceeds the most the section can carry, {V_max}: enlarge the section."
     ),
     "column_force_component_not_checked": (
-        "{component} = {value} is given but not checked: a column is checked for shear only, reading N_x, V_y and V_z."
+        "{component} = {value} is given but not verified: a column is checked for shear only."
     ),
     "mesh_ratio_below_min_h": "Horizontal wall mesh: ρt = {rho} is below the required ρt = {rho_min}.",
     "mesh_ratio_below_min_v": "Vertical wall mesh: ρl = {rho} is below the minimum ρl,min = {rho_min}.",

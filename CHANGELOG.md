@@ -31,6 +31,20 @@ from the release history and are summaries rather than complete lists.
   when read. The column checks shear only: flexure with axial load, tie design and EN
   1992-1-1 come later (`docs/architecture/column-shear-roadmap.md`, phase B). A new
   user-guide page, *Columns*.
+- **Column shear under EN 1992-1-1, rectangles and circles.** A rectangle is checked as
+  the EN beam of the same section (V_Rd,c with σ_cp, the truss at the angle the demand
+  fixes, V_Rd,max), giving its numbers where the clauses agree. A column needs shear
+  reinforcement only past V_Rd,c (§6.2.1(3)) and is not held to the beam minimum of
+  §9.2.2(5): its ties are §9.5.3. α_cw is 1 unless `alpha_cw_from_axial_load=True`
+  takes Expression (6.11aN) with the axial compression. A circle, which EN 1992-1-1 does
+  not cover, is checked by Orr et al. (*The Structural Engineer* 88(23-24), 2010): the
+  truss on the lever arm between the chords times the share of a circular link (λ1, no
+  more than 0.85) or a spiral (λ2; `set_hoops(..., spiral=True)`), and V_Rd,max on the
+  web of their equivalent rectangle. Its V_Rd,c follows §6.2.2(2): Expression (6.4)
+  (Orr's Eq. (17)) only where the combination's moments leave it uncracked in bending,
+  Expressions (6.2.a)/(6.2.b) on the equivalent rectangle elsewhere. d and z default to a
+  neutral axis at the centre and z = 0.77·d; `CircularColumn.set_lever_arm(d, z)` takes
+  those of a sectional analysis. Roadmap phase C.
 - **`ShearCheck.V_concrete`: the share of the concrete under the combination's axial
   load.** ØVc of ACI 318-19 / CIRSOC 201-25 Table 22.5.5.1 (the row the stirrups
   provided select) and VRd,c of EN 1992-1-1 §6.2.2(1), with N_u/(6·A_g) and σ_cp. It is

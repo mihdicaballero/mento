@@ -280,6 +280,230 @@ def test_a_us_customary_column_reports_in_kip_and_inches() -> None:
 
 
 # ---------------------------------------------------------------------------
+# EN 1992-1-1
+# ---------------------------------------------------------------------------
+
+EN_STEEL = SteelBar(name="B500S", f_y=500 * MPa)
+
+
+def _en_column(**kwargs: Any) -> RectangularColumn:
+    column = RectangularColumn(
+        label="C1",
+        concrete=Concrete_EN_1992_2004(name="C30", f_c=30 * MPa),
+        steel_bar=EN_STEEL,
+        width=30 * cm,
+        height=50 * cm,
+        c_c=25 * mm,
+        **kwargs,
+    )
+    column.set_longitudinal_rebar(d_b_corner=20 * mm, n_width=1, d_b_width=16 * mm)
+    return column
+
+
+@pytest.mark.parametrize("N_kN", [500.0, 0.0, -300.0], ids=["compression", "no-axial", "tension"])
+@pytest.mark.parametrize("V_kN", [40.0, 150.0, 600.0])
+@pytest.mark.parametrize("ties", [True, False], ids=["ties", "bare"])
+def test_the_en_z_direction_is_the_beam_of_the_same_rectangle(N_kN: float, V_kN: float, ties: bool) -> None:
+    """V_z of the EN column against the EN beam of the same rectangle: V_Rd,c
+    with σ_cp, the truss at the angle the demand fixes, V_Rd,max, the DCR, and
+    the spacings of §9.2.2(6), (8) where shear reinforcement is required. The
+    area asked for is compared past V_Rd,c and the §9.2.2(5) minimum the beam
+    keeps (2.63 cm²/m on this one), which a column does not."""
+    column = _en_column()
+    beam = RectangularBeam(
+        label="B", concrete=column.concrete, steel_bar=EN_STEEL, width=30 * cm, height=50 * cm, c_c=25 * mm
+    )
+    beam.set_longitudinal_rebar_bot(2, 20 * mm, 1, 16 * mm)
+    beam.set_longitudinal_rebar_top(2, 20 * mm, 1, 16 * mm)
+    if ties:
+        column.set_ties(d_b=10 * mm, s=20 * cm)
+        beam.set_transverse_rebar(d_b=10 * mm, s_l=20 * cm, legs=2)
+    else:
+        beam.set_transverse_rebar(0, 0 * mm, 0 * cm)
+    force = Forces(label="U", N_x=N_kN * kN, V_z=V_kN * kN)
+
+    (on_beam,) = beam.shear_check_results([force])
+    on_column = _z(column.shear_check_results([force]))
+
+    assert on_column.V_concrete.to("kN").magnitude == pytest.approx(on_beam.V_concrete.to("kN").magnitude, rel=1e-9)
+    assert on_column.V_capacity.to("kN").magnitude == pytest.approx(on_beam.V_capacity.to("kN").magnitude, rel=1e-9)
+    assert on_column.DCR == pytest.approx(on_beam.DCR, rel=1e-9)
+    if V_kN >= 150:
+        assert on_column.reinforcement_required
+        assert on_column.A_v_req.to("cm**2/m").magnitude == pytest.approx(
+            on_beam.A_v_req.to("cm**2/m").magnitude, rel=1e-9
+        )
+    if V_kN >= 150 and ties:
+        assert on_column.s_max_l.to("cm").magnitude == pytest.approx(on_beam.s_max_l_table.to("cm").magnitude)
+
+
+def test_an_en_rectangle_by_hand() -> None:
+    """30x50, C30, B500S, cover 25 mm, Ø20 corners and 1Ø16 between them on the
+    faces of length 30, tie Ø10 every 20 cm; N_Ed = 500 kN, V_z = 150 kN.
+
+    d = 500 - 25 - 10 - 9.52 = 455.5 mm; k = 1 + √(200/455.5) = 1.663;
+    ρ_l = 829.4/(300·455.5) = 0.00607; f_cd = 30/1.5 = 20 MPa (α_cc = 1 for
+    shear); σ_cp = 500000/150000 = 3.33 MPa, under 0.2·f_cd = 4. Expression
+    (6.2.a): (0.12·1.663·(100·0.00607·30)^(1/3) + 0.15·3.33)·300·455.5 =
+    140.0 kN, above the (6.2.b) floor. 150 kN > V_Rd,c: shear reinforcement
+    required (§6.2.1(3)). z = 0.9·d = 409.9 mm, ν1 = 0.6·(1 - 30/250) = 0.528,
+    V_Rd,max at cot θ = 2.5: 300·409.9·0.528·20/2.9 = 447.8 kN, so θ = 21.8°.
+    A_sw/s,req = 150000/(409.9·434.8·2.5) = 0.337 mm²/mm, with no §9.2.2(5)
+    minimum. V_Rd,s = 0.785·409.9·434.8·2.5 = 349.9 kN, under V_Rd,max.
+    """
+    column = _en_column()
+    column.set_ties(d_b=10 * mm, s=20 * cm)
+    check = _z(column.shear_check_results([Forces(label="U", N_x=500 * kN, V_z=150 * kN)]))
+
+    A_s = 2 * math.pi * 20**2 / 4 + math.pi * 16**2 / 4
+    d = 500 - 25 - 10 - (2 * math.pi * 20**2 / 4 * 10 + math.pi * 16**2 / 4 * 8) / A_s
+    k = 1 + math.sqrt(200 / d)
+    V_Rd_c = (0.18 / 1.5 * k * (100 * A_s / (300 * d) * 30) ** (1 / 3) + 0.15 * 500e3 / 150e3) * 300 * d
+    z, f_ywd = 0.9 * d, 500 / 1.15
+    cot = 1 / math.tan(math.radians(21.8))  # the 2.5 of §6.2.3(2), as mento takes θ = 21.8°
+    A_v = 2 * math.pi * 10**2 / 4 / 200
+    assert check.V_concrete.to("kN").magnitude == pytest.approx(V_Rd_c / 1e3)
+    assert check.reinforcement_required
+    assert check.A_v_min.magnitude == 0
+    assert check.A_v_req.to("cm**2/m").magnitude == pytest.approx(150e3 / (z * f_ywd * cot) * 10)
+    assert check.V_capacity.to("kN").magnitude == pytest.approx(A_v * z * f_ywd * cot / 1e3)
+    assert check.V_max.to("kN").magnitude == pytest.approx(300 * z * 0.528 * 20 / 2 / 1e3)
+    assert check.s_max_l.to("mm").magnitude == pytest.approx(0.75 * d)
+
+
+def test_an_en_column_under_v_rd_c_asks_for_no_minimum() -> None:
+    """§6.2.1(4) asks a beam for the minimum of §9.2.2 under V_Rd,c; a column's
+    ties are §9.5.3, detailing. The column of the test above under 40 kN."""
+    column = _en_column()
+    column.set_ties(d_b=6 * mm, s=30 * cm)
+    check = _z(column.shear_check_results([Forces(label="U", N_x=500 * kN, V_z=40 * kN)]))
+    assert not check.reinforcement_required
+    assert check.A_v_req.magnitude == 0 and check.s_max_l is None
+    assert column.warnings == ()
+
+
+def test_alpha_cw_takes_the_axial_compression_only_when_asked() -> None:
+    """Expression (6.11aN): σ_cp = 500000/150000 = 3.33 MPa, under 0.25·f_cd = 5,
+    so α_cw = 1 + 3.33/20 = 1.167 and V_Rd,max grows by as much. By default, and
+    in tension, α_cw stays 1 (D4)."""
+    force = [Forces(label="U", N_x=500 * kN, V_z=150 * kN)]
+    default, opted = _en_column(), _en_column(alpha_cw_from_axial_load=True)
+    for column in (default, opted):
+        column.set_ties(d_b=10 * mm, s=20 * cm)
+    ratio = _z(opted.shear_check_results(force)).V_max / _z(default.shear_check_results(force)).V_max
+    assert ratio.to("").magnitude == pytest.approx(1 + 500e3 / 150e3 / 20)
+
+    tension = [Forces(label="T", N_x=-300 * kN, V_z=150 * kN)]
+    assert _z(opted.shear_check_results(tension)).V_max == _z(default.shear_check_results(tension)).V_max
+
+
+def _en_circle() -> CircularColumn:
+    column = CircularColumn(
+        label="C2",
+        concrete=Concrete_EN_1992_2004(name="C30", f_c=30 * MPa),
+        steel_bar=EN_STEEL,
+        diameter=50 * cm,
+        c_c=30 * mm,
+    )
+    column.set_longitudinal_rebar(n=8, d_b=20 * mm)
+    column.set_hoops(d_b=10 * mm, s=15 * cm)
+    return column
+
+
+#: Ø50, cover 30, hoop Ø10, 8Ø20: r = 250, r_s = 250 - 30 - 10 - 10 = 200,
+#: r_sv = 250 - 30 - 5 = 215, and by default d = r + 2·r_s/π, z = 0.77·d.
+_R, _R_SV = 250.0, 215.0
+_D_TRUSS = _R + 2 * 200 / math.pi
+_Z_TRUSS = 0.77 * _D_TRUSS
+_F_CTD = 0.7 * 0.3 * 30 ** (2 / 3) / 1.5
+_F_YWD = 500 / 1.15
+_COT = 1 / math.tan(math.radians(21.8))
+
+
+def test_an_en_circle_uncracked_in_bending_takes_expression_6_4() -> None:
+    """N_Ed = 1000 kN and no moment: M/W - N/A_c = -5.09 MPa, under f_ctd =
+    1.35 MPa, so §6.2.2(2) admits Expression (6.4), Orr's Eq. (17):
+    V_Rd,c = 3π·250²/4·√(1.35² + 5.09·1.35) = 434.6 kN, past V_Ed = 250 kN."""
+    check = _z(_en_circle().shear_check_results([Forces(label="U", N_x=1000 * kN, V_z=250 * kN)]))
+    sigma = 1000e3 / (math.pi * _R**2)
+    expected = 3 * math.pi * _R**2 / 4 * math.sqrt(_F_CTD**2 + sigma * _F_CTD)
+    assert check.V_concrete.to("kN").magnitude == pytest.approx(expected / 1e3)
+    assert not check.reinforcement_required
+
+
+def test_an_en_circle_cracked_in_bending_takes_the_truss_of_orr() -> None:
+    """N_Ed = 1000 kN, M_y = 200 kNm: M/W - N/A_c = 16.3 - 5.09 = 11.2 MPa,
+    past f_ctd, so the circle is cracked and V_Rd,c is Expression (6.2.a) on
+    the equivalent rectangle: B_w = min(2√(c(2r - c)), 2√(e(2r_sv - e))) with
+    c = d - z and e = r + r_sv - d (Orr's Eqs. (10)-(13)), σ_cp capped at
+    0.2·f_cd = 4 MPa. V_Ed = 250 kN asks for links: λ1 by Eq. (6) passes 0.85
+    here, so 0.85, and A_sw/s = V_Ed/(0.85·z·f_ywd·cot θ)."""
+    check = _z(_en_circle().shear_check_results([Forces(label="U", N_x=1000 * kN, M_y=200 * kNm, V_z=250 * kN)]))
+    d, z = _D_TRUSS, _Z_TRUSS
+    c, e = d - z, _R + _R_SV - d
+    B_w = min(2 * math.sqrt(c * (2 * _R - c)), 2 * math.sqrt(e * (2 * _R_SV - e)))
+    rho_l = 3 * math.pi * 20**2 / 4 / (B_w * d)
+    k = 1 + math.sqrt(200 / d)
+    V_Rd_c = (0.12 * k * (100 * rho_l * 30) ** (1 / 3) + 0.15 * 4.0) * B_w * d
+    assert check.b_w.to("mm").magnitude == pytest.approx(B_w)
+    assert check.d.to("mm").magnitude == pytest.approx(d)
+    assert check.V_concrete.to("kN").magnitude == pytest.approx(V_Rd_c / 1e3)
+    assert check.reinforcement_required
+    assert check.A_v_req.to("mm**2/mm").magnitude == pytest.approx(250e3 / (0.85 * z * _F_YWD * _COT))
+    A_v = 2 * math.pi * 10**2 / 4 / 150
+    assert check.V_capacity.to("kN").magnitude == pytest.approx(0.85 * A_v * z * _F_YWD * _COT / 1e3)
+    assert check.s_max_l.to("mm").magnitude == pytest.approx(0.75 * d)
+
+
+def test_the_lever_arm_of_an_analysis_replaces_the_default() -> None:
+    """d = 450, z = 400 mm from a sectional analysis: z_0 = d - r = 200 mm and
+    Eq. (6) gives λ1 = 0.826, under 0.85, which the truss then takes."""
+    column = _en_circle()
+    column.set_lever_arm(d=450 * mm, z=400 * mm)
+    check = _z(column.shear_check_results([Forces(label="U", M_y=100 * kNm, V_z=150 * kN)]))
+    from mento.codes.en_1992_2004.equations.shear import circular_link_efficiency
+
+    lambda_1 = circular_link_efficiency(200.0, 400.0, _R_SV)
+    assert lambda_1 == pytest.approx(0.826, abs=0.001)
+    assert check.d.to("mm").magnitude == pytest.approx(450)
+    assert check.A_v_req.to("mm**2/mm").magnitude == pytest.approx(150e3 / (lambda_1 * 400 * _F_YWD * _COT))
+    column.set_lever_arm()
+    assert _z(column.shear_check_results([Forces(label="U", V_z=150 * kN)])).d.to("mm").magnitude == pytest.approx(
+        _D_TRUSS
+    )
+
+
+def test_a_spiral_asks_for_more_than_hoops_by_its_pitch() -> None:
+    """λ2 = ((p/(2π·r_sv))² + 1)^-0.5 with p = 150 mm, r_sv = 215 mm: 0.9939."""
+    force = [Forces(label="U", M_y=200 * kNm, V_z=250 * kN)]
+    hoops, spiral = _en_circle(), _en_circle()
+    spiral.set_hoops(d_b=10 * mm, s=15 * cm, spiral=True)
+    ratio = _z(spiral.shear_check_results(force)).A_v_req / _z(hoops.shear_check_results(force)).A_v_req
+    assert ratio.to("").magnitude == pytest.approx(((150 / (2 * math.pi * _R_SV)) ** 2 + 1) ** 0.5)
+
+
+def test_the_lever_arm_is_validated_and_aci_does_not_read_it() -> None:
+    column = _en_circle()
+    with pytest.raises(ValueError, match="both"):
+        column.set_lever_arm(d=40 * cm)
+    with pytest.raises(ValueError, match="shorter"):
+        column.set_lever_arm(d=40 * cm, z=45 * cm)
+    aci = CircularColumn(
+        label="C",
+        concrete=Concrete_ACI_318_19(name="H25", f_c=25 * MPa),
+        steel_bar=STEEL,
+        diameter=50 * cm,
+        c_c=30 * mm,
+    )
+    aci.set_longitudinal_rebar(n=8, d_b=20 * mm)
+    aci.set_hoops(d_b=10 * mm, s=15 * cm)
+    before = _z(aci.shear_check_results([Forces(label="U", V_z=100 * kN)]))
+    aci.set_lever_arm(d=45 * cm, z=40 * cm)
+    after = _z(aci.shear_check_results([Forces(label="U", V_z=100 * kN)]))
+    assert after.d == before.d and after.DCR == before.DCR
+
+
+# ---------------------------------------------------------------------------
 # The element
 # ---------------------------------------------------------------------------
 
@@ -313,9 +537,6 @@ def test_what_the_column_does_not_do_says_so() -> None:
     for call in (column.design, column.design_shear, column.check_flexure, column.design_flexure):
         with pytest.raises(NotImplementedError, match="column-shear-roadmap"):
             call(force)
-    en = _column(Concrete_EN_1992_2004(name="C25", f_c=25 * MPa))
-    with pytest.raises(NotImplementedError, match="EN 1992-2004"):
-        en.shear_check_results(force)
 
 
 @pytest.mark.parametrize(

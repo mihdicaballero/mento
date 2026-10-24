@@ -30,13 +30,19 @@ class ColumnShearCheck:
     A circle reads the same section both ways.
 
     ``V_concrete`` is the share of the concrete under the combination's axial
-    load: ``ØVc`` under ACI 318-19 and CIRSOC 201-25. ``reinforcement_required``
-    is whether the demand passes the share a column has to reinforce past:
-    ``Vu > 0.5·ØVc`` of §10.6.2.1. Only there do ``A_v_min`` (Table 10.6.2.2),
-    ``A_v_req`` and the spacing limits of Table 10.7.6.5.2 (``s_max_l``,
+    load: ``ØVc`` under ACI 318-19 and CIRSOC 201-25, ``VRd,c`` under EN
+    1992-1-1. ``reinforcement_required`` is whether the demand passes the share
+    a column has to reinforce past: ``Vu > 0.5·ØVc`` of ACI §10.6.2.1,
+    ``VEd > VRd,c`` of EN §6.2.1(3). Only there do ``A_v_req``, ``A_v_min``
+    (ACI Table 10.6.2.2; zero under EN, where a column's ties are §9.5.3) and
+    the spacing limits (ACI Table 10.7.6.5.2, EN §9.2.2(6) and (8): ``s_max_l``,
     ``s_max_w``) apply; elsewhere ``A_v_req`` and ``A_v_min`` are zero and the
     limits ``None``. A column is held to the ties of its detailing everywhere,
     which this check does not read.
+
+    ``b_w`` and ``d`` are the section the check used: under EN 1992-1-1 a
+    circle reports the web of the equivalent rectangle of Orr et al. (2010)
+    and the depth to its tension chord.
 
     ``V_capacity`` is the design resistance the ``DCR`` was formed from, so
     ``V_demand / DCR`` gives it back, and ``V_max`` the most the section can

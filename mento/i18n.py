@@ -338,12 +338,8 @@ ES.update(
         "Shear V_z = {V} exceeds the most the section can carry, {V_max}: enlarge the section.": (
             "El corte V_z = {V} supera el máximo que admite la sección, {V_max}: hay que agrandarla."
         ),
-        (
-            "{component} = {value} is given but not checked: a column is checked for shear only, "
-            "reading N_x, V_y and V_z."
-        ): (
-            "{component} = {value} está dado pero no se verifica: una columna se verifica sólo a corte, "
-            "con N_x, V_y y V_z."
+        "{component} = {value} is given but not verified: a column is checked for shear only.": (
+            "{component} = {value} está dado pero no se verifica: una columna se verifica sólo a corte."
         ),
         "Horizontal wall mesh: ρt = {rho} is below the required ρt = {rho_min}.": (
             "Malla horizontal del muro: ρt = {rho} es menor que la requerida ρt = {rho_min}."

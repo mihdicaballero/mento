@@ -457,3 +457,8 @@ def test_min_stirrup_diameter_for_compression_support_us(d_b_long, expected):
 def test_min_stirrup_diameter_for_compression_support_cirsoc(d_b_long, expected):
     """CIRSOC 201-25 Tabla 9.7.6.4.2: 6 mm to Ø16, 8 mm to Ø25, 10 mm to Ø32, 12 mm above."""
     assert eq.min_stirrup_diameter_for_compression_support_cirsoc(d_b_long) == expected
+
+
+def test_column_shear_reinforcement_threshold_is_half_phi_V_c():
+    """ACI 318-19 §10.6.2.1: A_v,min where V_u > 0.5·φ·V_c."""
+    assert eq.column_shear_reinforcement_threshold(121_300.0) == pytest.approx(60_650.0)

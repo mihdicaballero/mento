@@ -86,7 +86,8 @@ class ColumnShearSection:
     gross area of the axial term. ``A_v`` is the area of the legs that cross
     the shear, per length; ``s_l`` the tie spacing along the column and ``s_w``
     the largest distance between adjacent legs across it -- zero where there
-    are no ties, and ``s_w`` zero in a circle.
+    are no ties, and ``s_w`` zero in a circle. ``circular`` says which shape
+    it is, for a code whose rules differ by shape.
     """
 
     direction: Direction
@@ -100,6 +101,14 @@ class ColumnShearSection:
     s_w: float
     f_c: float
     f_y: float
+    circular: bool = False
+    #: A circle under EN 1992-1-1 (Orr et al., 2010): the radius to the links'
+    #: centreline, the depth to the tension chord, the lever arm, and the pitch
+    #: of a spiral (0 for hoops). Zero for a rectangle, which does not read them.
+    r_sv: float = 0.0
+    d_truss: float = 0.0
+    z_truss: float = 0.0
+    pitch: float = 0.0
 
 
 @dataclass
@@ -109,7 +118,16 @@ class ColumnSection(Section):
     Not built directly: :class:`RectangularColumn` or :class:`CircularColumn`.
     Any change to the bars or the ties drops the results of the last check,
     which described the section as it was.
+
+    ``alpha_cw_from_axial_load`` is read under EN 1992-1-1 only. ``False``,
+    the default, keeps α_cw = 1 in V_Rd,max, the value §6.2.3(3) Note 3
+    recommends "for non-prestressed structures" and the safe side. ``True``
+    takes Expression (6.11aN) with the compression of each combination,
+    N_Ed/A_c -- a reading of the Note that still waits for a source
+    (``docs/architecture/column-shear-roadmap.md``, D4).
     """
+
+    alpha_cw_from_axial_load: bool = field(default=False, kw_only=True)
 
     def __post_init__(self) -> None:
         super().__post_init__()
@@ -370,13 +388,23 @@ class RectangularColumn(ColumnSection):
 
 @dataclass
 class CircularColumn(ColumnSection):
-    """A circular column section of ``diameter``, with ``n`` bars round it and hoops.
+    """A circular column section of ``diameter``, with ``n`` bars round it and hoops or a spiral.
 
-    Checked as ACI 318-19 §22.5.2.2 allows, ``b_w = D`` and ``d = 0.8·D``,
-    with the gross area of the circle in the axial term. A hoop crosses the
-    shear twice, so it counts as two legs. The tension steel of ρ_w is the
-    bars past the centre line, ``(n - 1) // 2`` of them -- no more than the
-    circle has on one side, whatever way it is turned::
+    Under ACI 318-19 and CIRSOC 201-25 it is checked as §22.5.2.2 allows,
+    ``b_w = D`` and ``d = 0.8·D``, with the gross area of the circle in the
+    axial term. A hoop crosses the shear twice, so it counts as two legs. The
+    tension steel of ρ_w is the bars past the centre line, ``(n - 1) // 2`` of
+    them -- no more than the circle has on one side, whatever way it is
+    turned.
+
+    EN 1992-1-1 has no clause for a circle; it is checked by the truss of
+    Orr et al. (2010), which needs the depth ``d`` to the tension chord and
+    the lever arm ``z``. They come from a sectional analysis of each
+    combination, which mento does not run yet: by default ``d`` puts the
+    neutral axis at the centre, so the tension chord is the centroid of the
+    bars of one half, ``r + 2·r_s/π``, and ``z = 0.77·d``, the mean Orr et al.
+    found over 38 of Clarke's tests. :meth:`set_lever_arm` takes the ones of
+    an analysis instead::
 
         column = CircularColumn(label="C2", concrete=concrete, steel_bar=steel, diameter=50 * cm, c_c=30 * mm)
         column.set_longitudinal_rebar(n=8, d_b=20 * mm)
@@ -392,6 +420,8 @@ class CircularColumn(ColumnSection):
             raise ValueError("c_c must be less than half of the diameter.")
         self._n_bars: int = 0
         self._d_b: float = 0.0
+        self._spiral: bool = False
+        self._lever_arm: Optional[Tuple[float, float]] = None
 
     @property
     def A_x(self) -> Quantity:
@@ -405,19 +435,70 @@ class CircularColumn(ColumnSection):
         self._n_bars, self._d_b = n, _length_mm("d_b", d_b)
         self._drop_results()
 
-    def set_hoops(self, d_b: Quantity, s: Quantity) -> None:
-        """Set circular hoops of ``d_b`` every ``s``; both zero remove them."""
+    def set_hoops(self, d_b: Quantity, s: Quantity, *, spiral: bool = False) -> None:
+        """Set circular hoops of ``d_b`` every ``s``, or a spiral of pitch ``s``; both zero remove them.
+
+        A spiral leans along the column by its pitch, which EN 1992-1-1, by Orr
+        et al. (2010), reads as a smaller share of its force across the
+        section (λ2); ACI 318-19 counts it as hoops.
+        """
         self._set_tie(d_b, s)
+        self._spiral = bool(spiral)
+        self._drop_results()
+
+    def set_lever_arm(self, d: Optional[Quantity] = None, z: Optional[Quantity] = None) -> None:
+        """Set the depth to the tension chord and the lever arm EN 1992-1-1 checks a circle with.
+
+        From a sectional analysis of the column under the moment that governs,
+        which Orr et al. (2010) recommend applying along the member: the
+        largest compression chord, and so the smallest ``z``, is the safe side.
+        Both ``None`` go back to the default of the class docstring. ACI 318-19
+        does not read them: it takes ``d = 0.8·D``.
+        """
+        if d is None and z is None:
+            self._lever_arm = None
+        else:
+            if d is None or z is None:
+                raise ValueError("Give both d and z, or neither.")
+            d_mm, z_mm = _length_mm("d", d), _length_mm("z", z)
+            if not z_mm < d_mm <= self.diameter.to(mm).magnitude:
+                raise ValueError("The lever arm must be shorter than d, and d no deeper than the diameter.")
+            self._lever_arm = (d_mm, z_mm)
         self._drop_results()
 
     def _build_shear_section(self, direction: Direction) -> ColumnShearSection:
         if self._n_bars == 0:
             raise ValueError("Set the longitudinal bars first: ρ_w of the shear comes from them.")
-        imperial, one_mm, _c, f_c, f_y = self._floats()
+        imperial, one_mm, c, f_c, f_y = self._floats()
         D = float(self.diameter.to(CANONICAL[imperial]["length"]).magnitude)
         A_s = (self._n_bars - 1) // 2 * _bar_area(self._d_b * one_mm)
+        hoop, bar = self._tie_d_b * one_mm, self._d_b * one_mm
         A_v = s_l = 0.0
         if self._tie_s > 0:
             s_l = self._tie_s * one_mm
-            A_v = 2 * _bar_area(self._tie_d_b * one_mm) / s_l
-        return ColumnShearSection(direction, imperial, D, 0.8 * D, math.pi * D**2 / 4, A_s, A_v, s_l, 0.0, f_c, f_y)
+            A_v = 2 * _bar_area(hoop) / s_l
+        r = D / 2
+        r_sv = r - c - hoop / 2
+        if self._lever_arm is None:
+            d_truss = r + 2 * (r - c - hoop - bar / 2) / math.pi
+            z_truss = 0.77 * d_truss
+        else:
+            d_truss, z_truss = (value * one_mm for value in self._lever_arm)
+        return ColumnShearSection(
+            direction,
+            imperial,
+            D,
+            0.8 * D,
+            math.pi * D**2 / 4,
+            A_s,
+            A_v,
+            s_l,
+            0.0,
+            f_c,
+            f_y,
+            circular=True,
+            r_sv=r_sv,
+            d_truss=d_truss,
+            z_truss=z_truss,
+            pitch=s_l if self._spiral else 0.0,
+        )

@@ -1,7 +1,7 @@
 # Column shear — module roadmap
 
 Status: **accepted** (2026-10-24), with decisions D1–D7 of §6 taken by the owner the same
-day. Phases A and B done the same day, except B's published example (see Phase B).
+day. Phases A, B and C done the same day, except B's published example (see Phase B).
 Origin: the five requests mako's column shear (C12) left
 for mento, collected in mako issue
 [#117](https://github.com/mihdicaballero/mako/issues/117).
@@ -169,9 +169,9 @@ raise `NotImplementedError` pointing to this document.
 | V_Rd,c with σ_cp ≤ 0.2·f_cd | §6.2.2(1) | existing |
 | Whether shear reinforcement is required | §6.2.1(3): V_Ed > V_Rd,c | existing comparison; **no** §9.2.2(5) minimum (a column is §9.5.3) |
 | V_Rd,s, V_Rd,max | §6.2.3, Expressions (6.8), (6.9) | existing |
-| α_cw under compression (ask 5) | Expression (6.11aN) | **new** `alpha_cw(sigma_cp, f_cd)`; whether to apply it is D4 |
+| α_cw under compression (ask 5) | Expression (6.11aN) | **new** `compression_chord_coefficient(sigma_cp, f_cd)`; whether to apply it is D4 |
 | Spacing for shear | §9.2.2(6), (8) where required (mako's reading today) | existing |
-| Circular section | **no clause**: Orr et al. (2010), D3 | **new**, transcribed from the paper with its worked example |
+| Circular section | **no clause**: Orr et al. (2010), D3 | **new**, transcribed from the paper: λ1, λ2, B_w, Expression (6.4) for a circle |
 
 ### 4.3 Detailing (later phase, as warnings, not part of shear)
 
@@ -233,6 +233,33 @@ Each phase lands on green tests, in its own PR from `main`.
 - The same checker for EN, α_cw per D4, the circle by Orr et al. (D3).
 - Exit: hand calculations, a published example for the rectangle, and for the circle the
   worked example of Orr et al.
+- *Done (2026-10-24).* `mento/codes/EN_1992_2004_column.py`, registered as the EN
+  `check_column_shear`; the equations `compression_chord_coefficient` (6.11aN),
+  `design_tensile_strength`, `uncracked_shear_resistance_circle`, `circle_flexural_tension`,
+  `circular_link_efficiency`, `spiral_efficiency` and `circular_equivalent_web_width`;
+  `alpha_cw_from_axial_load`, `CircularColumn.set_lever_arm(d, z)` and
+  `set_hoops(..., spiral=True)`. The rectangle gives the EN beam's numbers to 10⁻⁹ in
+  compression, without axial load and in tension, with ties and bare.
+- What the exit criteria asked and what there is:
+  - Orr et al. publish no worked example. They report predictions against tests, from a
+    sectional analysis whose inputs (cover, link yield) are not all in the paper.
+    `tests/validation/test_column_shear_validated.py` holds the two numbers the paper does
+    print: λ1 = 0.85 for z = 0.8·D, r_sv = 0.45·D (Eq. (7); Eq. (6) gives 0.8450) and
+    λ2 = 1 at zero pitch.
+  - The rectangle's published example is still open, as in Phase B.
+- Three decisions taken while building it (owner, 2026-10-24):
+  - **d and z of a circle.** Orr et al. take them from a sectional analysis of each
+    combination, which mento does not have yet. By default the neutral axis is at the
+    centre (d = r + 2·r_s/π) and z = 0.77·d, the mean they found over 38 of Clarke's
+    tests. `set_lever_arm(d, z)` takes the values of an analysis, such as mako's.
+  - **V_Rd,c of a circle follows §6.2.2(2).** Orr's Eq. (17) is Expression (6.4),
+    which applies only where the section is uncracked in bending. On a cracked Ø50 with
+    no axial load it gave 199 kN, against 96 kN from Expression (6.2.a). mento reads the
+    combination's moments: (6.4) where M/W − N/A_c ≤ f_ctd, otherwise (6.2.a)/(6.2.b) on
+    the equivalent rectangle (B_w, d).
+  - **λ1 is capped at 0.85.** Orr recommend Eq. (6) over the 0.85 of Eq. (7), but note
+    λ1 ≤ 0.85 on the sections they analysed. With the default d, Eq. (6) gives about
+    0.91, so mento takes the smaller of the two.
 
 **Phase D — reports.** `shear_results_detailed` / `_doc` for a column through `reports/`, in
 both languages.
