@@ -74,6 +74,12 @@ from the release history and are summaries rather than complete lists.
 
 ### Fixed
 
+- **No warnings from pandas 3.1 in the bar searches.** pandas 3.1 deprecates the
+  `inplace` keyword of `sort_values` and `reset_index` (PDEP-8), and the stirrup and
+  bar searches of `mento/rebar.py` used it. Every design raised a `Pandas4Warning`, and
+  that warning failed the slab summary's test of the warnings it emits. The searches now
+  assign the sorted frame. The options and their order do not change.
+
 - **EN 1992-1-1: the resistance credits compression steel at the stress its strain
   gives it, not at f_yd.** Past the ductility limit M_Rd held the neutral axis at
   x_u,lim and paired the tension steel past A_s,lim with the compression steel at

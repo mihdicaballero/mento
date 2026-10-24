@@ -508,8 +508,7 @@ class Rebar:
         df = pd.DataFrame(combinations)
         # Sort combinations by the total rebar area required (ascending)
         # Sort by 'A_v' first, then by 'n_stir' to prioritize fewer bars
-        df.sort_values(by=["n_stir", "A_v"], inplace=True)
-        df.reset_index(drop=True, inplace=True)
+        df = df.sort_values(by=["n_stir", "A_v"]).reset_index(drop=True)
         return df
 
     @contextmanager
@@ -706,8 +705,9 @@ class Rebar:
             df_combinations["functional"] = self._stirrup_excess(
                 list(df_combinations["A_v"]), list(df_combinations["A_v_req"])
             )
-            df_combinations.sort_values(by=["A_v", "s_l"], ascending=[True, False], inplace=True)
-            df_combinations.reset_index(drop=True, inplace=True)
+            df_combinations = df_combinations.sort_values(by=["A_v", "s_l"], ascending=[True, False]).reset_index(
+                drop=True
+            )
         self._trans_combos_df = df_combinations
         return df_combinations
 
@@ -1010,8 +1010,7 @@ class Rebar:
         if not df.empty:
             modified_df = self._calculate_penalties_long_rebar(df)
             # Sort by 'Functional' to sort by the best options
-            modified_df.sort_values(by=["functional"], inplace=True)
-            modified_df.reset_index(drop=True, inplace=True)
+            modified_df = modified_df.sort_values(by=["functional"]).reset_index(drop=True)
             self._long_combos_df = modified_df
             return modified_df.head(10)
         else:
