@@ -472,8 +472,8 @@ def _run_flexure_design(
         A_s_comp_top = demand_bot.A_s_compression  # compression req. on top from bottom moment
 
         # init in case no negative moment branch runs
-        A_s_comp_bot = 0 * (cm**2)
-        A_s_final_top_Negative_M = 0 * (cm**2)
+        A_s_comp_bot: Quantity = 0 * (cm**2)
+        A_s_final_top_Negative_M: Quantity = 0 * (cm**2)
         self._A_s_top = A_s_comp_top
         demand_top: Optional[_FaceDemand] = None
 
