@@ -31,6 +31,14 @@ from the release history and are summaries rather than complete lists.
   when read. The column checks shear only: flexure with axial load, tie design and EN
   1992-1-1 come later (`docs/architecture/column-shear-roadmap.md`, phase B). A new
   user-guide page, *Columns*.
+- **The shear report of a column.** `shear_results_detailed()` prints, and
+  `shear_results_detailed_doc()` saves as Word, the shear of the governing combination (or
+  the one passed) in both directions: materials, geometry with the ties and crossties,
+  forces, and per direction the limit checks of the ties and the resistances in the
+  code's symbols (`DesignCode.column_shear_symbols`), ending on the DCR. `column.data` and
+  `column.results` give one line each in a notebook. In English and Spanish. Built from
+  the `ColumnShearCheck` results in `mento/reports/columns.py`, which checking a column
+  does not import. Roadmap phase D.
 - **Column shear under EN 1992-1-1, rectangles and circles.** A rectangle is checked as
   the EN beam of the same section (V_Rd,c with σ_cp, the truss at the angle the demand
   fixes, V_Rd,max), giving its numbers where the clauses agree. A column needs shear

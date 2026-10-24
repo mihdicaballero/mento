@@ -1,7 +1,7 @@
 # Column shear — module roadmap
 
 Status: **accepted** (2026-10-24), with decisions D1–D7 of §6 taken by the owner the same
-day. Phases A, B and C done the same day, except B's published example (see Phase B).
+day. Phases A to D done the same day, except B's published example (see Phase B).
 Origin: the five requests mako's column shear (C12) left
 for mento, collected in mako issue
 [#117](https://github.com/mihdicaballero/mako/issues/117).
@@ -263,6 +263,13 @@ Each phase lands on green tests, in its own PR from `main`.
 
 **Phase D — reports.** `shear_results_detailed` / `_doc` for a column through `reports/`, in
 both languages.
+- *Done (2026-10-24).* `mento/reports/columns.py` builds the tables from the
+  `ColumnShearCheck` results and the column's inputs, with no state written to the element
+  (ADR-0004), and the element imports it only when a report is asked for. The symbols are
+  per code (`DesignCode.column_shear_symbols`). The results carry no intermediate values
+  (ρ_w, λ_s, σ, θ, λ1), so the report shows the resistances and the limits, not each step
+  to them. Adding those intermediates to `ColumnShearCheck` would cost every check, so it
+  waits for someone to ask for them.
 
 **Phase E — tie design and detailing (optional; see D6).** `design()` returns the lightest
 tie set that satisfies shear and §4.3. mako's D28/D29 search is the reference.

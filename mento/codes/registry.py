@@ -74,6 +74,12 @@ class DesignCode:
     #: minimum), so it is not the beam's hook. ``None`` until a code implements
     #: it: see ``docs/architecture/column-shear-roadmap.md``.
     check_column_shear: Callable[..., Any] | None = None
+    #: What a column's shear report calls its quantities in this code, and the
+    #: share of the concrete's strength past which it asks for shear
+    #: reinforcement (``threshold_share``: 0.5 of ØVc in ACI §10.6.2.1, all of
+    #: VRd,c in EN §6.2.1(3)). Keys: axial, demand, concrete, threshold,
+    #: threshold_share, capacity, max, required_clause.
+    column_shear_symbols: Dict[str, Any] = field(default_factory=dict)
 
     #: Presentation the code owns: the symbols it names its quantities with and
     #: the unit rows of its summary tables. Not a calculation, but it is

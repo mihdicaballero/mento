@@ -161,6 +161,25 @@ under the moment that governs:
 
     column.set_lever_arm(d=42 * cm, z=33 * cm)   # EN 1992-1-1 only; ACI takes d = 0.8·D
 
+Reports
+-------
+
+The shear of one combination, both directions, as console tables or a Word
+document -- the combination that governs, or the one asked for -- in the
+language set with :func:`mento.set_language`:
+
+.. code-block:: python
+
+    column.shear_results_detailed()             # the governing combination
+    column.shear_results_detailed(forces[0])    # or this one
+    column.shear_results_detailed_doc()         # "Column C1 shear check ACI 318-19.docx"
+    column.data                                 # the inputs, one line (Jupyter)
+    column.results                              # the governing combination, one line per direction
+
+Each direction prints its limit checks (the area of the legs against what the
+shear asks, the tie spacing, the legs across and the section's limit) and its
+resistances, in the design code's symbols, ending on the DCR.
+
 Warnings
 --------
 

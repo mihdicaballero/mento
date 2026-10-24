@@ -245,6 +245,42 @@ class ColumnSection(Section):
 
         return collect(column_shear_warnings(self, self._shear_checks, self._checked_forces))
 
+    # Reports ------------------------------------------------------------------
+    # The presentation is imported when asked for, so that checking a column --
+    # in a loop over a building -- loads neither IPython nor python-docx.
+
+    @property
+    def data(self) -> None:
+        """The column's inputs in one line of Markdown (Jupyter)."""
+        from mento.reports.columns import column_data
+
+        column_data(self)
+
+    @property
+    def results(self) -> None:
+        """The governing combination, one line per direction (Jupyter)."""
+        from mento.reports.columns import column_shear_results
+
+        column_shear_results(self)
+
+    def shear_results_detailed(self, force: Optional[Forces] = None) -> None:
+        """Print the shear of one combination, both directions: the governing one, or ``force``."""
+        from mento.reports.columns import column_shear_results_detailed
+
+        column_shear_results_detailed(self, force)
+
+    def shear_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
+        """Save the same as a Word document in the working directory."""
+        from mento.reports.columns import column_shear_results_detailed_doc
+
+        column_shear_results_detailed_doc(self, force)
+
+    def flexure_results_detailed(self, force: Optional[Forces] = None) -> None:
+        self.check_flexure([])
+
+    def flexure_results_detailed_doc(self, force: Optional[Forces] = None) -> None:
+        self.check_flexure([])
+
 
 @dataclass
 class RectangularColumn(ColumnSection):

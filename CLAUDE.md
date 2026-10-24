@@ -114,7 +114,7 @@ mento/
 ├── summary.py              Deprecated shim re-exporting BeamSummary (emits DeprecationWarning)
 ├── i18n.py                 set_language() — language of reports, drawing, warnings and stirrup notation()
 ├── plots/                  Matplotlib drawings: sections.py, walls.py, punching.py
-├── reports/                Presentation layer: tables, views, documents, summaries, table_style, headings, punching
+├── reports/                Presentation layer: tables, views, documents, summaries, table_style, headings, punching, columns
 └── codes/
     ├── registry.py               DesignCode dataclass and the registered codes — every element dispatches through it
     ├── check_state.py            Check states held off the element; the report path copies them back

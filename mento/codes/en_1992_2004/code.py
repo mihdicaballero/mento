@@ -234,6 +234,16 @@ EN_1992_2004 = register(
         check_punching=check_punching_EN_1992_2004,
         # One-way shear of a column: §6.2 with no §9.2.2(5) minimum (§9.5.3 is the column's).
         check_column_shear=check_column_shear_EN_1992_2004,
+        column_shear_symbols={
+            "axial": "NEd",
+            "demand": "VEd",
+            "concrete": "VRd,c",
+            "threshold": "VRd,c",
+            "threshold_share": 1.0,
+            "capacity": "VRd",
+            "max": "VRd,max",
+            "required_clause": "§6.2.1(3)",
+        },
         flexure_symbols=_FLEXURE_SYMBOLS,
         units_row_shear=_UNITS_ROW_SHEAR,
         units_row_flexure=_UNITS_ROW_FLEXURE,
