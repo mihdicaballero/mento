@@ -20,11 +20,11 @@ gaps:
 
 | # | What mako asks | Fits `RectangularBeam`? |
 | --- | --- | --- |
-| 1 | A circular section for shear (A_g = π·D²/4, b_w = D, d = 0.8·D, ACI 318-19 §22.5.2.2), so a circle in tension can be checked | **No.** `RectangularSection`, `SectionFloats`, `section_geometry`, the cage model and the reports all assume a rectangle |
-| 2 | The column's clauses: A_v,min where V_u > 0.5·φ·V_c (ACI §10.6.2.1, with the axial load, with no shallow-member exemption); no beam minimum of EN §9.2.2(5) (§9.5.3 governs); or at least V_c / V_Rd,c in `ShearCheck` | Only as a fourth `mode` next to `"beam"`, `"slab"` and `"shear_wall"`, threaded through every `_stirrups_optional`-style branch |
-| 3 | Legs of two diameters: the perimeter tie, plus thinner crossties | **No.** `set_transverse_rebar` takes one `d_b`, and `leg_count`, `leg_seats`, `section_geometry`, compression support and the stirrup search all build on it |
-| 4 | A values path with no warnings: `shear_check_results` spends ~60 % of its time in `shear_warnings` | Yes, and it helps every caller |
-| 5 | α_cw of EN 1992-1-1 Expression (6.11aN) under compression | Yes: it is a code question, not an element question |
+| 1 ([#206](https://github.com/mento-calc/mento/issues/206)) | A circular section for shear (A_g = π·D²/4, b_w = D, d = 0.8·D, ACI 318-19 §22.5.2.2), so a circle in tension can be checked | **No.** `RectangularSection`, `SectionFloats`, `section_geometry`, the cage model and the reports all assume a rectangle |
+| 2 ([#207](https://github.com/mento-calc/mento/issues/207)) | The column's clauses: A_v,min where V_u > 0.5·φ·V_c (ACI §10.6.2.1, with the axial load, with no shallow-member exemption); no beam minimum of EN §9.2.2(5) (§9.5.3 governs); or at least V_c / V_Rd,c in `ShearCheck` | Only as a fourth `mode` next to `"beam"`, `"slab"` and `"shear_wall"`, threaded through every `_stirrups_optional`-style branch |
+| 3 ([#208](https://github.com/mento-calc/mento/issues/208)) | Legs of two diameters: the perimeter tie, plus thinner crossties | **No.** `set_transverse_rebar` takes one `d_b`, and `leg_count`, `leg_seats`, `section_geometry`, compression support and the stirrup search all build on it |
+| 4 ([#209](https://github.com/mento-calc/mento/issues/209)) | A values path with no warnings: `shear_check_results` spends ~60 % of its time in `shear_warnings` | Yes, and it helps every caller |
+| 5 ([#210](https://github.com/mento-calc/mento/issues/210)) | α_cw of EN 1992-1-1 Expression (6.11aN) under compression | Yes: it is a code question, not an element question |
 
 Two of the five (4 and 5) belong to the shear check whatever the element. The other three
 (1, 2, 3) describe a column, and fitting them into `RectangularBeam` means a circle inside
@@ -291,7 +291,7 @@ pruning and the pier logic stay in mako. Each request closed in mento comes out 
 | D4 | α_cw (6.11aN) for a non-prestressed member under axial compression | The recommended note gives "1 for non-prestressed structures", and σ_cp in it is "due to the design axial force". Find a source for the reading first. Until then α_cw = 1 (the safe side), exposed as a setting |
 | D5 | Bars of a circle that count in ρ_w | Those past the centre line, as mako does |
 | D6 | Does tie design live in mento or stay in mako? | Check in mento (B, C). The design stays in mako until the P–M engine moves the detailing over |
-| D7 | Issues in mento-calc/mento | One tracking issue ("Column element: shear") with the five requests as sub-issues linked to this document. That meets the "done when" of mako #117 |
+| D7 | Issues in mento-calc/mento | One tracking issue with the five requests as sub-issues linked to this document. That meets the "done when" of mako #117. **Opened 2026-10-24:** [#211](https://github.com/mento-calc/mento/issues/211), with [#206](https://github.com/mento-calc/mento/issues/206) (circle), [#207](https://github.com/mento-calc/mento/issues/207) (column clauses, V_c), [#208](https://github.com/mento-calc/mento/issues/208) (legs of two diameters), [#209](https://github.com/mento-calc/mento/issues/209) (values without warnings) and [#210](https://github.com/mento-calc/mento/issues/210) (α_cw). #206–#209 are resolved by this branch; #210 stays open on D4 |
 
 ---
 
